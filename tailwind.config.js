@@ -7,10 +7,14 @@ module.exports = {
     extend: {
       colors: {
         "low-purple": "#ECCEFF",
-        "mid-purple": "#250157",
-        "dark-purple": "#925CB3",
-        
+        "half-purple": "#67398B",
+        "mid-purple": "#925CB3",
+        "dark-purple": "#250157",  
+        "dark2-purple": "#642B87",
       },
+      backgroundImage: {
+        'line-pattern': "url('/assets/bg.svg')",
+      }
     },
   },
   plugins: [],

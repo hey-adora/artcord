@@ -66,9 +66,9 @@ pub fn main() {
 
     console_error_panic_hook::set_once();
 
-    leptos::mount_to_body(move |cx| {
+    leptos::mount_to_body(move || {
         // note: for testing it may be preferrable to replace this with a
         // more specific component, although leptos_router should still work
-        view! {cx, <App/> }
+        view! { <App/> }
     });
 }

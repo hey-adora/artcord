@@ -1,3 +1,10 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+
+.line-bg {
+    background-color: #e5e5f7;
+    opacity: 0.8;
+    background: repeating-linear-gradient( -45deg, #ecceff3f, #ecceff3f 5px, #e5e5f700 5px, #e5e5f700 25px );
+}
