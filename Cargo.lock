@@ -287,6 +287,7 @@ dependencies = [
  "cfg-if",
  "console_error_panic_hook",
  "http",
+ "js-sys",
  "leptos",
  "leptos_actix",
  "leptos_meta",

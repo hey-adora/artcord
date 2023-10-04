@@ -1,11 +1,22 @@
-use leptos::*;
+use leptos::{html::Nav, *};
 use leptos_meta::*;
 use leptos_router::*;
+use wasm_bindgen::prelude::*;
 
 #[component]
 pub fn App() -> impl IntoView {
     // Provides context that manages stylesheets, titles, meta tags, etc.
     provide_meta_context();
+
+    let navi = create_node_ref::<html::Main>();
+    let y3 = js_sys::Function::new_no_args("console.log(\"test\");");
+    let a = create_effect(move |prev_value| {
+        let node = navi.get();
+        if let Some(node) = node {
+            logging::log!("loaded!");
+            node.add_event_listener_with_callback("scroll", &y3);
+        }
+    });
 
     view! {
         // injects a stylesheet into the document <head>
@@ -17,9 +28,11 @@ pub fn App() -> impl IntoView {
         // sets the document title
         <Title text="Welcome to Leptos"/>
 
+
+
         // content for this welcome page
         <Router>
-            <main>
+            <main _ref=navi class=" grid grid-rows-[auto_1fr] gap-6 pt-6 text-low-purple bg-gradient-to-br from-mid-purple to-dark-purple    ">
                 <Routes>
                     <Route path="" view=HomePage/>
                     <Route path="/*any" view=NotFound/>
@@ -34,11 +47,27 @@ pub fn App() -> impl IntoView {
 fn HomePage() -> impl IntoView {
     // Creates a reactive value to update the button
     let (count, set_count) = create_signal(0);
-    //let on_click = move |_| set_count.update(|count| *count += 1);
+    // let navi = create_node_ref::<html::Main>();
+    //
+    // //let on_click = move |_| set_count.update(|count| *count += 1);
+    // //let navi = document().get_element_by_id("thenav");
+    // //let ff = js_sys::F
+    // //let y3 = js_sys::Function::from(JsValue::from("console.log('test')"));
+    // let y3 = js_sys::Function::new_no_args("console.log(\"test\");");
+    // //let y: Option<::js_sys::Function> = ;
+    // //unsafe { js_sys:: }
+    // let a = create_effect(move |prev_value| {
+    //     let node = navi.get();
+    //     if let Some(node) = node {
+    //         logging::log!("loaded!");
+    //         node.add_event_listener_with_callback("scroll", &y3);
+    //         //node.set_onscroll(Some(&y3));
+    //         //logging::log!("{:?}", );
+    //     }
+    // });
 
     view! {
-       <main class=" grid grid-rows-[auto_1fr] gap-6 pt-6 text-low-purple bg-gradient-to-br from-mid-purple to-dark-purple   min-h-screen  ">
-        <nav class="px-6 flex items-center justify-between gap-2">
+       <nav   id="thenav" class="sticky top-0 z-50 px-6 flex items-center justify-between gap-2">
             <div class="flex items-baseline gap-6">
                 <h3 class="  font-bold text-[2rem] ">"ArtCord"</h3>
                 <ul class="hidden sm:flex gap-2 text-[1rem] text-center">
@@ -48,21 +77,21 @@ fn HomePage() -> impl IntoView {
                 </ul>
             </div>
             <div>
-                <a class="hidden sm:flex gap-2 items-center text-[1rem] font-black bg-half-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] hover:bg-dark-purple transition-colors duration-300 " href=""> 
-                    <img src="/assets/discord.svg"/> 
+                <a class="hidden sm:flex gap-2 items-center text-[1rem] font-black bg-half-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] hover:bg-dark-purple transition-colors duration-300 " href="">
+                    <img src="/assets/discord.svg"/>
                     "Join"
                 </a>
                 <img class="cursor-pointer block sm:hidden " src="assets/burger.svg" alt=""/>
             </div>
         </nav>
-        <section class="px-6 py-6 line-bg  grid grid-rows-[1fr_1fr_0.3fr] md:grid-rows-[1fr] md:grid-cols-[1fr_1fr] place-items-center  overflow-hidden " style=move|| format!("max-height: calc(100vh - 100px)")>
+        <section class="px-6 py-6 line-bg  grid grid-rows-[1fr_1fr_0.3fr] md:grid-rows-[1fr] md:grid-cols-[1fr_1fr] place-items-center  overflow-hidden " style=move|| format!("height: calc(100vh - 100px)")>
             <div class="text-center flex flex-col  ">
                 <h1 class="text-[4rem] font-bold">"ArtCord"</h1>
                 <h2 class="text-[2rem]">"Discord Art Server"</h2>
                 <div class="flex gap-8 mt-4 items-center justify-center">
                     <a class=" text-[1rem] cursor-pointer border-b-[0.30rem] border-low-purple font-bold whitespace-nowrap">"Read More"</a>
-                    <a class="flex gap-2 items-center text-[1rem] font-black bg-half-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] hover:bg-dark-purple transition-colors duration-300 " href=""> 
-                        <img src="/assets/discord.svg"/> 
+                    <a class="flex gap-2 items-center text-[1rem] font-black bg-half-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] hover:bg-dark-purple transition-colors duration-300 " href="">
+                        <img src="/assets/discord.svg"/>
                         "Join"
                     </a>
                 </div>
@@ -74,22 +103,24 @@ fn HomePage() -> impl IntoView {
                     <div class="z-10 w-[32vw] h-[55vw] lg:max-w-[15rem] lg:max-h-[25rem] max-w-[10rem] max-h-[20rem] bg-center bg-cover absolute -rotate-[15deg] -translate-x-[60%]" style="background-image: url('/assets/3.jpg')" ></div>
                 </div>
                 <div class="flex justify-center">
-                    <a class=" text-[1rem] font-black bg-half-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] hover:bg-dark-purple transition-colors duration-300 " href=""> 
+                    <a class=" text-[1rem] font-black bg-half-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] hover:bg-dark-purple transition-colors duration-300 " href="">
                         "View Gallery"
                     </a>
                 </div>
-               
+
             </div>
             <div class=" md:col-span-2 grid place-items-center mt-auto text-center font-bold ">
                 <div class="flex flex-col gap-2 justify-center">
                     "About"
-                    <img class="h-[2rem]" src="/assets/triangle.svg"/> 
+                    <img class="h-[2rem]" src="/assets/triangle.svg"/>
                 </div>
              </div>
             // <div class="absolute w-[0.25rem]  h-full bg-low-purple/40"></div>
         </section>
+        <section style=move|| format!("height: calc(100vh")>
+            test
+        </section>
         // <img class="" src="/assets/bg.svg" alt=""/>
-       </main>
     }
 }
 
