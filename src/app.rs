@@ -1,6 +1,7 @@
 use leptos::{html::Nav, *};
 use leptos_meta::*;
 use leptos_router::*;
+use leptos_use::use_window_scroll;
 use wasm_bindgen::prelude::*;
 
 #[component]
@@ -9,14 +10,14 @@ pub fn App() -> impl IntoView {
     provide_meta_context();
 
     let navi = create_node_ref::<html::Main>();
-    let y3 = js_sys::Function::new_no_args("console.log(\"test\");");
-    let a = create_effect(move |prev_value| {
-        let node = navi.get();
-        if let Some(node) = node {
-            logging::log!("loaded!");
-            node.add_event_listener_with_callback("scroll", &y3);
-        }
-    });
+    // let y3 = js_sys::Function::new_no_args("console.log(\"test\");");
+    // let a = create_effect(move |prev_value| {
+    //     let node = navi.get();
+    //     if let Some(node) = node {
+    //         logging::log!("loaded!");
+    //         node.add_event_listener_with_callback("scroll", &y3);
+    //     }
+    // });
 
     view! {
         // injects a stylesheet into the document <head>
@@ -32,7 +33,7 @@ pub fn App() -> impl IntoView {
 
         // content for this welcome page
         <Router>
-            <main _ref=navi class=" grid grid-rows-[auto_1fr] gap-6 pt-6 text-low-purple bg-gradient-to-br from-mid-purple to-dark-purple    ">
+            <main on:scroll=|_|{ logging::log!("SCROLLED!"); } _ref=navi class=" grid grid-rows-[auto_1fr] gap-6 pt-6 text-low-purple bg-gradient-to-br from-mid-purple to-dark-purple    ">
                 <Routes>
                     <Route path="" view=HomePage/>
                     <Route path="/*any" view=NotFound/>
@@ -47,6 +48,24 @@ pub fn App() -> impl IntoView {
 fn HomePage() -> impl IntoView {
     // Creates a reactive value to update the button
     let (count, set_count) = create_signal(0);
+    let (nav_bg, set_nav_bg) = create_signal(false);
+    //let (x, y) = use_window_scroll();
+    //window().scroll
+    //let a = use_scroll();
+    let (x, y) = use_window_scroll();
+    create_effect(move |_| {
+        let y = y();
+        let nav_bg = nav_bg();
+        if y > 50f64 {
+            if nav_bg == false {
+                set_nav_bg(true);
+            }
+        } else if nav_bg == true {
+            set_nav_bg(false);
+        }
+        //logging::log!("{}", y());
+    });
+
     // let navi = create_node_ref::<html::Main>();
     //
     // //let on_click = move |_| set_count.update(|count| *count += 1);
@@ -67,7 +86,7 @@ fn HomePage() -> impl IntoView {
     // });
 
     view! {
-       <nav   id="thenav" class="sticky top-0 z-50 px-6 flex items-center justify-between gap-2">
+       <nav   id="thenav" class=move || { format!("sticky top-0 z-50 px-6 flex items-center justify-between gap-2  {}", if nav_bg() { "bg-gradient-to-r from-mid-purple to-dark-purple" } else { "" } ) }>
             <div class="flex items-baseline gap-6">
                 <h3 class="  font-bold text-[2rem] ">"ArtCord"</h3>
                 <ul class="hidden sm:flex gap-2 text-[1rem] text-center">
