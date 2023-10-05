@@ -1,0 +1,9 @@
+[submodule "vendors/tailwindcss"]
+	path = vendors/tailwindcss
+	url = https://github.com/tailwindlabs/tailwindcss.git
+[submodule "vendors/trunk"]
+	path = vendors/trunk
+	url = https://github.com/thedodd/trunk.git
+[submodule "vendors/cargo-leptos"]
+	path = vendors/cargo-leptos
+	url = https://github.com/leptos-rs/cargo-leptos.git

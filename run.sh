@@ -1,0 +1,1 @@
+./vendors/trunk/target/release/trunk serve --open --features csr & node ./vendors/tailwindcss/lib/cli.js -i ./input.css -o ./style/output.css --watch
