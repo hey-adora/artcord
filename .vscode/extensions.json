@@ -1,8 +1,9 @@
 {
     "recommendations": [
-        "bungcip.better-toml",
+        "tamasfe.even-better-toml",
         "serayuzgur.crates",
         "rust-lang.rust-analyzer",
-        "bradlc.vscode-tailwindcss"
+        "bradlc.vscode-tailwindcss",
+        "vadimcn.vscode-lldb"
     ]
 }
