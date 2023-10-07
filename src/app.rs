@@ -4,7 +4,6 @@ use leptos::{html::Nav, *};
 use leptos_meta::*;
 use leptos_router::*;
 use leptos_use::use_window_scroll;
-use wasm_bindgen::JsValue;
 
 //use wasm_bindgen::prelude::*;
 #[derive(Clone, PartialEq, Debug)]
@@ -29,6 +28,21 @@ enum ScrollSection {
 //     }
 // }
 
+#[derive(Copy, Clone, Debug)]
+struct GlobalState {
+    home_section: RwSignal<NodeRef<Section>>,
+    about_section: RwSignal<NodeRef<Section>>,
+}
+
+impl GlobalState {
+    pub fn new() -> Self {
+        Self {
+            home_section: create_rw_signal(create_node_ref::<html::Section>()),
+            about_section: create_rw_signal(create_node_ref::<html::Section>()),
+        }
+    }
+}
+
 #[component]
 pub fn App() -> impl IntoView {
     // Provides context that manages stylesheets, titles, meta tags, etc.
@@ -43,6 +57,8 @@ pub fn App() -> impl IntoView {
     //         node.add_event_listener_with_callback("scroll", &y3);
     //     }
     // });
+
+    //provide_context(GlobalState::new());
 
     view! {
         // injects a stylesheet into the document <head>
@@ -62,9 +78,11 @@ pub fn App() -> impl IntoView {
 
         // content for this welcome page
         <Router>
+            <Navbar/>
             <main id="home" on:scroll=|_|{ logging::log!("SCROLLED!"); }  class=" grid grid-rows-[auto_1fr] pt-6 gap-6   text-low-purple bg-gradient-to-br from-mid-purple to-dark-purple    ">
                 <Routes>
                     <Route path="" view=HomePage/>
+                    <Route path="/gallery" view=GalleryPage/>
                     <Route path="/*any" view=NotFound/>
                 </Routes>
             </main>
@@ -72,47 +90,20 @@ pub fn App() -> impl IntoView {
     }
 }
 
-fn get_offset(element: NodeRef<Section>) -> i32 {
-    let mut section_y: i32 = 0;
-    let home_section = element.get();
-    if let Some(section) = home_section {
-        section_y = section.offset_top();
-    }
-    section_y
-}
-
-fn silent_navigate(state: &str, unused: &str, url: &str) {
-    let a = window().history();
-    if let Ok(a) = a {
-        a.push_state_with_url(&JsValue::from(state), unused, Some(url))
-            .unwrap();
-    }
-}
-
-/// Renders the home page of your application.
 #[component]
-fn HomePage() -> impl IntoView {
+fn Navbar() -> impl IntoView {
     // Creates a reactive value to update the button
     let (count, set_count) = create_signal(0);
     //let (nav_bg, set_nav_bg) = create_signal(false);
     let (scroll_section, set_scroll_section) = create_signal(ScrollSection::None);
 
+    //let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
+    //let home_section = global_state.home_section.get();
+    //let about_section = global_state.about_section.get(); create_node_ref::<html::Section>()
     let home_section = create_node_ref::<html::Section>();
     let about_section = create_node_ref::<html::Section>();
 
     let navigate = leptos_router::use_navigate();
-
-    let btn_click = move |_| {
-        log!("wowowow");
-        // let a = window().history();
-        // if let Ok(a) = a {
-        //     log!("wowowow2");
-        //     a.push_state_with_url(&JsValue::from("google"), "google2", Some("wow"))
-        //         .unwrap();
-        // }
-
-        //..location().replace("https://google.com");
-    };
 
     //let (x, y) = use_window_scroll();
     //window().scroll
@@ -154,6 +145,68 @@ fn HomePage() -> impl IntoView {
         //logging::log!("{}", y());
     });
 
+    let btn_click = move |_| {
+        log!("wowowow");
+        // let a = window().history();
+        // if let Ok(a) = a {
+        //     log!("wowowow2");
+        //     a.push_state_with_url(&JsValue::from("google"), "google2", Some("wow"))
+        //         .unwrap();
+        // }
+
+        //..location().replace("https://google.com");
+    };
+
+    view! {
+        <nav  id="thenav" class=move || { format!("sticky text-low-purple top-0 z-50 px-6 flex items-center justify-between gap-2  {}", if scroll_section() != ScrollSection::None { "bg-gradient-to-r from-mid-purple to-dark-purple" } else { "" } ) }>
+            <div class="flex items-center gap-6">
+                <h3 class="  font-bold text-[2rem] ">"ArtCord"</h3>
+                <ul class="hidden sm:flex gap-2 text-[1rem] text-center">
+                    <li><a class=move || { format!( " w-[3.5rem] cursor-pointer border-b-[0.30rem] transition duration-300 font-bold {} ", if scroll_section() == ScrollSection::None || scroll_section() == ScrollSection::Home { "border-low-purple font-bold" } else { "border-transparent hover:border-low-purple/40 text-low-purple/60 hover:text-low-purple " } ) } href="#home">"Home"</a></li>
+                    <li><a class=move || { format!( " w-[3.5rem] cursor-pointer border-b-[0.30rem] transition duration-300 font-bold {} ", if scroll_section() == ScrollSection::About { "border-low-purple font-bold" } else { "border-transparent hover:border-low-purple/40 text-low-purple/60 hover:text-low-purple " } ) } href="#about">"About"</a></li>
+                    <li><a class=move || { format!( " w-[3.5rem] cursor-pointer border-b-[0.30rem] transition duration-300 font-bold {} ", if false { "border-low-purple font-bold" } else { "border-transparent hover:border-low-purple/40 text-low-purple/60 hover:text-low-purple " } ) } href="/gallery">"Gallery"</a></li>
+                </ul>
+            </div>
+            <button on:click=btn_click>
+                <div class="hidden sm:flex gap-2 items-center text-[1rem] font-black bg-half-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] hover:bg-dark-purple transition-colors duration-300 " href="">
+                    <img src="/assets/discord.svg"/>
+                    "Join"
+                </div>
+                <img class="cursor-pointer block sm:hidden " src="assets/burger.svg" alt=""/>
+            </button>
+        </nav>
+    }
+}
+
+fn get_offset(element: NodeRef<Section>) -> i32 {
+    let mut section_y: i32 = 0;
+    let home_section = element.get();
+    if let Some(section) = home_section {
+        section_y = section.offset_top();
+    }
+    section_y
+}
+
+// fn silent_navigate(state: &str, unused: &str, url: &str) {
+//     let a = window().history();
+//     if let Ok(a) = a {
+//         a.push_state_with_url(&JsValue::from(state), unused, Some(url))
+//             .unwrap();
+//     }
+// }
+
+#[component]
+fn GalleryPage() -> impl IntoView {
+    view! {
+        <h1>GALLERY</h1>
+    }
+}
+
+/// Renders the home page of your application.
+#[component]
+fn HomePage() -> impl IntoView {
+    // home_section: NodeRef<Section>, about_section: NodeRef<Section>
+
     // let navi = create_node_ref::<html::Main>();
     //
     // //let on_click = move |_| set_count.update(|count| *count += 1);
@@ -173,29 +226,17 @@ fn HomePage() -> impl IntoView {
     //     }
     // });
 
+    // let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
+    // let home_section = global_state.home_section.get();
+    // let about_section = global_state.about_section.get();
+
     view! {
-       <nav  id="thenav" class=move || { format!("sticky  top-0 z-50 px-6 flex items-center justify-between gap-2  {}", if scroll_section() != ScrollSection::None { "bg-gradient-to-r from-mid-purple to-dark-purple" } else { "" } ) }>
-            <div class="flex items-center gap-6">
-                <h3 class="  font-bold text-[2rem] ">"ArtCord"</h3>
-                <ul class="hidden sm:flex gap-2 text-[1rem] text-center">
-                    <li><a class=move || { format!( " w-[3.5rem] cursor-pointer border-b-[0.30rem] transition duration-300 font-bold {} ", if scroll_section() == ScrollSection::None || scroll_section() == ScrollSection::Home { "border-low-purple font-bold" } else { "border-transparent hover:border-low-purple/40 text-low-purple/60 hover:text-low-purple " } ) } href="#home">"Home"</a></li>
-                    <li><a class=move || { format!( " w-[3.5rem] cursor-pointer border-b-[0.30rem] transition duration-300 font-bold {} ", if scroll_section() == ScrollSection::About { "border-low-purple font-bold" } else { "border-transparent hover:border-low-purple/40 text-low-purple/60 hover:text-low-purple " } ) } href="#about">"About"</a></li>
-                    <li><a class=move || { format!( " w-[3.5rem] cursor-pointer border-b-[0.30rem] transition duration-300 font-bold {} ", if false { "border-low-purple font-bold" } else { "border-transparent hover:border-low-purple/40 text-low-purple/60 hover:text-low-purple " } ) } href="#gallery">"Gallery"</a></li>
-                </ul>
-            </div>
-            <button on:click=btn_click>
-                <div class="hidden sm:flex gap-2 items-center text-[1rem] font-black bg-half-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] hover:bg-dark-purple transition-colors duration-300 " href="">
-                    <img src="/assets/discord.svg"/>
-                    "Join"
-                </div>
-                <img class="cursor-pointer block sm:hidden " src="assets/burger.svg" alt=""/>
-            </button>
-        </nav>
+
         // <div class="  " >
 
         // </div>
 
-        <section _ref=home_section class="px-6 py-6 line-bg grid grid-rows-[1fr_1fr_0.3fr] md:grid-rows-[1fr] md:grid-cols-[1fr_1fr] place-items-center  overflow-hidden " style=move|| format!("min-height: calc(100vh - 100px)")>
+        <section  class="px-6 py-6 line-bg grid grid-rows-[1fr_1fr_0.3fr] md:grid-rows-[1fr] md:grid-cols-[1fr_1fr] place-items-center  overflow-hidden " style=move|| format!("min-height: calc(100vh - 100px)")>
                 <div class=" bg-the-star bg-center bg-contain bg-no-repeat h-full w-full grid place-items-center  ">
                     <div class="text-center flex flex-col">
                         <h1 class="text-[4rem] font-bold">"ArtCord"</h1>
@@ -230,7 +271,7 @@ fn HomePage() -> impl IntoView {
                 </div>
                 // <div class="absolute w-[0.25rem]  h-full bg-low-purple/40"></div> grid-rows-[auto_auto_auto] grid-cols-[auto_auto]
             </section>
-            <section _ref=about_section id="about" class=" line-bg px-6 py-6 flex flex-col md:grid md:grid-rows-[1fr_1fr_1fr_auto] md:grid-cols-[1fr_1fr] gap-0" style=move|| format!("min-height: calc(100vh - 50px)")>
+            <section  id="about" class=" line-bg px-6 py-6 flex flex-col md:grid md:grid-rows-[1fr_1fr_1fr_auto] md:grid-cols-[1fr_1fr] gap-0" style=move|| format!("min-height: calc(100vh - 50px)")>
                 <div>
                     <h4 class="text-[3rem] font-bold" >"About Us"</h4>
                     <p class="text-[1.5rem]" >"We're a community of artists who love to create, share, and learn. We're open to all types of art, from traditional to digital, and we're always looking for new members!"</p>
