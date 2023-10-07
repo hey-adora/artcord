@@ -374,6 +374,10 @@ img, video {
   z-index: 50;
 }
 
+.col-span-2 {
+  grid-column: span 2 / span 2;
+}
+
 .mx-auto {
   margin-left: auto;
   margin-right: auto;
@@ -635,6 +639,10 @@ img, video {
   text-align: center;
 }
 
+.font-barcode {
+  font-family: "Libre Barcode 128 Text";
+}
+
 .text-\[1\.5rem\] {
   font-size: 1.5rem;
 }
@@ -672,6 +680,11 @@ img, video {
   color: #ecceff99;
 }
 
+.text-green-600 {
+  --tw-text-opacity: 1;
+  color: rgb(22 163 74 / var(--tw-text-opacity));
+}
+
 .shadow-glowy {
   --tw-shadow: 0px 0px 15px 2px #ecceff;
   --tw-shadow-colored: 0px 0px 15px 2px var(--tw-shadow-color);
@@ -695,8 +708,12 @@ img, video {
 }
 
 @font-face {
-  font-family: "Libre Barcode 128 Text", cursive;
-  src: url("assets/LibreBarcode128Text-Regular.ttf");
+  font-family: "Libre Barcode 128 Text";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("assets/LibreBarcode128Text-Regular.ttf") format("woff2");
+  unicode-range: U+??, U+131, U+152-153, U+2BB-2BC, U+2C6, U+2DA, U+2DC, U+304, U+308, U+329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 .line-bg {
@@ -741,12 +758,36 @@ html {
     grid-column: span 2 / span 2;
   }
 
+  .md\:block {
+    display: block;
+  }
+
+  .md\:grid {
+    display: grid;
+  }
+
   .md\:grid-cols-\[1fr_1fr\] {
     grid-template-columns: 1fr 1fr;
   }
 
   .md\:grid-rows-\[1fr\] {
     grid-template-rows: 1fr;
+  }
+
+  .md\:grid-rows-\[1fr_1fr_1fr\] {
+    grid-template-rows: 1fr 1fr 1fr;
+  }
+
+  .md\:grid-rows-\[1fr_1fr_1fr_1fr\] {
+    grid-template-rows: 1fr 1fr 1fr 1fr;
+  }
+
+  .md\:grid-rows-\[1fr_1fr_1frauto\] {
+    grid-template-rows: 1fr 1fr 1frauto;
+  }
+
+  .md\:grid-rows-\[1fr_1fr_1fr_auto\] {
+    grid-template-rows: 1fr 1fr 1fr auto;
   }
 }
 

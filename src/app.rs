@@ -50,6 +50,10 @@ pub fn App() -> impl IntoView {
         <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 
         <Stylesheet id="leptos" href="/pkg/leptos_start.css"/>
+        // <link rel="preconnect" href="https://fonts.googleapis.com"/>
+        // <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+        // <link href="https://fonts.googleapis.com/css2?family=Libre+Barcode+128+Text&display=swap" rel="stylesheet"/>
+
 
         // sets the document title
         <Title text="Welcome to Leptos"/>
@@ -226,13 +230,13 @@ fn HomePage() -> impl IntoView {
                 </div>
                 // <div class="absolute w-[0.25rem]  h-full bg-low-purple/40"></div> grid-rows-[auto_auto_auto] grid-cols-[auto_auto]
             </section>
-            <section _ref=about_section id="about" class=" line-bg px-6 py-6 grid grid-rows-[1fr_1fr_1fr] grid-cols-[1fr_1fr] gap-0" style=move|| format!("min-height: calc(100vh - 50px)")>
+            <section _ref=about_section id="about" class=" line-bg px-6 py-6 flex flex-col md:grid md:grid-rows-[1fr_1fr_1fr_auto] md:grid-cols-[1fr_1fr] gap-0" style=move|| format!("min-height: calc(100vh - 50px)")>
                 <div>
                     <h4 class="text-[3rem] font-bold" >"About Us"</h4>
                     <p class="text-[1.5rem]" >"We're a community of artists who love to create, share, and learn. We're open to all types of art, from traditional to digital, and we're always looking for new members!"</p>
                 </div>
-                <img class="mx-auto" src="assets/circle.svg" alt=""/>
-                <img class="mx-auto" src="assets/rectangle.svg" alt=""/>
+                <img class="mx-auto hidden md:block" src="assets/circle.svg" alt=""/>
+                <img class="mx-auto hidden md:block" src="assets/rectangle.svg" alt=""/>
                 <div>
                     <h4 class="text-[3rem] font-bold" >"You Can"</h4>
                     <p class="text-[1.5rem]">
@@ -255,8 +259,8 @@ fn HomePage() -> impl IntoView {
                         </div>
                     </p>
                 </div>
-                <img class="mx-auto" src="assets/triangle2.svg" alt=""/>
-                <div class="col-span-2 text-center font-barcode">"Copyrighted  2023"</div>
+                <img class="mx-auto hidden md:block" src="assets/triangle2.svg" alt=""/>
+                <div class=" mt-auto text-[3rem] col-span-2 text-center font-barcode">"Copyrighted  2023"</div>
             </section>
         // <img class="" src="/assets/bg.svg" alt=""/>
     }
