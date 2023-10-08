@@ -5,28 +5,12 @@ use leptos_meta::*;
 use leptos_router::*;
 use leptos_use::use_window_scroll;
 
-//use wasm_bindgen::prelude::*;
 #[derive(Clone, PartialEq, Debug)]
 enum ScrollSection {
     None,
     Home,
     About,
 }
-
-// fn boom(n: i32) -> Result::<i32, &'static str> {
-//     match n {
-//         5 => Ok(100),
-//         _ => Err("error OwO")
-//     }
-// }
-//
-// fn maien() {
-//     let output = boom(4);
-//     match output {
-//         Ok(n) => println!("works! {}", n),
-//         Err(e) => panic!("BOOM: {}", e)
-//     }
-// }
 
 #[derive(Copy, Clone, Debug)]
 struct GlobalState {
@@ -45,40 +29,14 @@ impl GlobalState {
 
 #[component]
 pub fn App() -> impl IntoView {
-    // Provides context that manages stylesheets, titles, meta tags, etc.
     provide_meta_context();
-
-    //let navi = create_node_ref::<html::Main>();
-    //let y3 = js_sys::Function::new_no_args("console.log(\"test\");");
-    // let a = create_effect(move |prev_value| {
-    //     let node = navi.get();
-    //     if let Some(node) = node {
-    //         logging::log!("loaded!");
-    //         node.add_event_listener_with_callback("scroll", &y3);
-    //     }
-    // });
-
     provide_context(GlobalState::new());
 
     view! {
-        // injects a stylesheet into the document <head>
-        // id=leptos means cargo-leptos will hot-reload this stylesheet
         <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-
         <Stylesheet id="leptos" href="/pkg/leptos_start.css"/>
-        // <link rel="preconnect" href="https://fonts.googleapis.com"/>
-        // <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-        // <link href="https://fonts.googleapis.com/css2?family=Libre+Barcode+128+Text&display=swap" rel="stylesheet"/>
-
-
-        // sets the document title
         <Title text="Welcome to Leptos"/>
-
         <Body class="text-low-purple bg-gradient-to-br from-mid-purple to-dark-purple" />
-
-
-
-        // content for this welcome page
         <Router>
             <Navbar/>
             <main id="home" on:scroll=|_|{ logging::log!("SCROLLED!"); }  class=" grid grid-rows-[auto_1fr] pt-6 gap-6       ">
@@ -94,23 +52,14 @@ pub fn App() -> impl IntoView {
 
 #[component]
 fn Navbar() -> impl IntoView {
-    // Creates a reactive value to update the button
     let (count, set_count) = create_signal(0);
-    //let (nav_bg, set_nav_bg) = create_signal(false);
     let (scroll_section, set_scroll_section) = create_signal(ScrollSection::None);
 
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
     let home_section = global_state.home_section.get();
     let about_section = global_state.about_section.get();
-    //create_node_ref::<html::Section>();
-    // let home_section = create_node_ref::<html::Section>();
-    // let about_section = create_node_ref::<html::Section>();
 
     let navigate = leptos_router::use_navigate();
-
-    //let (x, y) = use_window_scroll();
-    //window().scroll
-    //let a = use_scroll();
 
     create_effect(move |_| {
         let (x, y) = use_window_scroll();
@@ -129,38 +78,12 @@ fn Navbar() -> impl IntoView {
         log!("{}", y);
 
         if new_section != current_section {
-            // log!("{:?}", new_section);
-            // match new_section {
-            //     ScrollSection::Home => silent_navigate("home", "", "#home"),
-            //     ScrollSection::About => silent_navigate("about", "", "#about"),
-            //     _ => (),
-            // };
-
             set_scroll_section(new_section);
         }
-
-        // logging::log!("{}, {}, {}", y, home_section_y, about_section_y);
-
-        // if y > 50f64 {
-        //     if nav_bg == false {
-        //         set_nav_bg(true);
-        //     }
-        // } else if nav_bg == true {
-        //     set_nav_bg(false);
-        // }
-        //logging::log!("{}", y());
     });
 
     let btn_click = move |_| {
         log!("wowowow");
-        // let a = window().history();
-        // if let Ok(a) = a {
-        //     log!("wowowow2");
-        //     a.push_state_with_url(&JsValue::from("google"), "google2", Some("wow"))
-        //         .unwrap();
-        // }
-
-        //..location().replace("https://google.com");
     };
 
     view! {
@@ -193,14 +116,6 @@ fn get_offset(element: NodeRef<Section>) -> i32 {
     section_y
 }
 
-// fn silent_navigate(state: &str, unused: &str, url: &str) {
-//     let a = window().history();
-//     if let Ok(a) = a {
-//         a.push_state_with_url(&JsValue::from(state), unused, Some(url))
-//             .unwrap();
-//     }
-// }
-
 #[component]
 fn GalleryPage() -> impl IntoView {
     view! {
@@ -208,40 +123,13 @@ fn GalleryPage() -> impl IntoView {
     }
 }
 
-/// Renders the home page of your application.
 #[component]
 fn HomePage() -> impl IntoView {
-    // home_section: NodeRef<Section>, about_section: NodeRef<Section>
-
-    // let navi = create_node_ref::<html::Main>();
-    //
-    // //let on_click = move |_| set_count.update(|count| *count += 1);
-    // //let navi = document().get_element_by_id("thenav");
-    // //let ff = js_sys::F
-    // //let y3 = js_sys::Function::from(JsValue::from("console.log('test')"));
-    // let y3 = js_sys::Function::new_no_args("console.log(\"test\");");
-    // //let y: Option<::js_sys::Function> = ;
-    // //unsafe { js_sys:: }
-    // let a = create_effect(move |prev_value| {
-    //     let node = navi.get();
-    //     if let Some(node) = node {
-    //         logging::log!("loaded!");
-    //         node.add_event_listener_with_callback("scroll", &y3);
-    //         //node.set_onscroll(Some(&y3));
-    //         //logging::log!("{:?}", );
-    //     }
-    // });
-
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
     let home_section = global_state.home_section.get();
     let about_section = global_state.about_section.get();
 
     view! {
-
-        // <div class="  " >
-
-        // </div>
-
         <section _ref=home_section class="px-6 py-6 line-bg grid grid-rows-[1fr_1fr_0.3fr] md:grid-rows-[1fr] md:grid-cols-[1fr_1fr] place-items-center  overflow-hidden " style=move|| format!("min-height: calc(100vh - 100px)")>
                 <div class=" bg-the-star bg-center bg-contain bg-no-repeat h-full w-full grid place-items-center  ">
                     <div class="text-center flex flex-col">
@@ -275,7 +163,6 @@ fn HomePage() -> impl IntoView {
                         <img class="h-[2rem]" src="/assets/triangle.svg"/>
                     </div>
                 </div>
-                // <div class="absolute w-[0.25rem]  h-full bg-low-purple/40"></div> grid-rows-[auto_auto_auto] grid-cols-[auto_auto]
             </section>
             <section _ref=about_section id="about" class=" line-bg px-6 py-6 flex flex-col md:grid md:grid-rows-[1fr_1fr_1fr_auto] md:grid-cols-[1fr_1fr] gap-0" style=move|| format!("min-height: calc(100vh - 50px)")>
                 <div>
@@ -309,23 +196,13 @@ fn HomePage() -> impl IntoView {
                 <img class="mx-auto hidden md:block" src="assets/triangle2.svg" alt=""/>
                 <div class=" mt-auto text-[3rem] col-span-2 text-center font-barcode">"Copyrighted  2023"</div>
             </section>
-        // <img class="" src="/assets/bg.svg" alt=""/>
     }
 }
 
-/// 404 - Not Found
 #[component]
 fn NotFound() -> impl IntoView {
-    // set an HTTP status code 404
-    // this is feature gated because it can only be done during
-    // initial server-side rendering
-    // if you navigate to the 404 page subsequently, the status
-    // code will not be set because there is not a new HTTP request
-    // to the server
     #[cfg(feature = "ssr")]
     {
-        // this can be done inline because it's synchronous
-        // if it were async, we'd use a server function
         let resp = expect_context::<leptos_actix::ResponseOptions>();
         resp.set_status(actix_web::http::StatusCode::NOT_FOUND);
     }
