@@ -1,4 +1,4 @@
-use leptos::html::Section;
+use leptos::html::{Body, Section};
 use leptos::logging::log;
 use leptos::{html::Nav, *};
 use leptos_meta::*;
@@ -49,7 +49,7 @@ pub fn App() -> impl IntoView {
     provide_meta_context();
 
     //let navi = create_node_ref::<html::Main>();
-    // let y3 = js_sys::Function::new_no_args("console.log(\"test\");");
+    //let y3 = js_sys::Function::new_no_args("console.log(\"test\");");
     // let a = create_effect(move |prev_value| {
     //     let node = navi.get();
     //     if let Some(node) = node {
@@ -58,7 +58,7 @@ pub fn App() -> impl IntoView {
     //     }
     // });
 
-    //provide_context(GlobalState::new());
+    provide_context(GlobalState::new());
 
     view! {
         // injects a stylesheet into the document <head>
@@ -74,12 +74,14 @@ pub fn App() -> impl IntoView {
         // sets the document title
         <Title text="Welcome to Leptos"/>
 
+        <Body class="text-low-purple bg-gradient-to-br from-mid-purple to-dark-purple" />
+
 
 
         // content for this welcome page
         <Router>
             <Navbar/>
-            <main id="home" on:scroll=|_|{ logging::log!("SCROLLED!"); }  class=" grid grid-rows-[auto_1fr] pt-6 gap-6   text-low-purple bg-gradient-to-br from-mid-purple to-dark-purple    ">
+            <main id="home" on:scroll=|_|{ logging::log!("SCROLLED!"); }  class=" grid grid-rows-[auto_1fr] pt-6 gap-6       ">
                 <Routes>
                     <Route path="" view=HomePage/>
                     <Route path="/gallery" view=GalleryPage/>
@@ -97,19 +99,21 @@ fn Navbar() -> impl IntoView {
     //let (nav_bg, set_nav_bg) = create_signal(false);
     let (scroll_section, set_scroll_section) = create_signal(ScrollSection::None);
 
-    //let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
-    //let home_section = global_state.home_section.get();
-    //let about_section = global_state.about_section.get(); create_node_ref::<html::Section>()
-    let home_section = create_node_ref::<html::Section>();
-    let about_section = create_node_ref::<html::Section>();
+    let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
+    let home_section = global_state.home_section.get();
+    let about_section = global_state.about_section.get();
+    //create_node_ref::<html::Section>();
+    // let home_section = create_node_ref::<html::Section>();
+    // let about_section = create_node_ref::<html::Section>();
 
     let navigate = leptos_router::use_navigate();
 
     //let (x, y) = use_window_scroll();
     //window().scroll
     //let a = use_scroll();
-    let (x, y) = use_window_scroll();
+
     create_effect(move |_| {
+        let (x, y) = use_window_scroll();
         let y = y();
         let current_section = scroll_section();
 
@@ -121,6 +125,8 @@ fn Navbar() -> impl IntoView {
             n if n > home_section_y as f64 => ScrollSection::Home,
             _ => ScrollSection::None,
         };
+
+        log!("{}", y);
 
         if new_section != current_section {
             // log!("{:?}", new_section);
@@ -226,9 +232,9 @@ fn HomePage() -> impl IntoView {
     //     }
     // });
 
-    // let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
-    // let home_section = global_state.home_section.get();
-    // let about_section = global_state.about_section.get();
+    let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
+    let home_section = global_state.home_section.get();
+    let about_section = global_state.about_section.get();
 
     view! {
 
@@ -236,7 +242,7 @@ fn HomePage() -> impl IntoView {
 
         // </div>
 
-        <section  class="px-6 py-6 line-bg grid grid-rows-[1fr_1fr_0.3fr] md:grid-rows-[1fr] md:grid-cols-[1fr_1fr] place-items-center  overflow-hidden " style=move|| format!("min-height: calc(100vh - 100px)")>
+        <section _ref=home_section class="px-6 py-6 line-bg grid grid-rows-[1fr_1fr_0.3fr] md:grid-rows-[1fr] md:grid-cols-[1fr_1fr] place-items-center  overflow-hidden " style=move|| format!("min-height: calc(100vh - 100px)")>
                 <div class=" bg-the-star bg-center bg-contain bg-no-repeat h-full w-full grid place-items-center  ">
                     <div class="text-center flex flex-col">
                         <h1 class="text-[4rem] font-bold">"ArtCord"</h1>
@@ -271,7 +277,7 @@ fn HomePage() -> impl IntoView {
                 </div>
                 // <div class="absolute w-[0.25rem]  h-full bg-low-purple/40"></div> grid-rows-[auto_auto_auto] grid-cols-[auto_auto]
             </section>
-            <section  id="about" class=" line-bg px-6 py-6 flex flex-col md:grid md:grid-rows-[1fr_1fr_1fr_auto] md:grid-cols-[1fr_1fr] gap-0" style=move|| format!("min-height: calc(100vh - 50px)")>
+            <section _ref=about_section id="about" class=" line-bg px-6 py-6 flex flex-col md:grid md:grid-rows-[1fr_1fr_1fr_auto] md:grid-cols-[1fr_1fr] gap-0" style=move|| format!("min-height: calc(100vh - 50px)")>
                 <div>
                     <h4 class="text-[3rem] font-bold" >"About Us"</h4>
                     <p class="text-[1.5rem]" >"We're a community of artists who love to create, share, and learn. We're open to all types of art, from traditional to digital, and we're always looking for new members!"</p>

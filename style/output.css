@@ -471,20 +471,12 @@ img, video {
   cursor: pointer;
 }
 
-.grid-cols-\[1fr_1fr\] {
-  grid-template-columns: 1fr 1fr;
-}
-
 .grid-cols-\[auto_auto\] {
   grid-template-columns: auto auto;
 }
 
 .grid-rows-\[1fr_1fr_0\.3fr\] {
   grid-template-rows: 1fr 1fr .3fr;
-}
-
-.grid-rows-\[1fr_1fr_1fr\] {
-  grid-template-rows: 1fr 1fr 1fr;
 }
 
 .grid-rows-\[auto_1fr\] {
@@ -571,6 +563,11 @@ img, video {
 
 .bg-low-purple\/40 {
   background-color: #ecceff66;
+}
+
+.bg-black {
+  --tw-bg-opacity: 1;
+  background-color: rgb(0 0 0 / var(--tw-bg-opacity));
 }
 
 .bg-gradient-to-br {
@@ -680,11 +677,6 @@ img, video {
   color: #ecceff99;
 }
 
-.text-green-600 {
-  --tw-text-opacity: 1;
-  color: rgb(22 163 74 / var(--tw-text-opacity));
-}
-
 .shadow-glowy {
   --tw-shadow: 0px 0px 15px 2px #ecceff;
   --tw-shadow-colored: 0px 0px 15px 2px var(--tw-shadow-color);
@@ -712,7 +704,7 @@ img, video {
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url("assets/LibreBarcode128Text-Regular.ttf") format("woff2");
+  src: url("/assets/LibreBarcode128Text-Regular.ttf") format("woff2");
   unicode-range: U+??, U+131, U+152-153, U+2BB-2BC, U+2C6, U+2DA, U+2DC, U+304, U+308, U+329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
@@ -772,18 +764,6 @@ html {
 
   .md\:grid-rows-\[1fr\] {
     grid-template-rows: 1fr;
-  }
-
-  .md\:grid-rows-\[1fr_1fr_1fr\] {
-    grid-template-rows: 1fr 1fr 1fr;
-  }
-
-  .md\:grid-rows-\[1fr_1fr_1fr_1fr\] {
-    grid-template-rows: 1fr 1fr 1fr 1fr;
-  }
-
-  .md\:grid-rows-\[1fr_1fr_1frauto\] {
-    grid-template-rows: 1fr 1fr 1frauto;
   }
 
   .md\:grid-rows-\[1fr_1fr_1fr_auto\] {
