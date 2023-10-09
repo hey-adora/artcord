@@ -703,6 +703,10 @@ video {
   cursor: pointer;
 }
 
+.resize {
+  resize: both;
+}
+
 .grid-rows-\[1fr_1fr_0\.3fr\] {
   grid-template-rows: 1fr 1fr 0.3fr;
 }
