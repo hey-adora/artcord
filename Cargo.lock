@@ -293,6 +293,7 @@ dependencies = [
  "leptos_actix",
  "leptos_meta",
  "leptos_router",
+ "rand",
  "wasm-bindgen",
  "web-sys",
 ]

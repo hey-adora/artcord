@@ -1,6 +1,8 @@
 use crate::app::utils::{GlobalState, ScrollDetect, ScrollSection};
 use leptos::html::Section;
+use leptos::logging::log;
 use leptos::*;
+use rand::prelude::*;
 
 #[component]
 pub fn GalleryPage() -> impl IntoView {
@@ -17,14 +19,42 @@ pub fn GalleryPage() -> impl IntoView {
 
     create_effect(move |_| {
         ScrollDetect::calc_section(section, ScrollSection::GalleryTop, &scroll_items);
-        // if section.get() != ScrollSection::Gallery {
-        //     section.set(ScrollSection::Gallery);
-        // }
     });
 
+    let images: Vec<(i32, i32)> = (0..200)
+        .map(|_| {
+            (
+                rand::thread_rng().gen_range(500..1000),
+                rand::thread_rng().gen_range(500..1000),
+            )
+        })
+        .collect();
+
     view! {
-        <section _ref=gallery_section style=move|| format!("min-height: calc(100vh - 100px)")>
-            <h1>GALLERY</h1>
+        <section _ref=gallery_section class="line-bg  px-6 flex gap-2 flex-wrap  " style=move|| format!("min-height: calc(100vh - 100px)")>
+            { move || {
+                images.iter().map(|(h, w)|{
+                    let new_height = 250;
+                    let height = h.to_owned();
+                    let width = w.to_owned();
+                    let ratio = width / height;
+                    let height_diff = height - new_height;
+                    let new_width = width - ( height_diff * ratio );
+
+                    log!("{}", height);
+                    view! {
+                    <div
+                        class="flex-shrink-0 flex flex-col shadow-glowy  bg-mid-purple border-4 border-low-purple"
+                        style:height=move || format!("{}px", new_height)
+                        style:width=move || format!("{}px", new_width)
+                    >
+                        <div class="flex justify-between gap-2">
+                            <h3>hello</h3>
+                            <div>2020</div>
+                        </div>
+                    </div>
+                } }).collect_view()
+            } }
         </section>
     }
 }
