@@ -50,14 +50,26 @@ fn render_gallery(max_width: i32, images: &Vec<(i32, i32)>) -> Vec<(i32, i32)> {
                     add_width
                 );
 
+                let mut total_ratio: f32 = 0f32;
+                for i in new_row_start..(new_row_end + 1) {
+                    let (prev_img_w, prev_img_h) = resized_images[i];
+                    total_ratio += prev_img_w as f32 / prev_img_h as f32;
+                }
+                let optimal_height: f32 = max_width as f32 / total_ratio;
+
                 for i in new_row_start..(new_row_end + 1) {
                     let (prev_img_w, prev_img_h) = resized_images[i];
                     let ratio = prev_img_w as f32 / prev_img_h as f32;
-                    let new_prev_img_w: f32 = max_width as f32 / img_count as f32;
-                    let new_prev_img_h: f32 = new_prev_img_w / ratio;
+                    let new_prev_img_w: f32 = optimal_height * ratio;
+                    let new_prev_img_h: f32 = optimal_height;
+                    // let new_prev_img_w: f32 = prev_img_w as f32 + add_width;
+                    // let new_prev_img_h: f32 = new_prev_img_w / ratio;
+                    // let new_prev_img_w: f32 = max_width as f32 / img_count as f32;
+                    // let new_prev_img_h: f32 = new_prev_img_w / ratio;
                     //resized_images[i].0 = new_prev_img_w as i32;
 
-                    resized_images[i].0 += add_width as i32;
+                    resized_images[i].0 = new_prev_img_w as i32;
+                    resized_images[i].1 = new_prev_img_h as i32;
                     //resized_images[i].0 = new_prev_img_w as i32 + add_width as i32;
                     //resized_images[i].1 = new_prev_img_h as i32;
                 }
