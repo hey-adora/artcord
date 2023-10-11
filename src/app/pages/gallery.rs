@@ -10,20 +10,14 @@ use std::rc::Rc;
 use rand::prelude::*;
 
 fn render_gallery(max_width: i32, images: &Vec<(i32, i32)>) -> Vec<(i32, i32)> {
-    //log!("width: {}", max_width);
-
     let max_width = max_width - 48;
-
     let mut resized_images: Vec<(i32, i32)> = Vec::new();
 
-    //let current_row_images: &[(i32, i32)] = &[];
     let mut new_row_start = 0;
     let mut new_row_end = 0;
     let mut current_row_filled_width: i32 = 0;
 
     for (index, (w, h)) in images.iter().enumerate() {
-        // let new_width: i32 = w.to_owned();
-        // let new_height: i32 = h.to_owned();
         let new_height: i32 = 250;
         let width: i32 = w.to_owned();
         let height: i32 = h.to_owned();
@@ -62,16 +56,9 @@ fn render_gallery(max_width: i32, images: &Vec<(i32, i32)>) -> Vec<(i32, i32)> {
                     let ratio = prev_img_w as f32 / prev_img_h as f32;
                     let new_prev_img_w: f32 = optimal_height * ratio;
                     let new_prev_img_h: f32 = optimal_height;
-                    // let new_prev_img_w: f32 = prev_img_w as f32 + add_width;
-                    // let new_prev_img_h: f32 = new_prev_img_w / ratio;
-                    // let new_prev_img_w: f32 = max_width as f32 / img_count as f32;
-                    // let new_prev_img_h: f32 = new_prev_img_w / ratio;
-                    //resized_images[i].0 = new_prev_img_w as i32;
 
                     resized_images[i].0 = new_prev_img_w as i32;
                     resized_images[i].1 = new_prev_img_h as i32;
-                    //resized_images[i].0 = new_prev_img_w as i32 + add_width as i32;
-                    //resized_images[i].1 = new_prev_img_h as i32;
                 }
             } else {
                 log!(
@@ -84,17 +71,6 @@ fn render_gallery(max_width: i32, images: &Vec<(i32, i32)>) -> Vec<(i32, i32)> {
                 );
             }
 
-            // if filled_with_diff != 0 {
-            //     let img_count: usize = new_row_end - new_row_start;
-            //     let add_width: f32 = filled_with_diff as f32 / img_count as f32;
-            //     for i in new_row_start..(new_row_end + 1) {
-            //         let (prev_img_h, prev_img_w) = resized_images[i];
-            //         let ratio = prev_img_w as f32 / prev_img_h as f32;
-            //         let add_height: i32 = (add_width / ratio) as i32;
-            //         resized_images[i].0 += add_height;
-            //         resized_images[i].1 += add_width as i32;
-            //     }
-            // }
             new_row_start = index;
             new_row_end = index;
             current_row_filled_width = new_width;
@@ -135,24 +111,11 @@ pub fn GalleryPage() -> impl IntoView {
         })
         .collect();
 
-    // create_effect(move |_| {
-    //     let test = images.clone();
-    //     let f = use_event_listener(use_window(), resize, move |event| {
-    //         let a = test;
-    //     });
-    // });
-
     create_effect(move |_| {
         ScrollDetect::calc_section(section, ScrollSection::GalleryTop, &scroll_items);
     });
 
     create_effect(move |_| {});
-
-    //use_resize_observer
-
-    // create_render_effect(move |_| {
-    //
-    // });
 
     create_effect(move |_| {
         let imgs = images.clone();
@@ -165,7 +128,6 @@ pub fn GalleryPage() -> impl IntoView {
                 let imgs = imgs.clone();
                 let img = render_gallery(gallery_width.get_untracked(), &imgs);
                 set_gallery_images(img);
-                //log!("width: {}", width);
             };
         });
 
@@ -177,57 +139,7 @@ pub fn GalleryPage() -> impl IntoView {
             let imgs = images.clone();
             let img = render_gallery(gallery_width.get_untracked(), &imgs);
             set_gallery_images(img);
-            //log!("INITIAL: {}", width);
         };
-        //log!("SOMETHING WENT WRONG");
-        //log!("first load");
-        //window().set_onresize(Some(&f));
-        // window_event_listener();
-
-        // if let Ok(x) = xxx {
-        //     log!("x: {}", x);
-        // }
-
-        // let gallery_width = gallery_width() - 200;
-        // let row_width = 0;
-        //
-        // let mut row_imgs: &[(i32, i32)] = &[(0, 0); 0];
-        // let resized_images: Vec<(i32, i32)> = Vec::new();
-        //
-        // for img in images {
-        //
-        // }
-        //
-        // let render_gallery = move || {
-        //
-        //
-        //     images.iter().map(|(h, w)|{
-        //         let new_height = 250;
-        //         let height = h.to_owned();
-        //         let width = w.to_owned();
-        //         let ratio = width / height;
-        //         let height_diff = height - new_height;
-        //         let new_width = width - ( height_diff * ratio );
-        //
-        //         if (row_width + new_width) > gallery_width {
-        //
-        //         }
-        //
-        //
-        //
-        //         view! {
-        //             <div
-        //                 class="flex-shrink-0 flex flex-col shadow-glowy  bg-mid-purple border-4 border-low-purple"
-        //                 style:height=move || format!("{}px", new_height)
-        //                 style:width=move || format!("{}px", new_width)
-        //             >
-        //                 <div class="flex justify-between gap-2">
-        //                     <h3>hello</h3>
-        //                     <div>2020</div>
-        //                 </div>
-        //             </div>
-        //         } }).collect_view()
-        // };gallery_width
     });
 
     view! {
@@ -245,7 +157,6 @@ pub fn GalleryPage() -> impl IntoView {
                             <div class="flex flex-col text-center justify-center gap-2">
                                 <h3>{w}x{h}</h3>
                                 <h3>{w as f32 /h as f32}</h3>
-                                // <div>2020</div>
                             </div>
                         </div>
                     } }).collect_view()

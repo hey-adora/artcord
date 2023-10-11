@@ -727,6 +727,14 @@ video {
   border-radius: 1.5rem;
 }
 
+.border {
+  border-width: 1px;
+}
+
+.border-2 {
+  border-width: 2px;
+}
+
 .border-4 {
   border-width: 4px;
 }
@@ -760,6 +768,11 @@ video {
 
 .bg-transparent {
   background-color: transparent;
+}
+
+.bg-dark2-purple {
+  --tw-bg-opacity: 1;
+  background-color: rgb(100 43 135 / var(--tw-bg-opacity));
 }
 
 .bg-gradient-to-br {
