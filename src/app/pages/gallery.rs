@@ -12,11 +12,9 @@ use rand::prelude::*;
 fn render_gallery(max_width: i32, images: &Vec<(i32, i32)>) -> Vec<(i32, i32)> {
     let max_width = max_width - 48;
     let mut resized_images: Vec<(i32, i32)> = Vec::new();
-
     let mut new_row_start = 0;
     let mut new_row_end = 0;
     let mut current_row_filled_width: i32 = 0;
-
     for (index, (w, h)) in images.iter().enumerate() {
         let new_height: i32 = 250;
         let width: i32 = w.to_owned();
@@ -24,61 +22,30 @@ fn render_gallery(max_width: i32, images: &Vec<(i32, i32)>) -> Vec<(i32, i32)> {
         let ratio: f32 = width as f32 / height as f32;
         let height_diff: i32 = height - new_height;
         let new_width: i32 = width - (height_diff as f32 * ratio) as i32;
-
         if (current_row_filled_width + new_width) <= max_width {
             current_row_filled_width += new_width;
             new_row_end = index;
         } else {
-            let filled_with_diff = max_width - current_row_filled_width;
-            let img_count: usize = (new_row_end - new_row_start) + 1;
-            //log!("{}", img_count);
-
-            if img_count != 0 {
-                let add_width: f32 = filled_with_diff as f32 / img_count as f32;
-                log!(
-                    "i: {}, f: {}, w: {}, c: {}, d: {}",
-                    index,
-                    current_row_filled_width,
-                    max_width,
-                    img_count,
-                    add_width
-                );
-
-                let mut total_ratio: f32 = 0f32;
-                for i in new_row_start..(new_row_end + 1) {
-                    let (prev_img_w, prev_img_h) = resized_images[i];
-                    total_ratio += prev_img_w as f32 / prev_img_h as f32;
-                }
-                let optimal_height: f32 = max_width as f32 / total_ratio;
-
-                for i in new_row_start..(new_row_end + 1) {
-                    let (prev_img_w, prev_img_h) = resized_images[i];
-                    let ratio = prev_img_w as f32 / prev_img_h as f32;
-                    let new_prev_img_w: f32 = optimal_height * ratio;
-                    let new_prev_img_h: f32 = optimal_height;
-
-                    resized_images[i].0 = new_prev_img_w as i32;
-                    resized_images[i].1 = new_prev_img_h as i32;
-                }
-            } else {
-                log!(
-                    "i: {}, f: {}, w: {}, c: {}, d: {}",
-                    index,
-                    current_row_filled_width,
-                    max_width,
-                    img_count,
-                    0
-                );
+            let mut total_ratio: f32 = 0f32;
+            for i in new_row_start..(new_row_end + 1) {
+                let (prev_img_w, prev_img_h) = resized_images[i];
+                total_ratio += prev_img_w as f32 / prev_img_h as f32;
             }
-
+            let optimal_height: f32 = max_width as f32 / total_ratio;
+            for i in new_row_start..(new_row_end + 1) {
+                let (prev_img_w, prev_img_h) = resized_images[i];
+                let ratio = prev_img_w as f32 / prev_img_h as f32;
+                let new_prev_img_w: f32 = optimal_height * ratio;
+                let new_prev_img_h: f32 = optimal_height;
+                resized_images[i].0 = new_prev_img_w as i32;
+                resized_images[i].1 = new_prev_img_h as i32;
+            }
             new_row_start = index;
             new_row_end = index;
             current_row_filled_width = new_width;
         }
-
         resized_images.push((new_width, new_height));
     }
-
     resized_images
 }
 
