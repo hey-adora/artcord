@@ -102,7 +102,7 @@ pub fn GalleryPage() -> impl IntoView {
         "/gallery",
     )];
 
-    let images: Vec<(i32, i32)> = (0..200)
+    let images: Vec<(i32, i32)> = (0..25)
         .map(|_| {
             (
                 rand::thread_rng().gen_range(500..1000),
