@@ -1,4 +1,3 @@
-use leptos::logging::log;
 use leptos::*;
 use leptos_meta::*;
 use leptos_router::*;
@@ -24,7 +23,7 @@ pub fn App() -> impl IntoView {
         <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
         <Stylesheet id="leptos" href="/pkg/leptos_start.css"/>
         <Title text="Welcome to Leptos"/>
-        <Body  class=move || format!("text-low-purple  bg-gradient-to-br from-mid-purple to-dark-purple {}", if global_state.nav_open.get() == true { "overflow-hidden w-screen h-screen" } else { "" })  />
+        <Body  class=move || format!("text-low-purple  bg-gradient-to-br from-mid-purple to-dark-purple overflow-hidden max-h-screen {}", if global_state.nav_open.get() == true { " w-screen h-screen" } else { "" })  />
         <Router>
             <div id="home" class="pt-4" >
                 <Navbar/>
