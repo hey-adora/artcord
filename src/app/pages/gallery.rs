@@ -1,12 +1,9 @@
-use crate::app::utils::{GlobalState, ScrollDetect, ScrollSection};
 use leptos::ev::resize;
 use leptos::html::Section;
 use leptos::logging::log;
 use leptos::*;
-use leptos_router::use_resolved_path;
-use leptos_use::{use_document, use_event_listener, use_window};
-use std::rc::Rc;
-//use leptos_use::use_resize_observer;
+use leptos_router::use_router;
+use leptos_use::{use_event_listener, use_window};
 use rand::prelude::*;
 
 fn render_gallery(max_width: i32, images: &Vec<(i32, i32)>) -> Vec<(i32, i32)> {
@@ -58,16 +55,8 @@ pub fn GalleryPage() -> impl IntoView {
 
     let (gallery_width, set_gallery_width): (ReadSignal<i32>, WriteSignal<i32>) =
         create_signal::<i32>(1000);
-    let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
-    let section = global_state.section;
 
     let gallery_section = create_node_ref::<Section>();
-    let scroll_items = [ScrollDetect::new(
-        ScrollSection::Gallery,
-        gallery_section,
-        0,
-        "/gallery",
-    )];
 
     let images: Vec<(i32, i32)> = (0..25)
         .map(|_| {
@@ -78,15 +67,12 @@ pub fn GalleryPage() -> impl IntoView {
         })
         .collect();
 
-    create_effect(move |_| {
-        ScrollDetect::calc_section(section, ScrollSection::GalleryTop, &scroll_items);
-    });
-
-    create_effect(move |_| {});
+    let router = use_router();
 
     create_effect(move |_| {
+        router.pathname();
         let imgs = images.clone();
-        let f = use_event_listener(use_window(), resize, move |event| {
+        let resize_images = move || {
             let section = gallery_section.get_untracked();
             if let Some(section) = section {
                 let width = section.offset_width();
@@ -96,17 +82,10 @@ pub fn GalleryPage() -> impl IntoView {
                 let img = render_gallery(gallery_width.get_untracked(), &imgs);
                 set_gallery_images(img);
             };
-        });
-
-        let section = gallery_section.get_untracked();
-        if let Some(section) = section {
-            let width = section.offset_width();
-            set_gallery_width(width);
-
-            let imgs = images.clone();
-            let img = render_gallery(gallery_width.get_untracked(), &imgs);
-            set_gallery_images(img);
         };
+        resize_images();
+
+        let _ = use_event_listener(use_window(), resize, move |_| resize_images());
     });
 
     view! {

@@ -1,26 +1,9 @@
-use crate::app::utils::{GlobalState, ScrollDetect, ScrollSection};
-use leptos::html::Section;
 use leptos::*;
 
 #[component]
 pub fn HomePage() -> impl IntoView {
-    let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
-    let section = global_state.section;
-
-    let home_section = create_node_ref::<Section>();
-    let about_section = create_node_ref::<Section>();
-
-    let scroll_items = [
-        ScrollDetect::new(ScrollSection::About, about_section, 70, "/#about"),
-        ScrollDetect::new(ScrollSection::Home, home_section, 70, "/#home"),
-    ];
-
-    create_effect(move |_| {
-        ScrollDetect::calc_section(section, ScrollSection::HomeTop, &scroll_items);
-    });
-
     view! {
-        <section _ref=home_section class="px-6 py-6 line-bg grid grid-rows-[1fr_1fr_0.3fr] md:grid-rows-[1fr] md:grid-cols-[1fr_1fr] place-items-center  overflow-hidden " style=move|| format!("min-height: calc(100vh - 100px)")>
+        <section class="px-6 py-6 line-bg grid grid-rows-[1fr_1fr_0.3fr] md:grid-rows-[1fr] md:grid-cols-[1fr_1fr] place-items-center  overflow-hidden " style=move|| format!("min-height: calc(100vh - 100px)")>
                 <div class=" bg-the-star bg-center bg-contain bg-no-repeat h-full w-full grid place-items-center  ">
                     <div class="text-center flex flex-col">
                         <h1 class="text-[4rem] font-bold">"ArtCord"</h1>
@@ -63,7 +46,7 @@ pub fn HomePage() -> impl IntoView {
                     </a>
                 </div>
             </section>
-            <section _ref=about_section id="about" class=" line-bg px-6 py-6 flex flex-col md:grid md:grid-rows-[1fr_1fr_1fr_auto] md:grid-cols-[1fr_1fr] gap-0" style=move|| format!("min-height: calc(100vh - 50px)")>
+            <section  id="about" class=" line-bg px-6 py-6 flex flex-col md:grid md:grid-rows-[1fr_1fr_1fr_auto] md:grid-cols-[1fr_1fr] gap-0" style=move|| format!("min-height: calc(100vh - 50px)")>
                 <div>
                     <h4 class="text-[3rem] font-bold" >"About Us"</h4>
                     <p class="text-[1.5rem]" >"We're a community of artists who love to create, share, and learn. We're open to all types of art, from traditional to digital, and we're always looking for new members!"</p>
