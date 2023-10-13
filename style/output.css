@@ -619,6 +619,10 @@ video {
   max-height: 20rem;
 }
 
+.max-h-full {
+  max-height: 100%;
+}
+
 .w-\[100vw\] {
   width: 100vw;
 }
@@ -687,6 +691,10 @@ video {
   grid-template-rows: auto 1fr;
 }
 
+.grid-rows-\[1fr\] {
+  grid-template-rows: 1fr;
+}
+
 .flex-col {
   flex-direction: column;
 }
@@ -737,6 +745,14 @@ video {
 
 .overflow-hidden {
   overflow: hidden;
+}
+
+.overflow-x-auto {
+  overflow-x: auto;
+}
+
+.overflow-y-auto {
+  overflow-y: auto;
 }
 
 .overflow-x-hidden {

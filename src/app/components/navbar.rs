@@ -21,12 +21,12 @@ pub fn Navbar() -> impl IntoView {
         let (_, y) = use_window_scroll();
         if y() > 100f64 {
             if nav_tran.with(|&s| s) {
-                log!("FALSE: {}", y());
+                //log!("FALSE: {}", y());
                 nav_tran.set(false);
             }
         } else {
             if nav_tran.with(|&s| !s) {
-                log!("TRUE: {}", y());
+                //log!("TRUE: {}", y());
                 nav_tran.set(true);
             }
         }

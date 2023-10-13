@@ -4,6 +4,7 @@ use leptos::logging::log;
 use leptos::*;
 use leptos_use::{use_event_listener, use_window};
 use rand::prelude::*;
+use web_sys::Event;
 
 fn resize_imgs(
     max_width: i32,
@@ -29,17 +30,17 @@ fn resize_imgs(
         resized_imgs[i].0 = new_prev_img_w as i32;
         resized_imgs[i].1 = new_prev_img_h as i32;
 
-        log!(
-            "-: {}, f: {}, w: {}, c: {}, d: {}, o: {}, l: {}..{}",
-            i,
-            0,
-            max_width,
-            1 + new_row_end - new_row_start,
-            0,
-            optimal_height,
-            new_row_start,
-            new_row_end
-        );
+        // log!(
+        //     "-: {}, f: {}, w: {}, c: {}, d: {}, o: {}, l: {}..{}",
+        //     i,
+        //     0,
+        //     max_width,
+        //     1 + new_row_end - new_row_start,
+        //     0,
+        //     optimal_height,
+        //     new_row_start,
+        //     new_row_end
+        // );
     }
 }
 
@@ -65,18 +66,18 @@ fn render_gallery(max_width: i32, org_imgs: &[(i32, i32)], resized_imgs: &mut [(
         if ((current_row_filled_width + new_width) <= max_width) {
             current_row_filled_width += new_width;
             new_row_end = index;
-            log!(
-                "+: {}, f: {}, w: {}, c: {}, d: {}, l: {}..{}",
-                index,
-                current_row_filled_width,
-                max_width,
-                1 + new_row_end - new_row_start,
-                max_width - current_row_filled_width,
-                new_row_start,
-                new_row_end
-            );
+            // log!(
+            //     "+: {}, f: {}, w: {}, c: {}, d: {}, l: {}..{}",
+            //     index,
+            //     current_row_filled_width,
+            //     max_width,
+            //     1 + new_row_end - new_row_start,
+            //     max_width - current_row_filled_width,
+            //     new_row_start,
+            //     new_row_end
+            // );
             if index == loop_end - 1 {
-                log!("FIRST: END;");
+                // log!("FIRST: END;");
                 resize_imgs(
                     max_width,
                     new_row_start,
@@ -97,16 +98,16 @@ fn render_gallery(max_width: i32, org_imgs: &[(i32, i32)], resized_imgs: &mut [(
             new_row_start = index;
             new_row_end = index;
             current_row_filled_width = new_width;
-            log!(
-                "+: {}, f: {}, w: {}, c: {}, d: {}, l: {}..{}",
-                index,
-                current_row_filled_width,
-                max_width,
-                1 + new_row_end - new_row_start,
-                max_width - current_row_filled_width,
-                new_row_start,
-                new_row_end
-            );
+            // log!(
+            //     "+: {}, f: {}, w: {}, c: {}, d: {}, l: {}..{}",
+            //     index,
+            //     current_row_filled_width,
+            //     max_width,
+            //     1 + new_row_end - new_row_start,
+            //     max_width - current_row_filled_width,
+            //     new_row_start,
+            //     new_row_end
+            // );
             if index == loop_end - 1 {
                 // log!("SECOND: END;");
                 resize_imgs(
@@ -167,7 +168,7 @@ fn render_gallery3(max_width: i32, images: &Vec<(i32, i32)>) -> Vec<(i32, i32)> 
 pub fn GalleryPage() -> impl IntoView {
     let (org_images, set_org_images): (ReadSignal<Vec<(i32, i32)>>, WriteSignal<Vec<(i32, i32)>>) =
         create_signal::<Vec<(i32, i32)>>(
-            (0..25)
+            (0..100)
                 .map(|_| {
                     (
                         rand::thread_rng().gen_range(500..1000),
@@ -189,7 +190,7 @@ pub fn GalleryPage() -> impl IntoView {
     let resize_images = move || {
         let section = gallery_section.get_untracked();
         if let Some(section) = section {
-            let width = section.parent_element().unwrap().client_width();
+            let width = section.client_width();
             set_gallery_width(width);
 
             set_gallery_images.update(move |imgs| {
@@ -199,9 +200,9 @@ pub fn GalleryPage() -> impl IntoView {
                     imgs,
                 );
             });
-            log!("WIDTH: {:?}", width);
-            log!("ORG: {:?}", org_images.get_untracked());
-            log!("NEW: {:?}", gallery_images.get_untracked());
+            // log!("WIDTH: {:?}", width);
+            // log!("ORG: {:?}", org_images.get_untracked());
+            // log!("NEW: {:?}", gallery_images.get_untracked());
         };
     };
 
@@ -224,9 +225,74 @@ pub fn GalleryPage() -> impl IntoView {
         let _ = use_event_listener(use_window(), resize, move |_| resize_images());
     });
 
+    let section_scroll = move |_: Event| {
+        let section = gallery_section.get_untracked().unwrap();
+        let scroll_top = section.scroll_top();
+        // if scroll_top > 5000 {
+        //     if org_images.get_untracked().len() > 25 {
+        //         log!(
+        //             "REMOVING {} {} {} {} {}",
+        //             scroll_top,
+        //             scroll_top,
+        //             section.offset_height(),
+        //             section.scroll_height(),
+        //             section.client_height()
+        //         );
+        //         set_org_images.update_untracked(move |mut imgs| {
+        //             *imgs = imgs.drain(5..).collect();
+        //         });
+        //
+        //         set_gallery_images.update_untracked(move |imgs| {
+        //             *imgs = imgs.drain(5..).collect();
+        //         });
+        //         resize_images();
+        //     }
+        // }
+        let left = section.scroll_height() - (section.client_height() + scroll_top);
+        if left < 3000 {
+            log!(
+                "ADDING {} {} {} {} {}",
+                left,
+                scroll_top,
+                section.offset_height(),
+                section.scroll_height(),
+                section.client_height()
+            );
+            let amount: usize = 100;
+            let remove = false;
+            let mut new_imgs = (0..amount * 2)
+                .map(|_| {
+                    (
+                        rand::thread_rng().gen_range(500..1000),
+                        rand::thread_rng().gen_range(500..1000),
+                    )
+                })
+                .collect::<Vec<(i32, i32)>>();
+            let mut new_imgs2 = new_imgs.clone();
+            if remove {
+                set_org_images.update_untracked(move |imgs| {
+                    *imgs = [imgs.drain(amount..).collect(), new_imgs].concat();
+                });
+
+                set_gallery_images.update_untracked(move |imgs| {
+                    *imgs = [imgs.drain(amount..).collect(), new_imgs2].concat();
+                });
+            } else {
+                set_org_images.update_untracked(move |imgs| {
+                    imgs.append(&mut new_imgs);
+                });
+
+                set_gallery_images.update_untracked(move |imgs| {
+                    imgs.append(&mut new_imgs2);
+                });
+            }
+            resize_images();
+        }
+    };
+
     view! {
-        <section on:resize=move |_| { log!("test resize") } _ref=gallery_section class="line-bg  overflow-x-hidden content-start flex flex-wrap  " style=move|| format!("min-height: calc(100vh - 100px); ")>
-                       { move || {
+        <section on:scroll=section_scroll on:resize=move |_| { log!("test resize") } _ref=gallery_section class="line-bg  overflow-x-hidden content-start flex flex-wrap overflow-y-auto " style=move|| format!("max-height: calc(100vh - 80px); ")>
+            { move || {
 
                   gallery_images.get().into_iter().enumerate().map(|(i, (w, h))|{
 
@@ -245,8 +311,8 @@ pub fn GalleryPage() -> impl IntoView {
                         </div>
                     } }).collect_view()
 
+                }
             }
-        }
         </section>
     }
 }
