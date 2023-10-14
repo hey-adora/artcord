@@ -534,6 +534,10 @@ video {
   --tw-backdrop-sepia:  ;
 }
 
+.static {
+  position: static;
+}
+
 .absolute {
   position: absolute;
 }
@@ -619,10 +623,6 @@ video {
   max-height: 20rem;
 }
 
-.max-h-full {
-  max-height: 100%;
-}
-
 .w-\[100vw\] {
   width: 100vw;
 }
@@ -683,16 +683,16 @@ video {
   scroll-margin-top: 10rem;
 }
 
+.grid-rows-\[1fr\] {
+  grid-template-rows: 1fr;
+}
+
 .grid-rows-\[1fr_1fr_0\.3fr\] {
   grid-template-rows: 1fr 1fr 0.3fr;
 }
 
 .grid-rows-\[auto_1fr\] {
   grid-template-rows: auto 1fr;
-}
-
-.grid-rows-\[1fr\] {
-  grid-template-rows: 1fr;
 }
 
 .flex-col {
@@ -747,16 +747,16 @@ video {
   overflow: hidden;
 }
 
-.overflow-x-auto {
-  overflow-x: auto;
-}
-
 .overflow-y-auto {
   overflow-y: auto;
 }
 
 .overflow-x-hidden {
   overflow-x: hidden;
+}
+
+.overflow-y-scroll {
+  overflow-y: scroll;
 }
 
 .whitespace-nowrap {

@@ -6,6 +6,8 @@ use leptos_use::{use_event_listener, use_window};
 use rand::prelude::*;
 use web_sys::Event;
 
+static new_img_height: i32 = 250;
+
 fn resize_imgs(
     max_width: i32,
     new_row_start: usize,
@@ -30,29 +32,39 @@ fn resize_imgs(
         resized_imgs[i].0 = new_prev_img_w as i32;
         resized_imgs[i].1 = new_prev_img_h as i32;
 
-        // log!(
-        //     "-: {}, f: {}, w: {}, c: {}, d: {}, o: {}, l: {}..{}",
-        //     i,
-        //     0,
-        //     max_width,
-        //     1 + new_row_end - new_row_start,
-        //     0,
-        //     optimal_height,
-        //     new_row_start,
-        //     new_row_end
-        // );
+        log!(
+            "-: {}, f: {}, w: {}, c: {}, d: {}, o: {}, l: {}..{}",
+            i,
+            0,
+            max_width,
+            1 + new_row_end - new_row_start,
+            0,
+            optimal_height,
+            new_row_start,
+            new_row_end
+        );
     }
 }
 
-fn render_gallery(max_width: i32, org_imgs: &[(i32, i32)], resized_imgs: &mut [(i32, i32)]) -> () {
+fn calc_fit_count(width: i32, height: i32) -> i32 {
+    (width * height) / (new_img_height * new_img_height)
+}
+
+fn render_gallery(
+    max_width: i32,
+    org_imgs: &[(i32, i32)],
+    resized_imgs: &mut [(i32, i32)],
+) -> Vec<usize> {
+    let mut row_img_count: Vec<usize> = Vec::new();
     let loop_start = 0;
     let loop_end = org_imgs.len();
     let mut new_row_start: usize = 0;
     let mut new_row_end: usize = loop_end - 1;
     let mut current_row_filled_width: i32 = 0;
-    let new_height: i32 = match max_width {
-        _ => 250,
-    };
+    let new_height: i32 = new_img_height;
+    // let new_height: i32 = match max_width {
+    //     _ => new_img_height,
+    // };
 
     for index in loop_start..loop_end {
         let (w, h) = &org_imgs[index];
@@ -66,18 +78,18 @@ fn render_gallery(max_width: i32, org_imgs: &[(i32, i32)], resized_imgs: &mut [(
         if ((current_row_filled_width + new_width) <= max_width) {
             current_row_filled_width += new_width;
             new_row_end = index;
-            // log!(
-            //     "+: {}, f: {}, w: {}, c: {}, d: {}, l: {}..{}",
-            //     index,
-            //     current_row_filled_width,
-            //     max_width,
-            //     1 + new_row_end - new_row_start,
-            //     max_width - current_row_filled_width,
-            //     new_row_start,
-            //     new_row_end
-            // );
+            log!(
+                "+: {}, f: {}, w: {}, c: {}, d: {}, l: {}..{}",
+                index,
+                current_row_filled_width,
+                max_width,
+                1 + new_row_end - new_row_start,
+                max_width - current_row_filled_width,
+                new_row_start,
+                new_row_end
+            );
             if index == loop_end - 1 {
-                // log!("FIRST: END;");
+                log!("FIRST: END;");
                 resize_imgs(
                     max_width,
                     new_row_start,
@@ -85,6 +97,7 @@ fn render_gallery(max_width: i32, org_imgs: &[(i32, i32)], resized_imgs: &mut [(
                     org_imgs,
                     resized_imgs,
                 );
+                row_img_count.push((new_row_end + 1) - new_row_start);
             }
         } else {
             resize_imgs(
@@ -94,22 +107,23 @@ fn render_gallery(max_width: i32, org_imgs: &[(i32, i32)], resized_imgs: &mut [(
                 org_imgs,
                 resized_imgs,
             );
+            row_img_count.push((new_row_end + 1) - new_row_start);
 
             new_row_start = index;
             new_row_end = index;
             current_row_filled_width = new_width;
-            // log!(
-            //     "+: {}, f: {}, w: {}, c: {}, d: {}, l: {}..{}",
-            //     index,
-            //     current_row_filled_width,
-            //     max_width,
-            //     1 + new_row_end - new_row_start,
-            //     max_width - current_row_filled_width,
-            //     new_row_start,
-            //     new_row_end
-            // );
+            log!(
+                "+: {}, f: {}, w: {}, c: {}, d: {}, l: {}..{}",
+                index,
+                current_row_filled_width,
+                max_width,
+                1 + new_row_end - new_row_start,
+                max_width - current_row_filled_width,
+                new_row_start,
+                new_row_end
+            );
             if index == loop_end - 1 {
-                // log!("SECOND: END;");
+                log!("SECOND: END;");
                 resize_imgs(
                     max_width,
                     new_row_start,
@@ -117,9 +131,12 @@ fn render_gallery(max_width: i32, org_imgs: &[(i32, i32)], resized_imgs: &mut [(
                     org_imgs,
                     resized_imgs,
                 );
+                row_img_count.push((new_row_end + 1) - new_row_start);
             }
         }
     }
+
+    row_img_count
 }
 
 fn render_gallery3(max_width: i32, images: &Vec<(i32, i32)>) -> Vec<(i32, i32)> {
@@ -166,22 +183,16 @@ fn render_gallery3(max_width: i32, images: &Vec<(i32, i32)>) -> Vec<(i32, i32)> 
 
 #[component]
 pub fn GalleryPage() -> impl IntoView {
+    let (loaded, set_loaded): (ReadSignal<bool>, WriteSignal<bool>) = create_signal(false);
+    let (row_img_count, set_row_img_count): (ReadSignal<Vec<usize>>, WriteSignal<Vec<usize>>) =
+        create_signal(Vec::new());
     let (org_images, set_org_images): (ReadSignal<Vec<(i32, i32)>>, WriteSignal<Vec<(i32, i32)>>) =
-        create_signal::<Vec<(i32, i32)>>(
-            (0..100)
-                .map(|_| {
-                    (
-                        rand::thread_rng().gen_range(500..1000),
-                        rand::thread_rng().gen_range(500..1000),
-                    )
-                })
-                .collect::<Vec<(i32, i32)>>(),
-        );
+        create_signal::<Vec<(i32, i32)>>(Vec::new());
 
     let (gallery_images, set_gallery_images): (
         ReadSignal<Vec<(i32, i32)>>,
         WriteSignal<Vec<(i32, i32)>>,
-    ) = create_signal::<Vec<(i32, i32)>>(org_images.get_untracked());
+    ) = create_signal::<Vec<(i32, i32)>>(Vec::new());
 
     let (gallery_width, set_gallery_width): (ReadSignal<i32>, WriteSignal<i32>) =
         create_signal::<i32>(0);
@@ -194,11 +205,13 @@ pub fn GalleryPage() -> impl IntoView {
             set_gallery_width(width);
 
             set_gallery_images.update(move |imgs| {
-                render_gallery(
+                let row_img_count = render_gallery(
                     gallery_width.get_untracked(),
                     &org_images.get_untracked(),
                     imgs,
                 );
+
+                set_row_img_count.set_untracked(row_img_count);
             });
             // log!("WIDTH: {:?}", width);
             // log!("ORG: {:?}", org_images.get_untracked());
@@ -212,14 +225,37 @@ pub fn GalleryPage() -> impl IntoView {
     //     }
     // });
 
+    create_effect(move |_| {});
+
     create_effect(move |_| {
         let _ = use_event_listener(use_window(), load, move |_| {
-            // resize_images();
+            //resize_images();
             // log!("LOADED");
         });
     });
 
     create_effect(move |_| {
+        let new_org_imgs = (0..10)
+            .map(|_| {
+                (
+                    rand::thread_rng().gen_range(500..1000),
+                    rand::thread_rng().gen_range(500..1000),
+                )
+            })
+            .collect::<Vec<(i32, i32)>>();
+        let new_org_imgs2 = new_org_imgs.clone();
+
+        set_org_images.update_untracked(move |org_imgs| {
+            *org_imgs = new_org_imgs;
+            //let two = new_org_imgs
+
+            //resize_images();
+        });
+
+        set_gallery_images.update_untracked(move |gallery_imgs| {
+            *gallery_imgs = new_org_imgs2;
+        });
+
         resize_images();
 
         let _ = use_event_listener(use_window(), resize, move |_| resize_images());
@@ -248,50 +284,88 @@ pub fn GalleryPage() -> impl IntoView {
         //         resize_images();
         //     }
         // }
-        let left = section.scroll_height() - (section.client_height() + scroll_top);
-        if left < 3000 {
-            log!(
-                "ADDING {} {} {} {} {}",
-                left,
-                scroll_top,
-                section.offset_height(),
-                section.scroll_height(),
-                section.client_height()
-            );
-            let amount: usize = 100;
-            let remove = false;
-            let mut new_imgs = (0..amount * 2)
-                .map(|_| {
-                    (
-                        rand::thread_rng().gen_range(500..1000),
-                        rand::thread_rng().gen_range(500..1000),
-                    )
-                })
-                .collect::<Vec<(i32, i32)>>();
-            let mut new_imgs2 = new_imgs.clone();
-            if remove {
+        let width = section.client_width();
+        let height = section.client_height();
+        let left = section.scroll_height() - (height + scroll_top);
+
+        let fit_count = calc_fit_count(width, height) as usize;
+        let row_fit_count = (height / new_img_height) as usize;
+        let mut amount: usize = fit_count as usize;
+        let row_img_count = row_img_count.get_untracked();
+
+        //if row_img_count.len() >
+
+        if scroll_top > (height / 1) {
+            if row_img_count.len() > (row_fit_count * 3) as usize {
+                log!(
+                    "REMOVING {} {} {} {} {}",
+                    left,
+                    scroll_top,
+                    section.offset_height(),
+                    section.scroll_height(),
+                    section.client_height()
+                );
+
+                amount = row_img_count[0];
+                // for row in &row_img_count[..row_fit_count / 4] {
+                //     amount += row;
+                // }
+
                 set_org_images.update_untracked(move |imgs| {
-                    *imgs = [imgs.drain(amount..).collect(), new_imgs].concat();
+                    *imgs = imgs.drain(amount..).collect();
                 });
 
                 set_gallery_images.update_untracked(move |imgs| {
-                    *imgs = [imgs.drain(amount..).collect(), new_imgs2].concat();
-                });
-            } else {
-                set_org_images.update_untracked(move |imgs| {
-                    imgs.append(&mut new_imgs);
+                    *imgs = imgs.drain(amount..).collect();
                 });
 
-                set_gallery_images.update_untracked(move |imgs| {
-                    imgs.append(&mut new_imgs2);
-                });
+                resize_images();
             }
-            resize_images();
         }
+        // if left < (height / 1) {
+        //     log!(
+        //         "ADDING {} {} {} {} {}",
+        //         left,
+        //         scroll_top,
+        //         section.offset_height(),
+        //         section.scroll_height(),
+        //         section.client_height()
+        //     );
+        //
+        //     let remove = false;
+        //     let mut new_imgs = (0..amount)
+        //         .map(|_| {
+        //             (
+        //                 rand::thread_rng().gen_range(500..1000),
+        //                 rand::thread_rng().gen_range(500..1000),
+        //             )
+        //         })
+        //         .collect::<Vec<(i32, i32)>>();
+        //     let mut new_imgs2 = new_imgs.clone();
+        //     if remove {
+        //         set_org_images.update_untracked(move |imgs| {
+        //             *imgs = [imgs.drain(amount..).collect(), new_imgs].concat();
+        //         });
+        //
+        //         set_gallery_images.update_untracked(move |imgs| {
+        //             *imgs = [imgs.drain(amount..).collect(), new_imgs2].concat();
+        //         });
+        //     } else {
+        //         set_org_images.update_untracked(move |imgs| {
+        //             imgs.append(&mut new_imgs);
+        //         });
+        //
+        //         set_gallery_images.update_untracked(move |imgs| {
+        //             imgs.append(&mut new_imgs2);
+        //         });
+        //     }
+        //     resize_images();
+        // }
     };
 
     view! {
-        <section on:scroll=section_scroll on:resize=move |_| { log!("test resize") } _ref=gallery_section class="line-bg  overflow-x-hidden content-start flex flex-wrap overflow-y-auto " style=move|| format!("max-height: calc(100vh - 80px); ")>
+        // <button on:click=move|_|{  resize_images(); }>"RESIZE"</button>
+        <section on:scroll=section_scroll on:resize=move |_| { log!("test resize") } _ref=gallery_section class="line-bg  overflow-x-hidden content-start flex flex-wrap overflow-y-scroll " style=move|| format!("max-height: calc(100vh - 80px); ")>
             { move || {
 
                   gallery_images.get().into_iter().enumerate().map(|(i, (w, h))|{
