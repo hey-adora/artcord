@@ -19,8 +19,11 @@ leptos_router = { version = "0.5", features = ["nightly"] }
 wasm-bindgen = { version = "=0.2.87", features = [] }
 leptos-use = { version = "0.7.1", features = [] }
 web-sys = { version = "0.3.64", features = [] }
-js-sys = "0.3.64"
-rand = "0.8.5"
+js-sys = {version = "0.3.64", features = []}
+rand = {version = "0.8.5", features = []}
+actix-web-actors = {version = "4.2.0", features = [], optional = true}
+actix = {version = "0.13.1", features = [], optional = true}
+
 
 [features]
 csr = ["leptos/csr", "leptos_meta/csr", "leptos_router/csr" ]
@@ -29,6 +32,8 @@ ssr = [
   "dep:actix-files",
   "dep:actix-web",
   "dep:leptos_actix",
+  "dep:actix-web-actors",
+  "dep:actix",
   "leptos/ssr",
   "leptos_meta/ssr",
   "leptos_router/ssr",

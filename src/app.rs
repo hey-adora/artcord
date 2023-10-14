@@ -1,6 +1,8 @@
+use leptos::logging::log;
 use leptos::*;
 use leptos_meta::*;
 use leptos_router::*;
+use leptos_use::{use_websocket, UseWebsocketReturn};
 
 use components::navbar::Navbar;
 use pages::gallery::GalleryPage;
@@ -18,6 +20,19 @@ pub fn App() -> impl IntoView {
     provide_meta_context();
     provide_context(GlobalState::new());
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
+
+    create_effect(move |_| {
+        let UseWebsocketReturn {
+            ready_state,
+            message,
+            message_bytes,
+            send,
+            send_bytes,
+            open,
+            close,
+            ..
+        } = use_websocket("/ws/");
+    });
 
     view! {
         <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
