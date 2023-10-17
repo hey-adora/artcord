@@ -3,7 +3,7 @@ use leptos::*;
 use leptos_meta::*;
 use leptos_router::*;
 use leptos_use::core::ConnectionReadyState;
-use leptos_use::{use_websocket, use_websocket_with_options, UseWebsocketReturn};
+use leptos_use::{use_websocket, UseWebsocketReturn};
 
 use components::navbar::Navbar;
 use pages::gallery::GalleryPage;

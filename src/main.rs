@@ -1,82 +1,16 @@
-use actix_web::web::Json;
-use actix_web::{get, web, Error, HttpRequest, HttpResponse};
-
 use actix::{
-    Actor, ActorContext, ActorFuture, ActorFutureExt, Addr, AsyncContext, Context,
-    ContextFutureSpawner, Handler, Message, Recipient, Running, StreamHandler, WrapFuture,
+    Actor, ActorContext, ActorFutureExt, AsyncContext, ContextFutureSpawner, Handler, Message,
+    Recipient, StreamHandler, WrapFuture,
 };
-
+use actix_web::{web, Error, HttpRequest, HttpResponse};
 use actix_web_actors::ws::{self, ProtocolError};
 use futures::future;
 use rand::Rng;
-use uuid::Uuid;
 use wasm_bindgen::__rt::Start;
 
-// struct Session {
-//     //pub addr: Addr<MyWs>,
-// }
-
-// #[derive(Message)]
-// #[rtype(result = "()")]
-// pub struct WsMessage(pub String);
-//
-// #[derive(Message)]
-// #[rtype(result = "()")]
-// pub struct Connect {
-//     pub addr: Recipient<WsMessage>,
-// }
-//
-// #[derive(Message)]
-// #[rtype(result = "()")]
-// pub struct Disconnect {
-//     pub wtf: String,
-// }
-//
-// #[derive(Message)]
-// #[rtype(result = "()")]
-// pub struct ClientActorMessage {
-//     pub msg: String,
-// }
-//
-//
-// struct Server {
-//     me: Recipient<WsMessage>
-// }
-//
-// impl Actor for Server {
-//     type Context = Context<Self>;
-// }
-
-// impl Handler<Message> for Server {
-//     type Result = ();
-//
-//     fn handle(&mut self, msg: Message, _: &mut Context<Self>) {
-//         println!("SEND WHAT???");
-//         //self.send_message(&msg.room, msg.msg.as_str(), msg.id);
-//     }
-// }
-
 struct MyWs {
-    //pub addr: Addr<MyWs>,
     id: u32,
 }
-
-// impl Handler<WsMessage> for MyWs {
-//     type Result = ();
-//
-//     fn handle(&mut self, msg: WsMessage, ctx: &mut Self::Context) {
-//         ctx.text(msg.0);
-//     }
-// }
-
-// impl Handler<Connect> for Server {
-//
-//     type Result = ();
-//     fn handle(&mut self, msg: Connect, ctx: &mut Self::Context) -> Self::Result {
-//         let s = &self.me;
-//         s.
-//     }
-// }
 
 struct Connect {
     pub addr: Recipient<MSG>,
@@ -86,149 +20,38 @@ impl actix::Message for Connect {
     type Result = ();
 }
 
-impl Handler<Connect> for MyWs {
-    type Result = ();
-
-    fn handle(&mut self, msg: Connect, ctx: &mut Self::Context) {
-        println!("Someone joined??FE?FE?EF?");
-
-        // notify all users in same room
-        //self.se("main", "Someone joined", 0);
-
-        // register session with random id
-        //let id = self.rng.gen::<usize>();
-        //self.sessions.insert(id, msg.addr);
-
-        // auto join session to main room
-        //self.rooms.get_mut("main").unwrap().insert(id);
-
-        // send id back
-        //id
-    }
-}
-
 impl Actor for MyWs {
     type Context = ws::WebsocketContext<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
         println!("started what? {}", self.id);
 
-        let addr = ctx.address();
-        addr.do_send(MSG("HISSSSSSSSSSSSSS".to_string()));
-        addr.do_send(Connect {
-            addr: addr.clone().recipient(),
-        });
+        //BROKEN
+        ctx.address()
+            .send(MSG("NOOOOOOOOOOOOOOOOOO".to_string()))
+            .into_actor(self)
+            .then(|res, act, ctx| {
+                match res {
+                    Ok(res) => {
+                        println!("how does this even make sense");
+                        ().start()
+                    }
+                    _ => {
+                        println!("started error???");
+                        ctx.stop()
+                    }
+                }
+                println!("started READY???");
+                actix::fut::ready(())
+            })
+            .wait(ctx);
 
-        // let b = addr
-        //     .send(MSG("NOOOOOOOOOOOOOOOOOO".to_string()))
-        //     .into_actor(self)
-        //     .then(|res, act, ctx| {
-        //         match res {
-        //             Ok(res) => {
-        //                 println!("how does this even make sense");
-        //
-        //                 ().start()
-        //             }
-        //             // something is wrong with chat server
-        //             _ => {
-        //                 println!("started error???");
-        //                 ctx.stop()
-        //             }
-        //         }
-        //         println!("started READY???");
-        //         actix::fut::ready(())
-        //     });
-
-        // futures::executor::block_on(async {
-        //     addr.send(MSG("NOOOOOOOOOOOOOOOOOO".to_string()))
-        //         .await
-        //         .unwrap()
-        // });
-        //b.wait(ctx);
-
-        // addr.send(Connect {
-        //     addr: addr.clone().recipient(),
-        // })
-        // .into_actor(self)
-        // .then(|res, act, ctx| {
-        //     match res {
-        //         Ok(res) => {
-        //             println!("how does this even make sense");
-        //
-        //             ().start()
-        //         }
-        //         // something is wrong with chat server
-        //         _ => {
-        //             println!("started error???");
-        //             ctx.stop()
-        //         }
-        //     }
-        //     println!("started READY???");
-        //     actix::fut::ready(())
-        // });
-
-        // addr.send(Connect {
-        //     addr: addr.clone().recipient(),
-        // })
-        // .into_actor(self)
-        // .then(|res, act, ctx| {
-        //     match res {
-        //         Ok(res) => {
-        //             println!("how does this even make sense");
-        //
-        //             ().start()
-        //         }
-        //         // something is wrong with chat server
-        //         _ => {
-        //             println!("started error???");
-        //             ctx.stop()
-        //         }
-        //     }
-        //     println!("started READY???");
-        //     actix::fut::ready(())
-        // })
-        // .wait(ctx);
-
+        // THIS ONE WORKS FINE:
         // ctx.address()
-        //     .send(MSG("soooooooo, wyd?".to_string()))
-        //     .into_actor(self)
-        //     .then(|res, _, ctx| {
-        //         match res {
-        //             Ok(_res) => {
-        //                 println!("how does this even make sense");
-        //
-        //                 ().start()
-        //             }
-        //             _ => {
-        //                 println!("started error???");
-        //                 ctx.stop()
-        //             }
-        //         }
-        //         actix::fut::ready(())
-        //     })
-        //     .wait(ctx);
-    }
+        //     .do_send(MSG("NOOOOOOOOOOOOOOOOOO".to_string()));
 
-    // fn started(&mut self, ctx: &mut Self::Context) {
-    //     let addr = ctx.address();
-    //     self.addr
-    //         .send(Connect {
-    //             addr: addr.recipient(),
-    //         })
-    //         .into_actor(self)
-    //         .then(|res, _, ctx| match res {
-    //             Ok(_res) => ().start(),
-    //             _ => ctx.stop(),
-    //         })
-    //         .wait();
-    // }
-    //
-    // fn stopping(&mut self, _: &mut Self::Context) -> Running {
-    //     self.addr.do_send(Disconnect {
-    //         wtf: String::from("WOWWOWOWOWOWOOWOWOWOWOW"),
-    //     });
-    //     Running::Stop
-    // }
+        println!("WHERES THE DUCK {}", self.id);
+    }
 }
 
 struct MSG(pub String);
@@ -256,13 +79,6 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWs {
                 println!("WHATS UP DUCK {}", text);
                 let a = ctx.address();
                 a.do_send(MSG("wow".to_string()));
-                // a.send(MSG("wow".to_string())).into_actor(self).then(|res, _, ctx| {
-                //     match res {
-                //         Ok(_res) => (),
-                //         _ => ctx.stop()
-                //     }
-                //     actix::fut::ready(())
-                // }).wait(ctx);
 
                 ctx.text(text)
             }
@@ -281,12 +97,6 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWs {
     }
 }
 
-// #[derive(actix::Message)]
-// #[rtype(result = "()")]
-// pub struct Message {
-//     pub msg: String,
-// }
-
 async fn index(
     req: HttpRequest,
     stream: web::Payload,
@@ -303,24 +113,9 @@ async fn index(
     let port = req.peer_addr().unwrap().port();
 
     println!("{:?}:{} {:?}", ip, port, resp);
-    // let _ = srv.send(Message {
-    //     msg: String::from("wwwwww"),
-    // });
 
     resp
 }
-
-// #[get("/{group_id}")]
-// pub async fn start_connection(
-//     req: HttpRequest,
-//     stream: Payload,
-//     srv: web::Data<Addr<Lobby>>,
-// ) -> Result<HttpResponse, Error> {
-//     let ws = WsConn::new(group_id, srv.get_ref().clone());
-//
-//     let resp = ws::start(ws, &req, stream)?;
-//     Ok(resp)
-// }
 
 #[cfg(feature = "ssr")]
 #[actix_web::main]
@@ -367,20 +162,6 @@ async fn main() -> std::io::Result<()> {
 
     Ok(())
 }
-
-// #[cfg(feature = "ssr")]
-// #[get("/ws/")]
-// pub async fn wc_connection(
-//     req: HttpRequest,
-//     stream: web::Payload,
-//     //srv: web::Data<Addr<Server>>,
-// ) -> Result<HttpResponse, Error> {
-//     //let ws = WsConn::new(group_id, srv.get_ref().clone());
-//     let ws = MyWs {};
-//
-//     let resp = ws::start(ws, &req, stream)?;
-//     Ok(resp)
-// }
 
 #[cfg(feature = "ssr")]
 #[actix_web::get("favicon.ico")]
