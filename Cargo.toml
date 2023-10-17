@@ -23,6 +23,8 @@ js-sys = {version = "0.3.64", features = []}
 rand = {version = "0.8.5", features = []}
 actix-web-actors = {version = "4.2.0", features = [], optional = true}
 actix = {version = "0.13.1", features = [], optional = true}
+uuid = { version = "1.4.1", features = ["v4", "serde"], optional = true }
+futures = { version = "0.3.28", features = ["alloc", "async-await", "executor", "std", "futures-executor"], optional = true }
 
 
 [features]
@@ -34,6 +36,8 @@ ssr = [
   "dep:leptos_actix",
   "dep:actix-web-actors",
   "dep:actix",
+  "dep:uuid",
+  "dep:futures",
   "leptos/ssr",
   "leptos_meta/ssr",
   "leptos_router/ssr",

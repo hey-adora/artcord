@@ -2,7 +2,8 @@ use leptos::logging::log;
 use leptos::*;
 use leptos_meta::*;
 use leptos_router::*;
-use leptos_use::{use_websocket, UseWebsocketReturn};
+use leptos_use::core::ConnectionReadyState;
+use leptos_use::{use_websocket, use_websocket_with_options, UseWebsocketReturn};
 
 use components::navbar::Navbar;
 use pages::gallery::GalleryPage;
@@ -21,7 +22,9 @@ pub fn App() -> impl IntoView {
     provide_context(GlobalState::new());
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
 
-    create_effect(move |_| {
+    let (connected, set_connected) = create_signal(String::new());
+
+    if cfg!(feature = "hydrate") {
         let UseWebsocketReturn {
             ready_state,
             message,
@@ -32,7 +35,25 @@ pub fn App() -> impl IntoView {
             close,
             ..
         } = use_websocket("/ws/");
-    });
+
+        create_effect(move |_| {
+            log!("{:?}", message.get());
+        });
+
+        create_effect(move |_| {
+            log!("{:?}", message_bytes.get());
+        });
+
+        create_effect(move |_| {
+            set_connected(format!("{}", ready_state.get()));
+        });
+
+        create_effect(move |_| {
+            if ready_state.get() == ConnectionReadyState::Open {
+                send("test69");
+            }
+        });
+    };
 
     view! {
         <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
@@ -41,6 +62,7 @@ pub fn App() -> impl IntoView {
         <Body  class=move || format!("text-low-purple  bg-gradient-to-br from-mid-purple to-dark-purple   {}", if global_state.nav_open.get() == true { "overflow-hidden w-screen h-screen" } else { "" })  />
         <Router>
             <div id="home" class="pt-4 grid grid-rows-[auto_1fr]" >
+                {move || connected()}
                 <Navbar/>
                 <main    class=" scroll-mt-[10rem] grid grid-rows-[1fr] pt-4 gap-6       ">
                     <Routes>
