@@ -1,5 +1,9 @@
 pub mod app;
-//pub mod server;
+
+#[cfg(feature = "ssr")]
+pub mod bot;
+#[cfg(feature = "ssr")]
+pub mod server;
 use cfg_if::cfg_if;
 
 cfg_if! {

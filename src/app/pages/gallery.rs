@@ -205,11 +205,10 @@ pub fn GalleryPage() -> impl IntoView {
             set_gallery_width(width);
 
             set_gallery_images.update(move |imgs| {
-                let row_img_count = render_gallery(
-                    gallery_width.get_untracked(),
-                    &org_images.get_untracked(),
-                    imgs,
-                );
+                let org_imgs = &org_images.get_untracked();
+                log!("INPUT {:?}", org_imgs);
+                let row_img_count = render_gallery(gallery_width.get_untracked(), org_imgs, imgs);
+                log!("OUTPUT {:?}", &imgs);
 
                 set_row_img_count.set_untracked(row_img_count);
             });
@@ -295,33 +294,34 @@ pub fn GalleryPage() -> impl IntoView {
 
         //if row_img_count.len() >
 
-        if scroll_top > (height / 1) {
-            if row_img_count.len() > (row_fit_count * 3) as usize {
-                log!(
-                    "REMOVING {} {} {} {} {}",
-                    left,
-                    scroll_top,
-                    section.offset_height(),
-                    section.scroll_height(),
-                    section.client_height()
-                );
+        // if scroll_top > (height / 1) {
+        //     if row_img_count.len() > (row_fit_count * 3) as usize {
+        //         log!(
+        //             "REMOVING {} {} {} {} {}",
+        //             left,
+        //             scroll_top,
+        //             section.offset_height(),
+        //             section.scroll_height(),
+        //             section.client_height()
+        //         );
+        //
+        //         amount = row_img_count[0];
+        //         // for row in &row_img_count[..row_fit_count / 4] {
+        //         //     amount += row;
+        //         // }
+        //
+        //         set_org_images.update_untracked(move |imgs| {
+        //             *imgs = imgs.drain(amount..).collect();
+        //         });
+        //
+        //         set_gallery_images.update_untracked(move |imgs| {
+        //             *imgs = imgs.drain(amount..).collect();
+        //         });
+        //
+        //         resize_images();
+        //     }
+        // }
 
-                amount = row_img_count[0];
-                // for row in &row_img_count[..row_fit_count / 4] {
-                //     amount += row;
-                // }
-
-                set_org_images.update_untracked(move |imgs| {
-                    *imgs = imgs.drain(amount..).collect();
-                });
-
-                set_gallery_images.update_untracked(move |imgs| {
-                    *imgs = imgs.drain(amount..).collect();
-                });
-
-                resize_images();
-            }
-        }
         // if left < (height / 1) {
         //     log!(
         //         "ADDING {} {} {} {} {}",

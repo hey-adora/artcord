@@ -1,117 +1,176 @@
-use crate::server::lobby::Lobby;
-use crate::server::messages::{ClientActorMessage, Connect, Disconnect, WsMessage};
-use actix::{fut, ActorContext, ActorFuture, ActorFutureExt, ContextFutureSpawner, WrapFuture};
-use actix::{Actor, Addr, Running, StreamHandler};
-use actix::{AsyncContext, Handler};
-use actix_web_actors::ws;
-use actix_web_actors::ws::Message::Text;
-use std::time::{Duration, Instant};
-use uuid::Uuid;
+use actix::{
+    Actor, ActorContext, ActorFutureExt, AsyncContext, ContextFutureSpawner, Handler, Message,
+    Recipient, StreamHandler, WrapFuture,
+};
+use actix_files::Files;
+use actix_web::{web, App, Error, HttpRequest, HttpResponse, HttpServer};
+use actix_web_actors::ws::{self, ProtocolError};
+use futures::{future, select, try_join, TryFutureExt};
+use leptos::get_configuration;
+use leptos_actix::{generate_route_list, LeptosRoutes};
+use rand::Rng;
 
-pub mod lobby;
-pub mod messages;
+use async_std::task;
+use dotenv::dotenv;
+use futures::future::join_all;
+use serenity::async_trait;
+use serenity::framework::standard::macros::{command, group};
+use serenity::framework::standard::{CommandGroup, CommandResult, GroupOptions, StandardFramework};
+use serenity::prelude::*;
 
-const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
-const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
+use actix_web::dev::Server;
+use std::env;
+use wasm_bindgen::__rt::Start;
 
-pub struct WsConn {
-    room: Uuid,
-    lobby_addr: Addr<Lobby>,
-    hb: Instant,
-    id: Uuid,
+struct MyWs {
+    id: u32,
 }
 
-impl WsConn {
-    pub fn new(room: Uuid, lobby: Addr<Lobby>) -> WsConn {
-        WsConn {
-            id: Uuid::new_v4(),
-            room,
-            hb: Instant::now(),
-            lobby_addr: lobby,
-        }
-    }
+struct Connect {
+    pub addr: Recipient<MSG>,
 }
 
-impl Actor for WsConn {
+impl actix::Message for Connect {
+    type Result = ();
+}
+
+impl Actor for MyWs {
     type Context = ws::WebsocketContext<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        self.hb(ctx);
+        println!("started what? {}", self.id);
 
-        let addr = ctx.address();
-        self.lobby_addr
-            .send(Connect {
-                addr: addr.recipient(),
-                lobby_id: self.room,
-                self_id: self.id,
-            })
-            .into_actor(self)
-            .then(|res, _, ctx| {
-                match res {
-                    Ok(_res) => (),
-                    _ => ctx.stop(),
-                }
-                fut::ready(())
-            })
-            .wait(ctx);
-    }
+        //BROKEN
+        // ctx.address()
+        //     .send(MSG("NOOOOOOOOOOOOOOOOOO".to_string()))
+        //     .into_actor(self)
+        //     .then(|res, act, ctx| {
+        //         match res {
+        //             Ok(res) => {
+        //                 println!("how does this even make sense");
+        //                 ().start()
+        //             }
+        //             _ => {
+        //                 println!("started error???");
+        //                 ctx.stop()
+        //             }
+        //         }
+        //         println!("started READY???");
+        //         actix::fut::ready(())
+        //     })
+        //     .wait(ctx);
 
-    fn stopping(&mut self, _: &mut Self::Context) -> Running {
-        self.lobby_addr.do_send(Disconnect {
-            id: self.id,
-            room_id: self.room,
-        });
-        Running::Stop
-    }
-}
+        //THIS ONE WORKS FINE:
+        ctx.address()
+            .do_send(MSG("NOOOOOOOOOOOOOOOOOO".to_string()));
 
-impl WsConn {
-    fn hb(&self, ctx: &mut ws::WebsocketContext<Self>) {
-        ctx.run_interval(HEARTBEAT_INTERVAL, |act, ctx| {
-            if Instant::now().duration_since(act.hb) > CLIENT_TIMEOUT {
-                println!("Disconnecting failed heartbeat");
-                ctx.stop();
-                return;
-            }
-
-            ctx.ping(b"hi");
-        });
+        println!("WHERES THE DUCK {}", self.id);
     }
 }
 
-impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsConn {
-    fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
+struct MSG(pub String);
+
+impl actix::Message for MSG {
+    type Result = ();
+}
+
+impl Handler<MSG> for MyWs {
+    type Result = ();
+
+    fn handle(&mut self, msg: MSG, ctx: &mut Self::Context) {
+        ctx.text(msg.0);
+    }
+}
+
+impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWs {
+    fn handle(&mut self, msg: Result<ws::Message, ProtocolError>, ctx: &mut Self::Context) {
         match msg {
             Ok(ws::Message::Ping(msg)) => {
-                self.hb = Instant::now();
-                ctx.pong(&msg);
+                println!("BING BING");
+                ctx.pong(&msg)
             }
-            Ok(ws::Message::Pong(_)) => {
-                self.hb = Instant::now();
+            Ok(ws::Message::Text(text)) => {
+                println!("WHATS UP DUCK {}", text);
+                let a = ctx.address();
+                a.do_send(MSG("wow".to_string()));
+
+                ctx.text(text)
             }
             Ok(ws::Message::Binary(bin)) => ctx.binary(bin),
             Ok(ws::Message::Close(reason)) => {
-                ctx.close(reason);
-                ctx.stop();
+                println!("WTF HAPPENED {:?}", reason);
+                ctx.close(reason)
             }
-            Ok(ws::Message::Continuation(_)) => {
-                ctx.stop();
+            Err(e) => {
+                println!("ERROR: {:?}", e);
             }
-            Ok(ws::Message::Nop) => (),
-            Ok(Text(s)) => self.lobby_addr.do_send(ClientActorMessage {
-                id: self.id,
-                msg: s.parse().unwrap(),
-                room_id: self.room,
-            }),
-            Err(e) => std::panic::panic_any(e),
+            _ => {
+                println!("BOOOM");
+            }
         }
     }
 }
 
-impl Handler<WsMessage> for WsConn {
-    type Result = ();
+async fn index(
+    req: HttpRequest,
+    stream: web::Payload,
+    //srv: web::Data<Addr<MyWs>>,
+) -> Result<HttpResponse, Error> {
+    let resp = ws::start(
+        MyWs {
+            id: rand::thread_rng().gen_range(500..1000),
+        },
+        &req,
+        stream,
+    );
+    let ip = req.peer_addr().unwrap().ip();
+    let port = req.peer_addr().unwrap().port();
 
-    fn handle(&mut self, msg: WsMessage, ctx: &mut Self::Context) {
-        ctx.text(msg.0);
-    }
+    println!("{:?}:{} {:?}", ip, port, resp);
+
+    resp
+}
+
+#[actix_web::get("favicon.ico")]
+pub async fn favicon(
+    leptos_options: actix_web::web::Data<leptos::LeptosOptions>,
+) -> actix_web::Result<actix_files::NamedFile> {
+    let leptos_options = leptos_options.into_inner();
+    let site_root = &leptos_options.site_root;
+    Ok(actix_files::NamedFile::open(format!(
+        "{site_root}/favicon.ico"
+    ))?)
+}
+
+pub async fn create_server() -> Server {
+    let conf = get_configuration(None).await.unwrap();
+    let addr = conf.leptos_options.site_addr;
+    let routes = generate_route_list(crate::app::App);
+    println!("listening on http://{}", &addr);
+
+    HttpServer::new(move || {
+        let leptos_options = &conf.leptos_options;
+        let site_root = &leptos_options.site_root;
+
+        App::new()
+            .route("/ws/", web::get().to(index))
+            .route("/api/{tail:.*}", leptos_actix::handle_server_fns())
+            // serve JS/WASM/CSS from `pkg`
+            .service(Files::new("/pkg", format!("{site_root}/pkg")))
+            // serve other assets from the `assets` directory
+            .service(Files::new("/assets", site_root))
+            // serve the favicon from /favicon.ico
+            .service(favicon)
+            .leptos_routes(
+                leptos_options.to_owned(),
+                routes.to_owned(),
+                crate::app::App,
+            )
+            .app_data(web::Data::new(leptos_options.to_owned()))
+        //.wrap(middleware::Compress::default())
+    })
+    .workers(2)
+    .bind(&addr)
+    .unwrap()
+    .run()
 }
