@@ -22,6 +22,7 @@ use serenity::prelude::*;
 
 use artcord::bot::create_bot;
 use artcord::server::create_server;
+use artcord::database::create_database;
 use std::env;
 use std::future::join;
 use wasm_bindgen::__rt::Start;
@@ -31,8 +32,9 @@ use wasm_bindgen::__rt::Start;
 async fn main() -> std::io::Result<()> {
     dotenv().ok();
 
+    let db = create_database().await;
     let mut bot_server = create_bot().await;
-    let web_server = create_server().await;
+    let web_server = create_server(db).await;
 
     let r = try_join!(
         async { web_server.await.or_else(|e| Err(e.to_string())) },

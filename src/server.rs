@@ -1,7 +1,4 @@
-use actix::{
-    Actor, ActorContext, ActorFutureExt, AsyncContext, ContextFutureSpawner, Handler, Message,
-    Recipient, StreamHandler, WrapFuture,
-};
+use actix::{Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, ContextFutureSpawner, Handler, Message, Recipient, StreamHandler, WrapFuture};
 use actix_files::Files;
 use actix_web::{web, App, Error, HttpRequest, HttpResponse, HttpServer};
 use actix_web_actors::ws::{self, ProtocolError};
@@ -20,6 +17,7 @@ use serenity::prelude::*;
 
 use actix_web::dev::Server;
 use std::env;
+use std::sync::Arc;
 use wasm_bindgen::__rt::Start;
 
 struct MyWs {
@@ -111,11 +109,18 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWs {
     }
 }
 
+impl Actor for ServerState {
+    type Context = actix::Context<Self>;
+}
+
 async fn index(
     req: HttpRequest,
     stream: web::Payload,
     //srv: web::Data<Addr<MyWs>>,
+    //srv: web::Data<Addr<ServerState>>
+    test: actix_web::web::Data<ServerState>
 ) -> Result<HttpResponse, Error> {
+    
     let resp = ws::start(
         MyWs {
             id: rand::thread_rng().gen_range(500..1000),
@@ -131,28 +136,51 @@ async fn index(
     resp
 }
 
-#[actix_web::get("favicon.ico")]
-pub async fn favicon(
-    leptos_options: actix_web::web::Data<leptos::LeptosOptions>,
-) -> actix_web::Result<actix_files::NamedFile> {
-    let leptos_options = leptos_options.into_inner();
-    let site_root = &leptos_options.site_root;
+//#[actix_web::get("favicon.ico")]
+pub async fn favicon() -> actix_web::Result<actix_files::NamedFile> {
     Ok(actix_files::NamedFile::open(format!(
-        "{site_root}/favicon.ico"
+        "assets/favicon.ico"
     ))?)
 }
 
-pub async fn create_server() -> Server {
+#[derive(Clone)]
+pub struct ServerState {
+    //db: Arc<Mutex<crate::database::DB>>
+    db: crate::database::DB
+}
+
+pub async fn create_server(db: crate::database::DB) -> Server {
     let conf = get_configuration(None).await.unwrap();
     let addr = conf.leptos_options.site_addr;
     let routes = generate_route_list(crate::app::App);
     println!("listening on http://{}", &addr);
+
+    // let db_mutex = Mutex::new(db);
+    //
+    // let db_mutex_arc = Arc::new(db_mutex);
+
+
+
+    // let server_state = web::Data::new(ServerState {
+    //     db: db_mutex_arc
+    // });
+    // let server_state = ServerState {
+    //     db: std::sync::Mutex::new(db)
+    // };
+    //let server_state_arc = Arc::new(server_state);
+    //let server_state_arc_mutex = Mutex::new(server_state_arc);
+
 
     HttpServer::new(move || {
         let leptos_options = &conf.leptos_options;
         let site_root = &leptos_options.site_root;
 
         App::new()
+            //.service(favicon)
+            .app_data(web::Data::new(ServerState {
+                db: db.clone()
+            }))
+            .route("/favicon.ico", web::get().to(favicon))
             .route("/ws/", web::get().to(index))
             .route("/api/{tail:.*}", leptos_actix::handle_server_fns())
             // serve JS/WASM/CSS from `pkg`
@@ -160,13 +188,13 @@ pub async fn create_server() -> Server {
             // serve other assets from the `assets` directory
             .service(Files::new("/assets", site_root))
             // serve the favicon from /favicon.ico
-            .service(favicon)
+
             .leptos_routes(
                 leptos_options.to_owned(),
                 routes.to_owned(),
                 crate::app::App,
             )
-            .app_data(web::Data::new(leptos_options.to_owned()))
+            //.app_data(web::Data::new(leptos_options.to_owned()))
         //.wrap(middleware::Compress::default())
     })
     .workers(2)
