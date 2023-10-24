@@ -374,6 +374,7 @@ dependencies = [
  "png_pong",
  "rand",
  "reqwest",
+ "rkyv",
  "serde",
  "serenity",
  "sha256",

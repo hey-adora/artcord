@@ -12,6 +12,12 @@ use std::hash::Hash;
 use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};
 use std::{env, fs};
+use serenity::http::CacheHttp;
+use serenity::model::application::command::Command;
+use serenity::model::id::GuildId;
+use serenity::model::prelude::{Interaction, InteractionResponseType};
+
+mod commands;
 
 struct ImgData {
     pub bytes: Vec<u8>,
@@ -146,7 +152,17 @@ fn save_webp(path: PathBuf, bytes: &[u8], img_format: image::ImageFormat, height
 
 #[async_trait]
 impl serenity::client::EventHandler for BotHandler {
+
+
+
     async fn message(&self, ctx: Context, msg: serenity::model::channel::Message) {
+
+        // let guilds = ctx.cache.guilds();
+        // for guild in guilds {
+        //     let name = guild.name(&ctx.cache).unwrap_or_default();
+        //     println!("Leaving: {}", name);
+        //     guild.leave(ctx.http()).await.unwrap();
+        // }
         for attachment in msg.attachments {
             let Some(content_type) = attachment.content_type else {
                 println!("Failed to get content type");
@@ -202,19 +218,49 @@ impl serenity::client::EventHandler for BotHandler {
         }
     }
 
-    async fn ready(&self, _: Context, ready: serenity::model::gateway::Ready) {
+    async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
+        if let Interaction::ApplicationCommand(command) = interaction {
+            //println!("Received command interaction: {:#?}", command);
+
+            let content = match command.data.name.as_str() {
+                "who" => "WONDERINOOOOOOOOO".to_string(),
+                _ => "not implemented >:3".to_string()
+            };
+
+            if let Err(why) = command.create_interaction_response(&ctx.http, |response| {
+                response.kind(InteractionResponseType::ChannelMessageWithSource).interaction_response_data(|message| message.content(content))
+            }).await {
+                println!("Cannot respond to slash command: {}", why);
+            }
+        }
+    }
+
+    async fn ready(&self, ctx: Context, ready: serenity::model::gateway::Ready) {
         println!("{} is connected!", ready.user.name);
+
+        for guild in ctx.cache.guilds() {
+            let commands = GuildId::set_application_commands(&guild, &ctx.http, |commands| {
+               commands.create_application_command(|command| commands::who::register(command))
+            }).await;
+            println!("Commands updated for guild id: {}, with commands: {:#?}", &guild, commands);
+            // let guild_command = Command::create_global_application_command(&ctx.http, |command| {
+            //     commands
+            // })
+        }
     }
 }
 
-pub async fn create_bot() -> serenity::Client {
+pub async fn create_bot(db: crate::database::DB) -> serenity::Client {
     let framework = StandardFramework::new()
         .configure(|c| c.prefix("~")) // set the bot's prefix to "~"
         .group(&GENERAL_GROUP);
 
     // Login with a bot token from the environment
     let token = env::var("DISCORD_BOT_TOKEN").expect("token");
-    let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
+    //let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
+    let intents = GatewayIntents::GUILD_MESSAGES
+        | GatewayIntents::DIRECT_MESSAGES
+        | GatewayIntents::MESSAGE_CONTENT;
     Client::builder(token, intents)
         .event_handler(BotHandler)
         .framework(framework)

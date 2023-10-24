@@ -4,6 +4,7 @@ use leptos_meta::*;
 use leptos_router::*;
 use leptos_use::core::ConnectionReadyState;
 use leptos_use::{use_websocket, UseWebsocketReturn};
+use rkyv::Deserialize;
 
 use components::navbar::Navbar;
 use pages::gallery::GalleryPage;
@@ -11,6 +12,8 @@ use pages::home::HomePage;
 use pages::not_found::NotFound;
 
 use crate::app::utils::GlobalState;
+use crate::server::ServerMsg;
+
 
 mod components;
 mod pages;
@@ -41,7 +44,20 @@ pub fn App() -> impl IntoView {
         });
 
         create_effect(move |_| {
-            log!("{:?}", message_bytes.get());
+            let Some(bytes) = message_bytes.get() else {
+                println!("Empty byte msg received.");
+                return;
+            };
+            let server_msg: ServerMsg = rkyv::check_archived_root::<ServerMsg>(&bytes[..]).unwrap().deserialize(&mut rkyv::Infallible).unwrap();
+
+            match server_msg {
+
+                ServerMsg::Str(str) => {
+                    log!("MSG RECEIVED: {}", str);
+                }
+            }
+
+
         });
 
         create_effect(move |_| {

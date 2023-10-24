@@ -1,7 +1,21 @@
+use cfg_if::cfg_if;
+
+use rkyv::{Archive, Deserialize, Serialize};
+#[derive(Archive, Deserialize, Serialize, Debug, PartialEq)]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug))]
+pub enum ServerMsg {
+    Str(String)
+}
+
+cfg_if! {
+if #[cfg(feature = "ssr")] {
+
+  use std::collections::HashMap;
 use actix::{Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, ContextFutureSpawner, Handler, Message, Recipient, StreamHandler, WrapFuture};
 use actix_files::Files;
 use actix_web::{web, App, Error, HttpRequest, HttpResponse, HttpServer};
-use actix_web_actors::ws::{self, ProtocolError};
+use actix_web_actors::ws::{self, CloseCode, CloseReason, ProtocolError};
 use futures::{future, select, try_join, TryFutureExt};
 use leptos::get_configuration;
 use leptos_actix::{generate_route_list, LeptosRoutes};
@@ -18,10 +32,13 @@ use serenity::prelude::*;
 use actix_web::dev::Server;
 use std::env;
 use std::sync::Arc;
-use wasm_bindgen::__rt::Start;
+use actix_web::web::BufMut;
+use image::EncodableLayout;
+
 
 struct MyWs {
-    id: u32,
+    id: uuid::Uuid,
+    server_state: ServerState
 }
 
 struct Connect {
@@ -32,37 +49,56 @@ impl actix::Message for Connect {
     type Result = ();
 }
 
+
+
 impl Actor for MyWs {
     type Context = ws::WebsocketContext<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
         println!("started what? {}", self.id);
 
-        //BROKEN
+        let sessions = self.server_state.sessions.try_lock();
+        let Ok(mut sessions) = sessions else {
+            let error = sessions.err().unwrap();
+            println!("Locking WS sessions error: {}", error);
+            ctx.close(Some(CloseReason::from(CloseCode::Error)));
+            return;
+        };
+
+        //ctx.binary()
+
+        sessions.insert(self.id, ctx.address());
+
+
+        //
+        //
+        // //BROKEN
+        // // ctx.address()
+        // //     .send(MSG("NOOOOOOOOOOOOOOOOOO".to_string()))
+        // //     .into_actor(self)
+        // //     .then(|res, act, ctx| {
+        // //         match res {
+        // //             Ok(res) => {
+        // //                 println!("how does this even make sense");
+        // //                 ().start()
+        // //             }
+        // //             _ => {
+        // //                 println!("started error???");
+        // //                 ctx.stop()
+        // //             }
+        // //         }
+        // //         println!("started READY???");
+        // //         actix::fut::ready(())
+        // //     })
+        // //     .wait(ctx);
+        //
+        // let ad = ctx.address();
+        //
+        // //THIS ONE WORKS FINE:
         // ctx.address()
-        //     .send(MSG("NOOOOOOOOOOOOOOOOOO".to_string()))
-        //     .into_actor(self)
-        //     .then(|res, act, ctx| {
-        //         match res {
-        //             Ok(res) => {
-        //                 println!("how does this even make sense");
-        //                 ().start()
-        //             }
-        //             _ => {
-        //                 println!("started error???");
-        //                 ctx.stop()
-        //             }
-        //         }
-        //         println!("started READY???");
-        //         actix::fut::ready(())
-        //     })
-        //     .wait(ctx);
-
-        //THIS ONE WORKS FINE:
-        ctx.address()
-            .do_send(MSG("NOOOOOOOOOOOOOOOOOO".to_string()));
-
-        println!("WHERES THE DUCK {}", self.id);
+        //     .do_send(MSG("NOOOOOOOOOOOOOOOOOO".to_string()));
+        //
+        // println!("WHERES THE DUCK {}", self.id);
     }
 }
 
@@ -88,11 +124,14 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWs {
                 ctx.pong(&msg)
             }
             Ok(ws::Message::Text(text)) => {
-                println!("WHATS UP DUCK {}", text);
-                let a = ctx.address();
-                a.do_send(MSG("wow".to_string()));
+                println!("TEXT RECEIVED {}", text);
+                //let a = ctx.address();
+                //a.do_send(MSG("wow".to_string()));
+                let msg = ServerMsg::Str("yo bro".to_string());
+                let bytes = rkyv::to_bytes::<_, 256>(&msg).unwrap();
+                ctx.binary(bytes.into_vec());
 
-                ctx.text(text)
+                //ctx.text(text)
             }
             Ok(ws::Message::Binary(bin)) => ctx.binary(bin),
             Ok(ws::Message::Close(reason)) => {
@@ -118,16 +157,18 @@ async fn index(
     stream: web::Payload,
     //srv: web::Data<Addr<MyWs>>,
     //srv: web::Data<Addr<ServerState>>
-    test: actix_web::web::Data<ServerState>
+    server_state: actix_web::web::Data<ServerState>
 ) -> Result<HttpResponse, Error> {
-    
+
     let resp = ws::start(
         MyWs {
-            id: rand::thread_rng().gen_range(500..1000),
+            id: uuid::Uuid::new_v4(),
+            server_state: server_state.get_ref().to_owned().clone()
         },
         &req,
         stream,
     );
+    //resp.unwrap().await.unwrap().
     let ip = req.peer_addr().unwrap().ip();
     let port = req.peer_addr().unwrap().port();
 
@@ -145,7 +186,7 @@ pub async fn favicon() -> actix_web::Result<actix_files::NamedFile> {
 
 #[derive(Clone)]
 pub struct ServerState {
-    //db: Arc<Mutex<crate::database::DB>>
+    sessions: Arc<Mutex<HashMap<uuid::Uuid,Addr<MyWs>>>>,
     db: crate::database::DB
 }
 
@@ -170,6 +211,8 @@ pub async fn create_server(db: crate::database::DB) -> Server {
     //let server_state_arc = Arc::new(server_state);
     //let server_state_arc_mutex = Mutex::new(server_state_arc);
 
+    let sessions = Arc::new(Mutex::new(HashMap::<uuid::Uuid, Addr<MyWs>>::new()));
+
 
     HttpServer::new(move || {
         let leptos_options = &conf.leptos_options;
@@ -178,6 +221,7 @@ pub async fn create_server(db: crate::database::DB) -> Server {
         App::new()
             //.service(favicon)
             .app_data(web::Data::new(ServerState {
+                sessions: sessions.clone(),
                 db: db.clone()
             }))
             .route("/favicon.ico", web::get().to(favicon))
@@ -202,3 +246,8 @@ pub async fn create_server(db: crate::database::DB) -> Server {
     .unwrap()
     .run()
 }
+}
+}
+
+
+

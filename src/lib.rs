@@ -4,7 +4,7 @@ pub mod app;
 pub mod bot;
 #[cfg(feature = "ssr")]
 pub mod database;
-#[cfg(feature = "ssr")]
+
 pub mod server;
 
 use cfg_if::cfg_if;

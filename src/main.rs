@@ -25,7 +25,11 @@ use artcord::server::create_server;
 use artcord::database::create_database;
 use std::env;
 use std::future::join;
+use rkyv::{Archive, Deserialize, Serialize};
 use wasm_bindgen::__rt::Start;
+
+
+
 
 #[cfg(feature = "ssr")]
 #[actix_web::main]
@@ -33,7 +37,7 @@ async fn main() -> std::io::Result<()> {
     dotenv().ok();
 
     let db = create_database().await;
-    let mut bot_server = create_bot().await;
+    let mut bot_server = create_bot(db.clone()).await;
     let web_server = create_server(db).await;
 
     let r = try_join!(
