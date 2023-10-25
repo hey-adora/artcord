@@ -14,7 +14,8 @@ pub struct Img {
     pub has_high: bool,
     pub has_medium: bool,
     pub has_low: bool,
-    
+    pub modified_at: mongodb::bson::DateTime,
+    pub created_at: mongodb::bson::DateTime,
 }
 
 pub enum ImgFormat {

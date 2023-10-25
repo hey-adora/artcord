@@ -1,5 +1,6 @@
 use crate::database::ImgFormat;
 use anyhow::anyhow;
+use chrono::Utc;
 use image::EncodableLayout;
 use mongodb::bson::doc;
 use mongodb::bson::spec::BinarySubtype;
@@ -154,7 +155,7 @@ fn save_webp(_path: String, bytes: &[u8], img_format: image::ImageFormat, height
             "File already exists: {}",
             path.as_os_str().to_str().unwrap()
         );
-        return false;
+        return true;
     }
 }
 
@@ -246,7 +247,7 @@ impl serenity::client::EventHandler for BotHandler {
                     &bytes,
                 ) {
                     Ok(to) => format!("Img saved to {}", to),
-                    Err(e) => format!("Error searching for existing img: {}", e),
+                    Err(e) => format!("Error: {}", e),
                 }
             );
 
@@ -298,7 +299,7 @@ impl serenity::client::EventHandler for BotHandler {
                 }
 
                 if update.len() > 0 {
-                    println!("Img '{}' is already up to date.", file_hash);
+                    update.insert("modified_at", mongodb::bson::DateTime::now());
                     let update_status = db
                         .collection_img
                         .update_one(
@@ -322,6 +323,7 @@ impl serenity::client::EventHandler for BotHandler {
                     println!("Img '{}' is already up to date.", file_hash);
                 }
             } else {
+                //let time = Utc::now().timestamp();
                 let img = crate::database::Img {
                     user_id: msg.author.id.0,
                     org_hash: file_hash_mongo,
@@ -344,6 +346,8 @@ impl serenity::client::EventHandler for BotHandler {
                         image::ImageFormat::Png,
                         360,
                     ),
+                    modified_at: mongodb::bson::DateTime::now(),
+                    created_at: mongodb::bson::DateTime::now(),
                 };
 
                 let r = db.collection_img.insert_one(&img, None).await;
