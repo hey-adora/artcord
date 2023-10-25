@@ -37,6 +37,7 @@ async fn main() -> std::io::Result<()> {
     dotenv().ok();
 
     let db = create_database().await;
+    //println!("{:#?}", db);
     let mut bot_server = create_bot(db.clone()).await;
     let web_server = create_server(db).await;
 

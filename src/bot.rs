@@ -1,9 +1,16 @@
+use crate::database::ImgFormat;
 use anyhow::anyhow;
 use image::EncodableLayout;
+use mongodb::bson::doc;
+use mongodb::bson::spec::BinarySubtype;
 use serenity::client::Context;
 use serenity::framework::standard::macros::{command, group};
 use serenity::framework::standard::CommandResult;
 use serenity::framework::StandardFramework;
+use serenity::http::CacheHttp;
+use serenity::model::application::command::Command;
+use serenity::model::id::GuildId;
+use serenity::model::prelude::{Interaction, InteractionResponseType};
 use serenity::prelude::GatewayIntents;
 use serenity::{async_trait, Client};
 use std::fs::File;
@@ -12,10 +19,6 @@ use std::hash::Hash;
 use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};
 use std::{env, fs};
-use serenity::http::CacheHttp;
-use serenity::model::application::command::Command;
-use serenity::model::id::GuildId;
-use serenity::model::prelude::{Interaction, InteractionResponseType};
 
 mod commands;
 
@@ -100,63 +103,64 @@ async fn ping(ctx: &Context, msg: &serenity::model::channel::Message) -> Command
 
 struct BotHandler;
 
-fn save_img(path: PathBuf, bytes: &[u8]) {
-    if !path.exists() {
-        let io = match fs::write(&path, bytes) {
-            Ok(_) => format!("Saved {}.", path.as_os_str().to_str().unwrap()),
-            Err(e) => format!(
-                "Failed to save {} with error: {}.",
-                path.as_os_str().to_str().unwrap(),
-                e
-            ),
-        };
-        println!("{io}");
-    } else {
-        println!(
-            "File already exists: {}",
-            path.as_os_str().to_str().unwrap()
-        );
+fn save_img(_path: String, bytes: &[u8]) -> Result<String, String> {
+    let path = PathBuf::from(&_path);
+
+    if path.exists() {
+        return Err(format!("File already exists: {}", _path));
     }
+
+    let io_status = fs::write(&path, bytes);
+    let Ok(_) = io_status else {
+        return Err(format!(
+            "Failed to save {} with error: {}.",
+            &_path,
+            io_status.err().unwrap()
+        ));
+    };
+    Ok(_path)
 }
 
-fn save_webp(path: PathBuf, bytes: &[u8], img_format: image::ImageFormat, height: u32) {
+fn save_webp(_path: String, bytes: &[u8], img_format: image::ImageFormat, height: u32) -> bool {
+    let path = PathBuf::from(&_path);
     if !path.exists() {
         let img = ImgData::new(&bytes, img_format, height);
         let Ok(img) = img else {
             println!("Error converting img: {}", img.err().unwrap());
-            return;
+            return false;
         };
 
         let bytes = img.encode_webp();
         let Ok(bytes) = bytes else {
             println!("Error converting img: {}", bytes.err().unwrap());
-            return;
+            return false;
         };
 
-        let io = match fs::write(&path, bytes) {
-            Ok(_) => format!("Saved {}.", path.as_os_str().to_str().unwrap()),
-            Err(e) => format!(
+        let io_state = fs::write(&path, bytes);
+        let Ok(_) = io_state else {
+            println!(
                 "Failed to save {} with error: {}.",
-                path.as_os_str().to_str().unwrap(),
-                e
-            ),
+                _path,
+                io_state.err().unwrap()
+            );
+            return false;
         };
-        println!("{io}");
+
+        println!("Saved {}.", path.as_os_str().to_str().unwrap());
+
+        return true;
     } else {
         println!(
             "File already exists: {}",
             path.as_os_str().to_str().unwrap()
         );
+        return false;
     }
 }
 
 #[async_trait]
 impl serenity::client::EventHandler for BotHandler {
-
-
-
     async fn message(&self, ctx: Context, msg: serenity::model::channel::Message) {
-
         // let guilds = ctx.cache.guilds();
         // for guild in guilds {
         //     let name = guild.name(&ctx.cache).unwrap_or_default();
@@ -192,30 +196,183 @@ impl serenity::client::EventHandler for BotHandler {
                 return;
             };
 
-            let file_hash = sha256::digest(bytes.as_bytes());
+            //let file_hash = sha256::digest(bytes.as_bytes());
+            //let mut hasher = md5::new();
+            //hasher.update(bytes.as_bytes());
+            //let file_hash2 = hasher.finalize();
+
+            //let file_hash2 = md5digest(bytes.as_bytes());
+            let file_hash_bytes: [u8; 16] = hashes::md5::hash(bytes.as_bytes()).into_bytes();
+            let file_hash: u128 = u128::from_be_bytes(file_hash_bytes);
+            let file_hash_mongo = mongodb::bson::Binary {
+                subtype: BinarySubtype::Md5,
+                bytes: file_hash_bytes.to_vec(),
+            };
 
             let file_name = PathBuf::from(&attachment.filename);
             let file_stem = file_name.file_stem().unwrap().to_str().unwrap();
             let file_ext = file_name.extension().unwrap().to_str().unwrap();
 
-            let org_file_path =
-                PathBuf::from(&format!("assets/gallery/org_{}.{}", file_hash, file_ext));
-            let hei_file_path = PathBuf::from(&format!("assets/gallery/hei_{}.webp", file_hash));
-            let med_file_path = PathBuf::from(&format!("assets/gallery/med_{}.webp", file_hash));
-            let low_file_path = PathBuf::from(&format!("assets/gallery/low_{}.webp", file_hash));
+            let db = {
+                let data_read = ctx.data.read().await;
+                data_read
+                    .get::<crate::database::DB>()
+                    .expect("Expected crate::database::DB in TypeMap")
+                    .clone()
+            };
 
-            save_img(org_file_path, &bytes);
+            let found_img_status = db
+                .collection_img
+                .find_one(
+                    doc! {
+                        "org_hash": file_hash_mongo.clone()
+                    },
+                    None,
+                )
+                .await;
+            let Ok(found_img) = found_img_status else {
+                println!(
+                    "Database error while searching for existing img '{}': {}",
+                    file_hash,
+                    found_img_status.err().unwrap()
+                );
+                return;
+            };
 
-            save_webp(hei_file_path, &bytes, image::ImageFormat::Png, 1080);
-            save_webp(med_file_path, &bytes, image::ImageFormat::Png, 720);
-            save_webp(low_file_path, &bytes, image::ImageFormat::Png, 360);
-        }
+            println!(
+                "{}",
+                match save_img(
+                    format!("assets/gallery/org_{}.{}", file_hash, file_ext),
+                    &bytes,
+                ) {
+                    Ok(to) => format!("Img saved to {}", to),
+                    Err(e) => format!("Error searching for existing img: {}", e),
+                }
+            );
 
-        if msg.content == "!ping" {
-            if let Err(why) = msg.channel_id.say(&ctx.http, "Pong!").await {
-                println!("Error sending message: {:?}", why);
+            if let Some(found_img) = found_img {
+                println!("Img '{}' already exists in database.", file_hash);
+
+                let mut update = doc! {};
+
+                let has_low = save_webp(
+                    format!("assets/gallery/low_{}.webp", file_hash),
+                    &bytes,
+                    image::ImageFormat::Png,
+                    360,
+                );
+
+                if found_img.has_low == has_low {
+                    println!("Img '{}' has_low field is correct.", file_hash);
+                } else {
+                    println!("Img '{}' has_low field is incorrect.", file_hash);
+                    update.insert("has_low", has_low);
+                }
+
+                let has_medium = save_webp(
+                    format!("assets/gallery/medium_{}.webp", file_hash),
+                    &bytes,
+                    image::ImageFormat::Png,
+                    720,
+                );
+
+                if found_img.has_medium == has_medium {
+                    println!("Img '{}' has_medium field is correct.", file_hash);
+                } else {
+                    println!("Img '{}' has_medium field is incorrect.", file_hash);
+                    update.insert("has_medium", has_medium);
+                }
+
+                let has_high = save_webp(
+                    format!("assets/gallery/high_{}.webp", file_hash),
+                    &bytes,
+                    image::ImageFormat::Png,
+                    1080,
+                );
+
+                if found_img.has_high == has_high {
+                    println!("Img '{}' has_high field is correct.", file_hash);
+                } else {
+                    println!("Img '{}' has_high field is incorrect.", file_hash);
+                    update.insert("has_high", has_high);
+                }
+
+                if update.len() > 0 {
+                    println!("Img '{}' is already up to date.", file_hash);
+                    let update_status = db
+                        .collection_img
+                        .update_one(
+                            doc! { "org_hash": file_hash_mongo },
+                            doc! {
+                                "$set": update
+                            },
+                            None,
+                        )
+                        .await;
+                    let Ok(_) = update_status else {
+                        println!(
+                            "Error updating img '{}': {}",
+                            file_hash,
+                            update_status.err().unwrap()
+                        );
+                        return;
+                    };
+                    println!("Img '{}' updated.", file_hash);
+                } else {
+                    println!("Img '{}' is already up to date.", file_hash);
+                }
+            } else {
+                let img = crate::database::Img {
+                    user_id: msg.author.id.0,
+                    org_hash: file_hash_mongo,
+                    format: 0,
+                    has_high: save_webp(
+                        format!("assets/gallery/high_{}.webp", file_hash),
+                        &bytes,
+                        image::ImageFormat::Png,
+                        1080,
+                    ),
+                    has_medium: save_webp(
+                        format!("assets/gallery/medium_{}.webp", file_hash),
+                        &bytes,
+                        image::ImageFormat::Png,
+                        720,
+                    ),
+                    has_low: save_webp(
+                        format!("assets/gallery/low_{}.webp", file_hash),
+                        &bytes,
+                        image::ImageFormat::Png,
+                        360,
+                    ),
+                };
+
+                let r = db.collection_img.insert_one(&img, None).await;
+                let insert_status = match r {
+                    Ok(r) => format!("IMG Inserted: {}", r.inserted_id),
+                    Err(e) => format!("Failed to insert IMG: {}", e),
+                };
+
+                println!("{}", insert_status);
             }
+
+            // let Some(found_img) = found_img else {
+            //     println!(
+            //         "Img '{}' doesn't exist in database, it will be inserted.",
+            //         file_hash
+            //     );
+            // };
+            // println!("Img '{}' already exists in database.", file_hash);
+            //
+            // let a = doc! { "test": 5 };
+
+            //let a: u8 = 0.into();
         }
+
+        // if msg.content == "!ping" {
+        //     if let Err(why) = msg.channel_id.say(&ctx.http, "Pong!").await {
+        //         println!("Error sending message: {:?}", why);
+        //     }
+        // }
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
@@ -223,13 +380,35 @@ impl serenity::client::EventHandler for BotHandler {
             //println!("Received command interaction: {:#?}", command);
 
             let content = match command.data.name.as_str() {
+                "test" => {
+                    // let db = {
+                    //     let data_read = ctx.data.read().await;
+                    //     data_read.get::<crate::database::DB>().expect("Expected crate::database::DB in TypeMap").clone()
+                    // };
+                    //
+                    // let img = crate::database::Img::default();
+                    // let r = db.collection_img.insert_one(&img, None).await;
+                    // let msg = match r {
+                    //     Ok(r) => format!("IMG Inserted: {}", r.inserted_id),
+                    //     Err(e) => format!("Failed to insert IMG: {}", e)
+                    // };
+
+                    let msg = "wow".to_string();
+
+                    msg
+                }
                 "who" => "WONDERINOOOOOOOOO".to_string(),
-                _ => "not implemented >:3".to_string()
+                _ => "not implemented >:3".to_string(),
             };
 
-            if let Err(why) = command.create_interaction_response(&ctx.http, |response| {
-                response.kind(InteractionResponseType::ChannelMessageWithSource).interaction_response_data(|message| message.content(content))
-            }).await {
+            if let Err(why) = command
+                .create_interaction_response(&ctx.http, |response| {
+                    response
+                        .kind(InteractionResponseType::ChannelMessageWithSource)
+                        .interaction_response_data(|message| message.content(content))
+                })
+                .await
+            {
                 println!("Cannot respond to slash command: {}", why);
             }
         }
@@ -240,9 +419,15 @@ impl serenity::client::EventHandler for BotHandler {
 
         for guild in ctx.cache.guilds() {
             let commands = GuildId::set_application_commands(&guild, &ctx.http, |commands| {
-               commands.create_application_command(|command| commands::who::register(command))
-            }).await;
-            println!("Commands updated for guild id: {}, with commands: {:#?}", &guild, commands);
+                commands
+                    .create_application_command(|command| commands::who::register(command))
+                    .create_application_command(|command| commands::test::register(command))
+            })
+            .await;
+            println!(
+                "Commands updated for guild id: {}, with commands: {:#?}",
+                &guild, commands
+            );
             // let guild_command = Command::create_global_application_command(&ctx.http, |command| {
             //     commands
             // })
@@ -261,9 +446,16 @@ pub async fn create_bot(db: crate::database::DB) -> serenity::Client {
     let intents = GatewayIntents::GUILD_MESSAGES
         | GatewayIntents::DIRECT_MESSAGES
         | GatewayIntents::MESSAGE_CONTENT;
-    Client::builder(token, intents)
+    let client = Client::builder(token, intents)
         .event_handler(BotHandler)
         .framework(framework)
         .await
-        .expect("Error creating client")
+        .expect("Error creating client");
+
+    {
+        let mut data = client.data.write().await;
+        data.insert::<crate::database::DB>(db);
+    }
+
+    client
 }

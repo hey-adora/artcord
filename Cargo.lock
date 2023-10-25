@@ -361,6 +361,7 @@ dependencies = [
  "console_error_panic_hook",
  "dotenv",
  "futures",
+ "hashes",
  "http",
  "image",
  "js-sys",
@@ -369,6 +370,7 @@ dependencies = [
  "leptos_actix",
  "leptos_meta",
  "leptos_router",
+ "md-5",
  "mongodb",
  "png",
  "png_pong",
@@ -1650,6 +1652,12 @@ dependencies = [
  "ahash 0.8.3",
  "allocator-api2",
 ]
+
+[[package]]
+name = "hashes"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ae25ccbcba51b77f4ffd55cd0221c84e0e2958a13669d97775ccd43ce6f2873"
 
 [[package]]
 name = "heck"

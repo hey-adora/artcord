@@ -1,19 +1,89 @@
-use mongodb::bson::doc;
+use mongodb::bson::{Binary, doc};
 use mongodb::options::{DeleteOptions, FindOptions};
 use mongodb::{options::ClientOptions, Client};
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
+use std::fmt::{Display, Formatter};
+use serenity::prelude::TypeMapKey;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-struct Img {
-    url: String,
+pub struct Img {
+    pub user_id: u64,
+    pub org_hash: Binary,
+    pub format: u8,
+    pub has_high: bool,
+    pub has_medium: bool,
+    pub has_low: bool,
+    
 }
 
-#[derive(Clone)]
+pub enum ImgFormat {
+    PNG,
+    JPG,
+}
+
+impl ImgFormat {
+    fn from_u8(value: u8) -> Option<Self> {
+        match value {
+            0 => Some(ImgFormat::PNG),
+            1 => Some(ImgFormat::JPG),
+            _ => None
+        }
+    }
+
+    fn from_str(value: &str) -> Option<Self> {
+        match value {
+            "png" => Some(ImgFormat::PNG),
+            "jpg" => Some(ImgFormat::JPG),
+            _ => None
+        }
+    }
+
+    fn from_i32(value: i32) -> Option<Self> {
+        match value {
+            0 => Some(ImgFormat::PNG),
+            1 => Some(ImgFormat::JPG),
+            _ => None
+        }
+    }
+}
+
+
+impl Into<u8> for ImgFormat {
+    fn into(self) -> u8 {
+        match self {
+            ImgFormat::PNG => 0,
+            ImgFormat::JPG => 1,
+        }
+    }
+}
+
+impl Into<&str> for &ImgFormat {
+    fn into(self) -> &'static str {
+        match self {
+            ImgFormat::PNG => "png",
+            ImgFormat::JPG => "jpg",
+        }
+    }
+}
+
+impl Display for ImgFormat {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let a: &str = self.into();
+        write!(f, "{}", a)
+    }
+}
+
+
+#[derive(Clone, Debug)]
 pub struct DB {
     pub client: mongodb::Client,
     pub database: mongodb::Database,
     pub collection_img: mongodb::Collection<Img>
+}
+
+impl TypeMapKey for DB {
+    type Value = Self;
 }
 
 // pub struct Item<T> {
@@ -70,14 +140,14 @@ pub struct DB {
 // }
 
 
-
-impl Default for Img {
-    fn default() -> Self {
-        Img {
-            url: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
-        }
-    }
-}
+// 
+// impl Default for Img {
+//     fn default() -> Self {
+//         Img {
+//             url: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+//         }
+//     }
+// }
 
 pub async fn create_database() -> DB {
     let mut client_options = ClientOptions::parse("mongodb://root:example@localhost:27017")
@@ -85,8 +155,17 @@ pub async fn create_database() -> DB {
         .unwrap();
     client_options.app_name = Some("My App".to_string());
     let client = Client::with_options(client_options).unwrap();
+
     let database = client.database("artcord");
     let collection_img = database.collection::<Img>("img");
+
+    //let test
+    //collection_img.insert_one()
+
+    println!("Connecting to database...");
+    let db_list = client.list_database_names(doc! {}, None).await.unwrap();
+    println!("Databases: {:?}", db_list);
+
 
     DB {
         database,
