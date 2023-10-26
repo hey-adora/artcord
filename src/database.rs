@@ -8,8 +8,9 @@ use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct User {
-    pub user_id: u64,
-    pub user_name: String,
+    pub id: u64,
+    pub name: String,
+    pub pfp_hash: Option<Binary>,
     pub modified_at: mongodb::bson::DateTime,
     pub created_at: mongodb::bson::DateTime,
 }
@@ -87,6 +88,7 @@ pub struct DB {
     pub client: mongodb::Client,
     pub database: mongodb::Database,
     pub collection_img: mongodb::Collection<Img>,
+    pub collection_user: mongodb::Collection<User>,
 }
 
 impl TypeMapKey for DB {
@@ -164,6 +166,7 @@ pub async fn create_database() -> DB {
 
     let database = client.database("artcord");
     let collection_img = database.collection::<Img>("img");
+    let collection_user = database.collection::<User>("user");
 
     //let test
     //collection_img.insert_one()
@@ -176,5 +179,6 @@ pub async fn create_database() -> DB {
         database,
         client,
         collection_img,
+        collection_user,
     }
 }

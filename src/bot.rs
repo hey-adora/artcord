@@ -1,9 +1,9 @@
-use crate::database::{ImgFormat, DB};
+use crate::database::{ImgFormat, User, DB};
 use anyhow::anyhow;
 use chrono::Utc;
 use image::EncodableLayout;
-use mongodb::bson::doc;
 use mongodb::bson::spec::BinarySubtype;
+use mongodb::bson::{doc, Binary};
 use serenity::client::Context;
 use serenity::framework::standard::macros::{command, group};
 use serenity::framework::standard::CommandResult;
@@ -19,6 +19,8 @@ use std::fs::File;
 use std::future::Future;
 use std::hash::Hash;
 use std::io::{Cursor, Write};
+use std::num::ParseIntError;
+use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::{env, fs, io};
 use thiserror::Error;
@@ -136,6 +138,122 @@ fn save_webp(
     }
 }
 
+async fn save_user_pfp(
+    user_id: u64,
+    user: &serenity::model::user::User,
+    org_pfp_hash: &Option<Binary>,
+) -> Result<SaveUserPfpResult, SaveUserPfpError> {
+    let user_pfp_hash = user
+        .avatar_url()
+        .ok_or(SaveUserPfpError::NotFound(user_id))?;
+
+    let md5_bytes: [u8; 16] = u128::from_str_radix(&user_pfp_hash, 16)?.to_be_bytes();
+    let pfp_img_path = format!("assets/gallery/pfp_{}.webp", user_id);
+    let pfp_url = format!(
+        "https://cdn.discordapp.com/avatars/{}/{}.webp",
+        user_id, user_pfp_hash
+    );
+
+    let pfp_file_exists = PathBuf::from(&pfp_img_path).exists();
+
+    if let Some(org_pfp_hash) = org_pfp_hash {
+        if org_pfp_hash.bytes == md5_bytes && pfp_file_exists {
+            return Ok(SaveUserPfpResult::AlreadyExists(md5_bytes));
+        }
+    }
+
+    let pfp_img_response = reqwest::get(pfp_url).await?;
+    let org_img_bytes = pfp_img_response.bytes().await?;
+
+    if pfp_file_exists {
+        fs::write(&pfp_img_path, &org_img_bytes)?;
+        Ok(SaveUserPfpResult::Updated(md5_bytes))
+    } else {
+        fs::write(&pfp_img_path, &org_img_bytes)?;
+        Ok(SaveUserPfpResult::Created(md5_bytes))
+    }
+}
+
+async fn save_user(
+    db: &DB,
+    msg: &serenity::model::channel::Message,
+) -> Result<SaveUserResult, SaveUserError> {
+    let user_id = msg.author.id.0;
+
+    let a = mongodb::bson::Decimal128 { bytes: user_id.b };
+
+    let user = db
+        .collection_user
+        .find_one(doc! { "id": user_id }, None)
+        .await?;
+
+    return if let Some(user) = user {
+        let mut update = doc! {};
+        let user_name = &msg.author.name;
+
+        let pfp = save_user_pfp(user_id, &msg.author, &user.pfp_hash).await;
+        let pfp_hash = match pfp {
+            Ok(result) => Ok(Some(mongodb::bson::Binary {
+                subtype: BinarySubtype::Md5,
+                bytes: result.into_bytes().to_vec(),
+            })),
+            Err(e) => match e {
+                SaveUserPfpError::NotFound(_) => Ok(None),
+                err => Err(err),
+            },
+        }?;
+
+        if pfp_hash != &user.pfp_hash {
+            update.insert("pfp_hash", pfp_hash);
+        }
+
+        if user_name != user.name {
+            update.insert("name", (*user_name).clone());
+        }
+
+        if update.len() > 0 {
+            update.insert("modified_at", mongodb::bson::DateTime::now());
+            db.collection_img
+                .update_one(
+                    doc! { "org_hash": file_hash_mongo },
+                    doc! {
+                        "$set": update
+                    },
+                    None,
+                )
+                .await?;
+            Ok(SaveUserResult::Updated(format!("{}", update)))
+        } else {
+            Ok(SaveUserResult::None)
+        }
+    } else {
+        let user_name = msg.author.name.clone();
+        let pfp = save_user_pfp(user_id, &msg.author, None).await;
+        let pfp_hash = match pfp {
+            Ok(result) => Ok(Some(mongodb::bson::Binary {
+                subtype: BinarySubtype::Md5,
+                bytes: result.into_bytes().to_vec(),
+            })),
+            Err(e) => match e {
+                SaveUserPfpError::NotFound(_) => Ok(None),
+                err => Err(err),
+            },
+        }?;
+
+        let user = User {
+            id: user_id,
+            name: user_name,
+            pfp_hash,
+            modified_at: mongodb::bson::DateTime::now(),
+            created_at: mongodb::bson::DateTime::now(),
+        };
+
+        db.collection_user.insert_one(&user, None).await?;
+
+        Ok(SaveUserResult::Created)
+    };
+}
+
 async fn save_attachment(
     db: &DB,
     msg: &serenity::model::channel::Message,
@@ -151,10 +269,10 @@ async fn save_attachment(
         (t) => Err(SaveAttachmentError::ImgTypeUnsupported(t.to_string())),
     }?;
 
-    let res = reqwest::get(&attachment.url).await?;
-    let bytes = res.bytes().await?;
+    let org_img_response = reqwest::get(&attachment.url).await?;
+    let org_img_bytes = org_img_response.bytes().await?;
 
-    let file_hash_bytes: [u8; 16] = hashes::md5::hash(bytes.as_bytes()).into_bytes();
+    let file_hash_bytes: [u8; 16] = hashes::md5::hash(org_img_bytes.as_bytes()).into_bytes();
     let file_hash_decimal: u128 = u128::from_be_bytes(file_hash_bytes);
     let file_hash_mongo = mongodb::bson::Binary {
         subtype: BinarySubtype::Md5,
@@ -174,7 +292,7 @@ async fn save_attachment(
     let mut paths_state = [false, false, false];
     let mut img_heights = [360, 720, 1080];
 
-    let save_org_img_result = save_org_img(&org_img_path, &bytes);
+    let save_org_img_result = save_org_img(&org_img_path, &org_img_bytes);
     if let Err(save_org_img_result) = save_org_img_result {
         match save_org_img_result {
             SaveImgError::AlreadyExist(_) => Ok(()),
@@ -184,7 +302,12 @@ async fn save_attachment(
 
     'path_loop: for (i, path) in paths.iter().enumerate() {
         println!("{}", path);
-        paths_state[i] = match save_webp(path, &bytes, image::ImageFormat::Png, img_heights[i]) {
+        paths_state[i] = match save_webp(
+            path,
+            &org_img_bytes,
+            image::ImageFormat::Png,
+            img_heights[i],
+        ) {
             Ok(_) => Ok(true),
             Err(e) => match e {
                 SaveWebpError::AlreadyExist(p) => Ok(true),
@@ -255,6 +378,16 @@ async fn save_attachment(
 #[async_trait]
 impl serenity::client::EventHandler for BotHandler {
     async fn message(&self, ctx: Context, msg: serenity::model::channel::Message) {
+        let Some(member) = msg.author.member else {
+            return;
+        };
+        let Some(permissions) = member.permissions else {
+            return;
+        };
+        if !permissions.administrator() {
+            return;
+        }
+
         if msg.attachments.len() > 0 {
             let db = {
                 let data_read = ctx.data.read().await;
@@ -419,7 +552,7 @@ pub enum SaveAttachmentError {
     Request(#[from] reqwest::Error),
 
     #[error("Failed to save org img {0}.")]
-    ImgSaveOrg(#[from] SaveImgError),
+    ImgSave(#[from] SaveImgError),
 
     #[error("Failed to save webp img {0}.")]
     ImgSaveWebp(#[from] SaveWebpError),
@@ -428,8 +561,63 @@ pub enum SaveAttachmentError {
     Mongo(#[from] mongodb::error::Error),
 }
 
+#[derive(Error, Debug)]
+pub enum SaveUserError {
+    #[error("Failed to save pfp: {0}")]
+    SavingPfp(#[from] SaveUserPfpError),
+
+    #[error("Mongodb: {0}.")]
+    Mongo(#[from] mongodb::error::Error),
+}
+
+#[derive(Error, Debug)]
+pub enum SaveUserPfpError {
+    #[error("User '{0}' pfp not found.")]
+    NotFound(u64),
+
+    #[error("Failed downloading pfp img {0}.")]
+    Request(#[from] reqwest::Error),
+
+    #[error("Failed to convert hex to decimal {0}.")]
+    HexToDec(#[from] ParseIntError),
+
+    #[error("Failed to save pfp: {0}")]
+    IO(#[from] std::io::Error),
+}
+
 pub enum SaveAttachmentResult {
     Created(u128),
     Updated(u128),
     None(u128),
 }
+
+pub enum SaveUserPfpResult {
+    AlreadyExists([u8; 16]),
+    Updated([u8; 16]),
+    Created([u8; 16]),
+}
+
+impl SaveUserPfpResult {
+    pub fn into_bytes(self) -> [u8; 16] {
+        match self {
+            SaveUserPfpResult::Created(bytes) => bytes,
+            SaveUserPfpResult::Updated(bytes) => bytes,
+            SaveUserPfpResult::AlreadyExists(bytes) => bytes,
+        }
+    }
+}
+
+pub enum SaveUserResult {
+    Updated(String),
+    Created,
+    None,
+}
+
+//
+// #[derive(Error, Debug)]
+// pub enum SaveUserPfpResultAsBytesError {
+//     Img
+//
+//     #[error("Failed to save pfp: {0}")]
+//     IO(#[from] std::io::Error),
+// }
