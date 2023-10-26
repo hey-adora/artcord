@@ -1,10 +1,18 @@
-use mongodb::bson::{Binary, doc};
+use mongodb::bson::{doc, Binary};
 use mongodb::options::{DeleteOptions, FindOptions};
 use mongodb::{options::ClientOptions, Client};
 use serde::{Deserialize, Serialize};
+use serenity::prelude::TypeMapKey;
 use std::borrow::Borrow;
 use std::fmt::{Display, Formatter};
-use serenity::prelude::TypeMapKey;
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct User {
+    pub user_id: u64,
+    pub user_name: String,
+    pub modified_at: mongodb::bson::DateTime,
+    pub created_at: mongodb::bson::DateTime,
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Img {
@@ -28,7 +36,7 @@ impl ImgFormat {
         match value {
             0 => Some(ImgFormat::PNG),
             1 => Some(ImgFormat::JPG),
-            _ => None
+            _ => None,
         }
     }
 
@@ -36,7 +44,7 @@ impl ImgFormat {
         match value {
             "png" => Some(ImgFormat::PNG),
             "jpg" => Some(ImgFormat::JPG),
-            _ => None
+            _ => None,
         }
     }
 
@@ -44,11 +52,10 @@ impl ImgFormat {
         match value {
             0 => Some(ImgFormat::PNG),
             1 => Some(ImgFormat::JPG),
-            _ => None
+            _ => None,
         }
     }
 }
-
 
 impl Into<u8> for ImgFormat {
     fn into(self) -> u8 {
@@ -75,12 +82,11 @@ impl Display for ImgFormat {
     }
 }
 
-
 #[derive(Clone, Debug)]
 pub struct DB {
     pub client: mongodb::Client,
     pub database: mongodb::Database,
-    pub collection_img: mongodb::Collection<Img>
+    pub collection_img: mongodb::Collection<Img>,
 }
 
 impl TypeMapKey for DB {
@@ -140,8 +146,7 @@ impl TypeMapKey for DB {
 //     fn collection
 // }
 
-
-// 
+//
 // impl Default for Img {
 //     fn default() -> Self {
 //         Img {
@@ -167,10 +172,9 @@ pub async fn create_database() -> DB {
     let db_list = client.list_database_names(doc! {}, None).await.unwrap();
     println!("Databases: {:?}", db_list);
 
-
     DB {
         database,
         client,
-        collection_img
+        collection_img,
     }
 }

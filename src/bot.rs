@@ -1,4 +1,4 @@
-use crate::database::ImgFormat;
+use crate::database::{ImgFormat, DB};
 use anyhow::anyhow;
 use chrono::Utc;
 use image::EncodableLayout;
@@ -10,6 +10,7 @@ use serenity::framework::standard::CommandResult;
 use serenity::framework::StandardFramework;
 use serenity::http::CacheHttp;
 use serenity::model::application::command::Command;
+use serenity::model::channel::Attachment;
 use serenity::model::id::GuildId;
 use serenity::model::prelude::{Interaction, InteractionResponseType};
 use serenity::prelude::GatewayIntents;
@@ -19,7 +20,9 @@ use std::future::Future;
 use std::hash::Hash;
 use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};
-use std::{env, fs};
+use std::{env, fs, io};
+use thiserror::Error;
+use webp::WebPEncodingError;
 
 mod commands;
 
@@ -35,7 +38,7 @@ impl ImgData {
         org_bytes: &[u8],
         img_format: image::ImageFormat,
         new_height: u32,
-    ) -> anyhow::Result<ImgData> {
+    ) -> Result<ImgData, ImgDataNewError> {
         //let mut img = image::io::Reader::open(file)?.decode()?;
         let mut img = image::io::Reader::new(Cursor::new(org_bytes))
             .with_guessed_format()?
@@ -43,11 +46,10 @@ impl ImgData {
         let width = img.width();
         let height = img.height();
         if height <= new_height {
-            return Err(anyhow!(
-                "Image is too small for resize from {} to {}",
-                height,
-                new_height
-            ));
+            return Err(ImgDataNewError::ImgTooSmall {
+                from: height,
+                to: new_height,
+            });
         }
         let ratio = width as f32 / height as f32;
         let new_width = (new_height as f32 * ratio) as u32;
@@ -71,13 +73,13 @@ impl ImgData {
         })
     }
 
-    pub fn encode_webp(&self) -> anyhow::Result<Vec<u8>> {
+    pub fn encode_webp(&self) -> Result<Vec<u8>, ImgDataEncodeWebpError> {
         let webp_encoder = webp::Encoder::new(&self.bytes, self.color, self.width, self.height);
         let r = webp_encoder
             .encode_simple(false, 10f32)
-            .or_else(|e| Err(anyhow::anyhow!("{:?}", e)))?;
-
+            .or_else(|e| Err(ImgDataEncodeWebpError::Encode(format!("{:?}", e))))?;
         let bytes: Vec<u8> = r.to_vec();
+
         Ok(bytes)
     }
 
@@ -104,116 +106,156 @@ async fn ping(ctx: &Context, msg: &serenity::model::channel::Message) -> Command
 
 struct BotHandler;
 
-fn save_img(_path: String, bytes: &[u8]) -> Result<String, String> {
-    let path = PathBuf::from(&_path);
+fn save_org_img(_path: &str, bytes: &[u8]) -> Result<(), SaveImgError> {
+    let path = PathBuf::from(_path);
 
     if path.exists() {
-        return Err(format!("File already exists: {}", _path));
+        return Err(SaveImgError::AlreadyExist(String::from(_path)));
     }
 
-    let io_status = fs::write(&path, bytes);
-    let Ok(_) = io_status else {
-        return Err(format!(
-            "Failed to save {} with error: {}.",
-            &_path,
-            io_status.err().unwrap()
-        ));
-    };
-    Ok(_path)
+    fs::write(&path, bytes)?;
+
+    Ok(())
 }
 
-fn save_webp(_path: String, bytes: &[u8], img_format: image::ImageFormat, height: u32) -> bool {
-    let path = PathBuf::from(&_path);
+fn save_webp(
+    _path: &str,
+    bytes: &[u8],
+    img_format: image::ImageFormat,
+    height: u32,
+) -> Result<(), SaveWebpError> {
+    let path = PathBuf::from(_path);
     if !path.exists() {
-        let img = ImgData::new(&bytes, img_format, height);
-        let Ok(img) = img else {
-            println!("Error converting img: {}", img.err().unwrap());
-            return false;
-        };
+        let img = ImgData::new(&bytes, img_format, height)?;
+        let bytes = img.encode_webp()?;
+        fs::write(&path, bytes)?;
 
-        let bytes = img.encode_webp();
-        let Ok(bytes) = bytes else {
-            println!("Error converting img: {}", bytes.err().unwrap());
-            return false;
-        };
-
-        let io_state = fs::write(&path, bytes);
-        let Ok(_) = io_state else {
-            println!(
-                "Failed to save {} with error: {}.",
-                _path,
-                io_state.err().unwrap()
-            );
-            return false;
-        };
-
-        println!("Saved {}.", path.as_os_str().to_str().unwrap());
-
-        return true;
+        Ok(())
     } else {
-        println!(
-            "File already exists: {}",
-            path.as_os_str().to_str().unwrap()
-        );
-        return true;
+        Err(SaveWebpError::AlreadyExist(String::from(_path)))
     }
+}
+
+async fn save_attachment(
+    db: &DB,
+    msg: &serenity::model::channel::Message,
+    attachment: &Attachment,
+) -> Result<SaveAttachmentResult, SaveAttachmentError> {
+    let content_type = attachment
+        .content_type
+        .as_ref()
+        .ok_or(SaveAttachmentError::ImgTypeNotFound)?;
+
+    match content_type.as_str() {
+        "image/png" => Ok(()),
+        (t) => Err(SaveAttachmentError::ImgTypeUnsupported(t.to_string())),
+    }?;
+
+    let res = reqwest::get(&attachment.url).await?;
+    let bytes = res.bytes().await?;
+
+    let file_hash_bytes: [u8; 16] = hashes::md5::hash(bytes.as_bytes()).into_bytes();
+    let file_hash_decimal: u128 = u128::from_be_bytes(file_hash_bytes);
+    let file_hash_mongo = mongodb::bson::Binary {
+        subtype: BinarySubtype::Md5,
+        bytes: file_hash_bytes.to_vec(),
+    };
+
+    let file_name = PathBuf::from(&attachment.filename);
+    let file_stem = file_name.file_stem().unwrap().to_str().unwrap();
+    let file_ext = file_name.extension().unwrap().to_str().unwrap();
+
+    let org_img_path = format!("assets/gallery/org_{}.{}", file_hash_decimal, file_ext);
+    let low_img_path = format!("assets/gallery/low_{}.webp", file_hash_decimal);
+    let medium_img_path = format!("assets/gallery/medium_{}.webp", file_hash_decimal);
+    let high_img_path = format!("assets/gallery/high_{}.webp", file_hash_decimal);
+
+    let mut paths = [low_img_path, medium_img_path, high_img_path];
+    let mut paths_state = [false, false, false];
+    let mut img_heights = [360, 720, 1080];
+
+    let save_org_img_result = save_org_img(&org_img_path, &bytes);
+    if let Err(save_org_img_result) = save_org_img_result {
+        match save_org_img_result {
+            SaveImgError::AlreadyExist(_) => Ok(()),
+            err => Err(err),
+        }?
+    }
+
+    'path_loop: for (i, path) in paths.iter().enumerate() {
+        println!("{}", path);
+        paths_state[i] = match save_webp(path, &bytes, image::ImageFormat::Png, img_heights[i]) {
+            Ok(_) => Ok(true),
+            Err(e) => match e {
+                SaveWebpError::AlreadyExist(p) => Ok(true),
+                SaveWebpError::ImgDecoding(decoding_err) => match decoding_err {
+                    ImgDataNewError::ImgTooSmall { from, to } => break 'path_loop,
+                    err => Err(SaveWebpError::from(err)),
+                },
+                err => Err(err),
+            },
+        }?;
+    }
+
+    let found_img = db
+        .collection_img
+        .find_one(
+            doc! {
+                "org_hash": file_hash_mongo.clone()
+            },
+            None,
+        )
+        .await?;
+
+    return if let Some(found_img) = found_img {
+        let db_img_names = ["has_low", "has_medium", "has_high"];
+        let db_img_states = [found_img.has_low, found_img.has_medium, found_img.has_high];
+
+        let mut update = doc! {};
+
+        for (i, path_state) in paths_state.into_iter().enumerate() {
+            if db_img_states[i] != path_state {
+                update.insert(db_img_names[i], path_state);
+            }
+        }
+
+        if update.len() > 0 {
+            update.insert("modified_at", mongodb::bson::DateTime::now());
+            let update_status = db
+                .collection_img
+                .update_one(
+                    doc! { "org_hash": file_hash_mongo },
+                    doc! {
+                        "$set": update
+                    },
+                    None,
+                )
+                .await?;
+            Ok(SaveAttachmentResult::Updated(file_hash_decimal))
+        } else {
+            Ok(SaveAttachmentResult::None(file_hash_decimal))
+        }
+    } else {
+        let img = crate::database::Img {
+            user_id: msg.author.id.0,
+            org_hash: file_hash_mongo,
+            format: 0,
+            has_high: paths_state[2],
+            has_medium: paths_state[1],
+            has_low: paths_state[0],
+            modified_at: mongodb::bson::DateTime::now(),
+            created_at: mongodb::bson::DateTime::now(),
+        };
+
+        db.collection_img.insert_one(&img, None).await?;
+        Ok(SaveAttachmentResult::Created(file_hash_decimal))
+    };
 }
 
 #[async_trait]
 impl serenity::client::EventHandler for BotHandler {
     async fn message(&self, ctx: Context, msg: serenity::model::channel::Message) {
-        // let guilds = ctx.cache.guilds();
-        // for guild in guilds {
-        //     let name = guild.name(&ctx.cache).unwrap_or_default();
-        //     println!("Leaving: {}", name);
-        //     guild.leave(ctx.http()).await.unwrap();
-        // }
-        for attachment in msg.attachments {
-            let Some(content_type) = attachment.content_type else {
-                println!("Failed to get content type");
-                return;
-            };
-
-            //let file_name = format!("{}_{}", attachment.id, &attachment.filename);
-
-            if content_type == "image/png" {
-                println!("Downloading: {}", &attachment.filename);
-            } else {
-                println!("File format is {}; skipping download.", content_type);
-                return;
-            }
-
-            let res = reqwest::get(attachment.url).await;
-            let Ok(res) = res else {
-                println!("{}", res.err().unwrap());
-                return;
-            };
-
-            //let file_name = format!("assets/gallery/{}", &file_name);
-
-            let bytes = res.bytes().await;
-            let Ok(bytes) = bytes else {
-                println!("Failed to get bytes: {}", bytes.err().unwrap());
-                return;
-            };
-
-            //let file_hash = sha256::digest(bytes.as_bytes());
-            //let mut hasher = md5::new();
-            //hasher.update(bytes.as_bytes());
-            //let file_hash2 = hasher.finalize();
-
-            //let file_hash2 = md5digest(bytes.as_bytes());
-            let file_hash_bytes: [u8; 16] = hashes::md5::hash(bytes.as_bytes()).into_bytes();
-            let file_hash: u128 = u128::from_be_bytes(file_hash_bytes);
-            let file_hash_mongo = mongodb::bson::Binary {
-                subtype: BinarySubtype::Md5,
-                bytes: file_hash_bytes.to_vec(),
-            };
-
-            let file_name = PathBuf::from(&attachment.filename);
-            let file_stem = file_name.file_stem().unwrap().to_str().unwrap();
-            let file_ext = file_name.extension().unwrap().to_str().unwrap();
-
+        if msg.attachments.len() > 0 {
             let db = {
                 let data_read = ctx.data.read().await;
                 data_read
@@ -221,162 +263,21 @@ impl serenity::client::EventHandler for BotHandler {
                     .expect("Expected crate::database::DB in TypeMap")
                     .clone()
             };
-
-            let found_img_status = db
-                .collection_img
-                .find_one(
-                    doc! {
-                        "org_hash": file_hash_mongo.clone()
+            for attachment in &msg.attachments {
+                let result = save_attachment(&db, &msg, attachment).await;
+                let msg = match result {
+                    Ok(hash) => match hash {
+                        SaveAttachmentResult::Created(hash) => format!("File '{}' saved.", hash),
+                        SaveAttachmentResult::Updated(hash) => format!("File '{}' updated.", hash),
+                        SaveAttachmentResult::None(hash) => {
+                            format!("File '{}' already exists.", hash)
+                        }
                     },
-                    None,
-                )
-                .await;
-            let Ok(found_img) = found_img_status else {
-                println!(
-                    "Database error while searching for existing img '{}': {}",
-                    file_hash,
-                    found_img_status.err().unwrap()
-                );
-                return;
-            };
-
-            println!(
-                "{}",
-                match save_img(
-                    format!("assets/gallery/org_{}.{}", file_hash, file_ext),
-                    &bytes,
-                ) {
-                    Ok(to) => format!("Img saved to {}", to),
-                    Err(e) => format!("Error: {}", e),
-                }
-            );
-
-            if let Some(found_img) = found_img {
-                println!("Img '{}' already exists in database.", file_hash);
-
-                let mut update = doc! {};
-
-                let has_low = save_webp(
-                    format!("assets/gallery/low_{}.webp", file_hash),
-                    &bytes,
-                    image::ImageFormat::Png,
-                    360,
-                );
-
-                if found_img.has_low == has_low {
-                    println!("Img '{}' has_low field is correct.", file_hash);
-                } else {
-                    println!("Img '{}' has_low field is incorrect.", file_hash);
-                    update.insert("has_low", has_low);
-                }
-
-                let has_medium = save_webp(
-                    format!("assets/gallery/medium_{}.webp", file_hash),
-                    &bytes,
-                    image::ImageFormat::Png,
-                    720,
-                );
-
-                if found_img.has_medium == has_medium {
-                    println!("Img '{}' has_medium field is correct.", file_hash);
-                } else {
-                    println!("Img '{}' has_medium field is incorrect.", file_hash);
-                    update.insert("has_medium", has_medium);
-                }
-
-                let has_high = save_webp(
-                    format!("assets/gallery/high_{}.webp", file_hash),
-                    &bytes,
-                    image::ImageFormat::Png,
-                    1080,
-                );
-
-                if found_img.has_high == has_high {
-                    println!("Img '{}' has_high field is correct.", file_hash);
-                } else {
-                    println!("Img '{}' has_high field is incorrect.", file_hash);
-                    update.insert("has_high", has_high);
-                }
-
-                if update.len() > 0 {
-                    update.insert("modified_at", mongodb::bson::DateTime::now());
-                    let update_status = db
-                        .collection_img
-                        .update_one(
-                            doc! { "org_hash": file_hash_mongo },
-                            doc! {
-                                "$set": update
-                            },
-                            None,
-                        )
-                        .await;
-                    let Ok(_) = update_status else {
-                        println!(
-                            "Error updating img '{}': {}",
-                            file_hash,
-                            update_status.err().unwrap()
-                        );
-                        return;
-                    };
-                    println!("Img '{}' updated.", file_hash);
-                } else {
-                    println!("Img '{}' is already up to date.", file_hash);
-                }
-            } else {
-                //let time = Utc::now().timestamp();
-                let img = crate::database::Img {
-                    user_id: msg.author.id.0,
-                    org_hash: file_hash_mongo,
-                    format: 0,
-                    has_high: save_webp(
-                        format!("assets/gallery/high_{}.webp", file_hash),
-                        &bytes,
-                        image::ImageFormat::Png,
-                        1080,
-                    ),
-                    has_medium: save_webp(
-                        format!("assets/gallery/medium_{}.webp", file_hash),
-                        &bytes,
-                        image::ImageFormat::Png,
-                        720,
-                    ),
-                    has_low: save_webp(
-                        format!("assets/gallery/low_{}.webp", file_hash),
-                        &bytes,
-                        image::ImageFormat::Png,
-                        360,
-                    ),
-                    modified_at: mongodb::bson::DateTime::now(),
-                    created_at: mongodb::bson::DateTime::now(),
+                    Err(err) => format!("Error: {}", err),
                 };
-
-                let r = db.collection_img.insert_one(&img, None).await;
-                let insert_status = match r {
-                    Ok(r) => format!("IMG Inserted: {}", r.inserted_id),
-                    Err(e) => format!("Failed to insert IMG: {}", e),
-                };
-
-                println!("{}", insert_status);
+                println!("{}", msg);
             }
-
-            // let Some(found_img) = found_img else {
-            //     println!(
-            //         "Img '{}' doesn't exist in database, it will be inserted.",
-            //         file_hash
-            //     );
-            // };
-            // println!("Img '{}' already exists in database.", file_hash);
-            //
-            // let a = doc! { "test": 5 };
-
-            //let a: u8 = 0.into();
         }
-
-        // if msg.content == "!ping" {
-        //     if let Err(why) = msg.channel_id.say(&ctx.http, "Pong!").await {
-        //         println!("Error sending message: {:?}", why);
-        //     }
-        // }
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
@@ -462,4 +363,73 @@ pub async fn create_bot(db: crate::database::DB) -> serenity::Client {
     }
 
     client
+}
+
+#[derive(Error, Debug)]
+pub enum SaveImgError {
+    #[error("Img already exists at {0}.")]
+    AlreadyExist(String),
+
+    #[error("IO error: {0}")]
+    IO(#[from] std::io::Error),
+}
+
+#[derive(Error, Debug)]
+pub enum SaveWebpError {
+    #[error("{0}")]
+    ImgDecoding(#[from] ImgDataNewError),
+
+    #[error("{0}")]
+    ImgEncoding(#[from] ImgDataEncodeWebpError),
+
+    #[error("IO error: {0}")]
+    IO(#[from] std::io::Error),
+
+    #[error("Img already exists at {0}.")]
+    AlreadyExist(String),
+}
+
+#[derive(Error, Debug)]
+pub enum ImgDataNewError {
+    #[error("Img invalid format: {0}.")]
+    Format(#[from] std::io::Error),
+
+    #[error("Failed to decode img: {0}.")]
+    Decode(#[from] image::ImageError),
+
+    #[error("Img too small to covert from {from:?} to {to:?}.")]
+    ImgTooSmall { from: u32, to: u32 },
+}
+
+#[derive(Error, Debug)]
+pub enum ImgDataEncodeWebpError {
+    #[error("Webp encoding error: {0}")]
+    Encode(String),
+}
+
+#[derive(Error, Debug)]
+pub enum SaveAttachmentError {
+    #[error("Msg content type not found.")]
+    ImgTypeNotFound,
+
+    #[error("Msg content type not found {0}.")]
+    ImgTypeUnsupported(String),
+
+    #[error("Failed downloading img {0}.")]
+    Request(#[from] reqwest::Error),
+
+    #[error("Failed to save org img {0}.")]
+    ImgSaveOrg(#[from] SaveImgError),
+
+    #[error("Failed to save webp img {0}.")]
+    ImgSaveWebp(#[from] SaveWebpError),
+
+    #[error("Mongodb: {0}.")]
+    Mongo(#[from] mongodb::error::Error),
+}
+
+pub enum SaveAttachmentResult {
+    Created(u128),
+    Updated(u128),
+    None(u128),
 }
