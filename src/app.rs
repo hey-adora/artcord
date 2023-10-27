@@ -12,8 +12,7 @@ use pages::home::HomePage;
 use pages::not_found::NotFound;
 
 use crate::app::utils::GlobalState;
-use crate::server::ServerMsg;
-
+use crate::server::{ClientMsg, ServerMsg};
 
 mod components;
 mod pages;
@@ -45,19 +44,59 @@ pub fn App() -> impl IntoView {
 
         create_effect(move |_| {
             let Some(bytes) = message_bytes.get() else {
-                println!("Empty byte msg received.");
+                log!("Empty byte msg received.");
                 return;
             };
-            let server_msg: ServerMsg = rkyv::check_archived_root::<ServerMsg>(&bytes[..]).unwrap().deserialize(&mut rkyv::Infallible).unwrap();
+            //
+            // let client_msg = rkyv::check_archived_root::<ClientMsg>(&bytes[..]);
+            // let Ok(client_msg) = client_msg else {
+            //     println!("Received invalid binary msg: {}", client_msg.err().unwrap());
+            //     return;
+            // };
+            //
+            // let client_msg: Result<ClientMsg, rkyv::Infallible> = client_msg.deserialize(&mut rkyv::Infallible);
+            // let Ok(client_msg) = client_msg else {
+            //     println!("Received invalid binary msg: {:?}", client_msg.err().unwrap());
+            //     return;
+            // };
+
+            let server_msg = ServerMsg::from_bytes(&bytes);
+            let Ok(server_msg) = server_msg else {
+                log!("{}", server_msg.err().unwrap());
+                return;
+            };
+
+            // let server_msg: ServerMsg = rkyv::check_archived_root::<ServerMsg>(&bytes[..])
+            //     .unwrap()
+            //     .deserialize(&mut rkyv::Infallible)
+            //     .unwrap();
+            //
+            // let server_msg = rkyv::check_archived_root::<ServerMsg>(&bytes[..]);
+            // let Ok(server_msg) = server_msg else {
+            //     log!("Received invalid binary msg: {}", server_msg.err().unwrap());
+            //     return;
+            // };
+
+            // let server_msg: ServerMsg = server_msg.deserialize(&mut rkyv::Infallible).unwrap();
+
+            // let Ok(server_msg) = server_msg else {
+            //     log!(
+            //         "Received invalid binary msg: {:?}",
+            //         server_msg.err().unwrap()
+            //     );
+            //     return;
+            // };
+            //
+            // let server_msg: ServerMsg = rkyv::check_archived_root::<ServerMsg>(&bytes[..])
+            //     .unwrap()
+            //     .deserialize(&mut rkyv::Infallible)
+            //     .unwrap();
 
             match server_msg {
-
                 ServerMsg::Str(str) => {
                     log!("MSG RECEIVED: {}", str);
                 }
-            }
-
-
+            };
         });
 
         create_effect(move |_| {
@@ -67,6 +106,12 @@ pub fn App() -> impl IntoView {
         create_effect(move |_| {
             if ready_state.get() == ConnectionReadyState::Open {
                 send("test69");
+
+                let msg = ClientMsg::GalleryInit(String::from("hello"));
+                let bytes = rkyv::to_bytes::<ClientMsg, 256>(&msg).unwrap();
+                let bytes = bytes.into_vec();
+                log!("{:?}", &bytes);
+                send_bytes(bytes);
             }
         });
     };

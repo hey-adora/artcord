@@ -1,17 +1,112 @@
 use cfg_if::cfg_if;
 
+use rkyv::validation::validators::DefaultValidator;
+use rkyv::validation::CheckTypeError;
 use rkyv::{Archive, Deserialize, Serialize};
+use thiserror::Error;
+
 #[derive(Archive, Deserialize, Serialize, Debug, PartialEq)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum ServerMsg {
-    Str(String)
+    Str(String),
+}
+
+#[derive(Error, Debug)]
+pub enum WebSerializeError {
+    #[error("Invalid bytes, error: {0}")]
+    InvalidBytes(String),
+}
+
+impl ServerMsg {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, WebSerializeError> {
+        // let server_msg = rkyv::check_archived_root::<ServerMsg>(&bytes[..]);
+        // let Ok(server_msg) = server_msg else {
+        //     return Err(ServerMsgFromBytesError::InvalidBytes(format!(
+        //         "Received invalid binary msg: {}",
+        //         server_msg.err().unwrap()
+        //     )));
+        // };
+        //
+        // let server_msg: Result<ServerMsg, rkyv::Infallible> = server_msg.deserialize(&mut rkyv::Infallible);
+        // let Ok(server_msg) = server_msg else {
+        //     return Err(ServerMsgFromBytesError::InvalidBytes(format!(
+        //         "Received invalid binary msg: {:?}",
+        //         server_msg.err().unwrap()
+        //     )));
+        // };
+
+        //let server_msg: ServerMsg = rkyv::check_archived_root::<ServerMsg>(&bytes[..]).unwrap().deserialize(&mut rkyv::Infallible).unwrap().into();
+
+        let server_msg: Self = rkyv::check_archived_root::<Self>(bytes)
+            .or_else(|e| {
+                Err(WebSerializeError::InvalidBytes(format!(
+                    "Received invalid binary msg: {}",
+                    e
+                )))
+            })?
+            .deserialize(&mut rkyv::Infallible)
+            .or_else(|e| {
+                Err(WebSerializeError::InvalidBytes(format!(
+                    "Received invalid binary msg: {:?}",
+                    e
+                )))
+            })?;
+
+        Ok(server_msg)
+    }
+}
+
+#[derive(Archive, Deserialize, Serialize, Debug, PartialEq)]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug))]
+pub enum ClientMsg {
+    GalleryInit(String),
+}
+
+impl ClientMsg {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, WebSerializeError> {
+        // let server_msg = rkyv::check_archived_root::<ServerMsg>(&bytes[..]);
+        // let Ok(server_msg) = server_msg else {
+        //     return Err(ServerMsgFromBytesError::InvalidBytes(format!(
+        //         "Received invalid binary msg: {}",
+        //         server_msg.err().unwrap()
+        //     )));
+        // };
+        //
+        // let server_msg: Result<ServerMsg, rkyv::Infallible> = server_msg.deserialize(&mut rkyv::Infallible);
+        // let Ok(server_msg) = server_msg else {
+        //     return Err(ServerMsgFromBytesError::InvalidBytes(format!(
+        //         "Received invalid binary msg: {:?}",
+        //         server_msg.err().unwrap()
+        //     )));
+        // };
+
+        //let server_msg: ServerMsg = rkyv::check_archived_root::<ServerMsg>(&bytes[..]).unwrap().deserialize(&mut rkyv::Infallible).unwrap().into();
+
+        let server_msg: Self = rkyv::check_archived_root::<Self>(bytes)
+            .or_else(|e| {
+                Err(WebSerializeError::InvalidBytes(format!(
+                    "check_archived_root failed: {}",
+                    e
+                )))
+            })?
+            .deserialize(&mut rkyv::Infallible)
+            .or_else(|e| {
+                Err(WebSerializeError::InvalidBytes(format!(
+                    "deserialize failed: {:?}",
+                    e
+                )))
+            })?;
+
+        Ok(server_msg)
+    }
 }
 
 cfg_if! {
 if #[cfg(feature = "ssr")] {
 
-  use std::collections::HashMap;
+        use std::collections::HashMap;
 use actix::{Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, ContextFutureSpawner, Handler, Message, Recipient, StreamHandler, WrapFuture};
 use actix_files::Files;
 use actix_web::{web, App, Error, HttpRequest, HttpResponse, HttpServer};
@@ -124,16 +219,45 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWs {
                 ctx.pong(&msg)
             }
             Ok(ws::Message::Text(text)) => {
+                        
                 println!("TEXT RECEIVED {}", text);
                 //let a = ctx.address();
                 //a.do_send(MSG("wow".to_string()));
                 let msg = ServerMsg::Str("yo bro".to_string());
                 let bytes = rkyv::to_bytes::<_, 256>(&msg).unwrap();
                 ctx.binary(bytes.into_vec());
+                        
+                        
 
                 //ctx.text(text)
             }
-            Ok(ws::Message::Binary(bin)) => ctx.binary(bin),
+            Ok(ws::Message::Binary(bytes)) => {
+                let bytes = bytes.to_vec();
+                println!("{:?}", &bytes);
+
+                let client_msg = ClientMsg::from_bytes(&bytes);
+                let Ok(client_msg) = client_msg else {
+                    println!("Decoding client msg error: {}", client_msg.err().unwrap());
+                    return;
+                };
+                  // let client_msg = rkyv::check_archived_root::<ClientMsg>(&bytes[..]);
+                  // let Ok(client_msg) = client_msg else {
+                  //       println!("Received invalid binary msg: {}", client_msg.err().unwrap());
+                  //       return;
+                  // };
+                  //
+                  // let client_msg: Result<ClientMsg, rkyv::Infallible> = client_msg.deserialize(&mut rkyv::Infallible);
+                  // let Ok(client_msg) = client_msg else {
+                  //       println!("Received invalid binary msg: {:?}", client_msg.err().unwrap());
+                  //       return;
+                  // };
+
+                  match client_msg {
+                        ClientMsg::GalleryInit(str) => {
+                                println!("Received: {}", str);
+                            }
+                  };
+            },
             Ok(ws::Message::Close(reason)) => {
                 println!("WTF HAPPENED {:?}", reason);
                 ctx.close(reason)
@@ -248,6 +372,3 @@ pub async fn create_server(db: crate::database::DB) -> Server {
 }
 }
 }
-
-
-
