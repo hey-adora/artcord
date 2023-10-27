@@ -42,6 +42,7 @@ md-5 = { version = "0.10.6", optional = true, features = ["std"] }
 hashes = { version = "0.1.9", optional = true }
 chrono = { version = "0.4.31", optional = true, features = ["android-tzdata", "clock", "iana-time-zone", "js-sys", "oldtime", "std", "wasm-bindgen", "wasmbind", "winapi", "windows-targets"] }
 thiserror = "1.0.50"
+tokio = {version = "1.33.0", optional = true}
 
 
 
@@ -71,6 +72,7 @@ ssr = [
   "dep:md-5",
   "dep:hashes",
   "dep:chrono",
+  "dep:tokio",
   "leptos/ssr",
   "leptos_meta/ssr",
   "leptos_router/ssr",

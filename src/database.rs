@@ -4,22 +4,50 @@ use mongodb::{options::ClientOptions, Client};
 use serde::{Deserialize, Serialize};
 use serenity::prelude::TypeMapKey;
 use std::borrow::Borrow;
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
+use std::sync::Arc;
+use tokio::sync::RwLock;
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AllowedRole {
+    pub id: String,
+    pub feature: String,
+    pub modified_at: mongodb::bson::DateTime,
+    pub created_at: mongodb::bson::DateTime,
+}
+
+impl TypeMapKey for AllowedRole {
+    type Value = Arc<RwLock<HashMap<String, Self>>>;
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AllowedChannel {
+    pub id: String,
+    pub feature: String,
+    pub modified_at: mongodb::bson::DateTime,
+    pub created_at: mongodb::bson::DateTime,
+}
+
+impl TypeMapKey for AllowedChannel {
+    type Value = Arc<RwLock<HashMap<String, Self>>>;
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct User {
-    pub id: u64,
+    pub id: String,
     pub name: String,
-    pub pfp_hash: Option<Binary>,
+    pub pfp_hash: Option<String>,
     pub modified_at: mongodb::bson::DateTime,
     pub created_at: mongodb::bson::DateTime,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Img {
-    pub user_id: u64,
-    pub org_hash: Binary,
-    pub format: u8,
+    pub user_id: String,
+    pub msg_id: String,
+    pub org_hash: String,
+    pub format: String,
     pub has_high: bool,
     pub has_medium: bool,
     pub has_low: bool,
@@ -27,61 +55,61 @@ pub struct Img {
     pub created_at: mongodb::bson::DateTime,
 }
 
-pub enum ImgFormat {
-    PNG,
-    JPG,
-}
-
-impl ImgFormat {
-    fn from_u8(value: u8) -> Option<Self> {
-        match value {
-            0 => Some(ImgFormat::PNG),
-            1 => Some(ImgFormat::JPG),
-            _ => None,
-        }
-    }
-
-    fn from_str(value: &str) -> Option<Self> {
-        match value {
-            "png" => Some(ImgFormat::PNG),
-            "jpg" => Some(ImgFormat::JPG),
-            _ => None,
-        }
-    }
-
-    fn from_i32(value: i32) -> Option<Self> {
-        match value {
-            0 => Some(ImgFormat::PNG),
-            1 => Some(ImgFormat::JPG),
-            _ => None,
-        }
-    }
-}
-
-impl Into<u8> for ImgFormat {
-    fn into(self) -> u8 {
-        match self {
-            ImgFormat::PNG => 0,
-            ImgFormat::JPG => 1,
-        }
-    }
-}
-
-impl Into<&str> for &ImgFormat {
-    fn into(self) -> &'static str {
-        match self {
-            ImgFormat::PNG => "png",
-            ImgFormat::JPG => "jpg",
-        }
-    }
-}
-
-impl Display for ImgFormat {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let a: &str = self.into();
-        write!(f, "{}", a)
-    }
-}
+// pub enum ImgFormat {
+//     PNG,
+//     JPG,
+// }
+//
+// impl ImgFormat {
+//     fn from_u8(value: u8) -> Option<Self> {
+//         match value {
+//             0 => Some(ImgFormat::PNG),
+//             1 => Some(ImgFormat::JPG),
+//             _ => None,
+//         }
+//     }
+//
+//     fn from_str(value: &str) -> Option<Self> {
+//         match value {
+//             "png" => Some(ImgFormat::PNG),
+//             "jpg" => Some(ImgFormat::JPG),
+//             _ => None,
+//         }
+//     }
+//
+//     fn from_i32(value: i32) -> Option<Self> {
+//         match value {
+//             0 => Some(ImgFormat::PNG),
+//             1 => Some(ImgFormat::JPG),
+//             _ => None,
+//         }
+//     }
+// }
+//
+// impl Into<u8> for ImgFormat {
+//     fn into(self) -> u8 {
+//         match self {
+//             ImgFormat::PNG => 0,
+//             ImgFormat::JPG => 1,
+//         }
+//     }
+// }
+//
+// impl Into<&str> for &ImgFormat {
+//     fn into(self) -> &'static str {
+//         match self {
+//             ImgFormat::PNG => "png",
+//             ImgFormat::JPG => "jpg",
+//         }
+//     }
+// }
+//
+// impl Display for ImgFormat {
+//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+//         let a: &str = self.into();
+//         write!(f, "{}", a)
+//     }
+// }
 
 #[derive(Clone, Debug)]
 pub struct DB {
@@ -89,6 +117,8 @@ pub struct DB {
     pub database: mongodb::Database,
     pub collection_img: mongodb::Collection<Img>,
     pub collection_user: mongodb::Collection<User>,
+    pub collection_allowed_role: mongodb::Collection<AllowedRole>,
+    pub collection_allowed_channel: mongodb::Collection<AllowedChannel>,
 }
 
 impl TypeMapKey for DB {
@@ -167,6 +197,8 @@ pub async fn create_database() -> DB {
     let database = client.database("artcord");
     let collection_img = database.collection::<Img>("img");
     let collection_user = database.collection::<User>("user");
+    let collection_allowed_channel = database.collection::<AllowedChannel>("allowed_channel");
+    let collection_allowed_role = database.collection::<AllowedRole>("allowed_role");
 
     //let test
     //collection_img.insert_one()
@@ -180,5 +212,7 @@ pub async fn create_database() -> DB {
         client,
         collection_img,
         collection_user,
+        collection_allowed_channel,
+        collection_allowed_role,
     }
 }

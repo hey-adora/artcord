@@ -1,4 +1,4 @@
-use crate::database::{ImgFormat, User, DB};
+use crate::database::{AllowedChannel, AllowedRole, User, DB};
 use anyhow::anyhow;
 use chrono::Utc;
 use image::EncodableLayout;
@@ -15,6 +15,7 @@ use serenity::model::id::GuildId;
 use serenity::model::prelude::{Interaction, InteractionResponseType};
 use serenity::prelude::GatewayIntents;
 use serenity::{async_trait, Client};
+use std::collections::HashMap;
 use std::fs::File;
 use std::future::Future;
 use std::hash::Hash;
@@ -22,8 +23,10 @@ use std::io::{Cursor, Write};
 use std::num::ParseIntError;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, LockResult};
 use std::{env, fs, io};
 use thiserror::Error;
+use tokio::sync::RwLock;
 use webp::WebPEncodingError;
 
 mod commands;
@@ -140,14 +143,18 @@ fn save_webp(
 
 async fn save_user_pfp(
     user_id: u64,
-    user: &serenity::model::user::User,
-    org_pfp_hash: &Option<Binary>,
+    pfp_hash: Option<String>,
+    mongo_user: &Option<User>,
 ) -> Result<SaveUserPfpResult, SaveUserPfpError> {
-    let user_pfp_hash = user
-        .avatar_url()
-        .ok_or(SaveUserPfpError::NotFound(user_id))?;
+    let user_pfp_hash = pfp_hash.ok_or(SaveUserPfpError::NotFound(user_id))?;
 
-    let md5_bytes: [u8; 16] = u128::from_str_radix(&user_pfp_hash, 16)?.to_be_bytes();
+    let org_pfp_hash = match mongo_user {
+        Some(user) => &user.pfp_hash,
+        None => &None,
+    };
+
+    // format!("{:x}", u128::from_be_bytes(file_hash_bytes))
+    //let md5_bytes: [u8; 16] = u128::from_str_radix(&user_pfp_hash, 16)?.to_be_bytes();
     let pfp_img_path = format!("assets/gallery/pfp_{}.webp", user_id);
     let pfp_url = format!(
         "https://cdn.discordapp.com/avatars/{}/{}.webp",
@@ -157,8 +164,8 @@ async fn save_user_pfp(
     let pfp_file_exists = PathBuf::from(&pfp_img_path).exists();
 
     if let Some(org_pfp_hash) = org_pfp_hash {
-        if org_pfp_hash.bytes == md5_bytes && pfp_file_exists {
-            return Ok(SaveUserPfpResult::AlreadyExists(md5_bytes));
+        if *org_pfp_hash == user_pfp_hash && pfp_file_exists {
+            return Ok(SaveUserPfpResult::AlreadyExists(user_pfp_hash));
         }
     }
 
@@ -167,57 +174,66 @@ async fn save_user_pfp(
 
     if pfp_file_exists {
         fs::write(&pfp_img_path, &org_img_bytes)?;
-        Ok(SaveUserPfpResult::Updated(md5_bytes))
+        Ok(SaveUserPfpResult::Updated(user_pfp_hash))
     } else {
         fs::write(&pfp_img_path, &org_img_bytes)?;
-        Ok(SaveUserPfpResult::Created(md5_bytes))
+        Ok(SaveUserPfpResult::Created(user_pfp_hash))
     }
 }
 
 async fn save_user(
     db: &DB,
-    msg: &serenity::model::channel::Message,
+    name: String,
+    user_id: u64,
+    pfp_hash: Option<String>,
 ) -> Result<SaveUserResult, SaveUserError> {
-    let user_id = msg.author.id.0;
-
-    let a = mongodb::bson::Decimal128 { bytes: user_id.b };
-
     let user = db
         .collection_user
-        .find_one(doc! { "id": user_id }, None)
+        .find_one(doc! { "id": format!("{}", user_id) }, None)
         .await?;
+
+    let pfp = save_user_pfp(user_id, pfp_hash, &user).await;
+    let pfp_hash = match pfp {
+        Ok(result) => Ok(Some(result.into_string())),
+        Err(e) => match e {
+            SaveUserPfpError::NotFound(_) => Ok(None),
+            err => Err(err),
+        },
+    }?;
 
     return if let Some(user) = user {
         let mut update = doc! {};
-        let user_name = &msg.author.name;
 
-        let pfp = save_user_pfp(user_id, &msg.author, &user.pfp_hash).await;
-        let pfp_hash = match pfp {
-            Ok(result) => Ok(Some(mongodb::bson::Binary {
-                subtype: BinarySubtype::Md5,
-                bytes: result.into_bytes().to_vec(),
-            })),
-            Err(e) => match e {
-                SaveUserPfpError::NotFound(_) => Ok(None),
-                err => Err(err),
+        match pfp_hash {
+            Some(bin) => match user.pfp_hash {
+                Some(org_bin) => {
+                    if bin != org_bin {
+                        update.insert("pfp_hash", bin);
+                    }
+                }
+                None => {
+                    update.insert("pfp_hash", bin);
+                }
             },
-        }?;
-
-        if pfp_hash != &user.pfp_hash {
-            update.insert("pfp_hash", pfp_hash);
+            None => match user.pfp_hash {
+                Some(_) => {
+                    update.insert("pfp_hash", None::<String>);
+                }
+                None => {}
+            },
         }
 
-        if user_name != user.name {
-            update.insert("name", (*user_name).clone());
+        if name != user.name {
+            update.insert("name", name);
         }
 
         if update.len() > 0 {
             update.insert("modified_at", mongodb::bson::DateTime::now());
             db.collection_img
                 .update_one(
-                    doc! { "org_hash": file_hash_mongo },
+                    doc! { "id": format!("{}", user_id) },
                     doc! {
-                        "$set": update
+                        "$set": update.clone()
                     },
                     None,
                 )
@@ -227,22 +243,9 @@ async fn save_user(
             Ok(SaveUserResult::None)
         }
     } else {
-        let user_name = msg.author.name.clone();
-        let pfp = save_user_pfp(user_id, &msg.author, None).await;
-        let pfp_hash = match pfp {
-            Ok(result) => Ok(Some(mongodb::bson::Binary {
-                subtype: BinarySubtype::Md5,
-                bytes: result.into_bytes().to_vec(),
-            })),
-            Err(e) => match e {
-                SaveUserPfpError::NotFound(_) => Ok(None),
-                err => Err(err),
-            },
-        }?;
-
         let user = User {
-            id: user_id,
-            name: user_name,
+            id: format!("{}", user_id),
+            name,
             pfp_hash,
             modified_at: mongodb::bson::DateTime::now(),
             created_at: mongodb::bson::DateTime::now(),
@@ -256,7 +259,8 @@ async fn save_user(
 
 async fn save_attachment(
     db: &DB,
-    msg: &serenity::model::channel::Message,
+    user_id: u64,
+    msg_id: u64,
     attachment: &Attachment,
 ) -> Result<SaveAttachmentResult, SaveAttachmentError> {
     let content_type = attachment
@@ -264,8 +268,8 @@ async fn save_attachment(
         .as_ref()
         .ok_or(SaveAttachmentError::ImgTypeNotFound)?;
 
-    match content_type.as_str() {
-        "image/png" => Ok(()),
+    let format = match content_type.as_str() {
+        "image/png" => Ok("png"),
         (t) => Err(SaveAttachmentError::ImgTypeUnsupported(t.to_string())),
     }?;
 
@@ -273,20 +277,16 @@ async fn save_attachment(
     let org_img_bytes = org_img_response.bytes().await?;
 
     let file_hash_bytes: [u8; 16] = hashes::md5::hash(org_img_bytes.as_bytes()).into_bytes();
-    let file_hash_decimal: u128 = u128::from_be_bytes(file_hash_bytes);
-    let file_hash_mongo = mongodb::bson::Binary {
-        subtype: BinarySubtype::Md5,
-        bytes: file_hash_bytes.to_vec(),
-    };
+    let file_hash_hex = format!("{:x}", u128::from_be_bytes(file_hash_bytes));
 
     let file_name = PathBuf::from(&attachment.filename);
-    let file_stem = file_name.file_stem().unwrap().to_str().unwrap();
+    //let file_stem = file_name.file_stem().unwrap().to_str().unwrap();
     let file_ext = file_name.extension().unwrap().to_str().unwrap();
 
-    let org_img_path = format!("assets/gallery/org_{}.{}", file_hash_decimal, file_ext);
-    let low_img_path = format!("assets/gallery/low_{}.webp", file_hash_decimal);
-    let medium_img_path = format!("assets/gallery/medium_{}.webp", file_hash_decimal);
-    let high_img_path = format!("assets/gallery/high_{}.webp", file_hash_decimal);
+    let org_img_path = format!("assets/gallery/org_{}.{}", file_hash_hex, file_ext);
+    let low_img_path = format!("assets/gallery/low_{}.webp", file_hash_hex);
+    let medium_img_path = format!("assets/gallery/medium_{}.webp", file_hash_hex);
+    let high_img_path = format!("assets/gallery/high_{}.webp", file_hash_hex);
 
     let mut paths = [low_img_path, medium_img_path, high_img_path];
     let mut paths_state = [false, false, false];
@@ -324,7 +324,7 @@ async fn save_attachment(
         .collection_img
         .find_one(
             doc! {
-                "org_hash": file_hash_mongo.clone()
+                "org_hash": file_hash_hex.clone()
             },
             None,
         )
@@ -347,22 +347,23 @@ async fn save_attachment(
             let update_status = db
                 .collection_img
                 .update_one(
-                    doc! { "org_hash": file_hash_mongo },
+                    doc! { "org_hash": file_hash_hex.clone() },
                     doc! {
                         "$set": update
                     },
                     None,
                 )
                 .await?;
-            Ok(SaveAttachmentResult::Updated(file_hash_decimal))
+            Ok(SaveAttachmentResult::Updated(file_hash_hex))
         } else {
-            Ok(SaveAttachmentResult::None(file_hash_decimal))
+            Ok(SaveAttachmentResult::None(file_hash_hex))
         }
     } else {
         let img = crate::database::Img {
-            user_id: msg.author.id.0,
-            org_hash: file_hash_mongo,
-            format: 0,
+            user_id: format!("{}", user_id),
+            msg_id: format!("{}", msg_id),
+            org_hash: file_hash_hex.clone(),
+            format: format!("{}", format),
             has_high: paths_state[2],
             has_medium: paths_state[1],
             has_low: paths_state[0],
@@ -371,37 +372,104 @@ async fn save_attachment(
         };
 
         db.collection_img.insert_one(&img, None).await?;
-        Ok(SaveAttachmentResult::Created(file_hash_decimal))
+        Ok(SaveAttachmentResult::Created(file_hash_hex))
     };
 }
 
 #[async_trait]
 impl serenity::client::EventHandler for BotHandler {
     async fn message(&self, ctx: Context, msg: serenity::model::channel::Message) {
-        let Some(member) = msg.author.member else {
-            return;
-        };
-        let Some(permissions) = member.permissions else {
-            return;
-        };
-        if !permissions.administrator() {
-            return;
-        }
+        let (allowed_channels, db) = {
+            let data_read = ctx.data.read().await;
 
-        if msg.attachments.len() > 0 {
-            let db = {
-                let data_read = ctx.data.read().await;
+            (
+                data_read
+                    .get::<AllowedChannel>()
+                    .expect("Expected AllowedChannels in TypeMap")
+                    .clone(),
                 data_read
                     .get::<crate::database::DB>()
                     .expect("Expected crate::database::DB in TypeMap")
-                    .clone()
+                    .clone(),
+            )
+        };
+
+        let allowed_channels = allowed_channels.read().await;
+
+        // let Ok(allowed_channels) = allowed_channels else {
+        //     println!(
+        //         "Failed to get read access to allowed_channels {}",
+        //         allowed_channels.err().unwrap()
+        //     );
+        //     return;
+        // };
+
+        if allowed_channels.len() > 0 {
+            if let None = allowed_channels.get(&format!("{}_gallery", msg.channel_id.0)) {
+                println!("Gallery feature cant run on channel: {}", msg.channel_id.0);
+                return;
             };
+        };
+
+        println!("Running gallery feature on channel: {}", msg.channel_id.0);
+
+        // let guild_id = msg.guild_id.unwrap();
+        // //let guild = msg.guild(ctx.cache).unwrap();.
+        // let guild = ctx.http.get_guild(guild_id.0).await.unwrap();
+        // println!("guild: {:#?}", guild);
+        // let member = ctx
+        //     .http
+        //     .get_member(guild_id.0, msg.author.id.0)
+        //     .await
+        //     .unwrap();
+        // //let uuu = guild.member_permissions(ctx.http, msg.author.id.0).await;
+        // println!("uuu: {:#?}", member);
+        // println!("msg: {:#?}", msg.clone());
+        // let Some(member) = msg.member else {
+        //     println!("Failed to get member object");
+        //     return;
+        // };
+        // let Some(permissions) = member.permissions else {
+        //     println!("Failed to get permissions object: {:#?}", member);
+        //     return;
+        // };
+        // if !permissions.administrator() {
+        //     println!("User '{}' is not admin", msg.author.name);
+        //     return;
+        // };
+
+        if msg.attachments.len() > 0 {
+            // let db = {
+            //     let data_read = ctx.data.read().await;
+            //     data_read
+            //         .get::<crate::database::DB>()
+            //         .expect("Expected crate::database::DB in TypeMap")
+            //         .clone()
+            // };
+            let user = save_user(&db, msg.author.name, msg.author.id.0, msg.author.avatar).await;
+            let Ok(user) = user else {
+                println!("Error saving user: {}", user.err().unwrap());
+                return;
+            };
+            println!(
+                "{}",
+                match user {
+                    SaveUserResult::Updated(data) => format!("Updated user: {}", data),
+                    SaveUserResult::Created => format!("Created user"),
+                    SaveUserResult::None => format!("User is up to date"),
+                }
+            );
+
             for attachment in &msg.attachments {
-                let result = save_attachment(&db, &msg, attachment).await;
+                let result = save_attachment(&db, msg.author.id.0, msg.id.0, attachment).await;
                 let msg = match result {
                     Ok(hash) => match hash {
-                        SaveAttachmentResult::Created(hash) => format!("File '{}' saved.", hash),
-                        SaveAttachmentResult::Updated(hash) => format!("File '{}' updated.", hash),
+                        SaveAttachmentResult::Created(hash) => {
+                            format!("File '{}' saved.", hash)
+                        }
+                        SaveAttachmentResult::Updated(hash) => {
+                            format!("File '{}' updated.", hash)
+                        }
                         SaveAttachmentResult::None(hash) => {
                             format!("File '{}' already exists.", hash)
                         }
@@ -490,9 +558,14 @@ pub async fn create_bot(db: crate::database::DB) -> serenity::Client {
         .await
         .expect("Error creating client");
 
+    let allowed_roles = Arc::new(RwLock::new(HashMap::<String, AllowedRole>::new()));
+    let allowed_channels = Arc::new(RwLock::new(HashMap::<String, AllowedChannel>::new()));
+
     {
         let mut data = client.data.write().await;
         data.insert::<crate::database::DB>(db);
+        data.insert::<AllowedRole>(allowed_roles);
+        data.insert::<AllowedChannel>(allowed_channels);
     }
 
     client
@@ -586,23 +659,23 @@ pub enum SaveUserPfpError {
 }
 
 pub enum SaveAttachmentResult {
-    Created(u128),
-    Updated(u128),
-    None(u128),
+    Created(String),
+    Updated(String),
+    None(String),
 }
 
 pub enum SaveUserPfpResult {
-    AlreadyExists([u8; 16]),
-    Updated([u8; 16]),
-    Created([u8; 16]),
+    AlreadyExists(String),
+    Updated(String),
+    Created(String),
 }
 
 impl SaveUserPfpResult {
-    pub fn into_bytes(self) -> [u8; 16] {
+    pub fn into_string(self) -> String {
         match self {
-            SaveUserPfpResult::Created(bytes) => bytes,
-            SaveUserPfpResult::Updated(bytes) => bytes,
-            SaveUserPfpResult::AlreadyExists(bytes) => bytes,
+            SaveUserPfpResult::Created(str) => str,
+            SaveUserPfpResult::Updated(str) => str,
+            SaveUserPfpResult::AlreadyExists(str) => str,
         }
     }
 }

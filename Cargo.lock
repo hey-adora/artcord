@@ -382,6 +382,7 @@ dependencies = [
  "serenity",
  "sha256",
  "thiserror",
+ "tokio",
  "uuid",
  "wasm-bindgen",
  "web-sys",
