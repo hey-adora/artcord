@@ -43,6 +43,7 @@ hashes = { version = "0.1.9", optional = true }
 chrono = { version = "0.4.31", optional = true, features = ["android-tzdata", "clock", "iana-time-zone", "js-sys", "oldtime", "std", "wasm-bindgen", "wasmbind", "winapi", "windows-targets"] }
 thiserror = "1.0.50"
 tokio = {version = "1.33.0", optional = true}
+bson = "2.7.0"
 
 
 

@@ -62,7 +62,7 @@ pub fn App() -> impl IntoView {
 
             let server_msg = ServerMsg::from_bytes(&bytes);
             let Ok(server_msg) = server_msg else {
-                log!("{}", server_msg.err().unwrap());
+                log!("Error decoding msg: {}", server_msg.err().unwrap());
                 return;
             };
 
@@ -93,8 +93,8 @@ pub fn App() -> impl IntoView {
             //     .unwrap();
 
             match server_msg {
-                ServerMsg::Str(str) => {
-                    log!("MSG RECEIVED: {}", str);
+                ServerMsg::Imgs(imgs) => {
+                    log!("MSG RECEIVED: {:#?}", imgs);
                 }
             };
         });
@@ -107,7 +107,10 @@ pub fn App() -> impl IntoView {
             if ready_state.get() == ConnectionReadyState::Open {
                 send("test69");
 
-                let msg = ClientMsg::GalleryInit(String::from("hello"));
+                let msg = ClientMsg::GalleryInit {
+                    amount: 25,
+                    from: None,
+                };
                 let bytes = rkyv::to_bytes::<ClientMsg, 256>(&msg).unwrap();
                 let bytes = bytes.into_vec();
                 log!("{:?}", &bytes);

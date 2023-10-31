@@ -530,10 +530,11 @@ impl serenity::client::EventHandler for BotHandler {
                     .create_application_command(|command| commands::test::register(command))
             })
             .await;
-            println!(
-                "Commands updated for guild id: {}, with commands: {:#?}",
-                &guild, commands
-            );
+            println!("Commands updated for guild id: {}", &guild);
+            // println!(
+            //     "Commands updated for guild id: {}, with commands: {:#?}",
+            //     &guild, commands
+            // );
             // let guild_command = Command::create_global_application_command(&ctx.http, |command| {
             //     commands
             // })

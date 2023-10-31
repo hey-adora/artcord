@@ -2,14 +2,44 @@ use cfg_if::cfg_if;
 
 use rkyv::validation::validators::DefaultValidator;
 use rkyv::validation::CheckTypeError;
+use rkyv::with::ArchiveWith;
 use rkyv::{Archive, Deserialize, Serialize};
 use thiserror::Error;
 
-#[derive(Archive, Deserialize, Serialize, Debug, PartialEq)]
+// struct Test;
+//
+// impl ArchiveWith<bson::DateTime> for Test {
+//     unsafe fn resolve_with(
+//             field: &bson::DateTime,
+//             pos: usize,
+//             resolver: Self::Resolver,
+//             out: *mut Self::Archived,
+//         ) {
+//         field
+//         field.resolve(pos, (), out);
+//     }
+// }
+
+#[derive(rkyv::Archive, Deserialize, Serialize, Debug, PartialEq)]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug))]
+pub struct ServerMsgImg {
+    pub user_id: String,
+    pub msg_id: String,
+    pub org_hash: String,
+    pub format: String,
+    pub has_high: bool,
+    pub has_medium: bool,
+    pub has_low: bool,
+    pub modified_at: i64,
+    pub created_at: i64,
+}
+
+#[derive(rkyv::Archive, Deserialize, Serialize, Debug, PartialEq)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum ServerMsg {
-    Str(String),
+    Imgs(Vec<ServerMsgImg>),
 }
 
 #[derive(Error, Debug)]
@@ -57,11 +87,11 @@ impl ServerMsg {
     }
 }
 
-#[derive(Archive, Deserialize, Serialize, Debug, PartialEq)]
+#[derive(rkyv::Archive, Deserialize, Serialize, Debug, PartialEq)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum ClientMsg {
-    GalleryInit(String),
+    GalleryInit { amount: u8, from: Option<String> },
 }
 
 impl ClientMsg {
@@ -105,8 +135,10 @@ impl ClientMsg {
 
 cfg_if! {
 if #[cfg(feature = "ssr")] {
-
-        use std::collections::HashMap;
+use actix_web::web::Bytes;
+use futures::TryStreamExt;
+use mongodb::bson::{doc, Binary};
+use std::collections::HashMap;
 use actix::{Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, ContextFutureSpawner, Handler, Message, Recipient, StreamHandler, WrapFuture};
 use actix_files::Files;
 use actix_web::{web, App, Error, HttpRequest, HttpResponse, HttpServer};
@@ -136,13 +168,13 @@ struct MyWs {
     server_state: ServerState
 }
 
-struct Connect {
-    pub addr: Recipient<MSG>,
-}
-
-impl actix::Message for Connect {
-    type Result = ();
-}
+// struct Connect {
+//     pub addr: Recipient<MSG>,
+// }
+//
+// impl actix::Message for Connect {
+//     type Result = ();
+// }
 
 
 
@@ -197,66 +229,123 @@ impl Actor for MyWs {
     }
 }
 
-struct MSG(pub String);
+struct VecMsg(pub Vec<u8>);
+
+impl actix::Message for VecMsg {
+    type Result = ();
+    //type Result = actix::ResponseFuture<Result<(), ()>>;
+}
+
+
+struct MSG(pub Bytes);
 
 impl actix::Message for MSG {
     type Result = ();
+    //type Result = actix::ResponseFuture<Result<(), ()>>;
+}
+
+impl Handler<VecMsg> for MyWs {
+    type Result = ();
+
+    fn handle(&mut self, msg: VecMsg, ctx: &mut Self::Context) -> Self::Result {
+        ctx.binary(msg.0);
+    }
 }
 
 impl Handler<MSG> for MyWs {
+    // type Result = actix::ResponseFuture<Result<(), ()>>;
+    //type Result = Result<(), ()>;
     type Result = ();
 
-    fn handle(&mut self, msg: MSG, ctx: &mut Self::Context) {
-        ctx.text(msg.0);
+    fn handle(&mut self, msg: MSG, ctx: &mut Self::Context) -> () {
+        let db = self.server_state.db.clone();
+        let recipient = ctx.address().recipient();
+        let client_msg = ClientMsg::from_bytes(&msg.0.to_vec());
+        let Ok(client_msg) = client_msg else {
+            println!("Failed to convert bytes to client msg: {}", client_msg.err().unwrap());
+            return;
+        };
+        let fut = async move {
+            let db = db;
+            let find_options = mongodb::options::FindOptions::builder().sort(doc!{"created_at": 1}).build();
+            let imgs = db.collection_img.find(doc!{}, Some(find_options)).await;
+            let Ok(mut imgs) = imgs else {
+                println!("Error fetching imgs: {}", imgs.err().unwrap());
+                return;
+            };
+
+            let mut send_this: Vec<ServerMsgImg> = Vec::new();
+            loop {
+                let img = imgs.try_next().await;
+                let Ok(Some(img)) = img else {
+                    println!("last of img.");
+                    break;
+                };
+                println!("IMG: {:#?}", img);
+                let server_msg_img = ServerMsgImg {
+                    msg_id: img.msg_id,
+                    format: img.format,
+                    user_id: img.user_id,
+                    org_hash: img.org_hash,
+                    has_low: img.has_low,
+                    has_medium: img.has_medium,
+                    has_high: img.has_high,
+                    modified_at: img.modified_at.timestamp_millis(),
+                    created_at: img.created_at.timestamp_millis(),
+                };
+                send_this.push(server_msg_img);
+            }
+
+            let msg = ServerMsg::Imgs(send_this);
+            let bytes = rkyv::to_bytes::<_, 256>(&msg).unwrap();
+           recipient.do_send(VecMsg(bytes.into_vec()));
+        //         let recipient = ctx.address().recipient();
+        //         let client_msg = ClientMsg::from_bytes(&bytes.to_vec());
+        //         let Ok(client_msg) = client_msg else {
+        //             println!("Failed to convert bytes to client msg: {}", client_msg.err().unwrap());
+        //             return;
+        //         };
+           println!("IS THIS WORKING OR NOT");
+        };
+        let fut = actix::fut::wrap_future::<_, Self>(fut);
+        let a = ctx.spawn(fut);
+        a;
+        //Ok(());
+        // Box::pin(async move {
+        //    // let client_msg = ClientMsg::from_bytes(&bytes.to_vec());
+        //     // let Ok(client_msg) = client_msg else {
+        //     //     println!("Failed to convert bytes to client msg: {}", client_msg.err().unwrap());
+        //     //     return;
+        //     // };
+        //     println!("IM TRYING TO SEND THE MSG: {:?}", &msg.0);
+        //     ctx.binary(msg.0);
+        //     println!("HELLO");
+        //     Ok(())
+        // }).intok
     }
 }
 
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWs {
+    //type Result = actix::ResponseFuture<Result<(), ()>>;
+
     fn handle(&mut self, msg: Result<ws::Message, ProtocolError>, ctx: &mut Self::Context) {
+        // Box::pin(async move {
+        //     println!("HELLO");
+        //
+        // })
+
         match msg {
             Ok(ws::Message::Ping(msg)) => {
                 println!("BING BING");
                 ctx.pong(&msg)
             }
             Ok(ws::Message::Text(text)) => {
-                        
                 println!("TEXT RECEIVED {}", text);
-                //let a = ctx.address();
-                //a.do_send(MSG("wow".to_string()));
-                let msg = ServerMsg::Str("yo bro".to_string());
-                let bytes = rkyv::to_bytes::<_, 256>(&msg).unwrap();
-                ctx.binary(bytes.into_vec());
-                        
-                        
-
-                //ctx.text(text)
             }
             Ok(ws::Message::Binary(bytes)) => {
-                let bytes = bytes.to_vec();
-                println!("{:?}", &bytes);
+                ctx.address().do_send(MSG(bytes));
+                println!("wow");
 
-                let client_msg = ClientMsg::from_bytes(&bytes);
-                let Ok(client_msg) = client_msg else {
-                    println!("Decoding client msg error: {}", client_msg.err().unwrap());
-                    return;
-                };
-                  // let client_msg = rkyv::check_archived_root::<ClientMsg>(&bytes[..]);
-                  // let Ok(client_msg) = client_msg else {
-                  //       println!("Received invalid binary msg: {}", client_msg.err().unwrap());
-                  //       return;
-                  // };
-                  //
-                  // let client_msg: Result<ClientMsg, rkyv::Infallible> = client_msg.deserialize(&mut rkyv::Infallible);
-                  // let Ok(client_msg) = client_msg else {
-                  //       println!("Received invalid binary msg: {:?}", client_msg.err().unwrap());
-                  //       return;
-                  // };
-
-                  match client_msg {
-                        ClientMsg::GalleryInit(str) => {
-                                println!("Received: {}", str);
-                            }
-                  };
             },
             Ok(ws::Message::Close(reason)) => {
                 println!("WTF HAPPENED {:?}", reason);
@@ -269,6 +358,137 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWs {
                 println!("BOOOM");
             }
         }
+        // match msg {
+        //     Ok(ws::Message::Ping(msg)) => {
+        //         println!("BING BING");
+        //         ctx.pong(&msg)
+        //     }
+        //     Ok(ws::Message::Text(text)) => {
+        //
+        //         println!("TEXT RECEIVED {}", text);
+        //         //let a = ctx.address();
+        //         //a.do_send(MSG("wow".to_string()));
+        //         // let msg = ServerMsg::Str("yo bro".to_string());
+        //         // let bytes = rkyv::to_bytes::<_, 256>(&msg).unwrap();
+        //         // ctx.binary(bytes.into_vec());
+        //
+        //
+        //
+        //         //ctx.text(text)
+        //     }
+        //     Ok(ws::Message::Binary(bytes)) => {
+        //         // let fut = async move {
+        //         //     let imgs = self.server_state.db.collection_img.find(doc!{}, None).await;
+        //         //     let Ok(imgs) = imgs else {
+        //         //         println!("Error fetching imgs: {}", imgs.err().unwrap());
+        //         //         return;
+        //         //     };
+        //         //     println!("Imgs fetched: {:?}", imgs);
+        //         // };
+        //         //
+        //         // //fut.into_actor(self).spawn(ctx);
+        //         // //let fut = Arc::new(fut);
+        //         // let fut = actix::fut::wrap_future::<_, Self>(fut);
+        //         // ctx.spawn(fut);
+        //         // //ctx.add
+        //
+        //         let db = self.server_state.db.clone();
+        //         let recipient = ctx.address().recipient();
+        //         let client_msg = ClientMsg::from_bytes(&bytes.to_vec());
+        //         let Ok(client_msg) = client_msg else {
+        //             println!("Failed to convert bytes to client msg: {}", client_msg.err().unwrap());
+        //             return;
+        //         };
+        //         //let msg = msg.clone();
+        //         let fut = async move {
+        //             match client_msg {
+        //                     ClientMsg::GalleryInit { amount, from } => {
+        //                         println!("Received: {} {:?}", amount, from);
+        //
+        //                         let find_options = mongodb::options::FindOptions::builder().sort(doc!{"created_at": 1}).build();
+        //                         let imgs = db.collection_img.find(doc!{}, Some(find_options)).await;
+        //                         // let imgs = self.server_state.db.collection_img.find(doc!{}, None).await;
+        //                         let Ok(mut imgs) = imgs else {
+        //                             println!("Error fetching imgs: {}", imgs.err().unwrap());
+        //                             return;
+        //                         };
+        //
+        //                         let mut send_this: Vec<ServerMsgImg> = Vec::new();
+        //                         loop {
+        //                             let img = imgs.try_next().await;
+        //                             let Ok(Some(img)) = img else {
+        //                                 println!("last of img.");
+        //                                 break;
+        //                             };
+        //                             println!("IMG: {:#?}", img);
+        //                             let server_msg_img = ServerMsgImg {
+        //                                 msg_id: img.msg_id,
+        //                                 format: img.format,
+        //                                 user_id: img.user_id,
+        //                                 org_hash: img.org_hash,
+        //                                 has_low: img.has_low,
+        //                                 has_medium: img.has_medium,
+        //                                 has_high: img.has_high,
+        //                                 modified_at: img.modified_at.timestamp_millis(),
+        //                                 created_at: img.created_at.timestamp_millis(),
+        //                             };
+        //                             send_this.push(server_msg_img);
+        //                         }
+        //                         let bytes = bytes.to_vec();
+        //                         println!("RECEIVED BYTES: {:?}", &bytes);
+        //
+        //                         let client_msg = ClientMsg::from_bytes(&bytes);
+        //                         let Ok(client_msg) = client_msg else {
+        //                             println!("Decoding client msg error: {}", client_msg.err().unwrap());
+        //                             return;
+        //                         };
+        //
+        //                         let msg = ServerMsg::Imgs(send_this);
+        //                         let bytes = rkyv::to_bytes::<_, 256>(&msg).unwrap();
+        //                         recipient.send(MSG(bytes.into_vec()));
+        //
+        //                     }
+        //             };
+        //             //println!("Imgs fetched: {:#?}", imgs);
+        //
+        //         };
+        //
+        //         // fut.into_actor(self).spawn(ctx);
+        //         let fut = actix::fut::wrap_future::<_, Self>(fut);
+        //         ctx.spawn(fut);
+        //         println!("wow");
+        //
+        //
+        //           // let client_msg = rkyv::check_archived_root::<ClientMsg>(&bytes[..]);
+        //           // let Ok(client_msg) = client_msg else {
+        //           //       println!("Received invalid binary msg: {}", client_msg.err().unwrap());
+        //           //       return;
+        //           // };
+        //           //
+        //           // let client_msg: Result<ClientMsg, rkyv::Infallible> = client_msg.deserialize(&mut rkyv::Infallible);
+        //           // let Ok(client_msg) = client_msg else {
+        //           //       println!("Received invalid binary msg: {:?}", client_msg.err().unwrap());
+        //           //       return;
+        //           // };
+        //
+        //     },
+        //     Ok(ws::Message::Close(reason)) => {
+        //         println!("WTF HAPPENED {:?}", reason);
+        //         ctx.close(reason)
+        //     }
+        //     Err(e) => {
+        //         println!("ERROR: {:?}", e);
+        //     }
+        //     _ => {
+        //         println!("BOOOM");
+        //     }
+        // }
+        // //let fut = Arc::new(fut);
+        // //let fut = actix::fut::wrap_future::<_, Self>(fut);
+        // //ctx.spawn(fut);
+        //
+        // //ctx.add
+
     }
 }
 

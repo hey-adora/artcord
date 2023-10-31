@@ -21,15 +21,12 @@ use serenity::framework::standard::{CommandGroup, CommandResult, GroupOptions, S
 use serenity::prelude::*;
 
 use artcord::bot::create_bot;
-use artcord::server::create_server;
 use artcord::database::create_database;
+use artcord::server::create_server;
+use rkyv::{Archive, Deserialize, Serialize};
 use std::env;
 use std::future::join;
-use rkyv::{Archive, Deserialize, Serialize};
 use wasm_bindgen::__rt::Start;
-
-
-
 
 #[cfg(feature = "ssr")]
 #[actix_web::main]
