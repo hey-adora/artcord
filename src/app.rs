@@ -1,3 +1,4 @@
+use chrono::Utc;
 use leptos::logging::log;
 use leptos::*;
 use leptos_meta::*;
@@ -47,18 +48,6 @@ pub fn App() -> impl IntoView {
                 log!("Empty byte msg received.");
                 return;
             };
-            //
-            // let client_msg = rkyv::check_archived_root::<ClientMsg>(&bytes[..]);
-            // let Ok(client_msg) = client_msg else {
-            //     println!("Received invalid binary msg: {}", client_msg.err().unwrap());
-            //     return;
-            // };
-            //
-            // let client_msg: Result<ClientMsg, rkyv::Infallible> = client_msg.deserialize(&mut rkyv::Infallible);
-            // let Ok(client_msg) = client_msg else {
-            //     println!("Received invalid binary msg: {:?}", client_msg.err().unwrap());
-            //     return;
-            // };
 
             let server_msg = ServerMsg::from_bytes(&bytes);
             let Ok(server_msg) = server_msg else {
@@ -66,35 +55,12 @@ pub fn App() -> impl IntoView {
                 return;
             };
 
-            // let server_msg: ServerMsg = rkyv::check_archived_root::<ServerMsg>(&bytes[..])
-            //     .unwrap()
-            //     .deserialize(&mut rkyv::Infallible)
-            //     .unwrap();
-            //
-            // let server_msg = rkyv::check_archived_root::<ServerMsg>(&bytes[..]);
-            // let Ok(server_msg) = server_msg else {
-            //     log!("Received invalid binary msg: {}", server_msg.err().unwrap());
-            //     return;
-            // };
-
-            // let server_msg: ServerMsg = server_msg.deserialize(&mut rkyv::Infallible).unwrap();
-
-            // let Ok(server_msg) = server_msg else {
-            //     log!(
-            //         "Received invalid binary msg: {:?}",
-            //         server_msg.err().unwrap()
-            //     );
-            //     return;
-            // };
-            //
-            // let server_msg: ServerMsg = rkyv::check_archived_root::<ServerMsg>(&bytes[..])
-            //     .unwrap()
-            //     .deserialize(&mut rkyv::Infallible)
-            //     .unwrap();
-
             match server_msg {
                 ServerMsg::Imgs(imgs) => {
                     log!("MSG RECEIVED: {:#?}", imgs);
+                }
+                ServerMsg::Reset => {
+                    log!("RESETING");
                 }
             };
         });
@@ -109,7 +75,7 @@ pub fn App() -> impl IntoView {
 
                 let msg = ClientMsg::GalleryInit {
                     amount: 25,
-                    from: None,
+                    from: Utc::now().timestamp_nanos(),
                 };
                 let bytes = rkyv::to_bytes::<ClientMsg, 256>(&msg).unwrap();
                 let bytes = bytes.into_vec();

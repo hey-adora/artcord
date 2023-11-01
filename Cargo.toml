@@ -19,36 +19,124 @@ leptos_router = { version = "0.5", features = ["nightly"] }
 wasm-bindgen = { version = "=0.2.87", features = [] }
 leptos-use = { version = "0.7.1", features = [] }
 web-sys = { version = "0.3.64", features = [] }
-js-sys = {version = "0.3.64", features = []}
-rand = {version = "0.8.5", features = []}
-actix-web-actors = {version = "4.2.0", features = [], optional = true}
-actix = {version = "0.13.1", features = [], optional = true}
+js-sys = { version = "0.3.64", features = [] }
+rand = { version = "0.8.5", features = [] }
+actix-web-actors = { version = "4.2.0", features = [], optional = true }
+actix = { version = "0.13.1", features = [], optional = true }
 uuid = { version = "1.4.1", features = ["v4", "serde"], optional = true }
-futures = { version = "0.3.28", features = ["alloc", "async-await", "executor", "std", "futures-executor"], optional = true }
-serenity = { version = "0.11.6", features = ["base64","builder","bytes","cache","chrono","client","command_attr","dashmap","default_no_backend","flate2","framework","gateway","http","levenshtein","model","parking_lot","rustls_backend","standard_framework","static_assertions","tokio","typemap_rev","utils","uwl"], optional = true }
-async-std = {version = "1.12.0", features = ["alloc","async-channel","async-global-executor","async-io","async-lock","crossbeam-utils","futures-channel","futures-io","futures-lite","gloo-timers","kv-log-macro","log","memchr","once_cell","pin-project-lite","pin-utils","slab","slab","std","wasm-bindgen-futures"], optional = true}
+futures = { version = "0.3.28", features = [
+  "alloc",
+  "async-await",
+  "executor",
+  "std",
+  "futures-executor",
+], optional = true }
+serenity = { version = "0.11.6", features = [
+  "base64",
+  "builder",
+  "bytes",
+  "cache",
+  "chrono",
+  "client",
+  "command_attr",
+  "dashmap",
+  "default_no_backend",
+  "flate2",
+  "framework",
+  "gateway",
+  "http",
+  "levenshtein",
+  "model",
+  "parking_lot",
+  "rustls_backend",
+  "standard_framework",
+  "static_assertions",
+  "tokio",
+  "typemap_rev",
+  "utils",
+  "uwl",
+], optional = true }
+async-std = { version = "1.12.0", features = [
+  "alloc",
+  "async-channel",
+  "async-global-executor",
+  "async-io",
+  "async-lock",
+  "crossbeam-utils",
+  "futures-channel",
+  "futures-io",
+  "futures-lite",
+  "gloo-timers",
+  "kv-log-macro",
+  "log",
+  "memchr",
+  "once_cell",
+  "pin-project-lite",
+  "pin-utils",
+  "slab",
+  "slab",
+  "std",
+  "wasm-bindgen-futures",
+], optional = true }
 dotenv = { version = "0.15.0", optional = true }
-reqwest = { version = "0.11.22", optional = true, features = ["__tls", "default-tls", "hyper-tls", "native-tls-crate", "tokio-native-tls"] }
+reqwest = { version = "0.11.22", optional = true, features = [
+  "__tls",
+  "default-tls",
+  "hyper-tls",
+  "native-tls-crate",
+  "tokio-native-tls",
+] }
 png = { version = "0.17.10", optional = true }
 png_pong = { version = "0.8.2", optional = true }
-image = { version = "0.24.7", optional = true, features = ["bmp", "dds", "dxt", "exr", "farbfeld", "gif", "hdr", "ico", "jpeg", "jpeg_rayon", "openexr", "png", "pnm", "qoi", "tga", "tiff", "webp"] }
+image = { version = "0.24.7", optional = true, features = [
+  "bmp",
+  "dds",
+  "dxt",
+  "exr",
+  "farbfeld",
+  "gif",
+  "hdr",
+  "ico",
+  "jpeg",
+  "jpeg_rayon",
+  "openexr",
+  "png",
+  "pnm",
+  "qoi",
+  "tga",
+  "tiff",
+  "webp",
+] }
 webp = { version = "0.2.6", optional = true, features = ["image", "img"] }
 anyhow = { version = "1.0.75", optional = true, features = ["std"] }
 sha256 = { version = "1.4.0", optional = true, features = ["async", "tokio"] }
-mongodb = { version = "2.7.0", optional = true, features = ["serde_bytes", "tokio-runtime"] }
+mongodb = { version = "2.7.0", optional = true, features = [
+  "serde_bytes",
+  "tokio-runtime",
+] }
 serde = { version = "1.0.189", optional = true, features = ["std"] }
 rkyv = { version = "0.7.42", features = ["validation"] }
 md-5 = { version = "0.10.6", optional = true, features = ["std"] }
 hashes = { version = "0.1.9", optional = true }
-chrono = { version = "0.4.31", optional = true, features = ["android-tzdata", "clock", "iana-time-zone", "js-sys", "oldtime", "std", "wasm-bindgen", "wasmbind", "winapi", "windows-targets"] }
+chrono = { version = "0.4.31", features = [
+  "android-tzdata",
+  "clock",
+  "iana-time-zone",
+  "js-sys",
+  "oldtime",
+  "std",
+  "wasm-bindgen",
+  "wasmbind",
+  "winapi",
+  "windows-targets",
+] }
 thiserror = "1.0.50"
-tokio = {version = "1.33.0", optional = true}
+tokio = { version = "1.33.0", optional = true }
 bson = "2.7.0"
 
 
-
 [features]
-csr = ["leptos/csr", "leptos_meta/csr", "leptos_router/csr" ]
+csr = ["leptos/csr", "leptos_meta/csr", "leptos_router/csr"]
 hydrate = ["leptos/hydrate", "leptos_meta/hydrate", "leptos_router/hydrate"]
 ssr = [
   "dep:actix-files",
@@ -72,7 +160,6 @@ ssr = [
   "dep:serde",
   "dep:md-5",
   "dep:hashes",
-  "dep:chrono",
   "dep:tokio",
   "leptos/ssr",
   "leptos_meta/ssr",
