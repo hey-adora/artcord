@@ -7,6 +7,7 @@ use crate::app::utils::{get_window_path, GlobalState, ScrollSection};
 
 #[component]
 pub fn Navbar() -> impl IntoView {
+    //let a = use_context::<TestContext>().expect("Failed to provide test context.");
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
     let section = global_state.section;
     let nav_tran = global_state.nav_tran;

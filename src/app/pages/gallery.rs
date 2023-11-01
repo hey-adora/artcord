@@ -1,3 +1,4 @@
+use chrono::Utc;
 use leptos::ev::{load, resize};
 use leptos::html::Section;
 use leptos::logging::log;
@@ -5,6 +6,9 @@ use leptos::*;
 use leptos_use::{use_event_listener, use_window};
 use rand::prelude::*;
 use web_sys::Event;
+
+use crate::app::utils::GlobalState;
+use crate::server::ClientMsg;
 
 static new_img_height: i32 = 250;
 
@@ -183,6 +187,7 @@ fn render_gallery3(max_width: i32, images: &Vec<(i32, i32)>) -> Vec<(i32, i32)> 
 
 #[component]
 pub fn GalleryPage() -> impl IntoView {
+    let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
     let (loaded, set_loaded): (ReadSignal<bool>, WriteSignal<bool>) = create_signal(false);
     let (row_img_count, set_row_img_count): (ReadSignal<Vec<usize>>, WriteSignal<Vec<usize>>) =
         create_signal(Vec::new());
@@ -234,6 +239,12 @@ pub fn GalleryPage() -> impl IntoView {
     });
 
     create_effect(move |_| {
+        let msg = ClientMsg::GalleryInit {
+            amount: 25,
+            from: Utc::now().timestamp_nanos(),
+        };
+        global_state.socket_send(msg);
+
         let new_org_imgs = (0..10)
             .map(|_| {
                 (

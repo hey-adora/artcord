@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use chrono::Utc;
 use leptos::logging::log;
 use leptos::*;
@@ -19,6 +21,9 @@ mod components;
 mod pages;
 mod utils;
 
+// #[derive(Copy, Clone)]
+// struct Testhontext(i32);
+
 #[component]
 pub fn App() -> impl IntoView {
     provide_meta_context();
@@ -26,6 +31,10 @@ pub fn App() -> impl IntoView {
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
 
     let (connected, set_connected) = create_signal(String::new());
+
+    // create_effect(move |_| {
+    //     provide_context(TestContext(55));
+    // });
 
     if cfg!(feature = "hydrate") {
         let UseWebsocketReturn {
@@ -38,6 +47,7 @@ pub fn App() -> impl IntoView {
             close,
             ..
         } = use_websocket("/ws/");
+        global_state.socket_send.set(Rc::new(send_bytes.clone()));
 
         create_effect(move |_| {
             log!("{:?}", message.get());
@@ -69,18 +79,54 @@ pub fn App() -> impl IntoView {
             set_connected(format!("{}", ready_state.get()));
         });
 
+        // create_effect(move |_| {
+        //     let mut client_msgs = global_state.socket_send.get();
+        //     loop {
+        //         let mut iter = client_msgs.iter_mut();
+        //         let len = client_msgs.len();
+        //         if len < 1 {
+        //             break;
+        //         }
+        //
+        //         let msg = iter.next();
+        //         let Some(msg) = msg else {
+        //             println!("Tried to fetch client msg, but found none.");
+        //             continue;
+        //         };
+        //
+        //         let bytes = rkyv::to_bytes::<ClientMsg, 256>(&msg);
+        //         let Ok(bytes) = bytes else {
+        //             println!(
+        //                 "Failed to serialize client msg: {:?}, error: {}",
+        //                 &msg,
+        //                 bytes.err().unwrap()
+        //             );
+        //             continue;
+        //         };
+        //         let bytes = bytes.into_vec();
+        //         log!("{:?}", &bytes);
+        //         send_bytes(bytes);
+        //
+        //         client_msgs.pop_front();
+        //     }
+        //     // for msg in client_msgs.iter_mut() {
+        //     // }
+        //     //
+        //     // global_state.socket_send.set(client_msgs);
+        // });
+
         create_effect(move |_| {
             if ready_state.get() == ConnectionReadyState::Open {
-                send("test69");
+                let a = send("test69");
 
-                let msg = ClientMsg::GalleryInit {
-                    amount: 25,
-                    from: Utc::now().timestamp_nanos(),
-                };
-                let bytes = rkyv::to_bytes::<ClientMsg, 256>(&msg).unwrap();
-                let bytes = bytes.into_vec();
-                log!("{:?}", &bytes);
-                send_bytes(bytes);
+                // let msg = ClientMsg::GalleryInit {
+                //     amount: 25,
+                //     from: Utc::now().timestamp_nanos(),
+                // };
+                // let bytes = rkyv::to_bytes::<ClientMsg, 256>(&msg).unwrap();
+                // let bytes = bytes.into_vec();
+                // log!("{:?}", &bytes);
+                // send_bytes(bytes);
             }
         });
     };

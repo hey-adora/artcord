@@ -58,7 +58,7 @@ impl ServerMsg {
     }
 }
 
-#[derive(rkyv::Archive, Deserialize, Serialize, Debug, PartialEq)]
+#[derive(rkyv::Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum ClientMsg {
