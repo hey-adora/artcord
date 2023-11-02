@@ -45,7 +45,7 @@ impl ImgData {
         new_height: u32,
     ) -> Result<ImgData, ImgDataNewError> {
         //let mut img = image::io::Reader::open(file)?.decode()?;
-        let mut img = image::io::Reader::new(Cursor::new(org_bytes))
+        let mut img: image::DynamicImage = image::io::Reader::new(Cursor::new(org_bytes))
             .with_guessed_format()?
             .decode()?;
         let width = img.width();
@@ -359,11 +359,17 @@ async fn save_attachment(
             Ok(SaveAttachmentResult::None(file_hash_hex))
         }
     } else {
+        let mut org_img: image::DynamicImage = image::io::Reader::new(Cursor::new(&org_img_bytes))
+            .with_guessed_format()?
+            .decode()?;
+
         let img = crate::database::Img {
             user_id: format!("{}", user_id),
             msg_id: format!("{}", msg_id),
             org_hash: file_hash_hex.clone(),
             format: format!("{}", format),
+            width: org_img.width(),
+            height: org_img.height(),
             has_high: paths_state[2],
             has_medium: paths_state[1],
             has_low: paths_state[0],
@@ -633,6 +639,12 @@ pub enum SaveAttachmentError {
 
     #[error("Mongodb: {0}.")]
     Mongo(#[from] mongodb::error::Error),
+
+    #[error("IO error: {0}")]
+    IO(#[from] std::io::Error),
+
+    #[error("Failed to decode img: {0}.")]
+    Decode(#[from] image::ImageError),
 }
 
 #[derive(Error, Debug)]

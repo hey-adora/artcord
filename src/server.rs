@@ -8,7 +8,7 @@ use rkyv::with::ArchiveWith;
 use rkyv::{Archive, Deserialize, Serialize};
 use thiserror::Error;
 
-#[derive(rkyv::Archive, Deserialize, Serialize, Debug, PartialEq)]
+#[derive(rkyv::Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct ServerMsgImg {
@@ -16,6 +16,8 @@ pub struct ServerMsgImg {
     pub msg_id: String,
     pub org_hash: String,
     pub format: String,
+    pub width: u32,
+    pub height: u32,
     pub has_high: bool,
     pub has_medium: bool,
     pub has_low: bool,
@@ -154,6 +156,8 @@ impl MyWs {
                 format: img.format,
                 user_id: img.user_id,
                 org_hash: img.org_hash,
+                width: img.width,
+                height: img.height,
                 has_low: img.has_low,
                 has_medium: img.has_medium,
                 has_high: img.has_high,

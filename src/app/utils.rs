@@ -4,7 +4,7 @@ use leptos::{create_rw_signal, window, RwSignal, SignalGet, SignalGetUntracked};
 use wasm_bindgen::JsValue;
 use web_sys::Location;
 
-use crate::server::ClientMsg;
+use crate::server::{ClientMsg, ServerMsgImg};
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum ScrollSection {
@@ -19,6 +19,7 @@ pub struct GlobalState {
     pub nav_open: RwSignal<bool>,
     pub nav_tran: RwSignal<bool>,
     pub socket_send: RwSignal<Rc<dyn Fn(Vec<u8>)>>,
+    pub gallery_imgs: RwSignal<Vec<ServerMsgImg>>,
 }
 
 impl GlobalState {
@@ -28,6 +29,7 @@ impl GlobalState {
             nav_open: create_rw_signal(false),
             nav_tran: create_rw_signal(true),
             socket_send: create_rw_signal(Rc::new(|_| {})),
+            gallery_imgs: create_rw_signal(Vec::new()),
         }
     }
 

@@ -65,6 +65,8 @@ if #[cfg(feature = "ssr")] {
             pub msg_id: String,
             pub org_hash: String,
             pub format: String,
+            pub width: u32,
+            pub height: u32,
             pub has_high: bool,
             pub has_medium: bool,
             pub has_low: bool,

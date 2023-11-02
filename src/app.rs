@@ -67,7 +67,8 @@ pub fn App() -> impl IntoView {
 
             match server_msg {
                 ServerMsg::Imgs(imgs) => {
-                    log!("MSG RECEIVED: {:#?}", imgs);
+                    log!("MSG RECEIVED: {:#?}", &imgs);
+                    global_state.gallery_imgs.set(imgs);
                 }
                 ServerMsg::Reset => {
                     log!("RESETING");
@@ -76,7 +77,7 @@ pub fn App() -> impl IntoView {
         });
 
         create_effect(move |_| {
-            set_connected(format!("{}", ready_state.get()));
+            log!("SOCKET STATE: {}", ready_state.get());
         });
 
         // create_effect(move |_| {
@@ -138,7 +139,7 @@ pub fn App() -> impl IntoView {
         <Body  class=move || format!("text-low-purple  bg-gradient-to-br from-mid-purple to-dark-purple   {}", if global_state.nav_open.get() == true { "overflow-hidden w-screen h-screen" } else { "" })  />
         <Router>
             <div id="home" class="pt-4 grid grid-rows-[auto_1fr]" >
-                {move || connected()}
+                // {move || connected()}
                 <Navbar/>
                 <main    class=" scroll-mt-[10rem] grid grid-rows-[1fr] pt-4 gap-6       ">
                     <Routes>
