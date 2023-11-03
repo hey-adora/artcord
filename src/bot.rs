@@ -402,14 +402,6 @@ impl serenity::client::EventHandler for BotHandler {
 
         let allowed_channels = allowed_channels.read().await;
 
-        // let Ok(allowed_channels) = allowed_channels else {
-        //     println!(
-        //         "Failed to get read access to allowed_channels {}",
-        //         allowed_channels.err().unwrap()
-        //     );
-        //     return;
-        // };
-
         if allowed_channels.len() > 0 {
             if let None = allowed_channels.get(&format!("{}_gallery", msg.channel_id.0)) {
                 println!("Gallery feature cant run on channel: {}", msg.channel_id.0);
@@ -419,39 +411,7 @@ impl serenity::client::EventHandler for BotHandler {
 
         println!("Running gallery feature on channel: {}", msg.channel_id.0);
 
-        // let guild_id = msg.guild_id.unwrap();
-        // //let guild = msg.guild(ctx.cache).unwrap();.
-        // let guild = ctx.http.get_guild(guild_id.0).await.unwrap();
-        // println!("guild: {:#?}", guild);
-        // let member = ctx
-        //     .http
-        //     .get_member(guild_id.0, msg.author.id.0)
-        //     .await
-        //     .unwrap();
-        // //let uuu = guild.member_permissions(ctx.http, msg.author.id.0).await;
-        // println!("uuu: {:#?}", member);
-        // println!("msg: {:#?}", msg.clone());
-        // let Some(member) = msg.member else {
-        //     println!("Failed to get member object");
-        //     return;
-        // };
-        // let Some(permissions) = member.permissions else {
-        //     println!("Failed to get permissions object: {:#?}", member);
-        //     return;
-        // };
-        // if !permissions.administrator() {
-        //     println!("User '{}' is not admin", msg.author.name);
-        //     return;
-        // };
-
         if msg.attachments.len() > 0 {
-            // let db = {
-            //     let data_read = ctx.data.read().await;
-            //     data_read
-            //         .get::<crate::database::DB>()
-            //         .expect("Expected crate::database::DB in TypeMap")
-            //         .clone()
-            // };
             let user = save_user(&db, msg.author.name, msg.author.id.0, msg.author.avatar).await;
             let Ok(user) = user else {
                 println!("Error saving user: {}", user.err().unwrap());
@@ -490,27 +450,51 @@ impl serenity::client::EventHandler for BotHandler {
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         if let Interaction::ApplicationCommand(command) = interaction {
             //println!("Received command interaction: {:#?}", command);
+            let db = {
+                let data_read = ctx.data.read().await;
+                data_read
+                    .get::<crate::database::DB>()
+                    .expect("Expected crate::database::DB in TypeMap")
+                    .clone()
+            };
+            //
+            // let content = match command.data.name.as_str() {
+            //     "test" => {
+            //         // let db = {
+            //         //     let data_read = ctx.data.read().await;
+            //         //     data_read.get::<crate::database::DB>().expect("Expected crate::database::DB in TypeMap").clone()
+            //         // };
+            //         //
+            //         // let img = crate::database::Img::default();
+            //         // let r = db.collection_img.insert_one(&img, None).await;
+            //         // let msg = match r {
+            //         //     Ok(r) => format!("IMG Inserted: {}", r.inserted_id),
+            //         //     Err(e) => format!("Failed to insert IMG: {}", e)
+            //         // };
+            //
+            //         let msg = "wow".to_string();
+            //
+            //         msg
+            //     }
+            //     "who" => "WONDERINOOOOOOOOO".to_string(),
+            //     "sync" => commands::sync::run(&command.data.options, &db).await,
+            //     "add_channel" => commands::add_channel::run(&command.data.options, &db),
+            //     _ => "not implemented >:3".to_string(),
+            // };
+            let content: Result<String, crate::bot::commands::CommandError> =
+                match command.data.name.as_str() {
+                    "add_channel" => commands::add_channel::run(&command.data.options, &db).await,
+                    "show_channels" => {
+                        commands::show_channels::run(&command.data.options, &db).await
+                    }
+                    name => Err(crate::bot::commands::CommandError::NotImplemented(
+                        name.to_string(),
+                    )),
+                };
 
-            let content = match command.data.name.as_str() {
-                "test" => {
-                    // let db = {
-                    //     let data_read = ctx.data.read().await;
-                    //     data_read.get::<crate::database::DB>().expect("Expected crate::database::DB in TypeMap").clone()
-                    // };
-                    //
-                    // let img = crate::database::Img::default();
-                    // let r = db.collection_img.insert_one(&img, None).await;
-                    // let msg = match r {
-                    //     Ok(r) => format!("IMG Inserted: {}", r.inserted_id),
-                    //     Err(e) => format!("Failed to insert IMG: {}", e)
-                    // };
-
-                    let msg = "wow".to_string();
-
-                    msg
-                }
-                "who" => "WONDERINOOOOOOOOO".to_string(),
-                _ => "not implemented >:3".to_string(),
+            let content = match content {
+                Ok(str) => str,
+                Err(err) => format!("Error: {:?}.", err),
             };
 
             if let Err(why) = command
@@ -534,6 +518,11 @@ impl serenity::client::EventHandler for BotHandler {
                 commands
                     .create_application_command(|command| commands::who::register(command))
                     .create_application_command(|command| commands::test::register(command))
+                    .create_application_command(|command| commands::sync::register(command))
+                    .create_application_command(|command| commands::add_channel::register(command))
+                    .create_application_command(|command| {
+                        commands::show_channels::register(command)
+                    })
             })
             .await;
             println!("Commands updated for guild id: {}", &guild);

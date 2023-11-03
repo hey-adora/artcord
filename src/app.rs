@@ -138,7 +138,7 @@ pub fn App() -> impl IntoView {
         <Title text="Welcome to Leptos"/>
         <Body  class=move || format!("text-low-purple  bg-gradient-to-br from-mid-purple to-dark-purple   {}", if global_state.nav_open.get() == true { "overflow-hidden w-screen h-screen" } else { "" })  />
         <Router>
-            <div id="home" class="pt-4 grid grid-rows-[auto_1fr]" >
+            <div id="home" class="pt-4 grid grid-rows-[auto_1fr] min-h-screen" >
                 // {move || connected()}
                 <Navbar/>
                 <main    class=" scroll-mt-[10rem] grid grid-rows-[1fr] pt-4 gap-6       ">

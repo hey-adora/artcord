@@ -1,5 +1,5 @@
 /*
-! tailwindcss v3.3.3 | MIT License | https://tailwindcss.com
+! tailwindcss v3.3.5 | MIT License | https://tailwindcss.com
 */
 
 /*
@@ -621,6 +621,10 @@ video {
 
 .max-h-\[20rem\] {
   max-height: 20rem;
+}
+
+.min-h-screen {
+  min-height: 100vh;
 }
 
 .w-\[100vw\] {
