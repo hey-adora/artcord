@@ -1,3 +1,4 @@
+use bson::doc;
 use serenity::{
     builder::CreateApplicationCommand,
     model::prelude::{
@@ -19,30 +20,35 @@ pub async fn run(
 
     Feature::is_valid(feature_option)?;
 
-    let allowed_channel = AllowedChannel {
-        id: channel_option.id.to_string(),
-        name: channel_option.name.clone().unwrap_or(String::from("none")),
-        feature: (*feature_option).clone(),
-        created_at: mongodb::bson::DateTime::now(),
-        modified_at: mongodb::bson::DateTime::now(),
-    };
-
     let result = db
         .collection_allowed_channel
-        .insert_one(allowed_channel, None)
+        .delete_one(
+            doc! { "id": channel_option.id.0.to_string(), "feature": feature_option },
+            None,
+        )
         .await?;
 
-    Ok(format!("Channel added: {}", result.inserted_id))
+    if result.deleted_count < 1 {
+        return Err(crate::bot::commands::CommandError::NotFound(format!(
+            "feature: {} in <#{}>",
+            feature_option, channel_option.id
+        )));
+    } else {
+        return Ok(format!(
+            "feature: {} in <#{}> was removed.",
+            feature_option, channel_option.id
+        ));
+    }
 }
 
 pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicationCommand {
     command
-        .name("add_channel")
-        .description("Add channel to whitelist of specific feature")
+        .name("remove_channel")
+        .description("Remove channel to whitelist of specific feature")
         .create_option(|option| {
             option
                 .name("channel")
-                .description(format!("Channel to whitelist."))
+                .description(format!("Channel to remove."))
                 .kind(CommandOptionType::Channel)
                 .required(true)
         })

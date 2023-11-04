@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use serenity::{
     builder::CreateApplicationCommand,
     model::prelude::{
@@ -9,15 +11,53 @@ use serenity::{
 use thiserror::Error;
 
 pub mod add_channel;
+pub mod remove_channel;
 pub mod show_channels;
 pub mod sync;
 pub mod test;
 pub mod who;
 
+#[derive(Debug)]
+pub enum Feature {
+    Gallery(&'static str),
+}
+
+impl Display for Feature {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Feature::Gallery(str) => str,
+            }
+        )
+    }
+}
+
+pub const FEATURE_GALLERY: Feature = Feature::Gallery("gallery");
+pub const FEATURES: [Feature; 1] = [FEATURE_GALLERY];
+
+impl Feature {
+    pub fn is_valid(feature: &str) -> Result<(), CommandError> {
+        for feat in FEATURES {
+            if feature == feat.to_string().as_str() {
+                return Ok(());
+            }
+        }
+        return Err(CommandError::OptionNotFound(format!(
+            "feature '{}' not found in {:?}",
+            feature, &FEATURES
+        )));
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum CommandError {
     #[error("Option not found: {0}")]
     OptionNotFound(String),
+
+    #[error("Not found: {0}")]
+    NotFound(String),
 
     #[error("Mongodb error: {0}")]
     Mongo(#[from] mongodb::error::Error),
