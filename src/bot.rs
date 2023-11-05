@@ -77,18 +77,16 @@ pub async fn resolve_command(
 
     let roles = db
         .collection_allowed_role
-        .find(
-            doc! { "guild_id": guild_id.to_string(), "feature": FEATURE_COMMANDER },
-            None,
-        )
+        .find(doc! { "guild_id": guild_id.to_string() }, None)
         .await?
         .try_collect()
         .await
         .unwrap_or_else(|_| vec![]);
 
     let no_roles_set = roles.len() < 1;
-    let user_is_authorized = roles
+    let user_commander_authorized = roles
         .iter()
+        .filter(|r| r.feature == FEATURE_COMMANDER)
         .position(|r| {
             member
                 .roles
@@ -98,17 +96,41 @@ pub async fn resolve_command(
         })
         .is_some();
 
-    if !no_roles_set && !user_is_authorized {
+    let user_gallery_authorized = roles
+        .iter()
+        .filter(|r| r.feature == FEATURE_COMMANDER)
+        .position(|r| {
+            member
+                .roles
+                .iter()
+                .position(|m| m.0.to_string() == r.id)
+                .is_some()
+        })
+        .is_some();
+
+    if !no_roles_set && !user_commander_authorized && !user_gallery_authorized {
         return Err(ResolveCommandError::Unauthorized);
     }
 
     let result: String = match command_name {
-        "add_role" => commands::add_role::run(&command.data.options, &db, guild_id.0).await,
-        "add_channel" => commands::add_channel::run(&command.data.options, &db).await,
-        "remove_channel" => commands::remove_channel::run(&command.data.options, &db).await,
-        "remove_role" => commands::remove_role::run(&command.data.options, &db, guild_id.0).await,
-        "show_channels" => commands::show_channels::run(&command.data.options, &db).await,
-        "show_roles" => commands::show_roles::run(&command.data.options, &db, guild_id.0).await,
+        c if c == "add_role" && user_commander_authorized => {
+            commands::add_role::run(&command.data.options, &db, guild_id.0).await
+        }
+        c if c == "add_channel" && user_commander_authorized => {
+            commands::add_channel::run(&command.data.options, &db).await
+        }
+        c if c == "remove_channel" && user_commander_authorized => {
+            commands::remove_channel::run(&command.data.options, &db).await
+        }
+        c if c == "remove_role" && user_commander_authorized => {
+            commands::remove_role::run(&command.data.options, &db, guild_id.0).await
+        }
+        c if c == "show_channels" && user_commander_authorized => {
+            commands::show_channels::run(&command.data.options, &db).await
+        }
+        c if c == "show_roles" && user_commander_authorized => {
+            commands::show_roles::run(&command.data.options, &db, guild_id.0).await
+        }
         name => Err(crate::bot::commands::CommandError::NotImplemented(
             name.to_string(),
         )),
