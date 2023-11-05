@@ -113,23 +113,26 @@ pub async fn resolve_command(
     }
 
     let result: String = match command_name {
-        c if c == "add_role" && user_commander_authorized => {
+        c if c == "add_role" && (user_commander_authorized || no_roles_set) => {
             commands::add_role::run(&command.data.options, &db, guild_id.0).await
         }
-        c if c == "add_channel" && user_commander_authorized => {
+        c if c == "add_channel" && (user_commander_authorized || no_roles_set) => {
             commands::add_channel::run(&command.data.options, &db).await
         }
-        c if c == "remove_channel" && user_commander_authorized => {
+        c if c == "remove_channel" && (user_commander_authorized || no_roles_set) => {
             commands::remove_channel::run(&command.data.options, &db).await
         }
-        c if c == "remove_role" && user_commander_authorized => {
+        c if c == "remove_role" && (user_commander_authorized || no_roles_set) => {
             commands::remove_role::run(&command.data.options, &db, guild_id.0).await
         }
-        c if c == "show_channels" && user_commander_authorized => {
+        c if c == "show_channels" && (user_commander_authorized || no_roles_set) => {
             commands::show_channels::run(&command.data.options, &db).await
         }
-        c if c == "show_roles" && user_commander_authorized => {
+        c if c == "show_roles" && (user_commander_authorized || no_roles_set) => {
             commands::show_roles::run(&command.data.options, &db, guild_id.0).await
+        }
+        c if c == "sync" && (user_gallery_authorized || no_roles_set) => {
+            commands::sync::run(&command.data.options, &db, guild_id.0).await
         }
         name => Err(crate::bot::commands::CommandError::NotImplemented(
             name.to_string(),
@@ -200,6 +203,7 @@ impl serenity::client::EventHandler for BotHandler {
                     .create_application_command(|command| commands::add_channel::register(command))
                     .create_application_command(|command| commands::add_role::register(command))
                     .create_application_command(|command| commands::remove_role::register(command))
+                    // .create_application_command(|command| commands::sync::register(command))
                     .create_application_command(|command| {
                         commands::remove_channel::register(command)
                     })
