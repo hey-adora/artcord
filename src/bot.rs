@@ -80,6 +80,13 @@ impl serenity::client::EventHandler for BotHandler {
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         if let Interaction::ApplicationCommand(command) = interaction {
             //println!("Received command interaction: {:#?}", command);
+            let command_name = command.data.name.as_str();
+
+            let Some(guild_id) = command.guild_id else {
+                println!("Command '{}' must be executed from a guild.", command_name);
+                return;
+            };
+
             let db = {
                 let data_read = ctx.data.read().await;
                 data_read
@@ -111,14 +118,17 @@ impl serenity::client::EventHandler for BotHandler {
             //     "add_channel" => commands::add_channel::run(&command.data.options, &db),
             //     _ => "not implemented >:3".to_string(),
             // };
-            let content: Result<String, crate::bot::commands::CommandError> = match command
-                .data
-                .name
-                .as_str()
-            {
+            let content: Result<String, crate::bot::commands::CommandError> = match command_name {
+                "add_role" => commands::add_role::run(&command.data.options, &db, guild_id.0).await,
                 "add_channel" => commands::add_channel::run(&command.data.options, &db).await,
                 "remove_channel" => commands::remove_channel::run(&command.data.options, &db).await,
+                "remove_role" => {
+                    commands::remove_role::run(&command.data.options, &db, guild_id.0).await
+                }
                 "show_channels" => commands::show_channels::run(&command.data.options, &db).await,
+                "show_roles" => {
+                    commands::show_roles::run(&command.data.options, &db, guild_id.0).await
+                }
                 name => Err(crate::bot::commands::CommandError::NotImplemented(
                     name.to_string(),
                 )),
@@ -152,12 +162,15 @@ impl serenity::client::EventHandler for BotHandler {
                     .create_application_command(|command| commands::test::register(command))
                     .create_application_command(|command| commands::sync::register(command))
                     .create_application_command(|command| commands::add_channel::register(command))
+                    .create_application_command(|command| commands::add_role::register(command))
+                    .create_application_command(|command| commands::remove_role::register(command))
                     .create_application_command(|command| {
                         commands::remove_channel::register(command)
                     })
                     .create_application_command(|command| {
                         commands::show_channels::register(command)
                     })
+                    .create_application_command(|command| commands::show_roles::register(command))
             })
             .await;
             println!("Commands updated for guild id: {}", &guild);

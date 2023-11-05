@@ -29,7 +29,7 @@ pub async fn run(
             continue;
         };
 
-        feature.push_str(&format!("\n{}", channel.name));
+        feature.push_str(&format!("\n-<#{}>", channel.id));
     }
 
     for (feature, channels) in unique_features {

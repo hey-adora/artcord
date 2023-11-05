@@ -8,7 +8,7 @@ use serenity::{
 
 use crate::database::{AllowedChannel, DB};
 
-use super::{get_option_channel, get_option_string, Feature};
+use super::{get_option_channel, get_option_string, Feature, FEATURES};
 
 pub async fn run(
     options: &[CommandDataOption],
@@ -49,7 +49,7 @@ pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicatio
         .create_option(|option| {
             option
                 .name("feature")
-                .description(format!("Features: gallery."))
+                .description(format!("Features: {:?}.", FEATURES))
                 .kind(CommandOptionType::String)
                 .required(true)
         })

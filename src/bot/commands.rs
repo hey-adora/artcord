@@ -6,13 +6,17 @@ use serenity::{
         application_command::{CommandDataOption, CommandDataOptionValue},
         channel::PartialChannel,
         command::CommandOptionType,
+        guild::Role,
     },
 };
 use thiserror::Error;
 
 pub mod add_channel;
+pub mod add_role;
 pub mod remove_channel;
+pub mod remove_role;
 pub mod show_channels;
+pub mod show_roles;
 pub mod sync;
 pub mod test;
 pub mod who;
@@ -58,6 +62,9 @@ pub enum CommandError {
 
     #[error("Not found: {0}")]
     NotFound(String),
+
+    #[error("Already exists: {0}")]
+    AlreadyExists(String),
 
     #[error("Mongodb error: {0}")]
     Mongo(#[from] mongodb::error::Error),
@@ -107,4 +114,11 @@ get_option!(
     i64,
     get_option_integer,
     String::from("Integer option was not provided.")
+);
+
+get_option!(
+    Role,
+    Role,
+    get_option_role,
+    String::from("Role option was not provided.")
 );

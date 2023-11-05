@@ -12,11 +12,15 @@ if #[cfg(feature = "ssr")] {
         use std::fmt::{Display, Formatter};
         use std::sync::Arc;
         use tokio::sync::RwLock;
-
+        use mongodb::bson::serde_helpers::serialize_hex_string_as_object_id;
 
         #[derive(Debug, Serialize, Deserialize, Clone)]
         pub struct AllowedRole {
+            // #[serde(serialize_with = "serialize_hex_string_as_object_id")]
+            pub _id: mongodb::bson::oid::ObjectId,
             pub id: String,
+            pub guild_id: String,
+            pub name: String,
             pub feature: String,
             pub modified_at: mongodb::bson::DateTime,
             pub created_at: mongodb::bson::DateTime,
