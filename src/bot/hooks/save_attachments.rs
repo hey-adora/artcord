@@ -486,9 +486,8 @@ pub enum SaveAttachmentsError {
     #[error("Mongodb: {0}.")]
     Mongo(#[from] mongodb::error::Error),
 
-    #[error("User is not authorized.")]
-    Unauthorized(String),
-
+    // #[error("User is not authorized.")]
+    // Unauthorized(String),
     #[error("Failed to save user: {0}")]
     SaveUserError(#[from] SaveUserError),
 

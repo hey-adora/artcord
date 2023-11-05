@@ -1,6 +1,8 @@
 use crate::database::{AllowedChannel, AllowedRole, User, DB};
 use anyhow::anyhow;
+use bson::Document;
 use chrono::Utc;
+use futures::TryStreamExt;
 use image::EncodableLayout;
 use mongodb::bson::spec::BinarySubtype;
 use mongodb::bson::{doc, Binary};
@@ -12,6 +14,7 @@ use serenity::http::CacheHttp;
 use serenity::model::application::command::Command;
 use serenity::model::channel::Attachment;
 use serenity::model::id::GuildId;
+use serenity::model::interactions::application_command::ApplicationCommandInteraction;
 use serenity::model::prelude::{Interaction, InteractionResponseType};
 use serenity::prelude::GatewayIntents;
 use serenity::{async_trait, Client};
@@ -35,6 +38,8 @@ mod commands;
 mod events;
 mod hooks;
 
+use commands::FEATURE_COMMANDER;
+
 #[group]
 #[commands(ping)]
 struct General;
@@ -47,6 +52,70 @@ async fn ping(ctx: &Context, msg: &serenity::model::channel::Message) -> Command
 }
 
 struct BotHandler;
+
+pub async fn resolve_command(
+    ctx: &Context,
+    command: &ApplicationCommandInteraction,
+) -> Result<String, ResolveCommandError> {
+    let command_name = command.data.name.as_str();
+    let guild_id = command
+        .guild_id
+        .as_ref()
+        .ok_or(ResolveCommandError::MustRunInGuild)?;
+    let member = command
+        .member
+        .as_ref()
+        .ok_or(ResolveCommandError::MustRunInGuild)?;
+
+    let db = {
+        let data_read = ctx.data.read().await;
+        data_read
+            .get::<crate::database::DB>()
+            .expect("Expected crate::database::DB in TypeMap")
+            .clone()
+    };
+
+    let roles = db
+        .collection_allowed_role
+        .find(
+            doc! { "guild_id": guild_id.to_string(), "feature": FEATURE_COMMANDER },
+            None,
+        )
+        .await?
+        .try_collect()
+        .await
+        .unwrap_or_else(|_| vec![]);
+
+    let no_roles_set = roles.len() < 1;
+    let user_is_authorized = roles
+        .iter()
+        .position(|r| {
+            member
+                .roles
+                .iter()
+                .position(|m| m.0.to_string() == r.id)
+                .is_some()
+        })
+        .is_some();
+
+    if !no_roles_set && !user_is_authorized {
+        return Err(ResolveCommandError::Unauthorized);
+    }
+
+    let result: String = match command_name {
+        "add_role" => commands::add_role::run(&command.data.options, &db, guild_id.0).await,
+        "add_channel" => commands::add_channel::run(&command.data.options, &db).await,
+        "remove_channel" => commands::remove_channel::run(&command.data.options, &db).await,
+        "remove_role" => commands::remove_role::run(&command.data.options, &db, guild_id.0).await,
+        "show_channels" => commands::show_channels::run(&command.data.options, &db).await,
+        "show_roles" => commands::show_roles::run(&command.data.options, &db, guild_id.0).await,
+        name => Err(crate::bot::commands::CommandError::NotImplemented(
+            name.to_string(),
+        )),
+    }?;
+
+    Ok(result)
+}
 
 #[async_trait]
 impl serenity::client::EventHandler for BotHandler {
@@ -79,64 +148,9 @@ impl serenity::client::EventHandler for BotHandler {
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         if let Interaction::ApplicationCommand(command) = interaction {
-            //println!("Received command interaction: {:#?}", command);
-            let command_name = command.data.name.as_str();
-
-            let Some(guild_id) = command.guild_id else {
-                println!("Command '{}' must be executed from a guild.", command_name);
-                return;
-            };
-
-            let db = {
-                let data_read = ctx.data.read().await;
-                data_read
-                    .get::<crate::database::DB>()
-                    .expect("Expected crate::database::DB in TypeMap")
-                    .clone()
-            };
-            //
-            // let content = match command.data.name.as_str() {
-            //     "test" => {
-            //         // let db = {
-            //         //     let data_read = ctx.data.read().await;
-            //         //     data_read.get::<crate::database::DB>().expect("Expected crate::database::DB in TypeMap").clone()
-            //         // };
-            //         //
-            //         // let img = crate::database::Img::default();
-            //         // let r = db.collection_img.insert_one(&img, None).await;
-            //         // let msg = match r {
-            //         //     Ok(r) => format!("IMG Inserted: {}", r.inserted_id),
-            //         //     Err(e) => format!("Failed to insert IMG: {}", e)
-            //         // };
-            //
-            //         let msg = "wow".to_string();
-            //
-            //         msg
-            //     }
-            //     "who" => "WONDERINOOOOOOOOO".to_string(),
-            //     "sync" => commands::sync::run(&command.data.options, &db).await,
-            //     "add_channel" => commands::add_channel::run(&command.data.options, &db),
-            //     _ => "not implemented >:3".to_string(),
-            // };
-            let content: Result<String, crate::bot::commands::CommandError> = match command_name {
-                "add_role" => commands::add_role::run(&command.data.options, &db, guild_id.0).await,
-                "add_channel" => commands::add_channel::run(&command.data.options, &db).await,
-                "remove_channel" => commands::remove_channel::run(&command.data.options, &db).await,
-                "remove_role" => {
-                    commands::remove_role::run(&command.data.options, &db, guild_id.0).await
-                }
-                "show_channels" => commands::show_channels::run(&command.data.options, &db).await,
-                "show_roles" => {
-                    commands::show_roles::run(&command.data.options, &db, guild_id.0).await
-                }
-                name => Err(crate::bot::commands::CommandError::NotImplemented(
-                    name.to_string(),
-                )),
-            };
-
-            let content = match content {
+            let content = match resolve_command(&ctx, &command).await {
                 Ok(str) => str,
-                Err(err) => format!("Error: {:?}.", err),
+                Err(err) => err.to_string(),
             };
 
             if let Err(why) = command
@@ -223,3 +237,18 @@ pub async fn create_bot(db: crate::database::DB) -> serenity::Client {
 //     #[error("Failed to save pfp: {0}")]
 //     IO(#[from] std::io::Error),
 // }
+
+#[derive(Error, Debug)]
+pub enum ResolveCommandError {
+    #[error("Mongodb: {0}.")]
+    Mongo(#[from] mongodb::error::Error),
+
+    #[error("Command error: {0}.")]
+    Command(#[from] crate::bot::commands::CommandError),
+
+    #[error("Not authorized.")]
+    Unauthorized,
+
+    #[error("Command must be run in guild.")]
+    MustRunInGuild,
+}

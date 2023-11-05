@@ -25,7 +25,7 @@ pub async fn run(
     let role = db
         .collection_allowed_role
         .find_one(
-            doc! { "guild_id": guild_id.to_string(), "id": role_option.id.to_string() },
+            doc! { "guild_id": guild_id.to_string(), "id": role_option.id.to_string(), "feature": feature_option },
             None,
         )
         .await?;
