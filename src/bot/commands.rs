@@ -21,38 +21,33 @@ pub mod sync;
 pub mod test;
 pub mod who;
 
-#[derive(Debug)]
-pub enum Feature {
-    Gallery(&'static str),
-}
+pub const FEATURE_GALLERY: &str = "gallery";
+pub const FEATURE_COMMANDER: &str = "commander";
+pub const CHANNEL_FEATURES: [&str; 1] = [FEATURE_GALLERY];
+pub const ROLE_FEATURES: [&str; 2] = [FEATURE_COMMANDER, FEATURE_GALLERY];
 
-impl Display for Feature {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Feature::Gallery(str) => str,
-            }
-        )
-    }
-}
-
-pub const FEATURE_GALLERY: Feature = Feature::Gallery("gallery");
-pub const FEATURES: [Feature; 1] = [FEATURE_GALLERY];
-
-impl Feature {
-    pub fn is_valid(feature: &str) -> Result<(), CommandError> {
-        for feat in FEATURES {
-            if feature == feat.to_string().as_str() {
-                return Ok(());
-            }
+pub fn is_valid_channel_feature(feature: &str) -> Result<(), CommandError> {
+    for feat in CHANNEL_FEATURES {
+        if feature == feat.to_string().as_str() {
+            return Ok(());
         }
-        return Err(CommandError::OptionNotFound(format!(
-            "feature '{}' not found in {:?}",
-            feature, &FEATURES
-        )));
     }
+    return Err(CommandError::OptionNotFound(format!(
+        "feature '{}' not found in {:?}",
+        feature, &CHANNEL_FEATURES
+    )));
+}
+
+pub fn is_valid_role_feature(feature: &str) -> Result<(), CommandError> {
+    for feat in ROLE_FEATURES {
+        if feature == feat.to_string().as_str() {
+            return Ok(());
+        }
+    }
+    return Err(CommandError::OptionNotFound(format!(
+        "feature '{}' not found in {:?}",
+        feature, &ROLE_FEATURES
+    )));
 }
 
 #[derive(Error, Debug)]

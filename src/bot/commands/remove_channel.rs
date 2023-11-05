@@ -9,7 +9,7 @@ use serenity::{
 
 use crate::database::{AllowedChannel, DB};
 
-use super::{get_option_channel, get_option_string, Feature, FEATURES};
+use super::{get_option_channel, get_option_string, is_valid_channel_feature, CHANNEL_FEATURES};
 
 pub async fn run(
     options: &[CommandDataOption],
@@ -18,7 +18,7 @@ pub async fn run(
     let channel_option = get_option_channel(options.get(0))?;
     let feature_option = get_option_string(options.get(1))?;
 
-    Feature::is_valid(feature_option)?;
+    is_valid_channel_feature(feature_option)?;
 
     let result = db
         .collection_allowed_channel
@@ -55,7 +55,7 @@ pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicatio
         .create_option(|option| {
             option
                 .name("feature")
-                .description(format!("Features: {:?}.", FEATURES))
+                .description(format!("Features: {:?}.", CHANNEL_FEATURES))
                 .kind(CommandOptionType::String)
                 .required(true)
         })

@@ -9,7 +9,10 @@ use serenity::{
 
 use crate::database::{AllowedChannel, AllowedRole, DB};
 
-use super::{get_option_channel, get_option_role, get_option_string, Feature, FEATURES};
+use super::{
+    get_option_channel, get_option_role, get_option_string, is_valid_role_feature,
+    CHANNEL_FEATURES, ROLE_FEATURES,
+};
 
 pub async fn run(
     options: &[CommandDataOption],
@@ -34,7 +37,7 @@ pub async fn run(
         )));
     }
 
-    Feature::is_valid(feature_option)?;
+    is_valid_role_feature(feature_option)?;
 
     // let _id = mongodb::bson::uuid::Uuid::new().to_string();
     // let _id = uuid::Uuid::new_v4().to_string();
@@ -73,7 +76,7 @@ pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicatio
         .create_option(|option| {
             option
                 .name("feature")
-                .description(format!("Features: {:?}.", FEATURES))
+                .description(format!("Features: {:?}.", ROLE_FEATURES))
                 .kind(CommandOptionType::String)
                 .required(true)
         })
