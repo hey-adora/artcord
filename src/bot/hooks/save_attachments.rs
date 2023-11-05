@@ -34,6 +34,7 @@ use webp::WebPEncodingError;
 pub async fn hook_save_attachments(
     attachments: &[serenity::model::channel::Attachment],
     db: &DB,
+    guild_id: u64,
     channel_id: u64,
     msg_id: u64,
     author_id: u64,
@@ -52,7 +53,7 @@ pub async fn hook_save_attachments(
     }
 
     if attachments.len() > 0 {
-        let user = save_user(&db, author_name, author_id, author_avatar).await?;
+        let user = save_user(&db, author_name, guild_id, author_id, author_avatar).await?;
         println!(
             "{}",
             match user {
@@ -63,7 +64,7 @@ pub async fn hook_save_attachments(
         );
 
         for attachment in attachments {
-            let result = save_attachment(&db, author_id, msg_id, attachment).await?;
+            let result = save_attachment(&db, guild_id, author_id, msg_id, attachment).await?;
             println!("File: {}", result);
         }
     }
@@ -211,6 +212,7 @@ pub async fn save_user_pfp(
 pub async fn save_user(
     db: &DB,
     name: String,
+    guild_id: u64,
     user_id: u64,
     pfp_hash: Option<String>,
 ) -> Result<SaveUserResult, SaveUserError> {
@@ -271,6 +273,8 @@ pub async fn save_user(
         }
     } else {
         let user = User {
+            _id: mongodb::bson::oid::ObjectId::new(),
+            guild_id: guild_id.to_string(),
             id: format!("{}", user_id),
             name,
             pfp_hash,
@@ -286,6 +290,7 @@ pub async fn save_user(
 
 pub async fn save_attachment(
     db: &DB,
+    guild_id: u64,
     user_id: u64,
     msg_id: u64,
     attachment: &Attachment,
@@ -391,6 +396,8 @@ pub async fn save_attachment(
             .decode()?;
 
         let img = crate::database::Img {
+            _id: mongodb::bson::oid::ObjectId::new(),
+            guild_id: guild_id.to_string(),
             user_id: format!("{}", user_id),
             msg_id: format!("{}", msg_id),
             org_hash: file_hash_hex.clone(),

@@ -64,6 +64,9 @@ pub enum CommandError {
     #[error("Mongodb error: {0}")]
     Mongo(#[from] mongodb::error::Error),
 
+    #[error("Serenity error: {0}")]
+    Serenity(#[from] serenity::Error),
+
     // #[error("Mongodb collect error: {0}")]
     // Mongo(#[from] mongodb::error::Error),
     #[error("Command not implemented: {0}")]

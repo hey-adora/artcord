@@ -14,6 +14,7 @@ use super::{get_option_channel, get_option_string, is_valid_channel_feature, CHA
 pub async fn run(
     options: &[CommandDataOption],
     db: &DB,
+    guild_id: u64,
 ) -> Result<String, crate::bot::commands::CommandError> {
     let channel_option = get_option_channel(options.get(0))?;
     let feature_option = get_option_string(options.get(1))?;

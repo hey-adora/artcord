@@ -117,10 +117,10 @@ pub async fn resolve_command(
             commands::add_role::run(&command.data.options, &db, guild_id.0).await
         }
         c if c == "add_channel" && (user_commander_authorized || no_roles_set) => {
-            commands::add_channel::run(&command.data.options, &db).await
+            commands::add_channel::run(&command.data.options, &db, guild_id.0).await
         }
         c if c == "remove_channel" && (user_commander_authorized || no_roles_set) => {
-            commands::remove_channel::run(&command.data.options, &db).await
+            commands::remove_channel::run(&command.data.options, &db, guild_id.0).await
         }
         c if c == "remove_role" && (user_commander_authorized || no_roles_set) => {
             commands::remove_role::run(&command.data.options, &db, guild_id.0).await
@@ -132,7 +132,14 @@ pub async fn resolve_command(
             commands::show_roles::run(&command.data.options, &db, guild_id.0).await
         }
         c if c == "sync" && (user_gallery_authorized || no_roles_set) => {
-            commands::sync::run(&command.data.options, &db, guild_id.0).await
+            commands::sync::run(
+                &command.data.options,
+                &db,
+                guild_id.0,
+                command.channel_id,
+                ctx.http.as_ref(),
+            )
+            .await
         }
         name => Err(crate::bot::commands::CommandError::NotImplemented(
             name.to_string(),
@@ -145,6 +152,10 @@ pub async fn resolve_command(
 #[async_trait]
 impl serenity::client::EventHandler for BotHandler {
     async fn message(&self, ctx: Context, msg: serenity::model::channel::Message) {
+        let Some(guild_id) = msg.guild_id else {
+            return;
+        };
+
         let (db) = {
             let data_read = ctx.data.read().await;
 
@@ -157,6 +168,7 @@ impl serenity::client::EventHandler for BotHandler {
         let result = hook_save_attachments(
             &msg.attachments,
             &db,
+            guild_id.0,
             msg.channel_id.0,
             msg.id.0,
             msg.author.id.0,

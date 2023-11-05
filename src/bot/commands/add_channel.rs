@@ -13,6 +13,7 @@ use super::{get_option_channel, get_option_string, is_valid_channel_feature, CHA
 pub async fn run(
     options: &[CommandDataOption],
     db: &DB,
+    guild_id: u64,
 ) -> Result<String, crate::bot::commands::CommandError> {
     let channel_option = get_option_channel(options.get(0))?;
     let feature_option = get_option_string(options.get(1))?;
@@ -20,6 +21,8 @@ pub async fn run(
     is_valid_channel_feature(feature_option)?;
 
     let allowed_channel = AllowedChannel {
+        _id: mongodb::bson::oid::ObjectId::new(),
+        guild_id: guild_id.to_string(),
         id: channel_option.id.to_string(),
         name: channel_option.name.clone().unwrap_or(String::from("none")),
         feature: (*feature_option).clone(),

@@ -18,8 +18,8 @@ if #[cfg(feature = "ssr")] {
         pub struct AllowedRole {
             // #[serde(serialize_with = "serialize_hex_string_as_object_id")]
             pub _id: mongodb::bson::oid::ObjectId,
-            pub id: String,
             pub guild_id: String,
+            pub id: String,
             pub name: String,
             pub feature: String,
             pub modified_at: mongodb::bson::DateTime,
@@ -32,6 +32,8 @@ if #[cfg(feature = "ssr")] {
 
         #[derive(Debug, Serialize, Deserialize, Clone)]
         pub struct AllowedChannel {
+            pub _id: mongodb::bson::oid::ObjectId,
+            pub guild_id: String,
             pub id: String,
             pub name: String,
             pub feature: String,
@@ -45,6 +47,8 @@ if #[cfg(feature = "ssr")] {
 
         #[derive(Debug, Serialize, Deserialize, Clone)]
         pub struct User {
+            pub _id: mongodb::bson::oid::ObjectId,
+            pub guild_id: String,
             pub id: String,
             pub name: String,
             pub pfp_hash: Option<String>,
@@ -54,6 +58,8 @@ if #[cfg(feature = "ssr")] {
 
         #[derive(Debug, Serialize, Deserialize, Clone)]
         pub struct Img {
+            pub _id: mongodb::bson::oid::ObjectId,
+            pub guild_id: String,
             pub user_id: String,
             pub msg_id: String,
             pub org_hash: String,
