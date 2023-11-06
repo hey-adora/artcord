@@ -1,9 +1,13 @@
 use serenity::{
     builder::CreateApplicationCommand,
-    model::prelude::{
-        application_command::{CommandDataOption, CommandDataOptionValue},
-        command::CommandOptionType,
+    model::{
+        interactions::application_command::ApplicationCommandInteraction,
+        prelude::{
+            application_command::{CommandDataOption, CommandDataOptionValue},
+            command::CommandOptionType,
+        },
     },
+    prelude::Context,
 };
 
 use crate::database::{AllowedChannel, DB};
@@ -11,12 +15,13 @@ use crate::database::{AllowedChannel, DB};
 use super::{get_option_channel, get_option_string, is_valid_channel_feature, CHANNEL_FEATURES};
 
 pub async fn run(
-    options: &[CommandDataOption],
+    ctx: &Context,
+    command: &ApplicationCommandInteraction,
     db: &DB,
     guild_id: u64,
-) -> Result<String, crate::bot::commands::CommandError> {
-    let channel_option = get_option_channel(options.get(0))?;
-    let feature_option = get_option_string(options.get(1))?;
+) -> Result<(), crate::bot::commands::CommandError> {
+    let channel_option = get_option_channel(command.data.options.get(0))?;
+    let feature_option = get_option_string(command.data.options.get(1))?;
 
     is_valid_channel_feature(feature_option)?;
 
@@ -35,7 +40,9 @@ pub async fn run(
         .insert_one(allowed_channel, None)
         .await?;
 
-    Ok(format!("Channel added: {}", result.inserted_id))
+    crate::bot::commands::show_channels::run(ctx, command, db).await?;
+    // Ok(format!("Channel added: {}", result.inserted_id))
+    Ok(())
 }
 
 pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicationCommand {

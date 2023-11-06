@@ -1,10 +1,15 @@
 use bson::doc;
 use serenity::{
     builder::CreateApplicationCommand,
-    model::prelude::{
-        application_command::{CommandDataOption, CommandDataOptionValue},
-        command::CommandOptionType,
+    model::{
+        interactions::application_command::ApplicationCommandInteraction,
+        prelude::{
+            application_command::{CommandDataOption, CommandDataOptionValue},
+            command::CommandOptionType,
+            InteractionResponseType,
+        },
     },
+    prelude::Context,
 };
 
 use crate::database::{AllowedChannel, DB};
@@ -14,12 +19,13 @@ use super::{
 };
 
 pub async fn run(
-    options: &[CommandDataOption],
+    ctx: &Context,
+    command: &ApplicationCommandInteraction,
     db: &DB,
     guild_id: u64,
-) -> Result<String, crate::bot::commands::CommandError> {
-    let role_option = get_option_role(options.get(0))?;
-    let feature_option = get_option_string(options.get(1))?;
+) -> Result<(), crate::bot::commands::CommandError> {
+    let role_option = get_option_role(command.data.options.get(0))?;
+    let feature_option = get_option_string(command.data.options.get(1))?;
 
     is_valid_role_feature(feature_option)?;
 
@@ -36,12 +42,25 @@ pub async fn run(
             "feature: {} in {}",
             feature_option, role_option.name
         )));
-    } else {
-        return Ok(format!(
-            "feature: {} in {} was removed.",
-            feature_option, role_option.name
-        ));
     }
+
+    let content = format!(
+        "feature: {} in {} was removed.",
+        feature_option, role_option.name
+    );
+
+    if let Err(why) = command
+        .create_interaction_response(&ctx.http, |response| {
+            response
+                .kind(InteractionResponseType::ChannelMessageWithSource)
+                .interaction_response_data(|message| message.content(content))
+        })
+        .await
+    {
+        println!("Cannot respond to slash command: {}", why);
+    }
+
+    Ok(())
 }
 
 pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicationCommand {

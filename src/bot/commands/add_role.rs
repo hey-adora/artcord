@@ -1,10 +1,14 @@
 use bson::doc;
 use serenity::{
     builder::CreateApplicationCommand,
-    model::prelude::{
-        application_command::{CommandDataOption, CommandDataOptionValue},
-        command::CommandOptionType,
+    model::{
+        interactions::application_command::ApplicationCommandInteraction,
+        prelude::{
+            application_command::{CommandDataOption, CommandDataOptionValue},
+            command::CommandOptionType,
+        },
     },
+    prelude::Context,
 };
 
 use crate::database::{AllowedChannel, AllowedRole, DB};
@@ -15,12 +19,13 @@ use super::{
 };
 
 pub async fn run(
-    options: &[CommandDataOption],
+    ctx: &Context,
+    command: &ApplicationCommandInteraction,
     db: &DB,
     guild_id: u64,
-) -> Result<String, crate::bot::commands::CommandError> {
-    let role_option = get_option_role(options.get(0))?;
-    let feature_option = get_option_string(options.get(1))?;
+) -> Result<(), crate::bot::commands::CommandError> {
+    let role_option = get_option_role(command.data.options.get(0))?;
+    let feature_option = get_option_string(command.data.options.get(1))?;
 
     let role = db
         .collection_allowed_role
@@ -59,7 +64,9 @@ pub async fn run(
         .await?;
 
     // Ok(format!("Role added: {}", result.inserted_id))
-    crate::bot::commands::show_roles::run(options, db, guild_id).await
+    crate::bot::commands::show_roles::run(ctx, command, db, guild_id).await?;
+
+    Ok(())
 }
 
 pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicationCommand {

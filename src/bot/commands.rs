@@ -11,6 +11,8 @@ use serenity::{
 };
 use thiserror::Error;
 
+use super::hooks::save_attachments::SaveAttachmentsError;
+
 pub mod add_channel;
 pub mod add_role;
 pub mod remove_channel;
@@ -66,6 +68,9 @@ pub enum CommandError {
 
     #[error("Serenity error: {0}")]
     Serenity(#[from] serenity::Error),
+
+    #[error("Failed to save attachments: {0}")]
+    Attachments(#[from] SaveAttachmentsError),
 
     // #[error("Mongodb collect error: {0}")]
     // Mongo(#[from] mongodb::error::Error),

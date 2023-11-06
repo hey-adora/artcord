@@ -4,16 +4,24 @@ use bson::doc;
 use futures::TryStreamExt;
 use serenity::{
     builder::CreateApplicationCommand,
-    model::prelude::{application_command::CommandDataOption, command::CommandOptionType},
+    model::{
+        interactions::application_command::ApplicationCommandInteraction,
+        prelude::{
+            application_command::CommandDataOption, command::CommandOptionType,
+            InteractionResponseType,
+        },
+    },
+    prelude::Context,
 };
 
 use crate::database::DB;
 
 pub async fn run(
-    options: &[CommandDataOption],
+    ctx: &Context,
+    command: &ApplicationCommandInteraction,
     db: &DB,
     guild_id: u64,
-) -> Result<String, crate::bot::commands::CommandError> {
+) -> Result<(), crate::bot::commands::CommandError> {
     let roles = db
         .collection_allowed_role
         .find(doc! { "guild_id": guild_id.to_string() }, None)
@@ -41,7 +49,18 @@ pub async fn run(
         output.push_str(&format!("\n{}:\n{}", feature, roles));
     }
 
-    Ok(output)
+    if let Err(why) = command
+        .create_interaction_response(&ctx.http, |response| {
+            response
+                .kind(InteractionResponseType::ChannelMessageWithSource)
+                .interaction_response_data(|message| message.content(output))
+        })
+        .await
+    {
+        println!("Cannot respond to slash command: {}", why);
+    }
+
+    Ok(())
 }
 
 pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicationCommand {

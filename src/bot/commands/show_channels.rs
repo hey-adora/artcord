@@ -3,15 +3,23 @@ use std::collections::HashMap;
 use futures::TryStreamExt;
 use serenity::{
     builder::CreateApplicationCommand,
-    model::prelude::{application_command::CommandDataOption, command::CommandOptionType},
+    model::{
+        interactions::application_command::ApplicationCommandInteraction,
+        prelude::{
+            application_command::CommandDataOption, command::CommandOptionType,
+            InteractionResponseType,
+        },
+    },
+    prelude::Context,
 };
 
 use crate::database::DB;
 
 pub async fn run(
-    options: &[CommandDataOption],
+    ctx: &Context,
+    command: &ApplicationCommandInteraction,
     db: &DB,
-) -> Result<String, crate::bot::commands::CommandError> {
+) -> Result<(), crate::bot::commands::CommandError> {
     let channels = db.collection_allowed_channel.find(None, None).await?;
     let channels = channels.try_collect().await.unwrap_or_else(|_| vec![]);
 
@@ -36,7 +44,18 @@ pub async fn run(
         output.push_str(&format!("\n{}:\n{}", feature, channels));
     }
 
-    Ok(output)
+    if let Err(why) = command
+        .create_interaction_response(&ctx.http, |response| {
+            response
+                .kind(InteractionResponseType::ChannelMessageWithSource)
+                .interaction_response_data(|message| message.content(output))
+        })
+        .await
+    {
+        println!("Cannot respond to slash command: {}", why);
+    }
+
+    Ok(())
 }
 
 pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicationCommand {

@@ -56,7 +56,7 @@ struct BotHandler;
 pub async fn resolve_command(
     ctx: &Context,
     command: &ApplicationCommandInteraction,
-) -> Result<String, ResolveCommandError> {
+) -> Result<(), ResolveCommandError> {
     let command_name = command.data.name.as_str();
     let guild_id = command
         .guild_id
@@ -112,41 +112,34 @@ pub async fn resolve_command(
         return Err(ResolveCommandError::Unauthorized);
     }
 
-    let result: String = match command_name {
+    match command_name {
         c if c == "add_role" && (user_commander_authorized || no_roles_set) => {
-            commands::add_role::run(&command.data.options, &db, guild_id.0).await
+            commands::add_role::run(&ctx, &command, &db, guild_id.0).await
         }
         c if c == "add_channel" && (user_commander_authorized || no_roles_set) => {
-            commands::add_channel::run(&command.data.options, &db, guild_id.0).await
+            commands::add_channel::run(&ctx, &command, &db, guild_id.0).await
         }
         c if c == "remove_channel" && (user_commander_authorized || no_roles_set) => {
-            commands::remove_channel::run(&command.data.options, &db, guild_id.0).await
+            commands::remove_channel::run(&ctx, &command, &db, guild_id.0).await
         }
         c if c == "remove_role" && (user_commander_authorized || no_roles_set) => {
-            commands::remove_role::run(&command.data.options, &db, guild_id.0).await
+            commands::remove_role::run(&ctx, &command, &db, guild_id.0).await
         }
         c if c == "show_channels" && (user_commander_authorized || no_roles_set) => {
-            commands::show_channels::run(&command.data.options, &db).await
+            commands::show_channels::run(&ctx, &command, &db).await
         }
         c if c == "show_roles" && (user_commander_authorized || no_roles_set) => {
-            commands::show_roles::run(&command.data.options, &db, guild_id.0).await
+            commands::show_roles::run(&ctx, &command, &db, guild_id.0).await
         }
         c if c == "sync" && (user_gallery_authorized || no_roles_set) => {
-            commands::sync::run(
-                &command.data.options,
-                &db,
-                guild_id.0,
-                command.channel_id,
-                ctx.http.as_ref(),
-            )
-            .await
+            commands::sync::run(&ctx, &command, &db, guild_id.0).await
         }
         name => Err(crate::bot::commands::CommandError::NotImplemented(
             name.to_string(),
         )),
     }?;
 
-    Ok(result)
+    Ok(())
 }
 
 #[async_trait]
@@ -174,6 +167,7 @@ impl serenity::client::EventHandler for BotHandler {
             msg.author.id.0,
             msg.author.name.clone(),
             msg.author.avatar.clone(),
+            false,
         )
         .await;
 
@@ -185,20 +179,18 @@ impl serenity::client::EventHandler for BotHandler {
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         if let Interaction::ApplicationCommand(command) = interaction {
-            let content = match resolve_command(&ctx, &command).await {
-                Ok(str) => str,
-                Err(err) => err.to_string(),
-            };
-
-            if let Err(why) = command
-                .create_interaction_response(&ctx.http, |response| {
-                    response
-                        .kind(InteractionResponseType::ChannelMessageWithSource)
-                        .interaction_response_data(|message| message.content(content))
-                })
-                .await
-            {
-                println!("Cannot respond to slash command: {}", why);
+            let result = resolve_command(&ctx, &command).await;
+            if let Err(err) = result {
+                if let Err(why) = command
+                    .create_interaction_response(&ctx.http, |response| {
+                        response
+                            .kind(InteractionResponseType::ChannelMessageWithSource)
+                            .interaction_response_data(|message| message.content(err.to_string()))
+                    })
+                    .await
+                {
+                    println!("Cannot respond to slash command: {}", why);
+                }
             }
         }
     }

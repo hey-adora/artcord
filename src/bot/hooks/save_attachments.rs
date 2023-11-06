@@ -40,16 +40,19 @@ pub async fn hook_save_attachments(
     author_id: u64,
     author_name: String,
     author_avatar: Option<String>,
+    force: bool,
 ) -> Result<(), SaveAttachmentsError> {
-    let channel = db
-        .collection_allowed_channel
-        .find_one(
-            doc! { "id": channel_id.to_string(), "feature": FEATURE_GALLERY.to_string() },
-            None,
-        )
-        .await?;
-    if let None = channel {
-        return Ok(());
+    if !force {
+        let channel = db
+            .collection_allowed_channel
+            .find_one(
+                doc! { "id": channel_id.to_string(), "feature": FEATURE_GALLERY.to_string() },
+                None,
+            )
+            .await?;
+        if let None = channel {
+            return Ok(());
+        }
     }
 
     if attachments.len() > 0 {
