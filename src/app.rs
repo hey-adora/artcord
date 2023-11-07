@@ -17,6 +17,8 @@ use pages::not_found::NotFound;
 use crate::app::utils::GlobalState;
 use crate::server::{ClientMsg, ServerMsg};
 
+use self::utils::ServerMsgImgResized;
+
 mod components;
 mod pages;
 mod utils;
@@ -66,9 +68,17 @@ pub fn App() -> impl IntoView {
             };
 
             match server_msg {
-                ServerMsg::Imgs(imgs) => {
+                ServerMsg::Imgs(new_imgs) => {
                     // log!("MSG RECEIVED: {:#?}", &imgs);
-                    global_state.gallery_imgs.set(imgs);
+                    // global_state.gallery_imgs.set(imgs);
+                    global_state.gallery_imgs.update(|imgs| {
+                        imgs.extend_from_slice(
+                            &new_imgs
+                                .into_iter()
+                                .map(|img| ServerMsgImgResized::from(img))
+                                .collect::<Vec<ServerMsgImgResized>>(),
+                        );
+                    });
                 }
                 ServerMsg::Reset => {
                     log!("RESETING");

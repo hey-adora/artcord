@@ -13,13 +13,50 @@ pub enum ScrollSection {
     Gallery,
 }
 
+#[derive(Clone, PartialEq, Debug)]
+pub struct ServerMsgImgResized {
+    pub user_id: String,
+    pub msg_id: String,
+    pub org_hash: String,
+    pub format: String,
+    pub width: u32,
+    pub height: u32,
+    pub new_width: u32,
+    pub new_height: u32,
+    pub has_high: bool,
+    pub has_medium: bool,
+    pub has_low: bool,
+    pub modified_at: i64,
+    pub created_at: i64,
+}
+
+impl From<ServerMsgImg> for ServerMsgImgResized {
+    fn from(value: ServerMsgImg) -> Self {
+        Self {
+            new_width: value.width,
+            new_height: value.height,
+            user_id: value.user_id,
+            msg_id: value.msg_id,
+            org_hash: value.org_hash,
+            format: value.format,
+            width: value.width,
+            height: value.height,
+            has_high: value.has_high,
+            has_medium: value.has_medium,
+            has_low: value.has_low,
+            modified_at: value.modified_at,
+            created_at: value.created_at,
+        }
+    }
+}
+
 #[derive(Copy, Clone, Debug)]
 pub struct GlobalState {
     pub section: RwSignal<ScrollSection>,
     pub nav_open: RwSignal<bool>,
     pub nav_tran: RwSignal<bool>,
     pub socket_send: RwSignal<Rc<dyn Fn(Vec<u8>)>>,
-    pub gallery_imgs: RwSignal<Vec<ServerMsgImg>>,
+    pub gallery_imgs: RwSignal<Vec<ServerMsgImgResized>>,
 }
 
 impl GlobalState {
