@@ -67,7 +67,7 @@ pub fn App() -> impl IntoView {
 
             match server_msg {
                 ServerMsg::Imgs(imgs) => {
-                    log!("MSG RECEIVED: {:#?}", &imgs);
+                    // log!("MSG RECEIVED: {:#?}", &imgs);
                     global_state.gallery_imgs.set(imgs);
                 }
                 ServerMsg::Reset => {
@@ -116,20 +116,20 @@ pub fn App() -> impl IntoView {
         //     // global_state.socket_send.set(client_msgs);
         // });
 
-        create_effect(move |_| {
-            if ready_state.get() == ConnectionReadyState::Open {
-                let a = send("test69");
-
-                // let msg = ClientMsg::GalleryInit {
-                //     amount: 25,
-                //     from: Utc::now().timestamp_nanos(),
-                // };
-                // let bytes = rkyv::to_bytes::<ClientMsg, 256>(&msg).unwrap();
-                // let bytes = bytes.into_vec();
-                // log!("{:?}", &bytes);
-                // send_bytes(bytes);
-            }
-        });
+        // create_effect(move |_| {
+        //     if ready_state.get() == ConnectionReadyState::Open {
+        //         // let a = send("test69");
+        //
+        //         // let msg = ClientMsg::GalleryInit {
+        //         //     amount: 25,
+        //         //     from: Utc::now().timestamp_nanos(),
+        //         // };
+        //         // let bytes = rkyv::to_bytes::<ClientMsg, 256>(&msg).unwrap();
+        //         // let bytes = bytes.into_vec();
+        //         // log!("{:?}", &bytes);
+        //         // send_bytes(bytes);
+        //     }
+        // });
     };
 
     view! {

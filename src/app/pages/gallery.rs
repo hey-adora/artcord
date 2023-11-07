@@ -36,17 +36,17 @@ fn resize_imgs(
         resized_imgs[i].width = new_prev_img_w as u32;
         resized_imgs[i].height = new_prev_img_h as u32;
 
-        log!(
-            "-: {}, f: {}, w: {}, c: {}, d: {}, o: {}, l: {}..{}",
-            i,
-            0,
-            max_width,
-            1 + new_row_end - new_row_start,
-            0,
-            optimal_height,
-            new_row_start,
-            new_row_end
-        );
+        // log!(
+        //     "-: {}, f: {}, w: {}, c: {}, d: {}, o: {}, l: {}..{}",
+        //     i,
+        //     0,
+        //     max_width,
+        //     1 + new_row_end - new_row_start,
+        //     0,
+        //     optimal_height,
+        //     new_row_start,
+        //     new_row_end
+        // );
     }
 }
 
@@ -175,12 +175,12 @@ pub fn GalleryPage() -> impl IntoView {
             set_gallery_images.update(move |imgs| {
                 let org_imgs = &global_state.gallery_imgs.get_untracked();
                 if imgs.len() < 1 || org_imgs.len() < 1 {
-                    log!("ORG_IMGS: {}, RESIZED_IMGS: {}", org_imgs.len(), imgs.len());
+                    // log!("ORG_IMGS: {}, RESIZED_IMGS: {}", org_imgs.len(), imgs.len());
                     return;
                 }
-                log!("INPUT {:?}", org_imgs);
+                // log!("INPUT {:?}", org_imgs);
                 let row_img_count = render_gallery(gallery_width.get_untracked(), org_imgs, imgs);
-                log!("OUTPUT {:?}", &imgs);
+                // log!("OUTPUT {:?}", &imgs);
 
                 set_row_img_count.set_untracked(row_img_count);
             });
@@ -189,7 +189,7 @@ pub fn GalleryPage() -> impl IntoView {
 
     create_effect(move |_| {
         let msg = ClientMsg::GalleryInit {
-            amount: 25,
+            amount: 254,
             from: Utc::now().timestamp_nanos(),
         };
         log!("SENDING REQ: {:#?}", &msg);
@@ -204,11 +204,11 @@ pub fn GalleryPage() -> impl IntoView {
     // });
 
     create_effect(move |_| {
-        log!("UPDATING EVENT");
+        // log!("UPDATING EVENT");
 
         set_gallery_images.update(move |gallery_imgs| {
             let org_imgs = global_state.gallery_imgs.get();
-            log!("Updating resized img vec with: {:?}", &org_imgs);
+            // log!("Updating resized img vec with: {:?}", &org_imgs);
             *gallery_imgs = org_imgs;
         });
 

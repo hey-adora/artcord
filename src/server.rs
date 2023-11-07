@@ -147,10 +147,10 @@ impl MyWs {
         loop {
             let img = imgs.try_next().await;
             let Ok(Some(img)) = img else {
-                println!("last of img.");
+                // println!("last of img.");
                 break;
             };
-            println!("IMG: {:#?}", img);
+            // println!("IMG: {:#?}", img);
             let server_msg_img = ServerMsgImg {
                 msg_id: img.msg_id,
                 format: img.format,
@@ -218,7 +218,7 @@ impl Handler<ByteActor> for MyWs {
         let fut = async move {
             let client_msg = ClientMsg::from_bytes(&msg.0.to_vec());
             let Ok(client_msg) = client_msg else {
-                println!("Failed to convert bytes to client msg: {}", client_msg.err().unwrap());
+                // println!("Failed to convert bytes to client msg: {}", client_msg.err().unwrap());
                 return;
             };
             let server_msg: Result<ServerMsg, ServerMsgError> = match client_msg {
@@ -230,7 +230,7 @@ impl Handler<ByteActor> for MyWs {
             let bytes = match server_msg {
                 Ok(server_msg) => rkyv::to_bytes::<_, 256>(&server_msg),
                 Err(server_msg_error) => {
-                    println!("Failed to parse client msg: {}", server_msg_error);
+                    // println!("Failed to parse client msg: {}", server_msg_error);
                     rkyv::to_bytes::<_, 256>(&ServerMsg::Reset)
                 }
             };
@@ -241,7 +241,7 @@ impl Handler<ByteActor> for MyWs {
             };
 
             recipient.do_send(VecActor(bytes.into_vec()));
-            println!("IS THIS WORKING OR NOT");
+            // println!("IS THIS WORKING OR NOT");
         };
         let fut = actix::fut::wrap_future::<_, Self>(fut);
         let a = ctx.spawn(fut);
@@ -253,19 +253,19 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWs {
     fn handle(&mut self, msg: Result<ws::Message, ProtocolError>, ctx: &mut Self::Context) {
         match msg {
             Ok(ws::Message::Ping(msg)) => {
-                println!("BING BING");
+                // println!("BING BING");
                 ctx.pong(&msg)
             }
             Ok(ws::Message::Text(text)) => {
-                println!("TEXT RECEIVED {}", text);
+                // println!("TEXT RECEIVED {}", text);
             }
             Ok(ws::Message::Binary(bytes)) => {
                 ctx.address().do_send(ByteActor(bytes));
-                println!("wow");
+                // println!("wow");
 
             },
             Ok(ws::Message::Close(reason)) => {
-                println!("WTF HAPPENED {:?}", reason);
+                // println!("WTF HAPPENED {:?}", reason);
                 ctx.close(reason)
             }
             Err(e) => {
