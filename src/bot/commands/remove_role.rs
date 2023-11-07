@@ -15,7 +15,8 @@ use serenity::{
 use crate::database::{AllowedChannel, DB};
 
 use super::{
-    get_option_channel, get_option_role, get_option_string, is_valid_role_feature, CHANNEL_FEATURES,
+    get_option_channel, get_option_role, get_option_string, is_valid_role_feature,
+    CHANNEL_FEATURES, ROLE_FEATURES,
 };
 
 pub async fn run(
@@ -49,16 +50,7 @@ pub async fn run(
         feature_option, role_option.name
     );
 
-    if let Err(why) = command
-        .create_interaction_response(&ctx.http, |response| {
-            response
-                .kind(InteractionResponseType::ChannelMessageWithSource)
-                .interaction_response_data(|message| message.content(content))
-        })
-        .await
-    {
-        println!("Cannot respond to slash command: {}", why);
-    }
+    crate::bot::commands::show_roles::run(ctx, command, db, guild_id).await?;
 
     Ok(())
 }
@@ -77,7 +69,7 @@ pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicatio
         .create_option(|option| {
             option
                 .name("feature")
-                .description(format!("Features: {:?}.", CHANNEL_FEATURES))
+                .description(format!("Features: {:?}.", ROLE_FEATURES))
                 .kind(CommandOptionType::String)
                 .required(true)
         })

@@ -49,16 +49,13 @@ pub async fn run(
         output.push_str(&format!("\n{}:\n{}", feature, roles));
     }
 
-    if let Err(why) = command
+    command
         .create_interaction_response(&ctx.http, |response| {
             response
                 .kind(InteractionResponseType::ChannelMessageWithSource)
                 .interaction_response_data(|message| message.content(output))
         })
-        .await
-    {
-        println!("Cannot respond to slash command: {}", why);
-    }
+        .await?;
 
     Ok(())
 }

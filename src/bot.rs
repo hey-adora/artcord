@@ -181,6 +181,7 @@ impl serenity::client::EventHandler for BotHandler {
         if let Interaction::ApplicationCommand(command) = interaction {
             let result = resolve_command(&ctx, &command).await;
             if let Err(err) = result {
+                println!("Error: {}", err);
                 if let Err(why) = command
                     .create_interaction_response(&ctx.http, |response| {
                         response
