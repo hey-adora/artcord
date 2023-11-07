@@ -131,7 +131,8 @@ impl MyWs {
 
         let find_options = find_options.build();
 
-        let filter = doc!{};
+        let filter = doc!{ "created_at": { "$lt": mongodb::bson::DateTime::from_millis(from) } };
+        // println!("{:#?}", filter);
 
         // if let Some(from) = from {
         //

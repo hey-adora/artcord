@@ -81,7 +81,7 @@ impl GlobalState {
             return;
         };
         let bytes = bytes.into_vec();
-        leptos::logging::log!("{:?}", &bytes);
+        // leptos::logging::log!("{:?}", &bytes);
         self.socket_send.get_untracked()(bytes);
     }
 }

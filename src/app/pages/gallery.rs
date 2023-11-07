@@ -187,8 +187,8 @@ pub fn GalleryPage() -> impl IntoView {
             amount: 254,
             from: Utc::now().timestamp_nanos(),
         };
-        log!("SENDING REQ: {:#?}", &msg);
         global_state.socket_send(msg);
+        // log!("SENDING REQ: {:#?}", &msg);
     });
 
     // create_effect(move |_| {
@@ -234,13 +234,38 @@ pub fn GalleryPage() -> impl IntoView {
     // });
 
     let section_scroll = move |_: Event| {
-        log!("SCROLL");
-        // let section = gallery_section.get_untracked().unwrap();
-        // let scroll_top = section.scroll_top() as u32;
-        //
-        // let width = section.client_width() as u32;
-        // let height = section.client_height() as u32;
-        // let left = section.scroll_height() as u32 - (height + scroll_top);
+        // log!("SCROLL");
+
+        let Some(last) = global_state
+            .gallery_imgs
+            .with_untracked(|imgs| match imgs.last() {
+                Some(l) => Some(l.created_at),
+                None => None,
+            })
+        else {
+            return;
+        };
+
+        let Some(section) = gallery_section.get_untracked() else {
+            return;
+        };
+
+        let scroll_top = section.scroll_top();
+        // //
+        // // let width = section.client_width() as u32;
+        let client_height = section.client_height();
+        let scroll_height = section.scroll_height();
+
+        let left = scroll_height - (client_height + scroll_top);
+
+        if left < client_height {
+            let msg = ClientMsg::GalleryInit {
+                amount: 254,
+                from: last,
+            };
+            global_state.socket_send(msg);
+        }
+
         //
         // let fit_count = calc_fit_count(width, height) as usize;
         // let row_fit_count = (height / new_img_height) as usize;
