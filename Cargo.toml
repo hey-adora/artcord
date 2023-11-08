@@ -132,7 +132,7 @@ chrono = { version = "0.4.31", features = [
 ] }
 thiserror = "1.0.50"
 tokio = { version = "1.33.0", optional = true }
-bson = "2.7.0"
+bson = { version = "2.7.0" }
 bytecheck = { version = "~0.6.11", features = ["simdutf8", "std"] }
 
 

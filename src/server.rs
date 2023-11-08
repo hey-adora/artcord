@@ -28,7 +28,6 @@ use crate::database::User;
 pub struct ServerMsgImg {
     #[with(OBJ)]
     pub _id: ObjectId,
-
     pub user: User,
     pub user_id: String,
     pub msg_id: String,
@@ -86,7 +85,12 @@ impl ServerMsg {
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum ClientMsg {
-    GalleryInit { amount: u8, from: i64 },
+    GalleryInit {
+        amount: u8,
+
+        #[with(DT)]
+        from: DateTime,
+    },
 }
 
 impl ClientMsg {
@@ -147,7 +151,7 @@ struct MyWs {
 
 
 impl MyWs {
-    pub async fn gallery_handler(db: crate::database::DB, amount: u8, from: i64) -> Result<ServerMsg, ServerMsgError> {
+    pub async fn gallery_handler(db: crate::database::DB, amount: u8, from: DateTime) -> Result<ServerMsg, ServerMsgError> {
         // let find_options = mongodb::options::AggregateOptions::builder()
         //     .limit(Some(amount.clamp(25, 255) as i64))
         //     .sort(doc!{"created_at": -1});
@@ -161,9 +165,10 @@ impl MyWs {
 
         let  pipeline = vec![
             doc! { "$sort": doc! { "created_at": -1 } },
-            doc! { "$match": doc! { "created_at": { "$lt": mongodb::bson::DateTime::from_millis(from) } } },
+            doc! { "$match": doc! { "created_at": { "$lt": from } } },
             doc! { "$limit": Some( amount.clamp(25, 255) as i64) },
-            doc! { "$lookup": doc! { "from": "user", "localField": "user_id", "foreignField": "id", "as": "user"} }
+            doc! { "$lookup": doc! { "from": "user", "localField": "user_id", "foreignField": "id", "as": "user"} },
+            doc! { "$unwind": "$user" }
         ];
         let mut imgs = db.collection_img.aggregate(pipeline, None).await?;
     //     let imgs: Vec<ServerMsgImg> = imgs.try_collect().await.unwrap_or_else(|_| vec![]).into_iter().map(|img| ServerMsgImg {
@@ -174,7 +179,7 @@ impl MyWs {
         // let test = mongodb::bson::DateTime::now().timestamp_millis();
 
         while let Some(result) = imgs.try_next().await? {
-            println!("WOWOWOWOWOWOWOWOWWOOWOWWWOWOOWOWOW");
+            // println!("WOWOWOWOWOWOWOWOWWOOWOWWWOWOOWOWOW: {:#?}", &result);
             let doc: ServerMsgImg = mongodb::bson::from_document(result)?;
             send_this.push(doc);
 
@@ -268,7 +273,7 @@ impl Handler<ByteActor> for MyWs {
             let bytes = match server_msg {
                 Ok(server_msg) => rkyv::to_bytes::<_, 256>(&server_msg),
                 Err(server_msg_error) => {
-                    println!("Failed to parse client msg: {}", server_msg_error);
+                    println!("Failed to create server msg: {}", server_msg_error);
                     rkyv::to_bytes::<_, 256>(&ServerMsg::Reset)
                 }
             };

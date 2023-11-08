@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 #[repr(transparent)]
-struct ArchivedDateTime(Archived<i64>);
+pub struct ArchivedDateTime(Archived<i64>);
 
 // #[derive(
 //     rkyv::Archive, rkyv::Deserialize, rkyv::Serialize, Debug, Serialize, Deserialize, Clone,
@@ -32,7 +32,7 @@ struct ArchivedDateTime(Archived<i64>);
 // #[archive_attr(derive(Debug))]
 #[derive(Debug, CheckBytes)]
 #[repr(transparent)]
-struct ArchivedObjectId(ArchivedString);
+pub struct ArchivedObjectId(ArchivedString);
 
 #[derive(
     rkyv::Archive,

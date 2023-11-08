@@ -1,3 +1,4 @@
+use bson::DateTime;
 use chrono::Utc;
 use leptos::ev::{load, resize};
 use leptos::html::Section;
@@ -91,7 +92,7 @@ pub fn GalleryPage() -> impl IntoView {
 
         let msg = ClientMsg::GalleryInit {
             amount: 254,
-            from: Utc::now().timestamp_nanos(),
+            from: DateTime::from_millis(Utc::now().timestamp_nanos()),
         };
         global_state.socket_send(msg);
     });
