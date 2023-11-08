@@ -114,8 +114,8 @@ mongodb = { version = "2.7.0", optional = true, features = [
   "serde_bytes",
   "tokio-runtime",
 ] }
-serde = { version = "1.0.189", optional = true, features = ["std"] }
-rkyv = { version = "0.7.42", features = ["validation"] }
+serde = { version = "1.0.189", features = ["std"] }
+rkyv = { version = "0.7.9", features = ["validation"] }
 md-5 = { version = "0.10.6", optional = true, features = ["std"] }
 hashes = { version = "0.1.9", optional = true }
 chrono = { version = "0.4.31", features = [
@@ -133,6 +133,7 @@ chrono = { version = "0.4.31", features = [
 thiserror = "1.0.50"
 tokio = { version = "1.33.0", optional = true }
 bson = "2.7.0"
+bytecheck = { version = "~0.6.11", features = ["simdutf8", "std"] }
 
 
 [features]
@@ -157,7 +158,6 @@ ssr = [
   "dep:anyhow",
   "dep:sha256",
   "dep:mongodb",
-  "dep:serde",
   "dep:md-5",
   "dep:hashes",
   "dep:tokio",

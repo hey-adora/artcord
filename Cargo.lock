@@ -359,6 +359,7 @@ dependencies = [
  "anyhow",
  "async-std",
  "bson",
+ "bytecheck",
  "cfg-if",
  "chrono",
  "console_error_panic_hook",

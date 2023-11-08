@@ -1,17 +1,35 @@
 use std::num::ParseIntError;
 
+use bson::oid::ObjectId;
+use bson::DateTime;
 use cfg_if::cfg_if;
 
+use crate::database::{DT, OBJ};
 use rkyv::validation::validators::DefaultValidator;
 use rkyv::validation::CheckTypeError;
 use rkyv::with::ArchiveWith;
-use rkyv::{Archive, Deserialize, Serialize};
+use rkyv::{Archive, Archived, Deserialize, Resolver, Serialize};
 use thiserror::Error;
 
-#[derive(rkyv::Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+use crate::database::User;
+
+#[derive(
+    rkyv::Archive,
+    rkyv::Deserialize,
+    rkyv::Serialize,
+    Debug,
+    PartialEq,
+    Clone,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct ServerMsgImg {
+    #[with(OBJ)]
+    pub _id: ObjectId,
+
+    pub user: User,
     pub user_id: String,
     pub msg_id: String,
     pub org_hash: String,
@@ -21,8 +39,12 @@ pub struct ServerMsgImg {
     pub has_high: bool,
     pub has_medium: bool,
     pub has_low: bool,
-    pub modified_at: i64,
-    pub created_at: i64,
+
+    #[with(DT)]
+    pub modified_at: bson::datetime::DateTime,
+
+    #[with(DT)]
+    pub created_at: bson::datetime::DateTime,
 }
 
 #[derive(rkyv::Archive, Deserialize, Serialize, Debug, PartialEq)]
@@ -123,50 +145,65 @@ struct MyWs {
     server_state: ServerState
 }
 
+
 impl MyWs {
     pub async fn gallery_handler(db: crate::database::DB, amount: u8, from: i64) -> Result<ServerMsg, ServerMsgError> {
-        let find_options = mongodb::options::FindOptions::builder()
-            .limit(Some(amount.clamp(25, 255) as i64))
-            .sort(doc!{"created_at": -1});
-
-        let find_options = find_options.build();
-
-        let filter = doc!{ "created_at": { "$lt": mongodb::bson::DateTime::from_millis(from) } };
-        // println!("{:#?}", filter);
-
-        // if let Some(from) = from {
+        // let find_options = mongodb::options::AggregateOptions::builder()
+        //     .limit(Some(amount.clamp(25, 255) as i64))
+        //     .sort(doc!{"created_at": -1});
         //
-        // }
+        // let find_options = find_options.build();
 
-        let mut imgs = db.collection_img.find(filter, Some(find_options)).await?;
-        // let Ok(mut imgs) = imgs else {
-        //     println!("Error fetching imgs: {}", imgs.err().unwrap());
-        //     return;
-        // };
+        // let filter = doc!{ "created_at": { "$lt": mongodb::bson::DateTime::from_millis(from) } };
+        //
+        // let mut imgs = db.collection_img.find(filter, Some(find_options)).await?;
+
+
+        let  pipeline = vec![
+            doc! { "$sort": doc! { "created_at": -1 } },
+            doc! { "$match": doc! { "created_at": { "$lt": mongodb::bson::DateTime::from_millis(from) } } },
+            doc! { "$limit": Some( amount.clamp(25, 255) as i64) },
+            doc! { "$lookup": doc! { "from": "user", "localField": "user_id", "foreignField": "id", "as": "user"} }
+        ];
+        let mut imgs = db.collection_img.aggregate(pipeline, None).await?;
+    //     let imgs: Vec<ServerMsgImg> = imgs.try_collect().await.unwrap_or_else(|_| vec![]).into_iter().map(|img| ServerMsgImg {
+    // user: img.get
+    // });
 
         let mut send_this: Vec<ServerMsgImg> = Vec::new();
-        loop {
-            let img = imgs.try_next().await;
-            let Ok(Some(img)) = img else {
-                // println!("last of img.");
-                break;
-            };
-            // println!("IMG: {:#?}", img);
-            let server_msg_img = ServerMsgImg {
-                msg_id: img.msg_id,
-                format: img.format,
-                user_id: img.user_id,
-                org_hash: img.org_hash,
-                width: img.width,
-                height: img.height,
-                has_low: img.has_low,
-                has_medium: img.has_medium,
-                has_high: img.has_high,
-                modified_at: img.modified_at.timestamp_millis(),
-                created_at: img.created_at.timestamp_millis(),
-            };
-            send_this.push(server_msg_img);
-        }
+        // let test = mongodb::bson::DateTime::now().timestamp_millis();
+
+        while let Some(result) = imgs.try_next().await? {
+            println!("WOWOWOWOWOWOWOWOWWOOWOWWWOWOOWOWOW");
+            let doc: ServerMsgImg = mongodb::bson::from_document(result)?;
+            send_this.push(doc);
+
+            // let server_msg_img = ServerMsgImg {
+            //     user: doc.get("user")
+            // };
+        };
+        // loop {
+        //     let img = imgs.try_next().await;
+        //     let Ok(Some(img)) = img else {
+        //         // println!("last of img.");
+        //         break;
+        //     };
+        //     // println!("IMG: {:#?}", img);
+        //     let server_msg_img = ServerMsgImg {
+        //         msg_id: img.msg_id,
+        //         format: img.format,
+        //         user_id: img.user_id,
+        //         org_hash: img.org_hash,
+        //         width: img.width,
+        //         height: img.height,
+        //         has_low: img.has_low,
+        //         has_medium: img.has_medium,
+        //         has_high: img.has_high,
+        //         modified_at: img.modified_at.timestamp_millis(),
+        //         created_at: img.created_at.timestamp_millis(),
+        //     };
+        //     send_this.push(server_msg_img);
+        // }
 
         Ok(ServerMsg::Imgs(send_this))
     }
@@ -219,7 +256,7 @@ impl Handler<ByteActor> for MyWs {
         let fut = async move {
             let client_msg = ClientMsg::from_bytes(&msg.0.to_vec());
             let Ok(client_msg) = client_msg else {
-                // println!("Failed to convert bytes to client msg: {}", client_msg.err().unwrap());
+                println!("Failed to convert bytes to client msg: {}", client_msg.err().unwrap());
                 return;
             };
             let server_msg: Result<ServerMsg, ServerMsgError> = match client_msg {
@@ -231,7 +268,7 @@ impl Handler<ByteActor> for MyWs {
             let bytes = match server_msg {
                 Ok(server_msg) => rkyv::to_bytes::<_, 256>(&server_msg),
                 Err(server_msg_error) => {
-                    // println!("Failed to parse client msg: {}", server_msg_error);
+                    println!("Failed to parse client msg: {}", server_msg_error);
                     rkyv::to_bytes::<_, 256>(&ServerMsg::Reset)
                 }
             };
@@ -367,6 +404,9 @@ pub enum ServerMsgError {
 
     #[error("Mongodb: {0}.")]
     Mongo(#[from] mongodb::error::Error),
+
+    #[error("Bson: {0}.")]
+    Bson(#[from] mongodb::bson::de::Error),
 }
 
 }

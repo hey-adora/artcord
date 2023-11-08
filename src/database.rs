@@ -1,11 +1,167 @@
+use bson::{oid::ObjectId, DateTime};
+use bytecheck::CheckBytes;
 use cfg_if::cfg_if;
+use rkyv::{
+    ser::Serializer,
+    string::{ArchivedString, StringResolver},
+    vec::ArchivedVec,
+    with::{ArchiveWith, AsString, DeserializeWith, SerializeWith},
+    Archive, Archived, Fallible, Resolver,
+};
+use serde::{Deserialize, Serialize};
+
+#[derive(
+    rkyv::Archive,
+    rkyv::Deserialize,
+    rkyv::Serialize,
+    Debug,
+    Serialize,
+    Deserialize,
+    Clone,
+    CheckBytes,
+)]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug))]
+#[repr(transparent)]
+struct ArchivedDateTime(Archived<i64>);
+
+// #[derive(
+//     rkyv::Archive, rkyv::Deserialize, rkyv::Serialize, Debug, Serialize, Deserialize, Clone,
+// )]
+// #[archive(compare(PartialEq), check_bytes)]
+// #[archive_attr(derive(Debug))]
+#[derive(Debug, CheckBytes)]
+#[repr(transparent)]
+struct ArchivedObjectId(ArchivedString);
+
+#[derive(
+    rkyv::Archive,
+    rkyv::Deserialize,
+    rkyv::Serialize,
+    Debug,
+    Serialize,
+    Deserialize,
+    Clone,
+    PartialEq,
+)]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug))]
+pub struct User {
+    #[with(OBJ)]
+    pub _id: ObjectId,
+
+    pub guild_id: String,
+    pub id: String,
+    pub name: String,
+    pub pfp_hash: Option<String>,
+
+    #[with(DT)]
+    pub modified_at: DateTime,
+
+    #[with(DT)]
+    pub created_at: DateTime,
+}
+
+// impl PartialEq<Archived<User>> for User {
+//     fn eq(&self, other: &Archived<User>) -> bool {
+//         self == other
+//     }
+// }
+
+impl PartialEq<ObjectId> for ArchivedObjectId {
+    fn eq(&self, other: &ObjectId) -> bool {
+        self.0 == other.to_string()
+    }
+}
+
+// impl PartialEq<ObjectId> for ArchivedObjectId {
+//     fn eq(&self, other: &ObjectId) -> bool {
+//         self.0 == other.to_string()
+//     }
+// }
+
+// impl PartialEq<ObjectId> for ArchivedObjectId {
+//     fn eq(&self, other: &ObjectId) -> bool {
+//         self.0 == other.to_string()
+//     }
+// }
+
+impl PartialEq<DateTime> for ArchivedDateTime {
+    fn eq(&self, other: &DateTime) -> bool {
+        self.0 == other.timestamp_millis()
+    }
+}
+
+pub struct OBJ;
+impl ArchiveWith<ObjectId> for OBJ {
+    type Archived = ArchivedObjectId;
+    type Resolver = StringResolver;
+
+    unsafe fn resolve_with(
+        id: &ObjectId,
+        pos: usize,
+        resolver: Self::Resolver,
+        out: *mut Self::Archived,
+    ) {
+        id.to_string().resolve(pos, resolver, out.cast())
+    }
+}
+
+impl<S: Fallible + Serializer + ?Sized> SerializeWith<ObjectId, S> for OBJ {
+    fn serialize_with(id: &ObjectId, serializer: &mut S) -> Result<Self::Resolver, S::Error> {
+        ArchivedString::serialize_from_str(id.to_string().as_str(), serializer)
+    }
+}
+
+impl<D: Fallible + ?Sized> DeserializeWith<ArchivedObjectId, ObjectId, D> for OBJ {
+    fn deserialize_with(
+        archived: &ArchivedObjectId,
+        deserializer: &mut D,
+    ) -> Result<ObjectId, D::Error> {
+        Ok(ObjectId::parse_str(archived.0.as_str()).unwrap_or_default())
+    }
+}
+
+pub struct DT;
+
+impl ArchiveWith<DateTime> for DT {
+    type Archived = ArchivedDateTime;
+    type Resolver = ();
+
+    unsafe fn resolve_with(
+        datetime: &DateTime,
+        pos: usize,
+        resolver: Self::Resolver,
+        out: *mut Self::Archived,
+    ) {
+        datetime
+            .timestamp_millis()
+            .resolve(pos, resolver, out.cast());
+    }
+}
+
+impl<S: Fallible + ?Sized> SerializeWith<DateTime, S> for DT {
+    fn serialize_with(datetime: &DateTime, serializer: &mut S) -> Result<Self::Resolver, S::Error> {
+        // Ok(ArchivedDateTime(datetime.timestamp_millis()))
+        Ok(())
+    }
+}
+
+impl<D: Fallible + ?Sized> DeserializeWith<ArchivedDateTime, DateTime, D> for DT {
+    fn deserialize_with(
+        archived: &ArchivedDateTime,
+        deserializer: &mut D,
+    ) -> Result<DateTime, D::Error> {
+        Ok(DateTime::from_millis(archived.0))
+    }
+}
 
 cfg_if! {
 if #[cfg(feature = "ssr")] {
         use mongodb::bson::{doc, Binary};
         use mongodb::options::{DeleteOptions, FindOptions};
         use mongodb::{options::ClientOptions, Client};
-        use serde::{Deserialize, Serialize};
+        // use serde::{Deserialize, Serialize};
         use serenity::prelude::TypeMapKey;
         use std::borrow::Borrow;
         use std::collections::HashMap;
@@ -45,16 +201,6 @@ if #[cfg(feature = "ssr")] {
             type Value = Arc<RwLock<HashMap<String, Self>>>;
         }
 
-        #[derive(Debug, Serialize, Deserialize, Clone)]
-        pub struct User {
-            pub _id: mongodb::bson::oid::ObjectId,
-            pub guild_id: String,
-            pub id: String,
-            pub name: String,
-            pub pfp_hash: Option<String>,
-            pub modified_at: mongodb::bson::DateTime,
-            pub created_at: mongodb::bson::DateTime,
-        }
 
         #[derive(Debug, Serialize, Deserialize, Clone)]
         pub struct Img {

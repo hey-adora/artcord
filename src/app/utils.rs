@@ -1,5 +1,6 @@
 use std::{collections::LinkedList, rc::Rc};
 
+use bson::DateTime;
 use leptos::{create_rw_signal, window, RwSignal, SignalGet, SignalGetUntracked};
 use wasm_bindgen::JsValue;
 use web_sys::Location;
@@ -26,8 +27,8 @@ pub struct ServerMsgImgResized {
     pub has_high: bool,
     pub has_medium: bool,
     pub has_low: bool,
-    pub modified_at: i64,
-    pub created_at: i64,
+    pub modified_at: DateTime,
+    pub created_at: DateTime,
 }
 
 impl From<ServerMsgImg> for ServerMsgImgResized {
