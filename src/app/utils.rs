@@ -5,7 +5,10 @@ use leptos::{create_rw_signal, window, RwSignal, SignalGet, SignalGetUntracked};
 use wasm_bindgen::JsValue;
 use web_sys::Location;
 
-use crate::server::{ClientMsg, ServerMsgImg};
+use crate::{
+    database::User,
+    server::{ClientMsg, ServerMsgImg},
+};
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum ScrollSection {
@@ -16,6 +19,7 @@ pub enum ScrollSection {
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct ServerMsgImgResized {
+    pub user: User,
     pub user_id: String,
     pub msg_id: String,
     pub org_hash: String,
@@ -34,6 +38,7 @@ pub struct ServerMsgImgResized {
 impl From<ServerMsgImg> for ServerMsgImgResized {
     fn from(value: ServerMsgImg) -> Self {
         Self {
+            user: value.user,
             new_width: value.width,
             new_height: value.height,
             user_id: value.user_id,

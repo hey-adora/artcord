@@ -146,7 +146,7 @@ pub fn GalleryPage() -> impl IntoView {
                             style:background-image=move || format!("url('assets/gallery/org_{}.{}')", img.org_hash, img.format)
                         >
                             <div class="relative flex opacity-0 hover:opacity-100 transition duration-300 w-full h-full flex-col text-center justify-center gap-2  "  >
-                                <div class="absolute bg-dark-purple bottom-0 left-0 translate-y-full w-full">{img.user_id}</div>
+                                <div class="absolute bg-dark-purple bottom-0 left-0 translate-y-full w-full">{img.user.name}</div>
                                 // <h3>{i}</h3>
                                 // <h3>{img.width}x{img.height}</h3>
                                 // <h3>{img.new_width}x{img.new_height}</h3>
