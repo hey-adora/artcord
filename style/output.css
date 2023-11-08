@@ -534,10 +534,6 @@ video {
   --tw-backdrop-sepia:  ;
 }
 
-.static {
-  position: static;
-}
-
 .absolute {
   position: absolute;
 }
@@ -554,6 +550,14 @@ video {
   top: 0px;
 }
 
+.left-0 {
+  left: 0px;
+}
+
+.bottom-0 {
+  bottom: 0px;
+}
+
 .z-10 {
   z-index: 10;
 }
@@ -564,6 +568,10 @@ video {
 
 .z-\[100\] {
   z-index: 100;
+}
+
+.z-\[101\] {
+  z-index: 101;
 }
 
 .col-span-2 {
@@ -662,6 +670,16 @@ video {
 
 .translate-x-\[60\%\] {
   --tw-translate-x: 60%;
+  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
+}
+
+.translate-y-full {
+  --tw-translate-y: 100%;
+  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
+}
+
+.-translate-y-full {
+  --tw-translate-y: -100%;
   transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
 }
 
@@ -811,6 +829,11 @@ video {
   background-color: transparent;
 }
 
+.bg-dark-purple {
+  --tw-bg-opacity: 1;
+  background-color: rgb(37 1 87 / var(--tw-bg-opacity));
+}
+
 .bg-gradient-to-br {
   background-image: linear-gradient(to bottom right, var(--tw-gradient-stops));
 }
@@ -918,6 +941,10 @@ video {
   color: rgb(236 206 255 / 0.6);
 }
 
+.opacity-0 {
+  opacity: 0;
+}
+
 .shadow-glowy {
   --tw-shadow: 0px 0px 15px 2px #ECCEFF;
   --tw-shadow-colored: 0px 0px 15px 2px var(--tw-shadow-color);
@@ -997,6 +1024,14 @@ html {
   z-index: 10;
 }
 
+.hover\:z-\[100\]:hover {
+  z-index: 100;
+}
+
+.hover\:z-\[101\]:hover {
+  z-index: 101;
+}
+
 .hover\:border-low-purple\/40:hover {
   border-color: rgb(236 206 255 / 0.4);
 }
@@ -1009,6 +1044,10 @@ html {
 .hover\:text-low-purple:hover {
   --tw-text-opacity: 1;
   color: rgb(236 206 255 / var(--tw-text-opacity));
+}
+
+.hover\:opacity-100:hover {
+  opacity: 1;
 }
 
 .hover\:shadow-glowy:hover {
