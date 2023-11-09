@@ -18,6 +18,8 @@ use crate::app::utils::GlobalState;
 use crate::server::{ClientMsg, ServerMsg};
 
 use self::utils::ServerMsgImgResized;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 mod components;
 mod pages;
@@ -25,6 +27,8 @@ mod utils;
 
 // #[derive(Copy, Clone)]
 // struct Testhontext(i32);
+
+// pub const YES: Arc<Mutex<Option<i64>>> = Arc::new(Mutex::new(None));
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -67,6 +71,8 @@ pub fn App() -> impl IntoView {
                 return;
             };
 
+            let name = server_msg.name();
+
             match server_msg {
                 ServerMsg::Imgs(new_imgs) => {
                     // log!("MSG RECEIVED: {:#?}", &imgs);
@@ -84,6 +90,10 @@ pub fn App() -> impl IntoView {
                     log!("RESETING");
                 }
             };
+
+            global_state.socket_state.update_untracked(|state| {
+                state.lock().unwrap().remove(&name);
+            });
         });
 
         create_effect(move |_| {

@@ -54,6 +54,18 @@ pub enum ServerMsg {
     Reset,
 }
 
+pub const SERVER_MSG_IMGS_NAME: &str = "imgs";
+pub const SERVER_MSG_IMGS_RESET: &str = "reset";
+
+impl ServerMsg {
+    pub fn name(&self) -> String {
+        match self {
+            ServerMsg::Imgs(a) => String::from(SERVER_MSG_IMGS_NAME),
+            ServerMsg::Reset => String::from(SERVER_MSG_IMGS_RESET),
+        }
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum WebSerializeError {
     #[error("Invalid bytes, error: {0}")]
@@ -86,7 +98,7 @@ impl ServerMsg {
 #[archive_attr(derive(Debug))]
 pub enum ClientMsg {
     GalleryInit {
-        amount: u8,
+        amount: u32,
 
         #[with(DT)]
         from: DateTime,
@@ -151,7 +163,7 @@ struct MyWs {
 
 
 impl MyWs {
-    pub async fn gallery_handler(db: crate::database::DB, amount: u8, from: DateTime) -> Result<ServerMsg, ServerMsgError> {
+    pub async fn gallery_handler(db: crate::database::DB, amount: u32, from: DateTime) -> Result<ServerMsg, ServerMsgError> {
         // let find_options = mongodb::options::AggregateOptions::builder()
         //     .limit(Some(amount.clamp(25, 255) as i64))
         //     .sort(doc!{"created_at": -1});
@@ -166,10 +178,18 @@ impl MyWs {
         let  pipeline = vec![
             doc! { "$sort": doc! { "created_at": -1 } },
             doc! { "$match": doc! { "created_at": { "$lt": from } } },
-            doc! { "$limit": Some( amount.clamp(25, 255) as i64) },
+            doc! { "$limit": Some( amount.clamp(1, 10000) as i64) },
             doc! { "$lookup": doc! { "from": "user", "localField": "user_id", "foreignField": "id", "as": "user"} },
             doc! { "$unwind": "$user" }
         ];
+
+
+
+        // println!("{:#?}", &pipeline);
+
+
+       // tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+
         let mut imgs = db.collection_img.aggregate(pipeline, None).await?;
     //     let imgs: Vec<ServerMsgImg> = imgs.try_collect().await.unwrap_or_else(|_| vec![]).into_iter().map(|img| ServerMsgImg {
     // user: img.get

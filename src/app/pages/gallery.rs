@@ -9,7 +9,7 @@ use rand::prelude::*;
 use web_sys::Event;
 
 use crate::app::utils::{GlobalState, ServerMsgImgResized};
-use crate::server::{ClientMsg, ServerMsgImg};
+use crate::server::{ClientMsg, ServerMsgImg, SERVER_MSG_IMGS_NAME};
 
 const new_img_height: u32 = 250;
 
@@ -91,13 +91,27 @@ pub fn GalleryPage() -> impl IntoView {
         });
 
         let msg = ClientMsg::GalleryInit {
-            amount: 254,
+            amount: 10,
             from: DateTime::from_millis(Utc::now().timestamp_nanos()),
         };
+        log!("{:#?}", &msg);
         global_state.socket_send(msg);
     });
 
     let section_scroll = move |_: Event| {
+        if !global_state.socket_state_imgs_is_ready() {
+            return;
+        }
+        // log!("{:#?}", global_state.socket_state.get_untracked());
+        // let socket_state = global_state.socket_state.with_untracked(|state| {
+        //     match state.get(&String::from(SERVER_MSG_IMGS_NAME)) {
+        //         Some(n) => Some(*n),
+        //         None => None,
+        //     }
+        // });
+        //
+        // if let Some(n) = socket_state {}
+
         let Some(last) = global_state
             .gallery_imgs
             .with_untracked(|imgs| match imgs.last() {
@@ -118,12 +132,15 @@ pub fn GalleryPage() -> impl IntoView {
 
         let left = scroll_height - (client_height + scroll_top);
 
+        // log!("{} < {}", left, client_height);
         if left < client_height {
             let msg = ClientMsg::GalleryInit {
-                amount: 254,
+                amount: 2,
                 from: last,
             };
+            // log!("{:#?}", &msg);
             global_state.socket_send(msg);
+            global_state.socket_state_imgs_used();
         }
     };
 
