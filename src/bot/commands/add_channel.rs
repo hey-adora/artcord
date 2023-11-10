@@ -1,11 +1,7 @@
 use serenity::{
     builder::CreateApplicationCommand,
-    model::{
-        interactions::application_command::ApplicationCommandInteraction,
-        prelude::{
-            application_command::{CommandDataOption, CommandDataOptionValue},
-            command::CommandOptionType,
-        },
+    model::prelude::{
+        application_command::ApplicationCommandInteraction, command::CommandOptionType,
     },
     prelude::Context,
 };
@@ -35,13 +31,13 @@ pub async fn run(
         modified_at: mongodb::bson::DateTime::now(),
     };
 
-    let result = db
+    let _result = db
         .collection_allowed_channel
         .insert_one(allowed_channel, None)
         .await?;
 
     crate::bot::commands::show_channels::run(ctx, command, db).await?;
-    // Ok(format!("Channel added: {}", result.inserted_id))
+
     Ok(())
 }
 

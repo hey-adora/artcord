@@ -1,16 +1,11 @@
-use serenity::builder::CreateApplicationCommand;
-use serenity::http::Http;
-use serenity::model::interactions::application_command::ApplicationCommandInteraction;
-use serenity::model::prelude::application_command::{CommandDataOption, CommandDataOptionValue};
-use serenity::model::prelude::command::CommandOptionType;
-use serenity::model::prelude::{ChannelId, InteractionResponseType};
-use serenity::prelude::Context;
-
 use crate::bot::commands::{get_option_channel, get_option_integer};
 use crate::bot::hooks::save_attachments::{self, hook_save_attachments};
 use crate::database::DB;
-
-use super::CommandError;
+use serenity::builder::CreateApplicationCommand;
+use serenity::model::prelude::application_command::ApplicationCommandInteraction;
+use serenity::model::prelude::command::CommandOptionType;
+use serenity::model::prelude::InteractionResponseType;
+use serenity::prelude::Context;
 
 pub const DISCORD_MAX_MSG_REQUEST_SIZE: i64 = 100;
 
@@ -20,7 +15,7 @@ pub async fn run(
     db: &DB,
     guild_id: u64,
 ) -> Result<(), crate::bot::commands::CommandError> {
-    let channel_option = get_option_channel(command.data.options.get(0))?;
+    let _channel_option = get_option_channel(command.data.options.get(0))?;
     let mut amount_option = *get_option_integer(command.data.options.get(1))?;
 
     if let Err(why) = command
@@ -31,8 +26,6 @@ pub async fn run(
     {
         println!("Cannot respond to slash command: {}", why);
     }
-
-    // return Err(CommandError::NotFound("yoyoyyomf".to_string()));
 
     let mut total_synced: usize = 0;
 
@@ -56,7 +49,6 @@ pub async fn run(
             message.content(format!("Syncing... {}/{}", total_synced, amount_option))
         })
         .await?;
-    // update_status.await;
 
     for message in &messages {
         let result = hook_save_attachments(
@@ -72,9 +64,6 @@ pub async fn run(
         )
         .await;
 
-        // if let Err(err) = result {
-        //
-        // }
         match result {
             Ok(_) => Ok(()),
             Err(err) => match err {
@@ -116,7 +105,7 @@ pub async fn run(
 
     let mut msg = (*last).clone();
 
-    for i in (0..loop_amount).step_by(DISCORD_MAX_MSG_REQUEST_SIZE as usize) {
+    for _i in (0..loop_amount).step_by(DISCORD_MAX_MSG_REQUEST_SIZE as usize) {
         let messages = command
             .channel_id
             .messages(ctx.http.as_ref(), |f| {

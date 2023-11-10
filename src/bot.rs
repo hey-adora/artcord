@@ -1,38 +1,16 @@
-use crate::database::{AllowedChannel, AllowedRole, User, DB};
-use anyhow::anyhow;
-use bson::Document;
-use chrono::Utc;
+use self::hooks::save_attachments::hook_save_attachments;
 use futures::TryStreamExt;
-use image::EncodableLayout;
-use mongodb::bson::spec::BinarySubtype;
-use mongodb::bson::{doc, Binary};
+use mongodb::bson::doc;
 use serenity::client::Context;
 use serenity::framework::standard::macros::{command, group};
 use serenity::framework::standard::CommandResult;
 use serenity::framework::StandardFramework;
-use serenity::http::CacheHttp;
-use serenity::model::application::command::Command;
-use serenity::model::channel::Attachment;
-use serenity::model::id::GuildId;
-use serenity::model::interactions::application_command::ApplicationCommandInteraction;
-use serenity::model::prelude::{Interaction, InteractionResponseType};
+use serenity::model::prelude::application_command::ApplicationCommandInteraction;
+use serenity::model::prelude::{GuildId, Interaction, InteractionResponseType};
 use serenity::prelude::GatewayIntents;
 use serenity::{async_trait, Client};
-use std::collections::HashMap;
-use std::fs::File;
-use std::future::Future;
-use std::hash::Hash;
-use std::io::{Cursor, Write};
-use std::num::ParseIntError;
-use std::ops::Deref;
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, LockResult};
-use std::{env, fs, io};
+use std::env;
 use thiserror::Error;
-use tokio::sync::RwLock;
-use webp::WebPEncodingError;
-
-use self::hooks::save_attachments::hook_save_attachments;
 
 mod commands;
 mod events;
@@ -160,7 +138,7 @@ impl serenity::client::EventHandler for BotHandler {
             return;
         };
 
-        let (db) = {
+        let db = {
             let data_read = ctx.data.read().await;
 
             data_read
@@ -223,7 +201,7 @@ impl serenity::client::EventHandler for BotHandler {
         println!("{} is connected!", ready.user.name);
 
         for guild in ctx.cache.guilds() {
-            let commands = GuildId::set_application_commands(&guild, &ctx.http, |commands| {
+            let _commands = GuildId::set_application_commands(&guild, &ctx.http, |commands| {
                 commands
                     .create_application_command(|command| commands::who::register(command))
                     .create_application_command(|command| commands::test::register(command))

@@ -1,18 +1,14 @@
 use bson::doc;
 use serenity::{
     builder::CreateApplicationCommand,
-    model::{
-        interactions::application_command::ApplicationCommandInteraction,
-        prelude::{
-            application_command::{CommandDataOption, CommandDataOptionValue},
-            command::CommandOptionType,
-            InteractionResponseType,
-        },
+    model::prelude::{
+        application_command::ApplicationCommandInteraction, command::CommandOptionType,
+        InteractionResponseType,
     },
     prelude::Context,
 };
 
-use crate::database::{AllowedChannel, DB};
+use crate::database::DB;
 
 use super::{get_option_channel, get_option_string, is_valid_channel_feature, CHANNEL_FEATURES};
 
@@ -20,7 +16,7 @@ pub async fn run(
     ctx: &Context,
     command: &ApplicationCommandInteraction,
     db: &DB,
-    guild_id: u64,
+    _guild_id: u64,
 ) -> Result<(), crate::bot::commands::CommandError> {
     let channel_option = get_option_channel(command.data.options.get(0))?;
     let feature_option = get_option_string(command.data.options.get(1))?;

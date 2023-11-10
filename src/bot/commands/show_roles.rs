@@ -4,13 +4,7 @@ use bson::doc;
 use futures::TryStreamExt;
 use serenity::{
     builder::CreateApplicationCommand,
-    model::{
-        interactions::application_command::ApplicationCommandInteraction,
-        prelude::{
-            application_command::CommandDataOption, command::CommandOptionType,
-            InteractionResponseType,
-        },
-    },
+    model::prelude::{application_command::ApplicationCommandInteraction, InteractionResponseType},
     prelude::Context,
 };
 
@@ -37,7 +31,7 @@ pub async fn run(
     let mut unique_features: HashMap<String, String> = HashMap::new();
 
     for role in roles {
-        let Some(mut feature) = unique_features.get_mut(&role.feature) else {
+        let Some(feature) = unique_features.get_mut(&role.feature) else {
             unique_features.insert(role.feature, format!("-{}", role.name));
             continue;
         };

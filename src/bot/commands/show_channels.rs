@@ -3,13 +3,7 @@ use std::collections::HashMap;
 use futures::TryStreamExt;
 use serenity::{
     builder::CreateApplicationCommand,
-    model::{
-        interactions::application_command::ApplicationCommandInteraction,
-        prelude::{
-            application_command::CommandDataOption, command::CommandOptionType,
-            InteractionResponseType,
-        },
-    },
+    model::prelude::{application_command::ApplicationCommandInteraction, InteractionResponseType},
     prelude::Context,
 };
 
@@ -32,7 +26,7 @@ pub async fn run(
     let mut unique_features: HashMap<String, String> = HashMap::new();
 
     for channel in channels {
-        let Some(mut feature) = unique_features.get_mut(&channel.feature) else {
+        let Some(feature) = unique_features.get_mut(&channel.feature) else {
             unique_features.insert(channel.feature, format!("-<#{}>", channel.id));
             continue;
         };

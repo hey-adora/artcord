@@ -1,4 +1,4 @@
-use leptos::logging::log;
+
 use leptos::*;
 use leptos_use::{use_interval_fn, use_window_scroll};
 use web_sys::MouseEvent;

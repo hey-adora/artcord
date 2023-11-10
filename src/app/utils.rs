@@ -1,16 +1,10 @@
 use bson::DateTime;
 use chrono::Utc;
-use leptos::logging::log;
+
 use leptos::*;
-use leptos::{
-    create_rw_signal, logging, window, RwSignal, SignalGet, SignalGetUntracked,
-    SignalUpdateUntracked, SignalWithUntracked,
-};
-use std::sync::{Mutex, RwLock};
-use std::{
-    collections::{HashMap, LinkedList},
-    rc::Rc,
-};
+use leptos::{create_rw_signal, window, RwSignal, SignalGetUntracked};
+use std::sync::Mutex;
+use std::{collections::HashMap, rc::Rc};
 use wasm_bindgen::JsValue;
 use web_sys::Location;
 
@@ -77,9 +71,6 @@ pub struct GlobalState {
 
 impl GlobalState {
     pub fn new() -> Self {
-        // let a = Utc::now();
-        // let b = chrono::Duration::;
-        // let c = chrono::DateTime::timestamp_nanos_opt(&self);
         Self {
             section: create_rw_signal(ScrollSection::Home),
             nav_open: create_rw_signal(false),
@@ -101,20 +92,11 @@ impl GlobalState {
             return;
         };
         let bytes = bytes.into_vec();
-        // leptos::logging::log!("{:?}", &bytes);
         self.socket_send.get_untracked()(bytes);
     }
 
     pub fn socket_state_imgs_is_ready(&self) -> bool {
-        // let socket_state =
-        //     self.socket_state.with(
-        //         |state| match state.get(&String::from(SERVER_MSG_IMGS_NAME)) {
-        //             Some(n) => Some(*n),
-        //             None => None,
-        //         },
-        //     );
-
-        let socket_state = self.socket_state.with(|state| {
+        let socket_state = self.socket_state.with_untracked(|state| {
             match state
                 .lock()
                 .unwrap()
@@ -126,37 +108,30 @@ impl GlobalState {
         });
 
         let Some(n) = socket_state else {
-            // log!("YO READY");
             return true;
         };
-        let now = Utc::now().timestamp_nanos();
+        let now = Utc::now().timestamp_nanos_opt().unwrap();
         let diff = now - n;
         let is_ready = diff >= 2_000_000_000;
-        // log!("IS IT READY?: {} - {} >= {} {}", now, n, diff, is_ready);
         is_ready
     }
 
-    pub fn socket_state_imgs_reset(&self) {
-        // log!("REMOVED?? WHY???");
-        self.socket_state.update(|state| {
-            state
-                .lock()
-                .unwrap()
-                .remove(&String::from(SERVER_MSG_IMGS_NAME));
+    pub fn socket_state_imgs_reset(&self, name: &String) {
+        self.socket_state.update_untracked(|state| {
+            state.lock().unwrap().remove(name);
         });
     }
 
     pub fn socket_state_imgs_used(&self) {
-        // log!("USED");
-        self.socket_state.update(|state| {
+        self.socket_state.update_untracked(|state| {
             let name = String::from(SERVER_MSG_IMGS_NAME);
             let mut locked_state = state.lock().unwrap();
             let Some(state) = locked_state.get_mut(&name) else {
-                locked_state.insert(name, Utc::now().timestamp_nanos());
+                locked_state.insert(name, Utc::now().timestamp_nanos_opt().unwrap());
                 return;
             };
 
-            *state = Utc::now().timestamp_nanos();
+            *state = Utc::now().timestamp_nanos_opt().unwrap();
         });
     }
 }

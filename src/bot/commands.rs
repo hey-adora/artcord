@@ -1,11 +1,9 @@
-use std::fmt::Display;
+
 
 use serenity::{
-    builder::CreateApplicationCommand,
     model::prelude::{
         application_command::{CommandDataOption, CommandDataOptionValue},
         channel::PartialChannel,
-        command::CommandOptionType,
         guild::Role,
     },
 };

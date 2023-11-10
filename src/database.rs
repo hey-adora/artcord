@@ -4,9 +4,8 @@ use cfg_if::cfg_if;
 use rkyv::{
     ser::Serializer,
     string::{ArchivedString, StringResolver},
-    vec::ArchivedVec,
-    with::{ArchiveWith, AsString, DeserializeWith, SerializeWith},
-    Archive, Archived, Fallible, Resolver,
+    with::{ArchiveWith, DeserializeWith, SerializeWith},
+    Archive, Archived, Fallible,
 };
 use serde::{Deserialize, Serialize};
 
@@ -25,11 +24,6 @@ use serde::{Deserialize, Serialize};
 #[repr(transparent)]
 pub struct ArchivedDateTime(Archived<i64>);
 
-// #[derive(
-//     rkyv::Archive, rkyv::Deserialize, rkyv::Serialize, Debug, Serialize, Deserialize, Clone,
-// )]
-// #[archive(compare(PartialEq), check_bytes)]
-// #[archive_attr(derive(Debug))]
 #[derive(Debug, CheckBytes)]
 #[repr(transparent)]
 pub struct ArchivedObjectId(ArchivedString);
@@ -62,29 +56,11 @@ pub struct User {
     pub created_at: DateTime,
 }
 
-// impl PartialEq<Archived<User>> for User {
-//     fn eq(&self, other: &Archived<User>) -> bool {
-//         self == other
-//     }
-// }
-
 impl PartialEq<ObjectId> for ArchivedObjectId {
     fn eq(&self, other: &ObjectId) -> bool {
         self.0 == other.to_string()
     }
 }
-
-// impl PartialEq<ObjectId> for ArchivedObjectId {
-//     fn eq(&self, other: &ObjectId) -> bool {
-//         self.0 == other.to_string()
-//     }
-// }
-
-// impl PartialEq<ObjectId> for ArchivedObjectId {
-//     fn eq(&self, other: &ObjectId) -> bool {
-//         self.0 == other.to_string()
-//     }
-// }
 
 impl PartialEq<DateTime> for ArchivedDateTime {
     fn eq(&self, other: &DateTime) -> bool {
@@ -116,7 +92,7 @@ impl<S: Fallible + Serializer + ?Sized> SerializeWith<ObjectId, S> for OBJ {
 impl<D: Fallible + ?Sized> DeserializeWith<ArchivedObjectId, ObjectId, D> for OBJ {
     fn deserialize_with(
         archived: &ArchivedObjectId,
-        deserializer: &mut D,
+        _deserializer: &mut D,
     ) -> Result<ObjectId, D::Error> {
         Ok(ObjectId::parse_str(archived.0.as_str()).unwrap_or_default())
     }
@@ -141,8 +117,10 @@ impl ArchiveWith<DateTime> for DT {
 }
 
 impl<S: Fallible + ?Sized> SerializeWith<DateTime, S> for DT {
-    fn serialize_with(datetime: &DateTime, serializer: &mut S) -> Result<Self::Resolver, S::Error> {
-        // Ok(ArchivedDateTime(datetime.timestamp_millis()))
+    fn serialize_with(
+        _datetime: &DateTime,
+        _serializer: &mut S,
+    ) -> Result<Self::Resolver, S::Error> {
         Ok(())
     }
 }
@@ -150,7 +128,7 @@ impl<S: Fallible + ?Sized> SerializeWith<DateTime, S> for DT {
 impl<D: Fallible + ?Sized> DeserializeWith<ArchivedDateTime, DateTime, D> for DT {
     fn deserialize_with(
         archived: &ArchivedDateTime,
-        deserializer: &mut D,
+        _deserializer: &mut D,
     ) -> Result<DateTime, D::Error> {
         Ok(DateTime::from_millis(archived.0))
     }
@@ -158,21 +136,17 @@ impl<D: Fallible + ?Sized> DeserializeWith<ArchivedDateTime, DateTime, D> for DT
 
 cfg_if! {
 if #[cfg(feature = "ssr")] {
-        use mongodb::bson::{doc, Binary};
-        use mongodb::options::{DeleteOptions, FindOptions};
+        use mongodb::bson::{doc};
+
         use mongodb::{options::ClientOptions, Client};
-        // use serde::{Deserialize, Serialize};
         use serenity::prelude::TypeMapKey;
-        use std::borrow::Borrow;
         use std::collections::HashMap;
-        use std::fmt::{Display, Formatter};
         use std::sync::Arc;
         use tokio::sync::RwLock;
-        use mongodb::bson::serde_helpers::serialize_hex_string_as_object_id;
+
 
         #[derive(Debug, Serialize, Deserialize, Clone)]
         pub struct AllowedRole {
-            // #[serde(serialize_with = "serialize_hex_string_as_object_id")]
             pub _id: mongodb::bson::oid::ObjectId,
             pub guild_id: String,
             pub id: String,

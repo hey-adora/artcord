@@ -1,23 +1,15 @@
 use bson::doc;
 use serenity::{
     builder::CreateApplicationCommand,
-    model::{
-        interactions::application_command::ApplicationCommandInteraction,
-        prelude::{
-            application_command::{CommandDataOption, CommandDataOptionValue},
-            command::CommandOptionType,
-            InteractionResponseType,
-        },
+    model::prelude::{
+        application_command::ApplicationCommandInteraction, command::CommandOptionType,
     },
     prelude::Context,
 };
 
-use crate::database::{AllowedChannel, DB};
+use crate::database::DB;
 
-use super::{
-    get_option_channel, get_option_role, get_option_string, is_valid_role_feature,
-    CHANNEL_FEATURES, ROLE_FEATURES,
-};
+use super::{get_option_role, get_option_string, is_valid_role_feature, ROLE_FEATURES};
 
 pub async fn run(
     ctx: &Context,
@@ -45,7 +37,7 @@ pub async fn run(
         )));
     }
 
-    let content = format!(
+    let _content = format!(
         "feature: {} in {} was removed.",
         feature_option, role_option.name
     );

@@ -1,35 +1,14 @@
 use crate::bot::commands::FEATURE_GALLERY;
-use crate::database::{AllowedChannel, AllowedRole, User, DB};
-use chrono::Utc;
-use futures::TryStreamExt;
+use crate::database::{User, DB};
 use image::EncodableLayout;
-use mongodb::bson::spec::BinarySubtype;
-use mongodb::bson::{doc, Binary};
-use serenity::client::Context;
-use serenity::framework::standard::macros::{command, group};
-use serenity::framework::standard::CommandResult;
-use serenity::framework::StandardFramework;
-use serenity::http::CacheHttp;
-use serenity::model::application::command::Command;
+use mongodb::bson::doc;
 use serenity::model::channel::Attachment;
-use serenity::model::id::GuildId;
-use serenity::model::prelude::{Interaction, InteractionResponseType};
-use serenity::prelude::GatewayIntents;
-use serenity::{async_trait, Client};
-use std::collections::HashMap;
 use std::fmt::Display;
-use std::fs::File;
-use std::future::Future;
-use std::hash::Hash;
-use std::io::{Cursor, Write};
+use std::fs;
+use std::io::Cursor;
 use std::num::ParseIntError;
-use std::ops::Deref;
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, LockResult};
-use std::{env, fs, io};
+use std::path::PathBuf;
 use thiserror::Error;
-use tokio::sync::RwLock;
-use webp::WebPEncodingError;
 
 pub async fn hook_save_attachments(
     attachments: &[serenity::model::channel::Attachment],
@@ -85,7 +64,7 @@ pub struct ImgData {
 impl ImgData {
     pub fn new(
         org_bytes: &[u8],
-        img_format: image::ImageFormat,
+        _img_format: image::ImageFormat,
         new_height: u32,
     ) -> Result<ImgData, ImgDataNewError> {
         //let mut img = image::io::Reader::open(file)?.decode()?;
@@ -305,7 +284,7 @@ pub async fn save_attachment(
 
     let format = match content_type.as_str() {
         "image/png" => Ok("png"),
-        (t) => Err(SaveAttachmentError::ImgTypeUnsupported(t.to_string())),
+        t => Err(SaveAttachmentError::ImgTypeUnsupported(t.to_string())),
     }?;
 
     let org_img_response = reqwest::get(&attachment.url).await?;
@@ -323,9 +302,9 @@ pub async fn save_attachment(
     let medium_img_path = format!("target/site/gallery/medium_{}.webp", file_hash_hex);
     let high_img_path = format!("target/site/gallery/high_{}.webp", file_hash_hex);
 
-    let mut paths = [low_img_path, medium_img_path, high_img_path];
+    let paths = [low_img_path, medium_img_path, high_img_path];
     let mut paths_state = [false, false, false];
-    let mut img_heights = [360, 720, 1080];
+    let img_heights = [360, 720, 1080];
 
     let save_org_img_result = save_org_img(&org_img_path, &org_img_bytes);
     if let Err(save_org_img_result) = save_org_img_result {
@@ -345,9 +324,9 @@ pub async fn save_attachment(
         ) {
             Ok(_) => Ok(true),
             Err(e) => match e {
-                SaveWebpError::AlreadyExist(p) => Ok(true),
+                SaveWebpError::AlreadyExist(_p) => Ok(true),
                 SaveWebpError::ImgDecoding(decoding_err) => match decoding_err {
-                    ImgDataNewError::ImgTooSmall { from, to } => break 'path_loop,
+                    ImgDataNewError::ImgTooSmall { from: _, to: _ } => break 'path_loop,
                     err => Err(SaveWebpError::from(err)),
                 },
                 err => Err(err),
@@ -379,7 +358,7 @@ pub async fn save_attachment(
 
         if update.len() > 0 {
             update.insert("modified_at", mongodb::bson::DateTime::now());
-            let update_status = db
+            let _update_status = db
                 .collection_img
                 .update_one(
                     doc! { "org_hash": file_hash_hex.clone() },
@@ -394,7 +373,7 @@ pub async fn save_attachment(
             Ok(SaveAttachmentResult::None(file_hash_hex))
         }
     } else {
-        let mut org_img: image::DynamicImage = image::io::Reader::new(Cursor::new(&org_img_bytes))
+        let org_img: image::DynamicImage = image::io::Reader::new(Cursor::new(&org_img_bytes))
             .with_guessed_format()?
             .decode()?;
 

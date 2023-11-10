@@ -1,18 +1,10 @@
-use std::num::ParseIntError;
-
+use crate::database::User;
+use crate::database::{DT, OBJ};
 use bson::oid::ObjectId;
 use bson::DateTime;
 use cfg_if::cfg_if;
-use leptos::{leptos_config, LeptosOptions};
-
-use crate::database::{DT, OBJ};
-use rkyv::validation::validators::DefaultValidator;
-use rkyv::validation::CheckTypeError;
-use rkyv::with::ArchiveWith;
-use rkyv::{Archive, Archived, Deserialize, Resolver, Serialize};
+use rkyv::{Deserialize, Serialize};
 use thiserror::Error;
-
-use crate::database::User;
 
 #[derive(
     rkyv::Archive,
@@ -61,7 +53,7 @@ pub const SERVER_MSG_IMGS_RESET: &str = "reset";
 impl ServerMsg {
     pub fn name(&self) -> String {
         match self {
-            ServerMsg::Imgs(a) => String::from(SERVER_MSG_IMGS_NAME),
+            ServerMsg::Imgs(_a) => String::from(SERVER_MSG_IMGS_NAME),
             ServerMsg::Reset => String::from(SERVER_MSG_IMGS_RESET),
         }
     }
@@ -131,31 +123,17 @@ cfg_if! {
 if #[cfg(feature = "ssr")] {
 use actix_web::web::Bytes;
 use futures::TryStreamExt;
-use mongodb::bson::{doc, Binary};
+use mongodb::bson::{doc};
 use std::collections::HashMap;
-use actix::{Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, ContextFutureSpawner, Handler, Message, Recipient, StreamHandler, WrapFuture};
+use actix::{Actor, Addr, AsyncContext, Handler, Recipient, StreamHandler};
 use actix_files::Files;
 use actix_web::{web, App, Error, HttpRequest, HttpResponse, HttpServer};
 use actix_web_actors::ws::{self, CloseCode, CloseReason, ProtocolError};
-use futures::{future, select, try_join, TryFutureExt};
 use leptos::get_configuration;
 use leptos_actix::{generate_route_list, LeptosRoutes};
-use rand::Rng;
-
-use async_std::task;
-use dotenv::dotenv;
-use futures::future::join_all;
-use serenity::async_trait;
-use serenity::framework::standard::macros::{command, group};
-use serenity::framework::standard::{CommandGroup, CommandResult, GroupOptions, StandardFramework};
 use serenity::prelude::*;
-
 use actix_web::dev::Server;
-use std::env;
-use std::sync::Arc;
-use actix_web::web::BufMut;
-use image::EncodableLayout;
-
+use std::{num::ParseIntError, sync::Arc};
 
 struct MyWs {
     id: uuid::Uuid,
@@ -165,17 +143,6 @@ struct MyWs {
 
 impl MyWs {
     pub async fn gallery_handler(db: crate::database::DB, amount: u32, from: DateTime) -> Result<ServerMsg, ServerMsgError> {
-        // let find_options = mongodb::options::AggregateOptions::builder()
-        //     .limit(Some(amount.clamp(25, 255) as i64))
-        //     .sort(doc!{"created_at": -1});
-        //
-        // let find_options = find_options.build();
-
-        // let filter = doc!{ "created_at": { "$lt": mongodb::bson::DateTime::from_millis(from) } };
-        //
-        // let mut imgs = db.collection_img.find(filter, Some(find_options)).await?;
-
-
         let  pipeline = vec![
             doc! { "$sort": doc! { "created_at": -1 } },
             doc! { "$match": doc! { "created_at": { "$lt": from } } },
@@ -184,52 +151,14 @@ impl MyWs {
             doc! { "$unwind": "$user" }
         ];
 
-
-
-        // println!("{:#?}", &pipeline);
-
-
-       // tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-
         let mut imgs = db.collection_img.aggregate(pipeline, None).await?;
-    //     let imgs: Vec<ServerMsgImg> = imgs.try_collect().await.unwrap_or_else(|_| vec![]).into_iter().map(|img| ServerMsgImg {
-    // user: img.get
-    // });
 
         let mut send_this: Vec<ServerMsgImg> = Vec::new();
-        // let test = mongodb::bson::DateTime::now().timestamp_millis();
 
         while let Some(result) = imgs.try_next().await? {
-            // println!("WOWOWOWOWOWOWOWOWWOOWOWWWOWOOWOWOW: {:#?}", &result);
             let doc: ServerMsgImg = mongodb::bson::from_document(result)?;
             send_this.push(doc);
-
-            // let server_msg_img = ServerMsgImg {
-            //     user: doc.get("user")
-            // };
         };
-        // loop {
-        //     let img = imgs.try_next().await;
-        //     let Ok(Some(img)) = img else {
-        //         // println!("last of img.");
-        //         break;
-        //     };
-        //     // println!("IMG: {:#?}", img);
-        //     let server_msg_img = ServerMsgImg {
-        //         msg_id: img.msg_id,
-        //         format: img.format,
-        //         user_id: img.user_id,
-        //         org_hash: img.org_hash,
-        //         width: img.width,
-        //         height: img.height,
-        //         has_low: img.has_low,
-        //         has_medium: img.has_medium,
-        //         has_high: img.has_high,
-        //         modified_at: img.modified_at.timestamp_millis(),
-        //         created_at: img.created_at.timestamp_millis(),
-        //     };
-        //     send_this.push(server_msg_img);
-        // }
 
         Ok(ServerMsg::Imgs(send_this))
     }
@@ -305,10 +234,9 @@ impl Handler<ByteActor> for MyWs {
             };
 
             recipient.do_send(VecActor(bytes.into_vec()));
-            // println!("IS THIS WORKING OR NOT");
         };
         let fut = actix::fut::wrap_future::<_, Self>(fut);
-        let a = ctx.spawn(fut);
+        let _a = ctx.spawn(fut);
     }
 }
 
@@ -317,19 +245,14 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWs {
     fn handle(&mut self, msg: Result<ws::Message, ProtocolError>, ctx: &mut Self::Context) {
         match msg {
             Ok(ws::Message::Ping(msg)) => {
-                // println!("BING BING");
                 ctx.pong(&msg)
             }
-            Ok(ws::Message::Text(text)) => {
-                // println!("TEXT RECEIVED {}", text);
+            Ok(ws::Message::Text(_text)) => {
             }
             Ok(ws::Message::Binary(bytes)) => {
                 ctx.address().do_send(ByteActor(bytes));
-                // println!("wow");
-
             },
             Ok(ws::Message::Close(reason)) => {
-                // println!("WTF HAPPENED {:?}", reason);
                 ctx.close(reason)
             }
             Err(e) => {
@@ -379,7 +302,6 @@ pub async fn favicon() -> actix_web::Result<actix_files::NamedFile> {
 pub struct ServerState {
     sessions: Arc<Mutex<HashMap<uuid::Uuid,Addr<MyWs>>>>,
     db: crate::database::DB,
-    config: LeptosOptions
 }
 
 pub async fn create_server(db: crate::database::DB) -> Server {
@@ -394,31 +316,23 @@ pub async fn create_server(db: crate::database::DB) -> Server {
     HttpServer::new(move || {
         let leptos_options = &conf.leptos_options;
         let site_root = &leptos_options.site_root;
-        // println!("root?: {}", site_root);
 
         App::new()
-            //.service(favicon)
             .app_data(web::Data::new(ServerState {
                 sessions: sessions.clone(),
                 db: db.clone(),
-                config: leptos_options.to_owned()
             }))
             .route("/favicon.ico", web::get().to(favicon))
             .route("/ws/", web::get().to(index))
             .route("/api/{tail:.*}", leptos_actix::handle_server_fns())
-            // serve JS/WASM/CSS from `pkg`
             .service(Files::new("/pkg", format!("{site_root}/pkg")))
-            // serve other assets from the `assets` directory
             .service(Files::new("/assets", site_root))
-            // serve the favicon from /favicon.ico
 
             .leptos_routes(
                 leptos_options.to_owned(),
                 routes.to_owned(),
                 crate::app::App,
             )
-            //.app_data(web::Data::new(leptos_options.to_owned()))
-        //.wrap(middleware::Compress::default())
     })
     .workers(2)
     .bind(&addr)

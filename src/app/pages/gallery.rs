@@ -1,17 +1,16 @@
 use bson::DateTime;
 use chrono::Utc;
-use leptos::ev::{load, resize};
+use leptos::ev::resize;
 use leptos::html::Section;
 use leptos::logging::log;
 use leptos::*;
 use leptos_use::{use_event_listener, use_window};
-use rand::prelude::*;
 use web_sys::Event;
 
 use crate::app::utils::{GlobalState, ServerMsgImgResized};
-use crate::server::{ClientMsg, ServerMsgImg, SERVER_MSG_IMGS_NAME};
+use crate::server::ClientMsg;
 
-const new_img_height: u32 = 250;
+const NEW_IMG_HEIGHT: u32 = 250;
 
 fn resize_imgs(
     max_width: u32,
@@ -38,7 +37,7 @@ fn resize_imgs(
 }
 
 fn calc_fit_count(width: u32, height: u32) -> u32 {
-    (width * height) / (new_img_height * new_img_height)
+    (width * height) / (NEW_IMG_HEIGHT * NEW_IMG_HEIGHT)
 }
 
 fn render_gallery(max_width: u32, imgs: &mut [ServerMsgImgResized]) -> () {
@@ -47,7 +46,7 @@ fn render_gallery(max_width: u32, imgs: &mut [ServerMsgImgResized]) -> () {
     let mut new_row_start: usize = 0;
     let mut new_row_end: usize = if loop_end > 0 { loop_end - 1 } else { 0 };
     let mut current_row_filled_width: u32 = 0;
-    let new_height: u32 = new_img_height;
+    let new_height: u32 = NEW_IMG_HEIGHT;
 
     for index in loop_start..loop_end {
         let org_img = &imgs[index];
@@ -61,7 +60,7 @@ fn render_gallery(max_width: u32, imgs: &mut [ServerMsgImgResized]) -> () {
         };
         let new_width: u32 = width - (height_diff as f32 * ratio) as u32;
 
-        if ((current_row_filled_width + new_width) <= max_width) {
+        if (current_row_filled_width + new_width) <= max_width {
             current_row_filled_width += new_width;
             new_row_end = index;
             if index == loop_end - 1 {
@@ -86,13 +85,13 @@ pub fn GalleryPage() -> impl IntoView {
     let gallery_section = create_node_ref::<Section>();
 
     create_effect(move |_| {
-        use_event_listener(use_window(), resize, move |_| {
+        let _ = use_event_listener(use_window(), resize, move |_| {
             global_state.gallery_imgs.update(|_| {});
         });
 
         let msg = ClientMsg::GalleryInit {
             amount: 10,
-            from: DateTime::from_millis(Utc::now().timestamp_nanos()),
+            from: DateTime::from_millis(Utc::now().timestamp_nanos_opt().unwrap()),
         };
         log!("{:#?}", &msg);
         global_state.socket_send(msg);
@@ -102,15 +101,6 @@ pub fn GalleryPage() -> impl IntoView {
         if !global_state.socket_state_imgs_is_ready() {
             return;
         }
-        // log!("{:#?}", global_state.socket_state.get_untracked());
-        // let socket_state = global_state.socket_state.with_untracked(|state| {
-        //     match state.get(&String::from(SERVER_MSG_IMGS_NAME)) {
-        //         Some(n) => Some(*n),
-        //         None => None,
-        //     }
-        // });
-        //
-        // if let Some(n) = socket_state {}
 
         let Some(last) = global_state
             .gallery_imgs
@@ -132,13 +122,11 @@ pub fn GalleryPage() -> impl IntoView {
 
         let left = scroll_height - (client_height + scroll_top);
 
-        // log!("{} < {}", left, client_height);
         if left < client_height {
             let msg = ClientMsg::GalleryInit {
                 amount: 2,
                 from: last,
             };
-            // log!("{:#?}", &msg);
             global_state.socket_send(msg);
             global_state.socket_state_imgs_used();
         }
@@ -154,7 +142,7 @@ pub fn GalleryPage() -> impl IntoView {
 
                       render_gallery(width, &mut imgs);
                   };
-                  imgs.into_iter().enumerate().map(|(i, img)|{
+                  imgs.into_iter().enumerate().map(|(_i, img)|{
                     view! {
                         <div
                             class="bg-center bg-contain bg-no-repeat flex-shrink-0 font-bold grid place-items-center  border hover:shadow-glowy hover:z-[101] transition-shadow duration-300 bg-mid-purple  border-low-purple"

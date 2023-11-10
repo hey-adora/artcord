@@ -1,22 +1,15 @@
 use bson::doc;
 use serenity::{
     builder::CreateApplicationCommand,
-    model::{
-        interactions::application_command::ApplicationCommandInteraction,
-        prelude::{
-            application_command::{CommandDataOption, CommandDataOptionValue},
-            command::CommandOptionType,
-        },
+    model::prelude::{
+        application_command::ApplicationCommandInteraction, command::CommandOptionType,
     },
     prelude::Context,
 };
 
-use crate::database::{AllowedChannel, AllowedRole, DB};
+use crate::database::{AllowedRole, DB};
 
-use super::{
-    get_option_channel, get_option_role, get_option_string, is_valid_role_feature,
-    CHANNEL_FEATURES, ROLE_FEATURES,
-};
+use super::{get_option_role, get_option_string, is_valid_role_feature, ROLE_FEATURES};
 
 pub async fn run(
     ctx: &Context,
@@ -44,10 +37,6 @@ pub async fn run(
 
     is_valid_role_feature(feature_option)?;
 
-    // let _id = mongodb::bson::uuid::Uuid::new().to_string();
-    // let _id = uuid::Uuid::new_v4().to_string();
-    // let _id = mongodb::bson::oid::ObjectId::new().to_string();
-    // println!("GENERATED ID: {}", &_id);
     let allowed_role = AllowedRole {
         _id: mongodb::bson::oid::ObjectId::new(),
         id: role_option.id.to_string(),
@@ -58,12 +47,11 @@ pub async fn run(
         modified_at: mongodb::bson::DateTime::now(),
     };
 
-    let result = db
+    let _result = db
         .collection_allowed_role
         .insert_one(allowed_role, None)
         .await?;
 
-    // Ok(format!("Role added: {}", result.inserted_id))
     crate::bot::commands::show_roles::run(ctx, command, db, guild_id).await?;
 
     Ok(())
