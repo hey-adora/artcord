@@ -6,7 +6,11 @@ use leptos::logging::log;
 use leptos::*;
 use leptos_meta::*;
 use leptos_router::*;
-use leptos_use::{use_websocket, UseWebsocketReturn};
+use leptos_use::utils::Pausable;
+use leptos_use::{
+    use_interval_fn, use_websocket, use_websocket_with_options, UseWebSocketOptions,
+    UseWebsocketReturn,
+};
 use pages::gallery::GalleryPage;
 use pages::home::HomePage;
 use pages::not_found::NotFound;
@@ -29,9 +33,23 @@ pub fn App() -> impl IntoView {
             message,
             message_bytes,
             send_bytes,
+            open,
             ..
-        } = use_websocket("/ws/");
+        } = use_websocket_with_options(
+            "/ws/",
+            UseWebSocketOptions::default()
+                .immediate(true)
+                .reconnect_limit(10)
+                .reconnect_interval(1000),
+        );
         global_state.socket_send.set(Rc::new(send_bytes.clone()));
+        let Pausable { pause, resume, .. } = use_interval_fn(
+            move || {
+                log!("RECONNECTING");
+                open();
+            },
+            1000,
+        );
 
         create_effect(move |_| {
             log!("{:?}", message.get());
@@ -72,7 +90,13 @@ pub fn App() -> impl IntoView {
         });
 
         create_effect(move |_| {
-            log!("SOCKET STATE: {}", ready_state.get());
+            let state = ready_state.get();
+            log!("SOCKET STATE: {}", state);
+            match state {
+                leptos_use::core::ConnectionReadyState::Closed => resume(),
+                leptos_use::core::ConnectionReadyState::Open => pause(),
+                _ => (),
+            };
         });
     };
 
