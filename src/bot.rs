@@ -132,6 +132,17 @@ pub async fn resolve_command(
             commands::show_roles::run(&ctx, &command, &db, guild_id.0).await
         }
         c if c == "sync" && (user_gallery_authorized || no_roles_set) => {
+            // if let Err(err) = commands::sync::run(&ctx, &command, &db, guild_id.0).await {
+            //     if let Err(why) = command
+            //         .edit_original_interaction_response(&ctx.http, |message| {
+            //             message.content(format!("Error: {}", err))
+            //         })
+            //         .await
+            //     {
+            //         println!("Cannot respond to slash command: {}", why);
+            //     }
+            // };
+            // Ok(())
             commands::sync::run(&ctx, &command, &db, guild_id.0).await
         }
         name => Err(crate::bot::commands::CommandError::NotImplemented(
@@ -182,6 +193,7 @@ impl serenity::client::EventHandler for BotHandler {
             let result = resolve_command(&ctx, &command).await;
             if let Err(err) = result {
                 println!("Error: {}", err);
+                // command.
                 if let Err(why) = command
                     .create_interaction_response(&ctx.http, |response| {
                         response
@@ -190,6 +202,17 @@ impl serenity::client::EventHandler for BotHandler {
                     })
                     .await
                 {
+                    let err_str = why.to_string();
+                    if err_str == "Interaction has already been acknowledged." {
+                        if let Err(why) = command
+                            .edit_original_interaction_response(&ctx.http, |message| {
+                                message.content(format!("Error: {}", err))
+                            })
+                            .await
+                        {
+                            println!("Cannot respond to slash command: {}", why);
+                        }
+                    }
                     println!("Cannot respond to slash command: {}", why);
                 }
             }

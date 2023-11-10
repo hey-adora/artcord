@@ -10,6 +10,8 @@ use crate::bot::commands::{get_option_channel, get_option_integer};
 use crate::bot::hooks::save_attachments::{self, hook_save_attachments};
 use crate::database::DB;
 
+use super::CommandError;
+
 pub const DISCORD_MAX_MSG_REQUEST_SIZE: i64 = 100;
 
 pub async fn run(
@@ -29,6 +31,8 @@ pub async fn run(
     {
         println!("Cannot respond to slash command: {}", why);
     }
+
+    // return Err(CommandError::NotFound("yoyoyyomf".to_string()));
 
     let mut total_synced: usize = 0;
 
