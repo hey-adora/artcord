@@ -36,10 +36,6 @@ fn resize_imgs(
     }
 }
 
-fn calc_fit_count(width: u32, height: u32) -> u32 {
-    (width * height) / (NEW_IMG_HEIGHT * NEW_IMG_HEIGHT)
-}
-
 fn render_gallery(max_width: u32, imgs: &mut [ServerMsgImgResized]) -> () {
     let loop_start = 0;
     let loop_end = imgs.len();
@@ -79,18 +75,29 @@ fn render_gallery(max_width: u32, imgs: &mut [ServerMsgImgResized]) -> () {
     }
 }
 
+fn calc_fit_count(width: u32, height: u32) -> u32 {
+    (width * height) / (NEW_IMG_HEIGHT * NEW_IMG_HEIGHT)
+}
+
 #[component]
 pub fn GalleryPage() -> impl IntoView {
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
     let gallery_section = create_node_ref::<Section>();
 
     create_effect(move |_| {
+        let Some(section) = gallery_section.get_untracked() else {
+            return;
+        };
+
         let _ = use_event_listener(use_window(), resize, move |_| {
             global_state.gallery_imgs.update(|_| {});
         });
 
+        let client_height = section.client_height();
+        let client_width = section.client_width();
+
         let msg = ClientMsg::GalleryInit {
-            amount: 10,
+            amount: calc_fit_count(client_width as u32, client_height as u32),
             from: DateTime::from_millis(Utc::now().timestamp_nanos_opt().unwrap()),
         };
         log!("{:#?}", &msg);
@@ -119,12 +126,13 @@ pub fn GalleryPage() -> impl IntoView {
         let scroll_top = section.scroll_top();
         let client_height = section.client_height();
         let scroll_height = section.scroll_height();
+        let client_width = section.client_width();
 
         let left = scroll_height - (client_height + scroll_top);
 
         if left < client_height {
             let msg = ClientMsg::GalleryInit {
-                amount: 2,
+                amount: calc_fit_count(client_width as u32, client_height as u32),
                 from: last,
             };
             global_state.socket_send(msg);
