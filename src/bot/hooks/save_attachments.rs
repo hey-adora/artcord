@@ -186,7 +186,7 @@ pub async fn save_user_pfp(
 
     // format!("{:x}", u128::from_be_bytes(file_hash_bytes))
     //let md5_bytes: [u8; 16] = u128::from_str_radix(&user_pfp_hash, 16)?.to_be_bytes();
-    let pfp_img_path = format!("assets/gallery/pfp_{}.webp", user_id);
+    let pfp_img_path = format!("target/site/gallery/pfp_{}.webp", user_id);
     let pfp_url = format!(
         "https://cdn.discordapp.com/avatars/{}/{}.webp",
         user_id, user_pfp_hash
@@ -318,10 +318,10 @@ pub async fn save_attachment(
     //let file_stem = file_name.file_stem().unwrap().to_str().unwrap();
     let file_ext = file_name.extension().unwrap().to_str().unwrap();
 
-    let org_img_path = format!("assets/gallery/org_{}.{}", file_hash_hex, file_ext);
-    let low_img_path = format!("assets/gallery/low_{}.webp", file_hash_hex);
-    let medium_img_path = format!("assets/gallery/medium_{}.webp", file_hash_hex);
-    let high_img_path = format!("assets/gallery/high_{}.webp", file_hash_hex);
+    let org_img_path = format!("target/site/gallery/org_{}.{}", file_hash_hex, file_ext);
+    let low_img_path = format!("target/site/gallery/low_{}.webp", file_hash_hex);
+    let medium_img_path = format!("target/site/gallery/medium_{}.webp", file_hash_hex);
+    let high_img_path = format!("target/site/gallery/high_{}.webp", file_hash_hex);
 
     let mut paths = [low_img_path, medium_img_path, high_img_path];
     let mut paths_state = [false, false, false];

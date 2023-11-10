@@ -3,6 +3,7 @@ use std::num::ParseIntError;
 use bson::oid::ObjectId;
 use bson::DateTime;
 use cfg_if::cfg_if;
+use leptos::{leptos_config, LeptosOptions};
 
 use crate::database::{DT, OBJ};
 use rkyv::validation::validators::DefaultValidator;
@@ -377,7 +378,8 @@ pub async fn favicon() -> actix_web::Result<actix_files::NamedFile> {
 #[derive(Clone)]
 pub struct ServerState {
     sessions: Arc<Mutex<HashMap<uuid::Uuid,Addr<MyWs>>>>,
-    db: crate::database::DB
+    db: crate::database::DB,
+    config: LeptosOptions
 }
 
 pub async fn create_server(db: crate::database::DB) -> Server {
@@ -392,12 +394,14 @@ pub async fn create_server(db: crate::database::DB) -> Server {
     HttpServer::new(move || {
         let leptos_options = &conf.leptos_options;
         let site_root = &leptos_options.site_root;
+        // println!("root?: {}", site_root);
 
         App::new()
             //.service(favicon)
             .app_data(web::Data::new(ServerState {
                 sessions: sessions.clone(),
-                db: db.clone()
+                db: db.clone(),
+                config: leptos_options.to_owned()
             }))
             .route("/favicon.ico", web::get().to(favicon))
             .route("/ws/", web::get().to(index))
