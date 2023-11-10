@@ -64,6 +64,7 @@ pub fn App() -> impl IntoView {
                 }
                 ServerMsg::Reset => {
                     log!("RESETING");
+                    document().location().unwrap().reload().unwrap();
                 }
             };
 
