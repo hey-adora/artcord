@@ -1,4 +1,3 @@
-
 use leptos::*;
 use leptos_use::{use_interval_fn, use_window_scroll};
 use web_sys::MouseEvent;
@@ -87,7 +86,7 @@ pub fn Navbar() -> impl IntoView {
                                     <img src="/assets/discord.svg"/>
                                     "Join"
                                 </a>
-                                <button class="block sm:hidden" on:click=on_nav_click >
+                                <button class="block sm:hidden h-[48px]" on:click=on_nav_click >
                                     <img class="    " src="assets/burger.svg" alt=""/>
                                 </button>
                             </div>

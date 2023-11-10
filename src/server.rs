@@ -146,7 +146,7 @@ impl MyWs {
         let  pipeline = vec![
             doc! { "$sort": doc! { "created_at": -1 } },
             doc! { "$match": doc! { "created_at": { "$lt": from } } },
-            doc! { "$limit": Some( amount.clamp(1, 10000) as i64) },
+            doc! { "$limit": Some( amount.clamp(25, 10000) as i64) },
             doc! { "$lookup": doc! { "from": "user", "localField": "user_id", "foreignField": "id", "as": "user"} },
             doc! { "$unwind": "$user" }
         ];

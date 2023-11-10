@@ -97,7 +97,7 @@ pub fn GalleryPage() -> impl IntoView {
         let client_width = section.client_width();
 
         let msg = ClientMsg::GalleryInit {
-            amount: calc_fit_count(client_width as u32, client_height as u32),
+            amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
             from: DateTime::from_millis(Utc::now().timestamp_nanos_opt().unwrap()),
         };
         log!("{:#?}", &msg);
@@ -132,7 +132,7 @@ pub fn GalleryPage() -> impl IntoView {
 
         if left < client_height {
             let msg = ClientMsg::GalleryInit {
-                amount: calc_fit_count(client_width as u32, client_height as u32),
+                amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
                 from: last,
             };
             global_state.socket_send(msg);
