@@ -110,17 +110,6 @@ pub async fn resolve_command(
             commands::show_roles::run(&ctx, &command, &db, guild_id.0).await
         }
         c if c == "sync" && (user_gallery_authorized || no_roles_set) => {
-            // if let Err(err) = commands::sync::run(&ctx, &command, &db, guild_id.0).await {
-            //     if let Err(why) = command
-            //         .edit_original_interaction_response(&ctx.http, |message| {
-            //             message.content(format!("Error: {}", err))
-            //         })
-            //         .await
-            //     {
-            //         println!("Cannot respond to slash command: {}", why);
-            //     }
-            // };
-            // Ok(())
             commands::sync::run(&ctx, &command, &db, guild_id.0).await
         }
         name => Err(crate::bot::commands::CommandError::NotImplemented(

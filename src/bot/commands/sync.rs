@@ -68,8 +68,12 @@ pub async fn run(
             Ok(_) => Ok(()),
             Err(err) => match err {
                 save_attachments::SaveAttachmentsError::SaveAttachmentError(e) => match e {
-                    save_attachments::SaveAttachmentError::ImgTypeUnsupported(r) => {
-                        println!("UNSUPPORTED IMG: {}", r);
+                    save_attachments::SaveAttachmentError::ImgTypeNotFound => {
+                        println!("Error: img type not found: msg_id: '{}'", message.id.0);
+                        Ok(())
+                    }
+                    save_attachments::SaveAttachmentError::ImgTypeUnsupported(t) => {
+                        println!("Error: img type unsuported: '{}'", t);
                         Ok(())
                     }
                     r => Err(save_attachments::SaveAttachmentsError::from(r)),
@@ -131,8 +135,12 @@ pub async fn run(
                 Ok(_) => Ok(()),
                 Err(err) => match err {
                     save_attachments::SaveAttachmentsError::SaveAttachmentError(e) => match e {
-                        save_attachments::SaveAttachmentError::ImgTypeUnsupported(r) => {
-                            println!("UNSUPPORTED IMG: {}", r);
+                        save_attachments::SaveAttachmentError::ImgTypeNotFound => {
+                            println!("Error: img type not found: msg_id: '{}'", message.id.0);
+                            Ok(())
+                        }
+                        save_attachments::SaveAttachmentError::ImgTypeUnsupported(t) => {
+                            println!("Error: img type unsuported: '{}'", t);
                             Ok(())
                         }
                         r => Err(save_attachments::SaveAttachmentsError::from(r)),

@@ -24,6 +24,7 @@ pub struct ServerMsgImg {
     pub id: String,
     pub user: User,
     pub user_id: String,
+    pub org_url: String,
     pub org_hash: String,
     pub format: String,
     pub width: u32,

@@ -46,8 +46,23 @@ pub async fn hook_save_attachments(
         );
 
         for attachment in attachments {
-            let result = save_attachment(&db, guild_id, author_id, msg_id, attachment).await?;
-            println!("File: {}", result);
+            match save_attachment(&db, guild_id, author_id, msg_id, attachment).await {
+                Ok(file) => {
+                    println!("File: {}", file);
+                    Ok::<(), SaveAttachmentsError>(())
+                }
+                Err(err) => match err {
+                    SaveAttachmentError::ImgTypeUnsupported(t) => {
+                        println!("Error: img type unsuported: '{}'", t);
+                        Ok(())
+                    }
+                    SaveAttachmentError::ImgTypeNotFound => {
+                        println!("Error: img type not found: msg_id: '{}'", msg_id);
+                        Ok(())
+                    }
+                    e => Err(SaveAttachmentsError::from(e)),
+                },
+            }?;
         }
     }
 
@@ -350,6 +365,10 @@ pub async fn save_attachment(
 
         let mut update = doc! {};
 
+        if found_img.org_url != attachment.url {
+            update.insert("org_url", attachment.url.clone());
+        }
+
         for (i, path_state) in paths_state.into_iter().enumerate() {
             if db_img_states[i] != path_state {
                 update.insert(db_img_names[i], path_state);
@@ -382,6 +401,7 @@ pub async fn save_attachment(
             guild_id: guild_id.to_string(),
             user_id: format!("{}", user_id),
             id: format!("{}", msg_id),
+            org_url: attachment.url.clone(),
             org_hash: file_hash_hex.clone(),
             format: format!("{}", format),
             width: org_img.width(),
