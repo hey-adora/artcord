@@ -67,26 +67,13 @@ pub fn App() -> impl IntoView {
                 return;
             };
 
-            let name = server_msg.name();
-
             match server_msg {
-                ServerMsg::Imgs(new_imgs) => {
-                    global_state.gallery_imgs.update(|imgs| {
-                        imgs.extend_from_slice(
-                            &new_imgs
-                                .into_iter()
-                                .map(|img| ServerMsgImgResized::from(img))
-                                .collect::<Vec<ServerMsgImgResized>>(),
-                        );
-                    });
-                }
                 ServerMsg::Reset => {
                     log!("RESETING");
                     document().location().unwrap().reload().unwrap();
                 }
+                msg => global_state.socket_recv.set(msg),
             };
-
-            global_state.socket_state_imgs_reset(&name);
         });
 
         create_effect(move |_| {

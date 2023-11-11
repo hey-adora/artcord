@@ -8,6 +8,7 @@ use std::{collections::HashMap, rc::Rc};
 use wasm_bindgen::JsValue;
 use web_sys::Location;
 
+use crate::server::ServerMsg;
 use crate::{
     database::User,
     server::{ClientMsg, ServerMsgImg, SERVER_MSG_IMGS_NAME},
@@ -65,8 +66,9 @@ pub struct GlobalState {
     pub nav_open: RwSignal<bool>,
     pub nav_tran: RwSignal<bool>,
     pub socket_send: RwSignal<Rc<dyn Fn(Vec<u8>)>>,
-    pub gallery_imgs: RwSignal<Vec<ServerMsgImgResized>>,
+    pub socket_recv: RwSignal<ServerMsg>,
     pub socket_state: RwSignal<Rc<Mutex<HashMap<String, i64>>>>,
+    pub gallery_imgs: RwSignal<Vec<ServerMsgImgResized>>,
 }
 
 impl GlobalState {
@@ -76,8 +78,9 @@ impl GlobalState {
             nav_open: create_rw_signal(false),
             nav_tran: create_rw_signal(true),
             socket_send: create_rw_signal(Rc::new(|_| {})),
-            gallery_imgs: create_rw_signal(Vec::new()),
+            socket_recv: create_rw_signal(ServerMsg::None),
             socket_state: create_rw_signal(Rc::new(Mutex::new(HashMap::new()))),
+            gallery_imgs: create_rw_signal(Vec::new()),
         }
     }
 

@@ -8,11 +8,11 @@ use leptos_use::{use_event_listener, use_window};
 use web_sys::Event;
 
 use crate::app::utils::{GlobalState, ServerMsgImgResized};
-use crate::server::ClientMsg;
+use crate::server::{ClientMsg, ServerMsg};
 
 const NEW_IMG_HEIGHT: u32 = 250;
 
-fn resize_imgs(
+fn resize_img(
     max_width: u32,
     new_row_start: usize,
     new_row_end: usize,
@@ -36,7 +36,7 @@ fn resize_imgs(
     }
 }
 
-fn render_gallery(max_width: u32, imgs: &mut [ServerMsgImgResized]) -> () {
+fn resize_imgs(max_width: u32, imgs: &mut [ServerMsgImgResized]) -> () {
     let loop_start = 0;
     let loop_end = imgs.len();
     let mut new_row_start: usize = 0;
@@ -60,16 +60,16 @@ fn render_gallery(max_width: u32, imgs: &mut [ServerMsgImgResized]) -> () {
             current_row_filled_width += new_width;
             new_row_end = index;
             if index == loop_end - 1 {
-                resize_imgs(max_width, new_row_start, new_row_end, imgs);
+                resize_img(max_width, new_row_start, new_row_end, imgs);
             }
         } else {
-            resize_imgs(max_width, new_row_start, new_row_end, imgs);
+            resize_img(max_width, new_row_start, new_row_end, imgs);
 
             new_row_start = index;
             new_row_end = index;
             current_row_filled_width = new_width;
             if index == loop_end - 1 {
-                resize_imgs(max_width, new_row_start, new_row_end, imgs);
+                resize_img(max_width, new_row_start, new_row_end, imgs);
             }
         }
     }
@@ -85,12 +85,41 @@ pub fn GalleryPage() -> impl IntoView {
     let gallery_section = create_node_ref::<Section>();
 
     create_effect(move |_| {
-        let Some(section) = gallery_section.get_untracked() else {
+        global_state.socket_recv.with(|server_msg| {
+            if let ServerMsg::Imgs(new_imgs) = server_msg {
+                global_state.gallery_imgs.update(|imgs| {
+                    imgs.extend_from_slice(
+                        &new_imgs
+                            .iter()
+                            .map(|img| ServerMsgImgResized::from(img.to_owned()))
+                            .collect::<Vec<ServerMsgImgResized>>(),
+                    );
+                    let section = gallery_section.get_untracked();
+                    if let Some(section) = section {
+                        let width = section.client_width() as u32;
+
+                        resize_imgs(width, imgs);
+                    };
+                });
+                global_state.socket_state_imgs_reset(&server_msg.name());
+            }
+        });
+    });
+
+    create_effect(move |_| {
+        let Some(section) = gallery_section.get() else {
             return;
         };
 
         let _ = use_event_listener(use_window(), resize, move |_| {
-            global_state.gallery_imgs.update(|_| {});
+            global_state.gallery_imgs.update(|imgs| {
+                let section = gallery_section.get_untracked();
+                if let Some(section) = section {
+                    let width = section.client_width() as u32;
+
+                    resize_imgs(width, imgs);
+                };
+            });
         });
 
         let client_height = section.client_height();
@@ -142,34 +171,18 @@ pub fn GalleryPage() -> impl IntoView {
 
     view! {
         <section on:scroll=section_scroll on:resize=move |_| { log!("test resize") } _ref=gallery_section class="line-bg  overflow-x-hidden content-start flex flex-wrap overflow-y-scroll " style=move|| format!("max-height: calc(100vh - 80px); ")>
-            { move || {
-                  let mut imgs = global_state.gallery_imgs.get();
-                  let section = gallery_section.get();
-                  if let Some(section) = section {
-                      let width = section.client_width() as u32;
-
-                      render_gallery(width, &mut imgs);
-                  };
-                  imgs.into_iter().enumerate().map(|(_i, img)|{
-                    view! {
-                        <div
-                            class="bg-center bg-contain bg-no-repeat flex-shrink-0 font-bold grid place-items-center  border hover:shadow-glowy hover:z-[101] transition-shadow duration-300 bg-mid-purple  border-low-purple"
-                            style:height=move || format!("{}px", img.new_height)
-                            style:width=move || format!("{}px", img.new_width)
-                            style:background-image=move || format!("url('assets/gallery/org_{}.{}')", img.org_hash, img.format)
-                        >
-                            <div class="relative flex opacity-0 hover:opacity-100 transition duration-300 w-full h-full flex-col text-center justify-center gap-2  "  >
-                                <div class="absolute bg-dark-purple bottom-0 left-0 translate-y-full w-full">{img.user.name}</div>
-                                // <h3>{i}</h3>
-                                // <h3>{img.width}x{img.height}</h3>
-                                // <h3>{img.new_width}x{img.new_height}</h3>
-                                // <h3>{img.new_width as f32 /img.new_height as f32}</h3>
-                            </div>
-                        </div>
-                    } }).collect_view()
-
-                }
-            }
+            <For each=global_state.gallery_imgs key=|state| (state.org_hash.clone(), state.new_width, state.new_height) let:img >
+                <div
+                    class="bg-center bg-contain bg-no-repeat flex-shrink-0 font-bold grid place-items-center  border hover:shadow-glowy hover:z-[101] transition-shadow duration-300 bg-mid-purple  border-low-purple"
+                    style:height=move || format!("{}px", &img.new_height)
+                    style:width=move || format!("{}px", &img.new_width)
+                    style:background-image=move || format!("url('assets/gallery/org_{}.{}')", &img.org_hash, &img.format)
+                >
+                    <div class="relative flex opacity-0 hover:opacity-100 transition duration-300 w-full h-full flex-col text-center justify-center gap-2  "  >
+                        <div class="absolute bg-dark-purple bottom-0 left-0 translate-y-full w-full">{&img.user.name}</div>
+                    </div>
+                </div>
+            </For>
         </section>
     }
 }

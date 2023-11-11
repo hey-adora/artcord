@@ -44,17 +44,20 @@ pub struct ServerMsgImg {
 #[archive_attr(derive(Debug))]
 pub enum ServerMsg {
     Imgs(Vec<ServerMsgImg>),
+    None,
     Reset,
 }
 
 pub const SERVER_MSG_IMGS_NAME: &str = "imgs";
-pub const SERVER_MSG_IMGS_RESET: &str = "reset";
+pub const SERVER_MSG_RESET_NAME: &str = "reset";
+pub const SERVER_MSG_NONE_NAME: &str = "NONE";
 
 impl ServerMsg {
     pub fn name(&self) -> String {
         match self {
             ServerMsg::Imgs(_a) => String::from(SERVER_MSG_IMGS_NAME),
-            ServerMsg::Reset => String::from(SERVER_MSG_IMGS_RESET),
+            ServerMsg::Reset => String::from(SERVER_MSG_RESET_NAME),
+            ServerMsg::None => String::from(SERVER_MSG_NONE_NAME),
         }
     }
 }
