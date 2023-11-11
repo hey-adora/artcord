@@ -197,6 +197,48 @@ impl serenity::client::EventHandler for BotHandler {
         println!("IMG HIDDEN: {}", deleted_message_id);
     }
 
+    async fn message_delete_bulk(
+        &self,
+        ctx: Context,
+        _channel_id: ChannelId,
+        multiple_deleted_messages_id: Vec<MessageId>,
+        guild_id: Option<GuildId>,
+    ) {
+        let Some(_) = guild_id else {
+            return;
+        };
+
+        let db = {
+            let data_read = ctx.data.read().await;
+
+            data_read
+                .get::<crate::database::DB>()
+                .expect("Expected crate::database::DB in TypeMap")
+                .clone()
+        };
+
+        for deleted_message_id in multiple_deleted_messages_id {
+            let result = db
+                .collection_img
+                .update_one(
+                    doc! { "id": deleted_message_id.0.to_string() },
+                    doc! { "$set": { "show": false } },
+                    None,
+                )
+                .await;
+            let Ok(_) = result else {
+                println!(
+                    "ERROR: failed to hide img '{}': {}",
+                    deleted_message_id.0,
+                    result.err().unwrap()
+                );
+                return;
+            };
+
+            println!("IMG HIDDEN: {}", deleted_message_id);
+        }
+    }
+
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         if let Interaction::ApplicationCommand(command) = interaction {
             let result = resolve_command(&ctx, &command).await;
