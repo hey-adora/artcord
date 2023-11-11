@@ -6,7 +6,9 @@ use serenity::framework::standard::macros::{command, group};
 use serenity::framework::standard::CommandResult;
 use serenity::framework::StandardFramework;
 use serenity::model::prelude::application_command::ApplicationCommandInteraction;
-use serenity::model::prelude::{GuildId, Interaction, InteractionResponseType};
+use serenity::model::prelude::{
+    ChannelId, GuildId, Interaction, InteractionResponseType, MessageId,
+};
 use serenity::prelude::GatewayIntents;
 use serenity::{async_trait, Client};
 use std::env;
@@ -153,6 +155,46 @@ impl serenity::client::EventHandler for BotHandler {
             println!("{:?}", err);
             return;
         }
+    }
+
+    async fn message_delete(
+        &self,
+        ctx: Context,
+        _channel_id: ChannelId,
+        deleted_message_id: MessageId,
+        guild_id: Option<GuildId>,
+    ) {
+        let Some(_) = guild_id else {
+            return;
+        };
+
+        let db = {
+            let data_read = ctx.data.read().await;
+
+            data_read
+                .get::<crate::database::DB>()
+                .expect("Expected crate::database::DB in TypeMap")
+                .clone()
+        };
+
+        let result = db
+            .collection_img
+            .update_one(
+                doc! { "id": deleted_message_id.0.to_string() },
+                doc! { "$set": { "show": false } },
+                None,
+            )
+            .await;
+        let Ok(_) = result else {
+            println!(
+                "ERROR: failed to hide img '{}': {}",
+                deleted_message_id.0,
+                result.err().unwrap()
+            );
+            return;
+        };
+
+        println!("IMG HIDDEN: {}", deleted_message_id);
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {

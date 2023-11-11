@@ -179,6 +179,7 @@ if #[cfg(feature = "ssr")] {
         #[derive(Debug, Serialize, Deserialize, Clone)]
         pub struct Img {
             pub _id: mongodb::bson::oid::ObjectId,
+            pub show: bool,
             pub guild_id: String,
             pub user_id: String,
             pub id: String,

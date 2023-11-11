@@ -149,7 +149,7 @@ impl MyWs {
     pub async fn gallery_handler(db: crate::database::DB, amount: u32, from: DateTime) -> Result<ServerMsg, ServerMsgError> {
         let  pipeline = vec![
             doc! { "$sort": doc! { "created_at": -1 } },
-            doc! { "$match": doc! { "created_at": { "$lt": from } } },
+            doc! { "$match": doc! { "created_at": { "$lt": from }, "show": true } },
             doc! { "$limit": Some( amount.clamp(25, 10000) as i64) },
             doc! { "$lookup": doc! { "from": "user", "localField": "user_id", "foreignField": "id", "as": "user"} },
             doc! { "$unwind": "$user" }

@@ -365,6 +365,15 @@ pub async fn save_attachment(
 
         let mut update = doc! {};
 
+        let msg_id = msg_id.to_string();
+        if found_img.id != msg_id {
+            update.insert("id", msg_id);
+        }
+
+        if !found_img.show {
+            update.insert("show", true);
+        }
+
         if found_img.org_url != attachment.url {
             update.insert("org_url", attachment.url.clone());
         }
@@ -377,6 +386,7 @@ pub async fn save_attachment(
 
         if update.len() > 0 {
             update.insert("modified_at", mongodb::bson::DateTime::now());
+            let update_msg = format!("{}: {:#?}", file_hash_hex, &update);
             let _update_status = db
                 .collection_img
                 .update_one(
@@ -387,7 +397,7 @@ pub async fn save_attachment(
                     None,
                 )
                 .await?;
-            Ok(SaveAttachmentResult::Updated(file_hash_hex))
+            Ok(SaveAttachmentResult::Updated(update_msg))
         } else {
             Ok(SaveAttachmentResult::None(file_hash_hex))
         }
@@ -398,12 +408,13 @@ pub async fn save_attachment(
 
         let img = crate::database::Img {
             _id: mongodb::bson::oid::ObjectId::new(),
+            show: true,
             guild_id: guild_id.to_string(),
             user_id: format!("{}", user_id),
             id: format!("{}", msg_id),
             org_url: attachment.url.clone(),
             org_hash: file_hash_hex.clone(),
-            format: format!("{}", format),
+            format: format.to_string(),
             width: org_img.width(),
             height: org_img.height(),
             has_high: paths_state[2],
