@@ -131,7 +131,7 @@ use mongodb::bson::{doc};
 use std::collections::HashMap;
 use actix::{Actor, Addr, AsyncContext, Handler, Recipient, StreamHandler};
 use actix_files::Files;
-use actix_web::{web, App, Error, HttpRequest, HttpResponse, HttpServer};
+use actix_web::{web, App, Responder, Error, HttpRequest, HttpResponse, HttpServer};
 use actix_web_actors::ws::{self, CloseCode, CloseReason, ProtocolError};
 use leptos::get_configuration;
 use leptos_actix::{generate_route_list, LeptosRoutes};
@@ -180,6 +180,17 @@ impl Actor for MyWs {
             return;
         };
         sessions.insert(self.id, ctx.address());
+    }
+
+    fn stopped(&mut self, ctx: &mut Self::Context) {
+        let sessions = self.server_state.sessions.try_lock();
+        let Ok(mut sessions) = sessions else {
+            let error = sessions.err().unwrap();
+            println!("Locking WS sessions error: {}", error);
+            ctx.close(Some(CloseReason::from(CloseCode::Error)));
+            return;
+        };
+        sessions.remove(&self.id);
     }
 }
 
@@ -297,7 +308,21 @@ pub async fn favicon() -> actix_web::Result<actix_files::NamedFile> {
 #[derive(Clone)]
 pub struct ServerState {
     sessions: Arc<Mutex<HashMap<uuid::Uuid,Addr<MyWs>>>>,
+
     db: crate::database::DB,
+}
+
+async fn overview(
+    _req: HttpRequest,
+    _stream: web::Payload,
+    server_state: actix_web::web::Data<ServerState>
+    ) -> impl Responder {
+    let sessions = server_state.sessions.try_lock();
+    let Ok(sessions) = sessions else {
+        let error = sessions.err().unwrap();
+        return HttpResponse::InternalServerError().body(format!("Error: {}", error));
+    };
+    HttpResponse::Ok().body(format!("Live connection: {}", sessions.len()))
 }
 
 pub async fn create_server(db: crate::database::DB) -> Server {
@@ -318,6 +343,7 @@ pub async fn create_server(db: crate::database::DB) -> Server {
                 sessions: sessions.clone(),
                 db: db.clone(),
             }))
+            .route("/overview", web::get().to(overview))
             .route("/favicon.ico", web::get().to(favicon))
             .route("/ws/", web::get().to(index))
             .route("/api/{tail:.*}", leptos_actix::handle_server_fns())
