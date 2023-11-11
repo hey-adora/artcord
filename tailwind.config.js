@@ -2,16 +2,16 @@
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: { 
+  content: {
     files: ["*.html", "./src/**/*.rs"],
   },
   theme: {
     extend: {
       colors: {
-        "low-purple": "#ECCEFF",
+        "low-purple": "#ffffff",
         "half-purple": "#67398B",
         "mid-purple": "#925CB3",
-        "dark-purple": "#250157",  
+        "dark-purple": "#250157",
         "dark2-purple": "#642B87",
       },
       backgroundImage: {

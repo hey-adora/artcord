@@ -87,8 +87,15 @@ pub fn App() -> impl IntoView {
 
     view! {
         <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+        <meta name="description" content="Art Community!"/>
+        <meta name="keywords" content="artcord,art,gallery,server,discord,community"/>
+        <meta name="twitter:title" content="Artcord"/>
+        <meta name="twitter:description" content="Art Community!"/>
+        <meta name="twitter:image" content="/assets/overview.png"/>
+        <meta name="twitter:card" content="summary_large_image"/>
+
         <Stylesheet id="leptos" href="/pkg/leptos_start.css"/>
-        <Title text="Welcome to Leptos"/>
+        <Title text="Artcord"/>
         <Body  class=move || format!("text-low-purple  bg-gradient-to-br from-mid-purple to-dark-purple   {}", if global_state.nav_open.get() == true { "overflow-hidden w-screen h-screen" } else { "" })  />
         <Router>
             <div id="home" class="pt-4 grid grid-rows-[auto_1fr] min-h-screen" >

@@ -21,15 +21,15 @@ pub fn HomePage() -> impl IntoView {
                     <div class="flex justify-center relative">
                         <div class="z-10 font-bold text-center flex flex-col border-2 border-low-purple absolute rotate-[15deg] translate-x-[60%] bg-dark2-purple ">
                             <div>"@moyanice"</div>
-                            <div class="  w-[32vw] h-[55vw] lg:max-w-[15rem] lg:max-h-[25rem] max-w-[10rem] max-h-[20rem] bg-center bg-cover " style="background-image: url('/assets/1.jpg')" ></div>
+                            <div class="  w-[32vw] h-[50vw] lg:max-w-[15rem] lg:max-h-[23rem] max-w-[10rem] max-h-[16rem] bg-center bg-cover " style="background-image: url('/assets/1.jpg')" ></div>
                         </div>
                         <div class="z-20 font-bold text-center flex flex-col border-2 border-low-purple bg-dark2-purple">
                             <div>"@valnikryatuveli"</div>
-                            <div class=" w-[32vw] h-[55vw] lg:max-w-[15rem] lg:max-h-[25rem] max-w-[10rem] max-h-[20rem] bg-center bg-cover" style="background-image: url('/assets/2.jpg')" ></div>
+                            <div class="  w-[32vw] h-[50vw] lg:max-w-[15rem] lg:max-h-[23rem] max-w-[10rem] max-h-[16rem] bg-center bg-cover" style="background-image: url('/assets/2.jpg')" ></div>
                         </div>
                         <div class="z-10 font-bold text-center flex flex-col border-2 border-low-purple absolute -rotate-[15deg] -translate-x-[60%] bg-dark2-purple">
                             <div>"@stalkstray"</div>
-                            <div class="z-10 w-[32vw] h-[55vw] lg:max-w-[15rem] lg:max-h-[25rem] max-w-[10rem] max-h-[20rem] bg-center bg-cover " style="background-image: url('/assets/3.jpg')" ></div>
+                            <div class="z-10 w-[32vw] h-[50vw] lg:max-w-[15rem] lg:max-h-[23rem] max-w-[10rem] max-h-[16rem] bg-center bg-cover " style="background-image: url('/assets/3.jpg')" ></div>
                         </div>
                     </div>
                     <div class="flex justify-center">
