@@ -181,7 +181,7 @@ if #[cfg(feature = "ssr")] {
             pub _id: mongodb::bson::oid::ObjectId,
             pub guild_id: String,
             pub user_id: String,
-            pub msg_id: String,
+            pub id: String,
             pub org_hash: String,
             pub format: String,
             pub width: u32,

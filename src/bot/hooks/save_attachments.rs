@@ -344,7 +344,7 @@ pub async fn save_attachment(
         )
         .await?;
 
-    return if let Some(found_img) = found_img {
+    if let Some(found_img) = found_img {
         let db_img_names = ["has_low", "has_medium", "has_high"];
         let db_img_states = [found_img.has_low, found_img.has_medium, found_img.has_high];
 
@@ -381,7 +381,7 @@ pub async fn save_attachment(
             _id: mongodb::bson::oid::ObjectId::new(),
             guild_id: guild_id.to_string(),
             user_id: format!("{}", user_id),
-            msg_id: format!("{}", msg_id),
+            id: format!("{}", msg_id),
             org_hash: file_hash_hex.clone(),
             format: format!("{}", format),
             width: org_img.width(),
@@ -395,7 +395,7 @@ pub async fn save_attachment(
 
         db.collection_img.insert_one(&img, None).await?;
         Ok(SaveAttachmentResult::Created(file_hash_hex))
-    };
+    }
 }
 
 #[derive(Error, Debug)]

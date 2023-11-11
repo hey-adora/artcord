@@ -21,9 +21,9 @@ use thiserror::Error;
 pub struct ServerMsgImg {
     #[with(OBJ)]
     pub _id: ObjectId,
+    pub id: String,
     pub user: User,
     pub user_id: String,
-    pub msg_id: String,
     pub org_hash: String,
     pub format: String,
     pub width: u32,
@@ -213,6 +213,12 @@ impl Handler<ByteActor> for MyWs {
             let client_msg = ClientMsg::from_bytes(&msg.0.to_vec());
             let Ok(client_msg) = client_msg else {
                 println!("Failed to convert bytes to client msg: {}", client_msg.err().unwrap());
+                let bytes = rkyv::to_bytes::<_, 256>(&ServerMsg::Reset);
+                let Ok(bytes) = bytes else {
+                    println!("Failed to serialize serevr msg: {}", bytes.err().unwrap());
+                    return;
+                };
+                recipient.do_send(VecActor(bytes.into_vec()));
                 return;
             };
             let server_msg: Result<ServerMsg, ServerMsgError> = match client_msg {
@@ -221,14 +227,12 @@ impl Handler<ByteActor> for MyWs {
                 }
             };
 
-            let bytes = match server_msg {
-                Ok(server_msg) => rkyv::to_bytes::<_, 256>(&server_msg),
-                Err(server_msg_error) => {
-                    println!("Failed to create server msg: {}", server_msg_error);
-                    rkyv::to_bytes::<_, 256>(&ServerMsg::Reset)
-                }
+            let Ok(server_msg) = server_msg else {
+                println!("Failed to create server msg: {}", server_msg.err().unwrap());
+                return;
             };
 
+            let bytes = rkyv::to_bytes::<_, 256>(&server_msg);
             let Ok(bytes) = bytes else {
                 println!("Failed to serialize serevr msg: {}", bytes.err().unwrap());
                 return;
