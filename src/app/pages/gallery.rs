@@ -8,7 +8,7 @@ use leptos_use::{use_event_listener, use_window};
 use web_sys::Event;
 
 use crate::app::utils::{GlobalState, ServerMsgImgResized};
-use crate::server::{ClientMsg, ServerMsg};
+use crate::server::{ClientMsg, ServerMsg, SERVER_MSG_IMGS_NAME};
 
 const NEW_IMG_HEIGHT: u32 = 250;
 
@@ -101,7 +101,7 @@ pub fn GalleryPage() -> impl IntoView {
                         resize_imgs(width, imgs);
                     };
                 });
-                global_state.socket_state_imgs_reset(&server_msg.name());
+                global_state.socket_state_reset(&server_msg.name());
             }
         });
     });
@@ -134,7 +134,7 @@ pub fn GalleryPage() -> impl IntoView {
     });
 
     let section_scroll = move |_: Event| {
-        if !global_state.socket_state_imgs_is_ready() {
+        if !global_state.socket_state_is_ready(SERVER_MSG_IMGS_NAME) {
             return;
         }
 
@@ -165,7 +165,7 @@ pub fn GalleryPage() -> impl IntoView {
                 from: last,
             };
             global_state.socket_send(msg);
-            global_state.socket_state_imgs_used();
+            global_state.socket_state_used(SERVER_MSG_IMGS_NAME);
         }
     };
 

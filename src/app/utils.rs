@@ -3,7 +3,6 @@ use chrono::Utc;
 
 use leptos::*;
 use leptos::{create_rw_signal, window, RwSignal, SignalGetUntracked};
-use std::sync::Mutex;
 use std::{collections::HashMap, rc::Rc};
 use wasm_bindgen::JsValue;
 use web_sys::Location;
@@ -11,7 +10,7 @@ use web_sys::Location;
 use crate::server::ServerMsg;
 use crate::{
     database::User,
-    server::{ClientMsg, ServerMsgImg, SERVER_MSG_IMGS_NAME},
+    server::{ClientMsg, ServerMsgImg},
 };
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -67,7 +66,7 @@ pub struct GlobalState {
     pub nav_tran: RwSignal<bool>,
     pub socket_send: RwSignal<Rc<dyn Fn(Vec<u8>)>>,
     pub socket_recv: RwSignal<ServerMsg>,
-    pub socket_state: RwSignal<Rc<Mutex<HashMap<String, i64>>>>,
+    pub socket_state: RwSignal<HashMap<&'static str, i64>>,
     pub gallery_imgs: RwSignal<Vec<ServerMsgImgResized>>,
 }
 
@@ -79,7 +78,7 @@ impl GlobalState {
             nav_tran: create_rw_signal(true),
             socket_send: create_rw_signal(Rc::new(|_| {})),
             socket_recv: create_rw_signal(ServerMsg::None),
-            socket_state: create_rw_signal(Rc::new(Mutex::new(HashMap::new()))),
+            socket_state: create_rw_signal(HashMap::new()),
             gallery_imgs: create_rw_signal(Vec::new()),
         }
     }
@@ -98,17 +97,13 @@ impl GlobalState {
         self.socket_send.get_untracked()(bytes);
     }
 
-    pub fn socket_state_imgs_is_ready(&self) -> bool {
-        let socket_state = self.socket_state.with_untracked(|state| {
-            match state
-                .lock()
-                .unwrap()
-                .get(&String::from(SERVER_MSG_IMGS_NAME))
-            {
+    pub fn socket_state_is_ready(&self, name: &str) -> bool {
+        let socket_state = self
+            .socket_state
+            .with_untracked(|state| match state.get(name) {
                 Some(n) => Some(*n),
                 None => None,
-            }
-        });
+            });
 
         let Some(n) = socket_state else {
             return true;
@@ -119,22 +114,20 @@ impl GlobalState {
         is_ready
     }
 
-    pub fn socket_state_imgs_reset(&self, name: &String) {
+    pub fn socket_state_reset(&self, name: &str) {
         self.socket_state.update_untracked(|state| {
-            state.lock().unwrap().remove(name);
+            state.remove(name);
         });
     }
 
-    pub fn socket_state_imgs_used(&self) {
-        self.socket_state.update_untracked(|state| {
-            let name = String::from(SERVER_MSG_IMGS_NAME);
-            let mut locked_state = state.lock().unwrap();
-            let Some(state) = locked_state.get_mut(&name) else {
-                locked_state.insert(name, Utc::now().timestamp_nanos_opt().unwrap());
+    pub fn socket_state_used(&self, name: &'static str) {
+        self.socket_state.update_untracked(move |state| {
+            let Some(socket_state) = state.get_mut(name) else {
+                state.insert(name, Utc::now().timestamp_nanos_opt().unwrap());
                 return;
             };
 
-            *state = Utc::now().timestamp_nanos_opt().unwrap();
+            *socket_state = Utc::now().timestamp_nanos_opt().unwrap();
         });
     }
 }

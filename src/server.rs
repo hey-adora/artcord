@@ -171,8 +171,6 @@ impl Actor for MyWs {
     type Context = ws::WebsocketContext<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        println!("started what? {}", self.id);
-
         let sessions = self.server_state.sessions.try_lock();
         let Ok(mut sessions) = sessions else {
             let error = sessions.err().unwrap();
@@ -277,28 +275,18 @@ async fn index(
     stream: web::Payload,
     server_state: actix_web::web::Data<ServerState>
 ) -> Result<HttpResponse, Error> {
-
-    let resp = ws::start(
+    ws::start(
         MyWs {
             id: uuid::Uuid::new_v4(),
             server_state: server_state.get_ref().to_owned().clone()
         },
         &req,
         stream,
-    );
-
-    let ip = req.peer_addr().unwrap().ip();
-    let port = req.peer_addr().unwrap().port();
-
-    println!("{:?}:{} {:?}", ip, port, resp);
-
-    resp
+    )
 }
 
 pub async fn favicon() -> actix_web::Result<actix_files::NamedFile> {
-    Ok(actix_files::NamedFile::open(format!(
-        "assets/favicon.ico"
-    ))?)
+    Ok(actix_files::NamedFile::open("assets/favicon.ico")?)
 }
 
 #[derive(Clone)]

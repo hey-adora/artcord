@@ -1,4 +1,3 @@
-use self::utils::ServerMsgImgResized;
 use crate::app::utils::GlobalState;
 use crate::server::ServerMsg;
 use components::navbar::Navbar;
@@ -8,8 +7,7 @@ use leptos_meta::*;
 use leptos_router::*;
 use leptos_use::utils::Pausable;
 use leptos_use::{
-    use_interval_fn, use_websocket, use_websocket_with_options, UseWebSocketOptions,
-    UseWebsocketReturn,
+    use_interval_fn, use_websocket_with_options, UseWebSocketOptions, UseWebsocketReturn,
 };
 use pages::gallery::GalleryPage;
 use pages::home::HomePage;
