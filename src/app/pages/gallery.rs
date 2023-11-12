@@ -45,7 +45,7 @@ fn resize_imgs(max_width: u32, imgs: &mut [ServerMsgImgResized]) -> () {
     let new_height: u32 = NEW_IMG_HEIGHT;
 
     for index in loop_start..loop_end {
-        let org_img = &imgs[index];
+        let org_img = &mut imgs[index];
         let width: u32 = org_img.width;
         let height: u32 = org_img.height;
         let ratio: f32 = width as f32 / height as f32;
@@ -55,6 +55,29 @@ fn resize_imgs(max_width: u32, imgs: &mut [ServerMsgImgResized]) -> () {
             height - new_height
         };
         let new_width: u32 = width - (height_diff as f32 * ratio) as u32;
+
+        let url_picker = |img: &ServerMsgImgResized, skip: u8| -> String {
+            match skip {
+                s if s < 1 && img.has_low => {
+                    format!("assets/gallery/low_{}.webp", img.org_hash)
+                }
+                s if s < 2 && img.has_medium => {
+                    format!("assets/gallery/medium_{}.webp", img.org_hash)
+                }
+                s if s < 3 && img.has_high => {
+                    format!("assets/gallery/high_{}.webp", img.org_hash)
+                }
+                _ => format!("assets/gallery/org_{}.{}", img.org_hash, &img.format),
+            }
+        };
+
+        org_img.display_high = url_picker(org_img, 2);
+
+        org_img.display_preview = match max_width {
+            w if w < NEW_IMG_HEIGHT * 4 => url_picker(org_img, 1),
+            w if w < NEW_IMG_HEIGHT * 3 => url_picker(org_img, 2),
+            _ => url_picker(org_img, 0),
+        };
 
         if (current_row_filled_width + new_width) <= max_width {
             current_row_filled_width += new_width;
@@ -180,7 +203,7 @@ pub fn GalleryPage() -> impl IntoView {
 
     let select_click_img = move |img: &ServerMsgImgResized| {
         selected_img.set(Some(SelectedImg {
-            display_url: format!("assets/gallery/org_{}.{}", img.org_hash, img.format),
+            display_url: img.display_high.clone(),
             org_url: format!("assets/gallery/org_{}.{}", img.org_hash, img.format),
             author_name: img.user.name.clone(),
             author_pfp: format!(
@@ -211,7 +234,7 @@ pub fn GalleryPage() -> impl IntoView {
                 {
                     let height = format!("{}px", &img.new_height);
                     let with = format!("{}px", &img.new_width);
-                    let bg_img = format!("url('assets/gallery/org_{}.{}')", &img.org_hash, &img.format);
+                    let bg_img = format!("url('{}')", &img.display_preview);
 
                     view! {
                         <div

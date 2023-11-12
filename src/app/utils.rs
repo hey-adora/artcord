@@ -22,6 +22,8 @@ pub enum ScrollSection {
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct ServerMsgImgResized {
+    pub display_high: String,
+    pub display_preview: String,
     pub user: User,
     pub user_id: String,
     pub msg_id: String,
@@ -31,8 +33,6 @@ pub struct ServerMsgImgResized {
     pub height: u32,
     pub new_width: u32,
     pub new_height: u32,
-    // pub new_width: RwSignal<u32>,
-    // pub new_height: RwSignal<u32>,
     pub has_high: bool,
     pub has_medium: bool,
     pub has_low: bool,
@@ -43,6 +43,8 @@ pub struct ServerMsgImgResized {
 impl From<ServerMsgImg> for ServerMsgImgResized {
     fn from(value: ServerMsgImg) -> Self {
         Self {
+            display_high: String::new(),
+            display_preview: String::new(),
             user: value.user,
             new_width: value.width,
             new_height: value.height,
