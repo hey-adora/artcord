@@ -300,6 +300,7 @@ pub async fn save_attachment(
 
     let format = match content_type.as_str() {
         "image/png" => Ok("png"),
+        "image/jpeg" => Ok("jpeg"),
         t => Err(SaveAttachmentError::ImgTypeUnsupported(t.to_string())),
     }?;
 
