@@ -47,6 +47,13 @@ pub async fn hook_save_attachments(
         );
 
         for attachment in attachments {
+            if attachment.size > 20_000_000 {
+                println!(
+                    "Error: attachment too big {} of {} in {}",
+                    attachment.size, msg_id, channel_id
+                );
+                continue;
+            }
             match save_attachment(
                 &db, timestamp, guild_id, channel_id, author_id, msg_id, attachment,
             )
