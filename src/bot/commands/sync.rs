@@ -4,7 +4,7 @@ use crate::database::DB;
 use serenity::builder::CreateApplicationCommand;
 use serenity::model::prelude::application_command::ApplicationCommandInteraction;
 use serenity::model::prelude::command::CommandOptionType;
-use serenity::model::prelude::InteractionResponseType;
+use serenity::model::prelude::{ChannelId, InteractionResponseType};
 use serenity::prelude::Context;
 
 pub const DISCORD_MAX_MSG_REQUEST_SIZE: i64 = 100;
@@ -15,7 +15,7 @@ pub async fn run(
     db: &DB,
     guild_id: u64,
 ) -> Result<(), crate::bot::commands::CommandError> {
-    let _channel_option = get_option_channel(command.data.options.get(0))?;
+    let channel_option = get_option_channel(command.data.options.get(0))?;
     let mut amount_option = *get_option_integer(command.data.options.get(1))?;
 
     if let Err(why) = command
@@ -38,8 +38,8 @@ pub async fn run(
     }
     let loop_amount: i64 = amount_option - amount_fraction;
 
-    let messages = command
-        .channel_id
+    let messages = channel_option
+        .id
         .messages(ctx.http.as_ref(), |f| f.limit(amount_fraction as u64))
         .await?;
 
@@ -55,7 +55,7 @@ pub async fn run(
             &message.attachments,
             db,
             guild_id,
-            command.channel_id.0,
+            channel_option.id.0,
             message.id.0,
             message.author.id.0,
             message.author.name.clone(),
@@ -110,8 +110,8 @@ pub async fn run(
     let mut msg = (*last).clone();
 
     for _i in (0..loop_amount).step_by(DISCORD_MAX_MSG_REQUEST_SIZE as usize) {
-        let messages = command
-            .channel_id
+        let messages = channel_option
+            .id
             .messages(ctx.http.as_ref(), |f| {
                 f.before(msg.id).limit(DISCORD_MAX_MSG_REQUEST_SIZE as u64)
             })
@@ -122,7 +122,7 @@ pub async fn run(
                 &message.attachments,
                 db,
                 guild_id,
-                command.channel_id.0,
+                channel_option.id.0,
                 message.id.0,
                 message.author.id.0,
                 message.author.name.clone(),
