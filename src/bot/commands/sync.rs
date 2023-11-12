@@ -49,7 +49,7 @@ pub async fn run(
     total_synced += messages.len();
     command
         .edit_original_interaction_response(&ctx.http, |message| {
-            message.content(format!("Syncing... {}/{}", total_synced, amount_option))
+            message.content(format!("Syncing... "))
         })
         .await?;
 
@@ -92,25 +92,43 @@ pub async fn run(
 
     if messages.len() < amount_fraction as usize {
         command
-            .edit_original_interaction_response(&ctx.http, |message| {
-                message.content(format!(
+            .channel_id
+            .send_message(&ctx.http, |msg| {
+                msg.content(format!(
                     "Syncing complete. {}/{}",
                     total_synced, amount_option
                 ))
             })
             .await?;
+        // command
+        //     .edit_original_interaction_response(&ctx.http, |message| {
+        //         message.content(format!(
+        //             "Syncing complete. {}/{}",
+        //             total_synced, amount_option
+        //         ))
+        //     })
+        //     .await?;
         return Ok(());
     }
 
     let Some(last) = messages.last() else {
         command
-            .edit_original_interaction_response(&ctx.http, |message| {
-                message.content(format!(
+            .channel_id
+            .send_message(&ctx.http, |msg| {
+                msg.content(format!(
                     "Syncing complete. {}/{}",
                     total_synced, amount_option
                 ))
             })
             .await?;
+        // command
+        //     .edit_original_interaction_response(&ctx.http, |message| {
+        //         message.content(format!(
+        //             "Syncing complete. {}/{}",
+        //             total_synced, amount_option
+        //         ))
+        //     })
+        //     .await?;
         return Ok(());
     };
 
@@ -172,22 +190,37 @@ pub async fn run(
         };
 
         command
-            .edit_original_interaction_response(&ctx.http, |message| {
-                message.content(format!("Syncing... {}/{}", total_synced, amount_option))
+            .channel_id
+            .send_message(&ctx.http, |msg| {
+                msg.content(format!("Syncing... {}/{}", total_synced, amount_option))
             })
             .await?;
+        // command
+        //     .edit_original_interaction_response(&ctx.http, |message| {
+        //         message.content(format!("Syncing... {}/{}", total_synced, amount_option))
+        //     })
+        //     .await?;
 
         msg = (*new_last).clone();
     }
 
     command
-        .edit_original_interaction_response(&ctx.http, |message| {
-            message.content(format!(
+        .channel_id
+        .send_message(&ctx.http, |msg| {
+            msg.content(format!(
                 "Syncing complete. {}/{}",
                 total_synced, amount_option
             ))
         })
         .await?;
+    // command
+    //     .edit_original_interaction_response(&ctx.http, |message| {
+    //         message.content(format!(
+    //             "Syncing complete. {}/{}",
+    //             total_synced, amount_option
+    //         ))
+    //     })
+    //     .await?;
 
     Ok(())
 }
