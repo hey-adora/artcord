@@ -46,7 +46,7 @@ pub async fn hook_save_attachments(
         );
 
         for attachment in attachments {
-            match save_attachment(&db, guild_id, author_id, msg_id, attachment).await {
+            match save_attachment(&db, guild_id, channel_id, author_id, msg_id, attachment).await {
                 Ok(file) => {
                     println!("File: {}", file);
                     Ok::<(), SaveAttachmentsError>(())
@@ -288,6 +288,7 @@ pub async fn save_user(
 pub async fn save_attachment(
     db: &DB,
     guild_id: u64,
+    channel_id: u64,
     user_id: u64,
     msg_id: u64,
     attachment: &Attachment,
@@ -410,6 +411,7 @@ pub async fn save_attachment(
             _id: mongodb::bson::oid::ObjectId::new(),
             show: true,
             guild_id: guild_id.to_string(),
+            channel_id: channel_id.to_string(),
             user_id: format!("{}", user_id),
             id: format!("{}", msg_id),
             org_url: attachment.url.clone(),
