@@ -302,7 +302,7 @@ async fn index(
 }
 
 pub async fn favicon() -> actix_web::Result<actix_files::NamedFile> {
-    Ok(actix_files::NamedFile::open("assets/favicon.ico")?)
+    Ok(actix_files::NamedFile::open("target/site/favicon.ico")?)
 }
 
 #[derive(Clone)]
