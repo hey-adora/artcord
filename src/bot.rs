@@ -111,6 +111,12 @@ pub async fn resolve_command(
         c if c == "show_roles" && (user_commander_authorized || no_roles_set) => {
             commands::show_roles::run(&ctx, &command, &db, guild_id.0).await
         }
+        c if c == "guilds" && (user_commander_authorized || no_roles_set) => {
+            commands::guilds::run(&ctx, &command, &db, guild_id.0).await
+        }
+        c if c == "leave" && (user_commander_authorized || no_roles_set) => {
+            commands::leave::run(&ctx, &command, &db, guild_id.0).await
+        }
         c if c == "sync" && (user_gallery_authorized || no_roles_set) => {
             commands::sync::run(&ctx, &command, &db, guild_id.0).await
         }
@@ -278,6 +284,8 @@ impl serenity::client::EventHandler for BotHandler {
                 commands
                     .create_application_command(|command| commands::who::register(command))
                     .create_application_command(|command| commands::test::register(command))
+                    .create_application_command(|command| commands::guilds::register(command))
+                    .create_application_command(|command| commands::leave::register(command))
                     .create_application_command(|command| commands::sync::register(command))
                     .create_application_command(|command| commands::add_channel::register(command))
                     .create_application_command(|command| commands::add_role::register(command))

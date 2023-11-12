@@ -1,11 +1,9 @@
+use std::num::ParseIntError;
 
-
-use serenity::{
-    model::prelude::{
-        application_command::{CommandDataOption, CommandDataOptionValue},
-        channel::PartialChannel,
-        guild::Role,
-    },
+use serenity::model::prelude::{
+    application_command::{CommandDataOption, CommandDataOptionValue},
+    channel::PartialChannel,
+    guild::Role,
 };
 use thiserror::Error;
 
@@ -13,6 +11,8 @@ use super::hooks::save_attachments::SaveAttachmentsError;
 
 pub mod add_channel;
 pub mod add_role;
+pub mod guilds;
+pub mod leave;
 pub mod remove_channel;
 pub mod remove_role;
 pub mod show_channels;
@@ -52,6 +52,9 @@ pub fn is_valid_role_feature(feature: &str) -> Result<(), CommandError> {
 
 #[derive(Error, Debug)]
 pub enum CommandError {
+    #[error("Failed to parse number: {0}")]
+    Number(#[from] ParseIntError),
+
     #[error("Option not found: {0}")]
     OptionNotFound(String),
 
