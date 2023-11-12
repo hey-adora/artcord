@@ -417,7 +417,7 @@ pub async fn save_attachment(
             id: format!("{}", msg_id),
             org_url: attachment.url.clone(),
             org_hash: file_hash_hex.clone(),
-            format: format.to_string(),
+            format: file_ext.to_string(),
             width: org_img.width(),
             height: org_img.height(),
             has_high: paths_state[2],
