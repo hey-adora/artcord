@@ -36,7 +36,7 @@ pub fn App() -> impl IntoView {
         } = use_websocket_with_options(
             "/ws/",
             UseWebSocketOptions::default()
-                .immediate(false)
+                .immediate(true)
                 .reconnect_limit(0)
                 .reconnect_interval(10000),
         );
