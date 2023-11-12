@@ -36,18 +36,18 @@ pub fn App() -> impl IntoView {
         } = use_websocket_with_options(
             "/ws/",
             UseWebSocketOptions::default()
-                .immediate(true)
-                .reconnect_limit(10)
-                .reconnect_interval(3000),
+                .immediate(false)
+                .reconnect_limit(0)
+                .reconnect_interval(10000),
         );
         global_state.socket_send.set(Rc::new(send_bytes.clone()));
-        // let Pausable { pause, resume, .. } = use_interval_fn(
-        //     move || {
-        //         log!("RECONNECTING");
-        //         open();
-        //     },
-        //     1000,
-        // );
+        let Pausable { pause, resume, .. } = use_interval_fn(
+            move || {
+                log!("RECONNECTING");
+                open();
+            },
+            3000,
+        );
 
         create_effect(move |_| {
             log!("{:?}", message.get());
@@ -77,11 +77,11 @@ pub fn App() -> impl IntoView {
         create_effect(move |_| {
             let state = ready_state.get();
             log!("SOCKET STATE: {}", state);
-            // match state {
-            //     leptos_use::core::ConnectionReadyState::Closed => resume(),
-            //     leptos_use::core::ConnectionReadyState::Open => pause(),
-            //     _ => (),
-            // };
+            match state {
+                leptos_use::core::ConnectionReadyState::Closed => resume(),
+                leptos_use::core::ConnectionReadyState::Open => pause(),
+                _ => (),
+            };
         });
     };
 
