@@ -79,10 +79,19 @@ fn calc_fit_count(width: u32, height: u32) -> u32 {
     (width * height) / (NEW_IMG_HEIGHT * NEW_IMG_HEIGHT)
 }
 
+#[derive(Clone)]
+struct SelectedImg {
+    pub display_url: String,
+    pub org_url: String,
+    pub author_name: String,
+    pub author_pfp: String,
+}
+
 #[component]
 pub fn GalleryPage() -> impl IntoView {
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
     let gallery_section = create_node_ref::<Section>();
+    let selected_img: RwSignal<Option<SelectedImg>> = create_rw_signal(None);
 
     create_effect(move |_| {
         global_state.socket_recv.with(|server_msg| {
@@ -129,7 +138,7 @@ pub fn GalleryPage() -> impl IntoView {
             amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
             from: DateTime::from_millis(Utc::now().timestamp_nanos_opt().unwrap()),
         };
-        log!("{:#?}", &msg);
+
         global_state.socket_send(msg);
     });
 
@@ -169,19 +178,55 @@ pub fn GalleryPage() -> impl IntoView {
         }
     };
 
+    let select_click_img = move |img: &ServerMsgImgResized| {
+        selected_img.set(Some(SelectedImg {
+            display_url: format!("assets/gallery/org_{}.{}", img.org_hash, img.format),
+            org_url: format!("assets/gallery/org_{}.{}", img.org_hash, img.format),
+            author_name: img.user.name.clone(),
+            author_pfp: format!(
+                "url('assets/gallery/pfp_{}.webp')",
+                img.user.pfp_hash.clone().unwrap_or_default()
+            ),
+        }))
+    };
+
     view! {
+        {
+            move || {
+                match selected_img.get() {
+                    Some(img) => Some(view! {
+                        <div on:click=move |_| { selected_img.set(None); } class=" absolute grid grid-rows-[1fr] left-0 top-0 w-screen h-screen place-items-center bg-gradient-to-br from-mid-purple/50 to-dark-purple/50 z-[150] ">
+                            <div  >
+                                <div class="flex justify-end text-2xl"><img class="border-2 border-low-purple rounded-full bg-mid-purple w-[30px] h-[30px] p-1 m-2" src="assets/x.svg"/></div>
+                                <img  style=move|| format!("max-height: calc(100vh - 70px); ") on:click=move |e| { e.stop_propagation();  } src=img.display_url/>
+                                <div on:click=move |e| { e.stop_propagation();  } class="bg-dark-purple">"By "{img.author_name}</div>
+                            </div>
+                        </div> }),
+                None => None
+                }
+            }
+        }
         <section on:scroll=section_scroll on:resize=move |_| { log!("test resize") } _ref=gallery_section class="line-bg  overflow-x-hidden content-start flex flex-wrap overflow-y-scroll " style=move|| format!("max-height: calc(100vh - 80px); ")>
             <For each=global_state.gallery_imgs key=|state| (state.org_hash.clone(), state.new_width, state.new_height) let:img >
-                <div
-                    class="bg-center bg-contain bg-no-repeat flex-shrink-0 font-bold grid place-items-center  border hover:shadow-glowy hover:z-[101] transition-shadow duration-300 bg-mid-purple  border-low-purple"
-                    style:height=move || format!("{}px", &img.new_height)
-                    style:width=move || format!("{}px", &img.new_width)
-                    style:background-image=move || format!("url('assets/gallery/org_{}.{}')", &img.org_hash, &img.format)
-                >
-                    <div class="relative flex opacity-0 hover:opacity-100 transition duration-300 w-full h-full flex-col text-center justify-center gap-2  "  >
-                        <div class="absolute bg-dark-purple bottom-0 left-0 translate-y-full w-full">{&img.user.name}</div>
-                    </div>
-                </div>
+                {
+                    let height = format!("{}px", &img.new_height);
+                    let with = format!("{}px", &img.new_width);
+                    let bg_img = format!("url('assets/gallery/org_{}.{}')", &img.org_hash, &img.format);
+
+                    view! {
+                        <div
+                            class="bg-center bg-contain bg-no-repeat flex-shrink-0 font-bold grid place-items-center  border hover:shadow-glowy hover:z-[101] transition-shadow duration-300 bg-mid-purple  border-low-purple"
+                            style:height=height
+                            style:width=with
+                            style:background-image=bg_img
+                            on:click= move |_| select_click_img(&img)
+                        >
+                            // <div class="relative flex opacity-0 hover:opacity-100 transition duration-300 w-full h-full flex-col text-center justify-center gap-2  "  >
+                            //     <div class="absolute bg-dark-purple bottom-0 left-0 translate-y-full w-full">{&img.user.name}</div>
+                            // </div>
+                        </div>
+                    }
+                }
             </For>
         </section>
     }
