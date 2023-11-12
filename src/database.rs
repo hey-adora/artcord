@@ -211,7 +211,8 @@ if #[cfg(feature = "ssr")] {
         }
 
         pub async fn create_database() -> DB {
-            let mut client_options = ClientOptions::parse("mongodb://root:example@localhost:27017")
+           let mongo_url = std::env::var("MONGO_URL").expect("MONGO_URL");
+            let mut client_options = ClientOptions::parse(mongo_url)
                 .await
                 .unwrap();
             client_options.app_name = Some("My App".to_string());
