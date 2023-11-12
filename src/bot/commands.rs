@@ -55,6 +55,9 @@ pub enum CommandError {
     #[error("Failed to parse number: {0}")]
     Number(#[from] ParseIntError),
 
+    #[error("Failed to get time")]
+    Time,
+
     #[error("Option not found: {0}")]
     OptionNotFound(String),
 

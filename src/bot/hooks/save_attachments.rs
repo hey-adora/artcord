@@ -13,6 +13,7 @@ use thiserror::Error;
 pub async fn hook_save_attachments(
     attachments: &[serenity::model::channel::Attachment],
     db: &DB,
+    timestamp: i64,
     guild_id: u64,
     channel_id: u64,
     msg_id: u64,
@@ -46,7 +47,11 @@ pub async fn hook_save_attachments(
         );
 
         for attachment in attachments {
-            match save_attachment(&db, guild_id, channel_id, author_id, msg_id, attachment).await {
+            match save_attachment(
+                &db, timestamp, guild_id, channel_id, author_id, msg_id, attachment,
+            )
+            .await
+            {
                 Ok(file) => {
                     println!("File: {}", file);
                     Ok::<(), SaveAttachmentsError>(())
@@ -287,6 +292,7 @@ pub async fn save_user(
 
 pub async fn save_attachment(
     db: &DB,
+    timestamp: i64,
     guild_id: u64,
     channel_id: u64,
     user_id: u64,
@@ -298,7 +304,7 @@ pub async fn save_attachment(
         .as_ref()
         .ok_or(SaveAttachmentError::ImgTypeNotFound)?;
 
-    let format = match content_type.as_str() {
+    let _ = match content_type.as_str() {
         "image/png" => Ok("png"),
         "image/jpeg" => Ok("jpeg"),
         t => Err(SaveAttachmentError::ImgTypeUnsupported(t.to_string())),
@@ -367,6 +373,13 @@ pub async fn save_attachment(
 
         let mut update = doc! {};
 
+        if found_img.created_at.timestamp_millis() != timestamp {
+            update.insert(
+                "created_at",
+                mongodb::bson::DateTime::from_millis(timestamp),
+            );
+        }
+
         let msg_id = msg_id.to_string();
         if found_img.id != msg_id {
             update.insert("id", msg_id);
@@ -424,7 +437,7 @@ pub async fn save_attachment(
             has_medium: paths_state[1],
             has_low: paths_state[0],
             modified_at: mongodb::bson::DateTime::now(),
-            created_at: mongodb::bson::DateTime::now(),
+            created_at: mongodb::bson::DateTime::from_millis(timestamp),
         };
 
         db.collection_img.insert_one(&img, None).await?;

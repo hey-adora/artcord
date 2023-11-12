@@ -1,3 +1,4 @@
+use self::commands::CommandError;
 use self::hooks::save_attachments::hook_save_attachments;
 use futures::TryStreamExt;
 use mongodb::bson::doc;
@@ -135,6 +136,14 @@ impl serenity::client::EventHandler for BotHandler {
             return;
         };
 
+        let Some(time) = msg.timestamp.timestamp_nanos_opt() else {
+            println!(
+                "Error failed to get time for guild: {}, msg: {}",
+                guild_id, msg.id.0
+            );
+            return;
+        };
+
         let db = {
             let data_read = ctx.data.read().await;
 
@@ -147,6 +156,7 @@ impl serenity::client::EventHandler for BotHandler {
         let result = hook_save_attachments(
             &msg.attachments,
             &db,
+            time,
             guild_id.0,
             msg.channel_id.0,
             msg.id.0,

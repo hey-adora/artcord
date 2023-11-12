@@ -1,11 +1,14 @@
 use crate::bot::commands::{get_option_channel, get_option_integer};
 use crate::bot::hooks::save_attachments::{self, hook_save_attachments};
 use crate::database::DB;
+use chrono::Utc;
 use serenity::builder::CreateApplicationCommand;
 use serenity::model::prelude::application_command::ApplicationCommandInteraction;
 use serenity::model::prelude::command::CommandOptionType;
 use serenity::model::prelude::{ChannelId, InteractionResponseType};
 use serenity::prelude::Context;
+
+use super::CommandError;
 
 pub const DISCORD_MAX_MSG_REQUEST_SIZE: i64 = 100;
 
@@ -54,6 +57,10 @@ pub async fn run(
         let result = hook_save_attachments(
             &message.attachments,
             db,
+            message
+                .timestamp
+                .timestamp_nanos_opt()
+                .ok_or(CommandError::Time)?,
             guild_id,
             channel_option.id.0,
             message.id.0,
@@ -121,6 +128,10 @@ pub async fn run(
             let result = hook_save_attachments(
                 &message.attachments,
                 db,
+                message
+                    .timestamp
+                    .timestamp_nanos_opt()
+                    .ok_or(CommandError::Time)?,
                 guild_id,
                 channel_option.id.0,
                 message.id.0,
