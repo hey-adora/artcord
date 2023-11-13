@@ -31,8 +31,8 @@ fn resize_img(
         let ratio = org_img.width as f32 / org_img.height as f32;
         let new_prev_img_w: f32 = optimal_height * ratio;
         let new_prev_img_h: f32 = optimal_height;
-        imgs[i].new_width = new_prev_img_w as u32;
-        imgs[i].new_height = new_prev_img_h as u32;
+        imgs[i].new_width = new_prev_img_w;
+        imgs[i].new_height = new_prev_img_h;
     }
 }
 
@@ -247,7 +247,7 @@ pub fn GalleryPage() -> impl IntoView {
             }
         }
         <section on:scroll=section_scroll on:resize=move |_| { log!("test resize") } _ref=gallery_section class="line-bg  overflow-x-hidden content-start flex flex-wrap overflow-y-scroll " style=move|| format!("max-height: calc(100vh - 80px); ")>
-            <For each=global_state.gallery_imgs key=|state| (state.org_hash.clone(), state.new_width, state.new_height) let:img >
+            <For each=global_state.gallery_imgs key=|state| (state.org_hash.clone(), state.new_width.to_string(), state.new_height.to_string()) let:img >
                 {
                     let height = format!("{}px", &img.new_height);
                     let with = format!("{}px", &img.new_width);
