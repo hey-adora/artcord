@@ -231,7 +231,7 @@ pub fn GalleryPage() -> impl IntoView {
                         <div on:click=move |_| { selected_img.set(None); } class=" absolute grid grid-rows-[1fr] left-0 top-0 w-screen h-screen place-items-center bg-gradient-to-br from-mid-purple/50 to-dark-purple/50 z-[150] ">
                             <div  >
                                 <div class="flex justify-end text-2xl"><img class="cursor-pointer border-2 border-low-purple rounded-full bg-mid-purple w-[30px] h-[30px] p-1 m-2" src="assets/x.svg"/></div>
-                                <img  style=move|| format!("max-height: calc(100vh - 70px); ") on:click=move |e| { e.stop_propagation();  } src=img.display_url/>
+                                <img  style=move|| format!("max-height: calc(100vh - 80px); ") on:click=move |e| { e.stop_propagation();  } src=img.display_url/>
                                 <div on:click=move |e| { e.stop_propagation();  } class="bg-dark-purple flex justify-between items-center">
                                        <div class="flex gap-2">
                                             <div>"By "</div>
