@@ -41,6 +41,7 @@ pub fn App() -> impl IntoView {
                 .reconnect_interval(10000),
         );
         global_state.socket_send.set(Rc::new(send_bytes.clone()));
+
         let Pausable { pause, resume, .. } = use_interval_fn(
             move || {
                 log!("RECONNECTING");
@@ -78,8 +79,21 @@ pub fn App() -> impl IntoView {
             let state = ready_state.get();
             log!("SOCKET STATE: {}", state);
             match state {
-                leptos_use::core::ConnectionReadyState::Closed => resume(),
-                leptos_use::core::ConnectionReadyState::Open => pause(),
+                leptos_use::core::ConnectionReadyState::Closed => {
+                    let current_state = global_state.socket_connected.get_untracked();
+                    if current_state == true {
+                        global_state.socket_connected.set(false);
+                    }
+                    resume()
+                }
+                leptos_use::core::ConnectionReadyState::Open => {
+                    let current_state = global_state.socket_connected.get_untracked();
+                    if current_state == false {
+                        global_state.socket_connected.set(true);
+                    }
+                    global_state.socket_connected.set(true);
+                    pause()
+                }
                 _ => (),
             };
         });

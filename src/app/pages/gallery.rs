@@ -139,20 +139,32 @@ pub fn GalleryPage() -> impl IntoView {
     });
 
     create_effect(move |_| {
-        let Some(section) = gallery_section.get() else {
-            return;
-        };
-
         let _ = use_event_listener(use_window(), resize, move |_| {
+            // log!("TRYING TO RESIZE");
             global_state.gallery_imgs.update(|imgs| {
                 let section = gallery_section.get_untracked();
                 if let Some(section) = section {
                     let width = section.client_width() as u32;
 
+                    // log!("RESIZING!!!!!!!!!!!!");
                     resize_imgs(width, imgs);
                 };
             });
         });
+    });
+
+    create_effect(move |_| {
+        let connected = global_state.socket_connected.get();
+        let loaded = global_state.gallery_loaded.get();
+        if loaded || !connected {
+            // log!("ITS NOT READY LOADED");
+            return;
+        }
+
+        let Some(section) = gallery_section.get() else {
+            return;
+        };
+        // log!("THIS SHOULDN'T HAPPEN {} {}", loaded, connected);
 
         let client_height = section.client_height();
         let client_width = section.client_width();
@@ -163,6 +175,7 @@ pub fn GalleryPage() -> impl IntoView {
         };
 
         global_state.socket_send(msg);
+        global_state.gallery_loaded.set(true);
     });
 
     let section_scroll = move |_: Event| {

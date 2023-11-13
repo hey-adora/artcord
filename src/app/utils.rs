@@ -3,6 +3,7 @@ use chrono::Utc;
 
 use leptos::*;
 use leptos::{create_rw_signal, window, RwSignal, SignalGetUntracked};
+use leptos_use::core::ConnectionReadyState;
 use std::{collections::HashMap, rc::Rc};
 use wasm_bindgen::JsValue;
 use web_sys::Location;
@@ -68,10 +69,12 @@ pub struct GlobalState {
     pub section: RwSignal<ScrollSection>,
     pub nav_open: RwSignal<bool>,
     pub nav_tran: RwSignal<bool>,
+    pub socket_connected: RwSignal<bool>,
     pub socket_send: RwSignal<Rc<dyn Fn(Vec<u8>)>>,
     pub socket_recv: RwSignal<ServerMsg>,
-    pub socket_state: RwSignal<HashMap<&'static str, i64>>,
+    pub socket_timestamps: RwSignal<HashMap<&'static str, i64>>,
     pub gallery_imgs: RwSignal<Vec<ServerMsgImgResized>>,
+    pub gallery_loaded: RwSignal<bool>,
 }
 
 impl GlobalState {
@@ -81,9 +84,11 @@ impl GlobalState {
             nav_open: create_rw_signal(false),
             nav_tran: create_rw_signal(true),
             socket_send: create_rw_signal(Rc::new(|_| {})),
+            socket_connected: create_rw_signal(false),
             socket_recv: create_rw_signal(ServerMsg::None),
-            socket_state: create_rw_signal(HashMap::new()),
+            socket_timestamps: create_rw_signal(HashMap::new()),
             gallery_imgs: create_rw_signal(Vec::new()),
+            gallery_loaded: create_rw_signal(false),
         }
     }
 
@@ -103,7 +108,7 @@ impl GlobalState {
 
     pub fn socket_state_is_ready(&self, name: &str) -> bool {
         let socket_state = self
-            .socket_state
+            .socket_timestamps
             .with_untracked(|state| match state.get(name) {
                 Some(n) => Some(*n),
                 None => None,
@@ -119,13 +124,13 @@ impl GlobalState {
     }
 
     pub fn socket_state_reset(&self, name: &str) {
-        self.socket_state.update_untracked(|state| {
+        self.socket_timestamps.update_untracked(|state| {
             state.remove(name);
         });
     }
 
     pub fn socket_state_used(&self, name: &'static str) {
-        self.socket_state.update_untracked(move |state| {
+        self.socket_timestamps.update_untracked(move |state| {
             let Some(socket_state) = state.get_mut(name) else {
                 state.insert(name, Utc::now().timestamp_nanos_opt().unwrap());
                 return;
