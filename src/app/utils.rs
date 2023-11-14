@@ -4,10 +4,12 @@ use chrono::Utc;
 use leptos::*;
 use leptos::{create_rw_signal, window, RwSignal, SignalGetUntracked};
 use leptos_use::core::ConnectionReadyState;
+use rand::Rng;
 use std::{collections::HashMap, rc::Rc};
 use wasm_bindgen::JsValue;
 use web_sys::Location;
 
+use crate::bot::ImgQuality;
 use crate::server::ServerMsg;
 use crate::{
     database::User,
@@ -23,6 +25,8 @@ pub enum ScrollSection {
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct ServerMsgImgResized {
+    pub id: u128,
+    pub quality: ImgQuality,
     pub display_high: String,
     pub display_preview: String,
     pub user: User,
@@ -43,9 +47,13 @@ pub struct ServerMsgImgResized {
 
 impl From<ServerMsgImg> for ServerMsgImgResized {
     fn from(value: ServerMsgImg) -> Self {
+        let quality = value.pick_quality();
+        let display_preview = quality.gen_link_preview(&value.org_hash, &value.format);
         Self {
-            display_high: String::new(),
-            display_preview: String::new(),
+            quality,
+            display_preview,
+            id: rand::thread_rng().gen::<u128>(),
+            display_high: ImgQuality::gen_link_org(&value.org_hash, &value.format),
             user: value.user,
             new_width: value.width as f32,
             new_height: value.height as f32,

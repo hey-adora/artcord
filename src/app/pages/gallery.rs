@@ -5,6 +5,7 @@ use leptos::html::Section;
 use leptos::logging::log;
 use leptos::*;
 use leptos_use::{use_event_listener, use_window};
+use rand::Rng;
 use web_sys::Event;
 
 use crate::app::utils::{GlobalState, ServerMsgImgResized};
@@ -44,6 +45,8 @@ fn resize_imgs(max_width: u32, imgs: &mut [ServerMsgImgResized]) -> () {
     let mut current_row_filled_width: u32 = 0;
     let new_height: u32 = NEW_IMG_HEIGHT;
 
+    let mut rand = rand::thread_rng();
+
     for index in loop_start..loop_end {
         let org_img = &mut imgs[index];
         let width: u32 = org_img.width;
@@ -55,29 +58,26 @@ fn resize_imgs(max_width: u32, imgs: &mut [ServerMsgImgResized]) -> () {
             height - new_height
         };
         let new_width: u32 = width - (height_diff as f32 * ratio) as u32;
+        org_img.id = rand.gen::<u128>();
 
-        let url_picker = |img: &ServerMsgImgResized, skip: u8| -> String {
-            match skip {
-                s if s < 1 && img.has_low => {
-                    format!("assets/gallery/low_{}.webp", img.org_hash)
-                }
-                s if s < 2 && img.has_medium => {
-                    format!("assets/gallery/medium_{}.webp", img.org_hash)
-                }
-                s if s < 3 && img.has_high => {
-                    format!("assets/gallery/high_{}.webp", img.org_hash)
-                }
-                _ => format!("assets/gallery/org_{}.{}", img.org_hash, &img.format),
-            }
-        };
-
-        org_img.display_high = url_picker(org_img, 2);
-
-        org_img.display_preview = match max_width {
-            w if w < NEW_IMG_HEIGHT * 4 => url_picker(org_img, 1),
-            w if w < NEW_IMG_HEIGHT * 3 => url_picker(org_img, 2),
-            _ => url_picker(org_img, 0),
-        };
+        // let url_picker = |img: &ServerMsgImgResized| -> String {
+        //     if img.has_high {
+        //         format!("assets/gallery/high_{}.webp", img.org_hash)
+        //     } else if img.has_medium {
+        //         format!("assets/gallery/medium_{}.webp", img.org_hash)
+        //     } else if img.has_low {
+        //         format!("assets/gallery/low_{}.webp", img.org_hash)
+        //     } else {
+        //         format!("assets/gallery/org_{}.{}", img.org_hash, &img.format)
+        //     }
+        // };
+        //
+        // org_img.display_high = format!(
+        //     "assets/gallery/org_{}.{}",
+        //     &org_img.org_hash, &org_img.format
+        // );
+        //
+        // org_img.display_preview = url_picker(&org_img);
 
         if (current_row_filled_width + new_width) <= max_width {
             current_row_filled_width += new_width;
@@ -247,7 +247,7 @@ pub fn GalleryPage() -> impl IntoView {
             }
         }
         <section on:scroll=section_scroll on:resize=move |_| { log!("test resize") } _ref=gallery_section class="line-bg  overflow-x-hidden content-start flex flex-wrap overflow-y-scroll " style=move|| format!("max-height: calc(100vh - 80px); ")>
-            <For each=global_state.gallery_imgs key=|state| (state.org_hash.clone(), state.new_width.to_string(), state.new_height.to_string()) let:img >
+            <For each=global_state.gallery_imgs key=|state| state.id let:img >
                 {
                     let height = format!("{}px", &img.new_height);
                     let with = format!("{}px", &img.new_width);

@@ -14,9 +14,9 @@ use pages::home::HomePage;
 use pages::not_found::NotFound;
 use std::rc::Rc;
 
-mod components;
-mod pages;
-mod utils;
+pub mod components;
+pub mod pages;
+pub mod utils;
 
 #[component]
 pub fn App() -> impl IntoView {

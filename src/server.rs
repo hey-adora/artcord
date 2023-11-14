@@ -1,3 +1,4 @@
+use crate::bot::ImgQuality;
 use crate::database::User;
 use crate::database::{DT, OBJ};
 use bson::oid::ObjectId;
@@ -38,6 +39,20 @@ pub struct ServerMsgImg {
 
     #[with(DT)]
     pub created_at: bson::datetime::DateTime,
+}
+
+impl ServerMsgImg {
+    pub fn pick_quality(&self) -> ImgQuality {
+        if self.has_high {
+            ImgQuality::High
+        } else if self.has_medium {
+            ImgQuality::Medium
+        } else if self.has_low {
+            ImgQuality::Low
+        } else {
+            ImgQuality::Org
+        }
+    }
 }
 
 #[derive(rkyv::Archive, Deserialize, Serialize, Debug, PartialEq)]
