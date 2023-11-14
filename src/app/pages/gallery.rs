@@ -234,23 +234,30 @@ pub fn GalleryPage() -> impl IntoView {
                     Some(img) => Some(view! {
                         <div on:click=move |_| { selected_img.set(None); } class=" absolute grid grid-rows-[1fr] left-0 top-0 w-screen h-screen place-items-center bg-gradient-to-br from-mid-purple/50 to-dark-purple/50 z-[150] ">
                             <div  >
-                                <div class="flex justify-end text-2xl"><img class="cursor-pointer border-2 border-low-purple rounded-full bg-mid-purple w-[30px] h-[30px] p-1 m-2" src="assets/x.svg"/></div>
-                                <img class="bg-mid-purple object-contain" alt="loading..." style=move|| format!("max-height: calc(100vh - 80px); max-width: 100vw; height: min({1}px, calc(100vw * ( {1} / {0} ))); aspect-ratio: {0} / {1};", img.width, img.height) on:click=move |e| { e.stop_propagation();  } src=img.display_url/>
-                                <div on:click=move |e| { e.stop_propagation();  } class="bg-dark-purple flex justify-between items-center">
+                                <div class="flex justify-between items-center rounded-t-lg bg-dark-purple pl-2">
                                        <div class="flex gap-2">
                                             <div>"By "</div>
                                             <img class="border border-low-purple rounded-full bg-mid-purple h-[25px] " src=img.author_pfp/>
                                             <div>{img.author_name}</div>
                                        </div>
-                                       <a target="_blank" href=img.org_url>"Open Original"</a>
+                                     <img class="cursor-pointer border-2 border-low-purple rounded-full bg-mid-purple w-[30px] h-[30px] p-1 m-2" src="assets/x.svg"/>
                                 </div>
+                                <img class="bg-mid-purple object-contain" alt="loading..." style=move|| format!("max-height: calc(100vh - 70px); max-width: 100vw; height: min({1}px, calc(100vw * ( {1} / {0} ))); aspect-ratio: {0} / {1};", img.width, img.height) on:click=move |e| { e.stop_propagation();  } src=img.display_url/>
+                                // <div on:click=move |e| { e.stop_propagation();  } class="bg-dark-purple flex justify-between items-center">
+                                //        <div class="flex gap-2">
+                                //             <div>"By "</div>
+                                //             <img class="border border-low-purple rounded-full bg-mid-purple h-[25px] " src=img.author_pfp/>
+                                //             <div>{img.author_name}</div>
+                                //        </div>
+                                //        <a target="_blank" href=img.org_url>"Open Original"</a>
+                                // </div>
                             </div>
                         </div> }),
                 None => None
                 }
             }
         }
-        <section on:scroll=section_scroll on:resize=move |_| { log!("test resize") } _ref=gallery_section class="line-bg  overflow-x-hidden content-start flex flex-wrap overflow-y-scroll " style=move|| format!("max-height: calc(100vh - 80px); ")>
+        <section on:scroll=section_scroll _ref=gallery_section class="line-bg  overflow-x-hidden content-start flex flex-wrap overflow-y-scroll " style=move|| format!("max-height: calc(100vh - 80px); ")>
             <For each=global_state.gallery_imgs key=|state| state.id let:img >
                 {
                     let height = format!("{}px", &img.new_height);
