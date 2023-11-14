@@ -108,6 +108,8 @@ struct SelectedImg {
     pub org_url: String,
     pub author_name: String,
     pub author_pfp: String,
+    pub width: u32,
+    pub height: u32,
 }
 
 #[component]
@@ -220,6 +222,8 @@ pub fn GalleryPage() -> impl IntoView {
             org_url: format!("assets/gallery/org_{}.{}", img.org_hash, img.format),
             author_name: img.user.name.clone(),
             author_pfp: format!("assets/gallery/pfp_{}.webp", img.user.id.clone()),
+            width: img.width,
+            height: img.height,
         }))
     };
 
@@ -231,7 +235,7 @@ pub fn GalleryPage() -> impl IntoView {
                         <div on:click=move |_| { selected_img.set(None); } class=" absolute grid grid-rows-[1fr] left-0 top-0 w-screen h-screen place-items-center bg-gradient-to-br from-mid-purple/50 to-dark-purple/50 z-[150] ">
                             <div  >
                                 <div class="flex justify-end text-2xl"><img class="cursor-pointer border-2 border-low-purple rounded-full bg-mid-purple w-[30px] h-[30px] p-1 m-2" src="assets/x.svg"/></div>
-                                <img  style=move|| format!("max-height: calc(100vh - 80px); ") on:click=move |e| { e.stop_propagation();  } src=img.display_url/>
+                                <img class="bg-mid-purple object-contain" alt="loading..." style=move|| format!("max-height: calc(100vh - 80px); max-width: 100vw; height: min({1}px, calc(100vw * ( {1} / {0} ))); aspect-ratio: {0} / {1};", img.width, img.height) on:click=move |e| { e.stop_propagation();  } src=img.display_url/>
                                 <div on:click=move |e| { e.stop_propagation();  } class="bg-dark-purple flex justify-between items-center">
                                        <div class="flex gap-2">
                                             <div>"By "</div>
