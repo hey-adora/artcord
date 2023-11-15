@@ -756,10 +756,6 @@ video {
   align-items: center;
 }
 
-.justify-end {
-  justify-content: flex-end;
-}
-
 .justify-center {
   justify-content: center;
 }
@@ -943,17 +939,12 @@ video {
   padding-bottom: 0.15rem;
 }
 
-.px-2 {
+.pl-2 {
   padding-left: 0.5rem;
-  padding-right: 0.5rem;
 }
 
 .pt-4 {
   padding-top: 1rem;
-}
-
-.pl-2 {
-  padding-left: 0.5rem;
 }
 
 .text-center {
@@ -962,11 +953,6 @@ video {
 
 .font-barcode {
   font-family: "Libre Barcode 128 Text";
-}
-
-.text-2xl {
-  font-size: 1.5rem;
-  line-height: 2rem;
 }
 
 .text-\[1\.5rem\] {
@@ -1042,6 +1028,12 @@ video {
 
 .transition-shadow {
   transition-property: box-shadow;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+.transition-transform {
+  transition-property: transform;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   transition-duration: 150ms;
 }

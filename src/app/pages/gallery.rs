@@ -14,27 +14,37 @@ use crate::server::{ClientMsg, ServerMsg, SERVER_MSG_IMGS_NAME};
 const NEW_IMG_HEIGHT: u32 = 250;
 
 fn resize_img(
+    top: &mut f64,
     max_width: u32,
     new_row_start: usize,
     new_row_end: usize,
     imgs: &mut [ServerMsgImgResized],
 ) {
-    let mut total_ratio: f32 = 0f32;
+    let mut total_ratio: f64 = 0f64;
 
     for i in new_row_start..(new_row_end + 1) {
         let org_img = &imgs[i];
-        total_ratio += org_img.width as f32 / org_img.height as f32;
+        total_ratio += org_img.width as f64 / org_img.height as f64;
     }
-    let optimal_height: f32 = max_width as f32 / total_ratio;
+    let optimal_height: f64 = max_width as f64 / total_ratio;
+    let mut left: f64 = 0.0;
 
     for i in new_row_start..(new_row_end + 1) {
-        let org_img = &imgs[i];
-        let ratio = org_img.width as f32 / org_img.height as f32;
-        let new_prev_img_w: f32 = optimal_height * ratio;
-        let new_prev_img_h: f32 = optimal_height;
-        imgs[i].new_width = new_prev_img_w;
-        imgs[i].new_height = new_prev_img_h;
+        // let line = String::new();
+        imgs[i].new_width = optimal_height * (imgs[i].width as f64 / imgs[i].height as f64);
+        imgs[i].new_height = optimal_height;
+        imgs[i].left = left;
+        imgs[i].top = *top;
+        left += imgs[i].new_width;
     }
+
+    // let mut total: f64 = 0.0;
+    // for i in new_row_start..(new_row_end + 1) {
+    //     total += imgs[i].new_width;
+    // }
+    // log!("line: {}", total);
+
+    *top += optimal_height;
 }
 
 fn resize_imgs(max_width: u32, imgs: &mut [ServerMsgImgResized]) -> () {
@@ -44,6 +54,7 @@ fn resize_imgs(max_width: u32, imgs: &mut [ServerMsgImgResized]) -> () {
     let mut new_row_end: usize = if loop_end > 0 { loop_end - 1 } else { 0 };
     let mut current_row_filled_width: u32 = 0;
     let new_height: u32 = NEW_IMG_HEIGHT;
+    let mut top: f64 = 0.0;
 
     let mut rand = rand::thread_rng();
 
@@ -51,48 +62,29 @@ fn resize_imgs(max_width: u32, imgs: &mut [ServerMsgImgResized]) -> () {
         let org_img = &mut imgs[index];
         let width: u32 = org_img.width;
         let height: u32 = org_img.height;
-        let ratio: f32 = width as f32 / height as f32;
+        let ratio: f64 = width as f64 / height as f64;
         let height_diff: u32 = if height < new_height {
             0
         } else {
             height - new_height
         };
-        let new_width: u32 = width - (height_diff as f32 * ratio) as u32;
+        let new_width: u32 = width - (height_diff as f64 * ratio) as u32;
         org_img.id = rand.gen::<u128>();
-
-        // let url_picker = |img: &ServerMsgImgResized| -> String {
-        //     if img.has_high {
-        //         format!("assets/gallery/high_{}.webp", img.org_hash)
-        //     } else if img.has_medium {
-        //         format!("assets/gallery/medium_{}.webp", img.org_hash)
-        //     } else if img.has_low {
-        //         format!("assets/gallery/low_{}.webp", img.org_hash)
-        //     } else {
-        //         format!("assets/gallery/org_{}.{}", img.org_hash, &img.format)
-        //     }
-        // };
-        //
-        // org_img.display_high = format!(
-        //     "assets/gallery/org_{}.{}",
-        //     &org_img.org_hash, &org_img.format
-        // );
-        //
-        // org_img.display_preview = url_picker(&org_img);
 
         if (current_row_filled_width + new_width) <= max_width {
             current_row_filled_width += new_width;
             new_row_end = index;
             if index == loop_end - 1 {
-                resize_img(max_width, new_row_start, new_row_end, imgs);
+                resize_img(&mut top, max_width, new_row_start, new_row_end, imgs);
             }
         } else {
-            resize_img(max_width, new_row_start, new_row_end, imgs);
+            resize_img(&mut top, max_width, new_row_start, new_row_end, imgs);
 
             new_row_start = index;
             new_row_end = index;
             current_row_filled_width = new_width;
             if index == loop_end - 1 {
-                resize_img(max_width, new_row_start, new_row_end, imgs);
+                resize_img(&mut top, max_width, new_row_start, new_row_end, imgs);
             }
         }
     }
@@ -102,9 +94,23 @@ fn calc_fit_count(width: u32, height: u32) -> u32 {
     (width * height) / (NEW_IMG_HEIGHT * NEW_IMG_HEIGHT)
 }
 
+// fn calc(width: f64, sizes: &[(f64, f64)]) -> f64 {
+//     let mut ratio: f64 = 0.0;
+//     for size in sizes {
+//         ratio += size.0 / size.1;
+//     }
+//     let height = width / ratio;
+//
+//     let mut reized_total_width: f64 = 0.0;
+//     for size in sizes {
+//         reized_total_width += f64::trunc((height * (size.0 / size.1)) * 1000.0) / 1000.0;
+//     }
+//
+//     reized_total_width
+// }
+
 #[derive(Clone)]
 struct SelectedImg {
-    pub display_url: String,
     pub org_url: String,
     pub author_name: String,
     pub author_pfp: String,
@@ -118,23 +124,37 @@ pub fn GalleryPage() -> impl IntoView {
     let gallery_section = create_node_ref::<Section>();
     let selected_img: RwSignal<Option<SelectedImg>> = create_rw_signal(None);
 
+    // create_effect(move |_| {
+    //     let sizes = [
+    //         (3072.0, 4096.0),
+    //         (3072.0, 4096.0),
+    //         (1975.0, 2634.0),
+    //         (3072.0, 4096.0),
+    //         (3072.0, 4096.0),
+    //     ];
+    //     let total_width = calc(873.0, &sizes);
+    //     log!("{}", total_width);
+    // });
+
     create_effect(move |_| {
         global_state.socket_recv.with(|server_msg| {
             if let ServerMsg::Imgs(new_imgs) = server_msg {
-                global_state.gallery_imgs.update(|imgs| {
-                    imgs.extend_from_slice(
-                        &new_imgs
-                            .iter()
-                            .map(|img| ServerMsgImgResized::from(img.to_owned()))
-                            .collect::<Vec<ServerMsgImgResized>>(),
-                    );
-                    let section = gallery_section.get_untracked();
-                    if let Some(section) = section {
-                        let width = section.client_width() as u32;
+                if new_imgs.len() > 0 {
+                    global_state.gallery_imgs.update(|imgs| {
+                        imgs.extend_from_slice(
+                            &new_imgs
+                                .iter()
+                                .map(|img| ServerMsgImgResized::from(img.to_owned()))
+                                .collect::<Vec<ServerMsgImgResized>>(),
+                        );
+                        let section = gallery_section.get_untracked();
+                        if let Some(section) = section {
+                            let width = section.client_width() as u32;
 
-                        resize_imgs(width, imgs);
-                    };
-                });
+                            resize_imgs(width, imgs);
+                        };
+                    });
+                }
                 global_state.socket_state_reset(&server_msg.name());
             }
         });
@@ -218,8 +238,7 @@ pub fn GalleryPage() -> impl IntoView {
 
     let select_click_img = move |img: &ServerMsgImgResized| {
         selected_img.set(Some(SelectedImg {
-            display_url: img.display_high.clone(),
-            org_url: format!("assets/gallery/org_{}.{}", img.org_hash, img.format),
+            org_url: img.display_high.clone(),
             author_name: img.user.name.clone(),
             author_pfp: format!("assets/gallery/pfp_{}.webp", img.user.id.clone()),
             width: img.width,
@@ -242,7 +261,7 @@ pub fn GalleryPage() -> impl IntoView {
                                        </div>
                                      <img class="cursor-pointer border-2 border-low-purple rounded-full bg-mid-purple w-[30px] h-[30px] p-1 m-2" src="assets/x.svg"/>
                                 </div>
-                                <img class="bg-mid-purple object-contain" alt="loading..." style=move|| format!("max-height: calc(100vh - 70px); max-width: 100vw; height: min({1}px, calc(100vw * ( {1} / {0} ))); aspect-ratio: {0} / {1};", img.width, img.height) on:click=move |e| { e.stop_propagation();  } src=img.display_url/>
+                                <img class="bg-mid-purple object-contain" alt="loading..." style=move|| format!("max-height: calc(100vh - 70px); max-width: 100vw; height: min({1}px, calc(100vw * ( {1} / {0} ))); aspect-ratio: {0} / {1};", img.width, img.height) on:click=move |e| { e.stop_propagation();  } src=img.org_url/>
                                 // <div on:click=move |e| { e.stop_propagation();  } class="bg-dark-purple flex justify-between items-center">
                                 //        <div class="flex gap-2">
                                 //             <div>"By "</div>
@@ -257,19 +276,23 @@ pub fn GalleryPage() -> impl IntoView {
                 }
             }
         }
-        <section on:scroll=section_scroll _ref=gallery_section class="line-bg  overflow-x-hidden content-start flex flex-wrap overflow-y-scroll " style=move|| format!("max-height: calc(100vh - 80px); ")>
+        <section on:scroll=section_scroll _ref=gallery_section class="relative line-bg  overflow-x-hidden content-start overflow-y-scroll " style=move|| format!("max-height: calc(100vh - 80px); ")>
             <For each=global_state.gallery_imgs key=|state| state.id let:img >
                 {
                     let height = format!("{}px", &img.new_height);
                     let with = format!("{}px", &img.new_width);
                     let bg_img = format!("url('{}')", &img.display_preview);
+                    let top = format!("{}px", img.top);
+                    let left = format!("{}px", img.left);
 
                     view! {
                         <div
-                            class="bg-center bg-contain bg-no-repeat flex-shrink-0 font-bold grid place-items-center  border hover:shadow-glowy hover:z-[101] transition-shadow duration-300 bg-mid-purple  border-low-purple"
+                            class="absolute bg-center bg-contain transition-shadow bg-no-repeat flex-shrink-0 font-bold grid place-items-center border hover:shadow-glowy hover:z-[101]  duration-300 bg-mid-purple  border-low-purple"
                             style:height=height
                             style:width=with
                             style:background-image=bg_img
+                            style:top=top
+                            style:left=left
                             on:click= move |_| select_click_img(&img)
                         >
                             // <div class="relative flex opacity-0 hover:opacity-100 transition duration-300 w-full h-full flex-col text-center justify-center gap-2  "  >
