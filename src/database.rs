@@ -170,6 +170,15 @@ impl Img {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AutoEmoji {
+    pub _id: ObjectId,
+    pub guild_id: String,
+    pub id: String,
+    pub modified_at: DateTime,
+    pub created_at: DateTime,
+}
+
 cfg_if! {
 if #[cfg(feature = "ssr")] {
         use mongodb::bson::{doc};
@@ -221,6 +230,7 @@ if #[cfg(feature = "ssr")] {
             pub collection_user: mongodb::Collection<User>,
             pub collection_allowed_role: mongodb::Collection<AllowedRole>,
             pub collection_allowed_channel: mongodb::Collection<AllowedChannel>,
+            pub collection_auto_emoji: mongodb::Collection<AutoEmoji>,
         }
 
         impl TypeMapKey for DB {
@@ -240,6 +250,7 @@ if #[cfg(feature = "ssr")] {
             let collection_user = database.collection::<User>("user");
             let collection_allowed_channel = database.collection::<AllowedChannel>("allowed_channel");
             let collection_allowed_role = database.collection::<AllowedRole>("allowed_role");
+            let collection_auto_emoji = database.collection::<AutoEmoji>("auto_emoji");
 
             println!("Connecting to database...");
             let db_list = client.list_database_names(doc! {}, None).await.unwrap();
@@ -252,6 +263,7 @@ if #[cfg(feature = "ssr")] {
                 collection_user,
                 collection_allowed_channel,
                 collection_allowed_role,
+                collection_auto_emoji
             }
         }
     }

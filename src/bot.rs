@@ -199,6 +199,9 @@ if #[cfg(feature = "ssr")] {
             c if c == "leave" && (user_commander_authorized || no_roles_set) => {
                 commands::leave::run(&ctx, &command, &db, guild_id.0).await
             }
+            c if c == "add_auto_emoji" && (user_commander_authorized || no_roles_set) => {
+                commands::add_auto_emoji::run(&ctx, &command, &db, guild_id.0).await
+            }
             c if c == "sync" && (user_gallery_authorized || no_roles_set) => {
                 commands::sync::run(&ctx, &command, &db, guild_id.0).await
             }
@@ -381,6 +384,7 @@ if #[cfg(feature = "ssr")] {
                         .create_application_command(|command| commands::add_channel::register(command))
                         .create_application_command(|command| commands::add_role::register(command))
                         .create_application_command(|command| commands::remove_role::register(command))
+                        .create_application_command(|command| commands::add_auto_emoji::register(command))
                         // .create_application_command(|command| commands::sync::register(command))
                         .create_application_command(|command| {
                             commands::remove_channel::register(command)

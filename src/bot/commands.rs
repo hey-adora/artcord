@@ -9,6 +9,7 @@ use thiserror::Error;
 
 use super::hooks::save_attachments::SaveAttachmentsError;
 
+pub mod add_auto_emoji;
 pub mod add_channel;
 pub mod add_role;
 pub mod guilds;
