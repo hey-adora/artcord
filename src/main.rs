@@ -13,8 +13,14 @@ async fn main() -> std::io::Result<()> {
     dotenv().ok();
     let token = env::var("DISCORD_BOT_TOKEN").expect("ENV MISSING: DISCORD_BOT_TOKEN");
     let mongo_url = std::env::var("MONGO_URL").expect("ENV MISSING: MONGO_URL");
+    let discord_default_guild =
+        std::env::var("DISCORD_DEFAULT_GUILD").expect("ENV MISSING: DISCORD_DEFAULT_GUILD");
 
     let db = create_database(mongo_url).await;
+    db.allowed_guild_insert_default(discord_default_guild)
+        .await
+        .unwrap();
+
     let mut bot_server = create_bot(db.clone(), token).await;
     let web_server = create_server(db).await;
 

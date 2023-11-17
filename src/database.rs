@@ -8,6 +8,7 @@ use rkyv::{
     Archive, Archived, Fallible,
 };
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use crate::bot::ImgQuality;
 
@@ -188,6 +189,18 @@ pub struct AllowedGuild {
     pub created_at: DateTime,
 }
 
+impl AllowedGuild {
+    pub fn new(id: String, name: String) -> Self {
+        Self {
+            _id: ObjectId::new(),
+            id,
+            name,
+            created_at: DateTime::now(),
+            modified_at: DateTime::now(),
+        }
+    }
+}
+
 cfg_if! {
 if #[cfg(feature = "ssr")] {
         use mongodb::bson::{doc};
@@ -197,6 +210,7 @@ if #[cfg(feature = "ssr")] {
         use std::collections::HashMap;
         use std::sync::Arc;
         use tokio::sync::RwLock;
+        use futures::TryStreamExt;
 
 
         #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -239,8 +253,55 @@ if #[cfg(feature = "ssr")] {
             pub collection_user: mongodb::Collection<User>,
             pub collection_allowed_role: mongodb::Collection<AllowedRole>,
             pub collection_allowed_channel: mongodb::Collection<AllowedChannel>,
-            pub collection_allowed_guild: mongodb::Collection<AllowedGuild>,
+            collection_allowed_guild: mongodb::Collection<AllowedGuild>,
             pub collection_auto_emoji: mongodb::Collection<AutoEmoji>,
+        }
+
+        impl DB {
+
+            pub async fn allowed_guild_insert_default(&self, new_guild: String) -> Result<Option<String>, mongodb::error::Error> {
+                let name = String::from("DEFAULT");
+                let allowed_guild = self.collection_allowed_guild.find_one(doc!{"id": &name, "name": &name}, None).await?;
+                if allowed_guild.is_none() {
+                    let allowed_guild = self.collection_allowed_guild.insert_one(AllowedGuild::new(new_guild, name), None).await?;
+                    return Ok(Some(allowed_guild.inserted_id.to_string()));
+                }
+                Ok(None)
+            }
+
+            pub async fn allowed_guild_insert(&self, new_guild: AllowedGuild) -> Result<Option<String>, mongodb::error::Error> {
+                let allowed_guild = self.collection_allowed_guild.find_one(doc!{"id": &new_guild.id}, None).await?;
+                if allowed_guild.is_none() {
+                    let allowed_guild = self.collection_allowed_guild.insert_one(new_guild, None).await?;
+                    return Ok(Some(allowed_guild.inserted_id.to_string()));
+                }
+                Ok(None)
+            }
+
+            pub async fn allowed_guild_remove_one(&self, guild_id: &str) -> Result<bool, mongodb::error::Error> {
+                let result = self.collection_allowed_guild.delete_one(doc!{ "id": guild_id }, None).await?;
+                Ok(result.deleted_count > 0)
+            }
+
+            pub async fn allowed_guild_all(&self) -> Result<Vec<AllowedGuild>, mongodb::error::Error> {
+                let allowed_guilds = self.collection_allowed_guild.find(None, None).await?;
+                let allowed_guilds = allowed_guilds.try_collect().await.unwrap_or_else(|_| vec![]);
+                Ok(allowed_guilds)
+            }
+
+            pub async fn allowed_guild_exists(&self, guild_id: &str) -> Result<bool, mongodb::error::Error> {
+                let result = self.collection_allowed_guild.count_documents(doc!{"id": guild_id}, None).await?;
+                Ok(result > 0)
+            }
+        }
+
+        #[derive(Error, Debug)]
+        pub enum DBError {
+            #[error("Mongodb: {0}.")]
+            Mongo(#[from] mongodb::error::Error),
+
+            #[error("Not found: {0}.")]
+            NotFound(String)
         }
 
         impl TypeMapKey for DB {

@@ -1,7 +1,5 @@
 use cfg_if::cfg_if;
 
-use crate::app::utils::ServerMsgImgResized;
-
 #[derive(Clone, PartialEq, Debug)]
 pub enum ImgQuality {
     Low,
@@ -79,7 +77,7 @@ impl ImgQuality {
 
 cfg_if! {
 if #[cfg(feature = "ssr")] {
-    use self::commands::CommandError;
+    use crate::database::DB;
     use self::hooks::save_attachments::hook_save_attachments;
     use futures::TryStreamExt;
     use mongodb::bson::doc;
@@ -117,6 +115,7 @@ if #[cfg(feature = "ssr")] {
     pub async fn resolve_command(
         ctx: &Context,
         command: &ApplicationCommandInteraction,
+        db: &DB
     ) -> Result<(), ResolveCommandError> {
         let command_name = command.data.name.as_str();
         let guild_id = command
@@ -127,14 +126,6 @@ if #[cfg(feature = "ssr")] {
             .member
             .as_ref()
             .ok_or(ResolveCommandError::MustRunInGuild)?;
-
-        let db = {
-            let data_read = ctx.data.read().await;
-            data_read
-                .get::<crate::database::DB>()
-                .expect("Expected crate::database::DB in TypeMap")
-                .clone()
-        };
 
         let roles = db
             .collection_allowed_role
@@ -193,13 +184,13 @@ if #[cfg(feature = "ssr")] {
                 commands::show_roles::run(&ctx, &command, &db, guild_id.0).await
             }
             "add_guild" if user_commander_authorized || no_roles_set => {
-                commands::add_guild::run(&ctx, &command, &db, guild_id.0).await
+                commands::add_guild::run(&ctx, &command, &db).await
             }
             "remove_guild" if user_commander_authorized || no_roles_set => {
-                commands::remove_guild::run(&ctx, &command, &db, guild_id.0).await
+                commands::remove_guild::run(&ctx, &command, &db).await
             }
             "show_guild" if user_commander_authorized || no_roles_set => {
-                commands::show_guilds::run(&ctx, &command, &db, guild_id.0).await
+                commands::show_guilds::run(&ctx, &command, &db).await
             }
             "joined_guilds" if user_commander_authorized || no_roles_set => {
                 commands::guilds::run(&ctx, &command, &db, guild_id.0).await
@@ -228,6 +219,7 @@ if #[cfg(feature = "ssr")] {
                 return;
             };
 
+
             let Some(time) = msg.timestamp.timestamp_nanos_opt() else {
                 println!(
                     "Error failed to get time for guild: {}, msg: {}",
@@ -244,6 +236,15 @@ if #[cfg(feature = "ssr")] {
                     .expect("Expected crate::database::DB in TypeMap")
                     .clone()
             };
+
+                let allowed_guild = db.allowed_guild_exists(guild_id.0.to_string().as_str()).await;
+                let Ok(allowed_guild) = allowed_guild else {
+                    println!("Mongodb error: {}", allowed_guild.err().unwrap());
+                    return;
+                };
+                if !allowed_guild {
+                    return;
+                }
 
             let result = hook_save_attachments(
                 &msg.attachments,
@@ -272,7 +273,7 @@ if #[cfg(feature = "ssr")] {
             deleted_message_id: MessageId,
             guild_id: Option<GuildId>,
         ) {
-            let Some(_) = guild_id else {
+            let Some(guild_id) = guild_id else {
                 return;
             };
 
@@ -285,6 +286,15 @@ if #[cfg(feature = "ssr")] {
                     .expect("Expected crate::database::DB in TypeMap")
                     .clone()
             };
+
+                let allowed_guild = db.allowed_guild_exists(guild_id.0.to_string().as_str()).await;
+                let Ok(allowed_guild) = allowed_guild else {
+                    println!("Mongodb error: {}", allowed_guild.err().unwrap());
+                    return;
+                };
+                if !allowed_guild {
+                    return;
+                }
 
             let result = db
                 .collection_img
@@ -294,7 +304,7 @@ if #[cfg(feature = "ssr")] {
                     None,
                 )
                 .await;
-            let Ok(_) = result else {
+            let Ok(result) = result else {
                 println!(
                     "ERROR: failed to hide img '{}': {}",
                     deleted_message_id.0,
@@ -303,7 +313,9 @@ if #[cfg(feature = "ssr")] {
                 return;
             };
 
-            println!("IMG HIDDEN: {}", deleted_message_id);
+            if result.modified_count > 0 {
+                println!("IMG HIDDEN: {}", deleted_message_id);
+            }
         }
 
         async fn message_delete_bulk(
@@ -313,7 +325,7 @@ if #[cfg(feature = "ssr")] {
             multiple_deleted_messages_id: Vec<MessageId>,
             guild_id: Option<GuildId>,
         ) {
-            let Some(_) = guild_id else {
+            let Some(guild_id) = guild_id else {
                 return;
             };
 
@@ -325,6 +337,15 @@ if #[cfg(feature = "ssr")] {
                     .expect("Expected crate::database::DB in TypeMap")
                     .clone()
             };
+
+            let allowed_guild = db.allowed_guild_exists(guild_id.0.to_string().as_str()).await;
+            let Ok(allowed_guild) = allowed_guild else {
+                println!("Mongodb error: {}", allowed_guild.err().unwrap());
+                return;
+            };
+            if !allowed_guild {
+                return;
+            }
 
             for deleted_message_id in multiple_deleted_messages_id {
                 let result = db
@@ -350,7 +371,26 @@ if #[cfg(feature = "ssr")] {
 
         async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
             if let Interaction::ApplicationCommand(command) = interaction {
-                let result = resolve_command(&ctx, &command).await;
+                let Some(guild_id) = command.guild_id else {
+                    return;
+                };
+                let db = {
+                    let data_read = ctx.data.read().await;
+
+                    data_read
+                        .get::<crate::database::DB>()
+                        .expect("Expected crate::database::DB in TypeMap")
+                        .clone()
+                };
+                let allowed_guild = db.allowed_guild_exists(guild_id.0.to_string().as_str()).await;
+                let Ok(allowed_guild) = allowed_guild else {
+                    println!("Mongodb error: {}", allowed_guild.err().unwrap());
+                    return;
+                };
+                if !allowed_guild {
+                    return;
+                }
+                let result = resolve_command(&ctx, &command, &db).await;
                 if let Err(err) = result {
                     println!("Error: {}", err);
                     // command.
@@ -382,7 +422,20 @@ if #[cfg(feature = "ssr")] {
         async fn ready(&self, ctx: Context, ready: serenity::model::gateway::Ready) {
             println!("{} is connected!", ready.user.name);
 
+            let db = {
+                let data_read = ctx.data.read().await;
+                data_read
+                    .get::<crate::database::DB>()
+                    .expect("Expected crate::database::DB in TypeMap")
+                    .clone()
+            };
+
             for guild in ctx.cache.guilds() {
+                if !db.allowed_guild_exists(guild.0.to_string().as_str()).await.expect("Failed to read database.") {
+                    println!("Skipped command update for guild: {}", guild.0);
+                    continue;
+                }
+
                 let _commands = GuildId::set_application_commands(&guild, &ctx.http, |commands| {
                     commands
                         .create_application_command(|command| commands::who::register(command))

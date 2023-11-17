@@ -15,22 +15,8 @@ pub async fn run(
     ctx: &Context,
     command: &ApplicationCommandInteraction,
     db: &DB,
-    guild_id: u64,
 ) -> Result<(), crate::bot::commands::CommandError> {
     let guild_option = get_option_string(command.data.options.get(0))?;
-
-    let guild = db
-        .collection_allowed_guild
-        .find_one(doc! { "id": guild_option }, None)
-        .await?;
-
-    if let Some(guild) = guild {
-        return Err(super::CommandError::AlreadyExists(format!(
-            "Guild '{}'",
-            guild.id
-        )));
-    }
-
     let guild = ctx.http.get_guild(guild_option.parse::<u64>()?).await?;
 
     let allowed_guild = AllowedGuild {
@@ -41,12 +27,15 @@ pub async fn run(
         modified_at: mongodb::bson::DateTime::now(),
     };
 
-    let _result = db
-        .collection_allowed_guild
-        .insert_one(allowed_guild, None)
-        .await?;
+    let result = db.allowed_guild_insert(allowed_guild).await?;
+    if result.is_some() {
+        return Err(super::CommandError::AlreadyExists(format!(
+            "Guild '{}'",
+            guild.id
+        )));
+    }
 
-    crate::bot::commands::show_guilds::run(ctx, command, db, guild_id).await?;
+    crate::bot::commands::show_guilds::run(ctx, command, db).await?;
 
     Ok(())
 }

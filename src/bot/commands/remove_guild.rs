@@ -15,23 +15,18 @@ pub async fn run(
     ctx: &Context,
     command: &ApplicationCommandInteraction,
     db: &DB,
-    guild_id: u64,
 ) -> Result<(), crate::bot::commands::CommandError> {
     let guild_option = get_option_string(command.data.options.get(0))?;
+    let deleted = db.allowed_guild_remove_one(guild_option.as_str()).await?;
 
-    let result = db
-        .collection_allowed_guild
-        .delete_one(doc! { "id": guild_option }, None)
-        .await?;
-
-    if result.deleted_count < 1 {
+    if deleted {
         return Err(crate::bot::commands::CommandError::NotFound(format!(
             "guild: {}",
             guild_option
         )));
     }
 
-    crate::bot::commands::show_roles::run(ctx, command, db, guild_id).await?;
+    crate::bot::commands::show_guilds::run(ctx, command, db).await?;
 
     Ok(())
 }

@@ -14,10 +14,8 @@ pub async fn run(
     ctx: &Context,
     command: &ApplicationCommandInteraction,
     db: &DB,
-    guild_id: u64,
 ) -> Result<(), crate::bot::commands::CommandError> {
-    let guilds = db.collection_allowed_guild.find(None, None).await?;
-    let guilds = guilds.try_collect().await.unwrap_or_else(|_| vec![]);
+    let guilds = db.allowed_guild_all().await?;
 
     let mut output = String::from("Guilds:");
 
