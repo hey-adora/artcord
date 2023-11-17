@@ -189,7 +189,7 @@ if #[cfg(feature = "ssr")] {
             "remove_guild" if user_commander_authorized || no_roles_set => {
                 commands::remove_guild::run(&ctx, &command, &db).await
             }
-            "show_guild" if user_commander_authorized || no_roles_set => {
+            "show_guilds" if user_commander_authorized || no_roles_set => {
                 commands::show_guilds::run(&ctx, &command, &db).await
             }
             "joined_guilds" if user_commander_authorized || no_roles_set => {

@@ -42,6 +42,6 @@ pub async fn run(
 
 pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicationCommand {
     command
-        .name("show_roles")
-        .description("Show whitelisted roles for specific features.")
+        .name("show_guilds")
+        .description("Show whitelisted guilds.")
 }
