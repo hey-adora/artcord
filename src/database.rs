@@ -259,11 +259,11 @@ if #[cfg(feature = "ssr")] {
 
         impl DB {
 
-            pub async fn allowed_guild_insert_default(&self, new_guild: String) -> Result<Option<String>, mongodb::error::Error> {
+            pub async fn allowed_guild_insert_default(&self, guild_id: String) -> Result<Option<String>, mongodb::error::Error> {
                 let name = String::from("DEFAULT");
-                let allowed_guild = self.collection_allowed_guild.find_one(doc!{"id": &name, "name": &name}, None).await?;
+                let allowed_guild = self.collection_allowed_guild.find_one(doc!{"id": &guild_id, "name": &name}, None).await?;
                 if allowed_guild.is_none() {
-                    let allowed_guild = self.collection_allowed_guild.insert_one(AllowedGuild::new(new_guild, name), None).await?;
+                    let allowed_guild = self.collection_allowed_guild.insert_one(AllowedGuild::new(guild_id, name), None).await?;
                     return Ok(Some(allowed_guild.inserted_id.to_string()));
                 }
                 Ok(None)

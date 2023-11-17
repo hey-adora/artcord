@@ -37,9 +37,9 @@ pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicatio
         .description("Remove guild from whitelist")
         .create_option(|option| {
             option
-                .name("role")
+                .name("guild")
                 .description(format!("Guild to remove."))
-                .kind(CommandOptionType::Role)
+                .kind(CommandOptionType::String)
                 .required(true)
         })
 }
