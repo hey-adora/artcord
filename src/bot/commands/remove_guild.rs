@@ -19,7 +19,7 @@ pub async fn run(
     let guild_option = get_option_string(command.data.options.get(0))?;
     let deleted = db.allowed_guild_remove_one(guild_option.as_str()).await?;
 
-    if deleted {
+    if !deleted {
         return Err(crate::bot::commands::CommandError::NotFound(format!(
             "guild: {}",
             guild_option
