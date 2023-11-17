@@ -179,6 +179,15 @@ pub struct AutoEmoji {
     pub created_at: DateTime,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AllowedGuild {
+    pub _id: ObjectId,
+    pub id: String,
+    pub name: String,
+    pub modified_at: DateTime,
+    pub created_at: DateTime,
+}
+
 cfg_if! {
 if #[cfg(feature = "ssr")] {
         use mongodb::bson::{doc};
@@ -230,6 +239,7 @@ if #[cfg(feature = "ssr")] {
             pub collection_user: mongodb::Collection<User>,
             pub collection_allowed_role: mongodb::Collection<AllowedRole>,
             pub collection_allowed_channel: mongodb::Collection<AllowedChannel>,
+            pub collection_allowed_guild: mongodb::Collection<AllowedGuild>,
             pub collection_auto_emoji: mongodb::Collection<AutoEmoji>,
         }
 
@@ -237,8 +247,7 @@ if #[cfg(feature = "ssr")] {
             type Value = Self;
         }
 
-        pub async fn create_database() -> DB {
-           let mongo_url = std::env::var("MONGO_URL").expect("MONGO_URL");
+        pub async fn create_database(mongo_url: String) -> DB {
             let mut client_options = ClientOptions::parse(mongo_url)
                 .await
                 .unwrap();
@@ -250,6 +259,7 @@ if #[cfg(feature = "ssr")] {
             let collection_user = database.collection::<User>("user");
             let collection_allowed_channel = database.collection::<AllowedChannel>("allowed_channel");
             let collection_allowed_role = database.collection::<AllowedRole>("allowed_role");
+            let collection_allowed_guild = database.collection::<AllowedGuild>("allowed_guild");
             let collection_auto_emoji = database.collection::<AutoEmoji>("auto_emoji");
 
             println!("Connecting to database...");
@@ -263,6 +273,7 @@ if #[cfg(feature = "ssr")] {
                 collection_user,
                 collection_allowed_channel,
                 collection_allowed_role,
+                collection_allowed_guild,
                 collection_auto_emoji
             }
         }

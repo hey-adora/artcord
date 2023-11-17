@@ -1,3 +1,7 @@
+use std::collections::HashMap;
+
+use bson::doc;
+use futures::TryStreamExt;
 use serenity::{
     builder::CreateApplicationCommand,
     model::prelude::{application_command::ApplicationCommandInteraction, InteractionResponseType},
@@ -9,14 +13,22 @@ use crate::database::DB;
 pub async fn run(
     ctx: &Context,
     command: &ApplicationCommandInteraction,
-    _db: &DB,
-    _guild_id: u64,
+    db: &DB,
+    guild_id: u64,
 ) -> Result<(), crate::bot::commands::CommandError> {
-    let guilds = ctx.http.get_guilds(None, Some(100)).await?;
+    let guilds = db.collection_allowed_guild.find(None, None).await?;
+    let guilds = guilds.try_collect().await.unwrap_or_else(|_| vec![]);
 
-    let mut output = String::new();
+    let mut output = String::from("Guilds:");
+
+    if guilds.len() < 1 {
+        output.push_str(" none.");
+    }
+
+    let mut unique_features: HashMap<String, String> = HashMap::new();
+
     for guild in guilds {
-        output.push_str(&format!("\n{}:{}", guild.id, guild.name));
+        output.push_str(&format!("\n-{}:{}", guild.id, guild.name));
     }
 
     command
@@ -32,6 +44,6 @@ pub async fn run(
 
 pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicationCommand {
     command
-        .name("joined_guilds")
-        .description("Show which guilds bot is in.")
+        .name("show_roles")
+        .description("Show whitelisted roles for specific features.")
 }

@@ -5,14 +5,17 @@ use artcord::database::create_database;
 use artcord::server::create_server;
 use dotenv::dotenv;
 use futures::try_join;
+use std::env;
 
 #[cfg(feature = "ssr")]
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     dotenv().ok();
+    let token = env::var("DISCORD_BOT_TOKEN").expect("ENV MISSING: DISCORD_BOT_TOKEN");
+    let mongo_url = std::env::var("MONGO_URL").expect("ENV MISSING: MONGO_URL");
 
-    let db = create_database().await;
-    let mut bot_server = create_bot(db.clone()).await;
+    let db = create_database(mongo_url).await;
+    let mut bot_server = create_bot(db.clone(), token).await;
     let web_server = create_server(db).await;
 
     let r = try_join!(

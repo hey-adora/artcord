@@ -17,23 +17,17 @@ pub async fn run(
     db: &DB,
     guild_id: u64,
 ) -> Result<(), crate::bot::commands::CommandError> {
-    let role_option = get_option_role(command.data.options.get(0))?;
-    let feature_option = get_option_string(command.data.options.get(1))?;
-
-    is_valid_role_feature(feature_option)?;
+    let guild_option = get_option_string(command.data.options.get(0))?;
 
     let result = db
-        .collection_allowed_role
-        .delete_one(
-            doc! { "guild_id": guild_id.to_string(), "id": role_option.id.0.to_string(), "feature": feature_option },
-            None,
-        )
+        .collection_allowed_guild
+        .delete_one(doc! { "id": guild_option }, None)
         .await?;
 
     if result.deleted_count < 1 {
         return Err(crate::bot::commands::CommandError::NotFound(format!(
-            "feature: {} in {}",
-            feature_option, role_option.name
+            "guild: {}",
+            guild_option
         )));
     }
 
@@ -44,20 +38,13 @@ pub async fn run(
 
 pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicationCommand {
     command
-        .name("remove_role")
-        .description("Remove role from whitelist of specific feature")
+        .name("remove_guild")
+        .description("Remove guild from whitelist")
         .create_option(|option| {
             option
                 .name("role")
-                .description(format!("Role to remove."))
+                .description(format!("Guild to remove."))
                 .kind(CommandOptionType::Role)
-                .required(true)
-        })
-        .create_option(|option| {
-            option
-                .name("feature")
-                .description(format!("Features: {:?}.", ROLE_FEATURES))
-                .kind(CommandOptionType::String)
                 .required(true)
         })
 }

@@ -11,12 +11,15 @@ use super::hooks::save_attachments::SaveAttachmentsError;
 
 pub mod add_auto_emoji;
 pub mod add_channel;
+pub mod add_guild;
 pub mod add_role;
 pub mod guilds;
 pub mod leave;
 pub mod remove_channel;
+pub mod remove_guild;
 pub mod remove_role;
 pub mod show_channels;
+pub mod show_guilds;
 pub mod show_roles;
 pub mod sync;
 pub mod test;

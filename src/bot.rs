@@ -93,7 +93,6 @@ if #[cfg(feature = "ssr")] {
     };
     use serenity::prelude::GatewayIntents;
     use serenity::{async_trait, Client};
-    use std::env;
     use thiserror::Error;
 
     mod commands;
@@ -175,34 +174,43 @@ if #[cfg(feature = "ssr")] {
         }
 
         match command_name {
-            c if c == "add_role" && (user_commander_authorized || no_roles_set) => {
+            "add_role" if user_commander_authorized || no_roles_set => {
                 commands::add_role::run(&ctx, &command, &db, guild_id.0).await
             }
-            c if c == "add_channel" && (user_commander_authorized || no_roles_set) => {
+            "add_channel" if user_commander_authorized || no_roles_set => {
                 commands::add_channel::run(&ctx, &command, &db, guild_id.0).await
             }
-            c if c == "remove_channel" && (user_commander_authorized || no_roles_set) => {
+            "remove_channel" if user_commander_authorized || no_roles_set => {
                 commands::remove_channel::run(&ctx, &command, &db, guild_id.0).await
             }
-            c if c == "remove_role" && (user_commander_authorized || no_roles_set) => {
+            "remove_role" if user_commander_authorized || no_roles_set => {
                 commands::remove_role::run(&ctx, &command, &db, guild_id.0).await
             }
-            c if c == "show_channels" && (user_commander_authorized || no_roles_set) => {
+            "show_channels" if user_commander_authorized || no_roles_set => {
                 commands::show_channels::run(&ctx, &command, &db).await
             }
-            c if c == "show_roles" && (user_commander_authorized || no_roles_set) => {
+            "show_roles" if user_commander_authorized || no_roles_set => {
                 commands::show_roles::run(&ctx, &command, &db, guild_id.0).await
             }
-            c if c == "guilds" && (user_commander_authorized || no_roles_set) => {
+            "add_guild" if user_commander_authorized || no_roles_set => {
+                commands::add_guild::run(&ctx, &command, &db, guild_id.0).await
+            }
+            "remove_guild" if user_commander_authorized || no_roles_set => {
+                commands::remove_guild::run(&ctx, &command, &db, guild_id.0).await
+            }
+            "show_guild" if user_commander_authorized || no_roles_set => {
+                commands::show_guilds::run(&ctx, &command, &db, guild_id.0).await
+            }
+            "joined_guilds" if user_commander_authorized || no_roles_set => {
                 commands::guilds::run(&ctx, &command, &db, guild_id.0).await
             }
-            c if c == "leave" && (user_commander_authorized || no_roles_set) => {
+            "leave" if user_commander_authorized || no_roles_set => {
                 commands::leave::run(&ctx, &command, &db, guild_id.0).await
             }
-            c if c == "add_auto_emoji" && (user_commander_authorized || no_roles_set) => {
+            "add_auto_emoji" if user_commander_authorized || no_roles_set => {
                 commands::add_auto_emoji::run(&ctx, &command, &db, guild_id.0).await
             }
-            c if c == "sync" && (user_gallery_authorized || no_roles_set) => {
+            "sync" if user_gallery_authorized || no_roles_set => {
                 commands::sync::run(&ctx, &command, &db, guild_id.0).await
             }
             name => Err(crate::bot::commands::CommandError::NotImplemented(
@@ -267,6 +275,7 @@ if #[cfg(feature = "ssr")] {
             let Some(_) = guild_id else {
                 return;
             };
+
 
             let db = {
                 let data_read = ctx.data.read().await;
@@ -383,6 +392,9 @@ if #[cfg(feature = "ssr")] {
                         .create_application_command(|command| commands::sync::register(command))
                         .create_application_command(|command| commands::add_channel::register(command))
                         .create_application_command(|command| commands::add_role::register(command))
+                        .create_application_command(|command| commands::remove_guild::register(command))
+                        .create_application_command(|command| commands::add_guild::register(command))
+                        .create_application_command(|command| commands::show_guilds::register(command))
                         .create_application_command(|command| commands::remove_role::register(command))
                         .create_application_command(|command| commands::add_auto_emoji::register(command))
                         // .create_application_command(|command| commands::sync::register(command))
@@ -407,13 +419,12 @@ if #[cfg(feature = "ssr")] {
         }
     }
 
-    pub async fn create_bot(db: crate::database::DB) -> serenity::Client {
+    pub async fn create_bot(db: crate::database::DB, token: String) -> serenity::Client {
         let framework = StandardFramework::new()
             .configure(|c| c.prefix("~")) // set the bot's prefix to "~"
             .group(&GENERAL_GROUP);
 
         // Login with a bot token from the environment
-        let token = env::var("DISCORD_BOT_TOKEN").expect("token");
         //let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
         let intents = GatewayIntents::GUILD_MESSAGES
             | GatewayIntents::DIRECT_MESSAGES
