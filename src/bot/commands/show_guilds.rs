@@ -23,8 +23,6 @@ pub async fn run(
         output.push_str(" none.");
     }
 
-    let mut unique_features: HashMap<String, String> = HashMap::new();
-
     for guild in guilds {
         output.push_str(&format!("\n-{}:{}", guild.id, guild.name));
     }

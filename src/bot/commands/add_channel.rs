@@ -36,7 +36,7 @@ pub async fn run(
         .insert_one(allowed_channel, None)
         .await?;
 
-    crate::bot::commands::show_channels::run(ctx, command, db).await?;
+    crate::bot::commands::show_channels::run(ctx, command, db, guild_id).await?;
 
     Ok(())
 }

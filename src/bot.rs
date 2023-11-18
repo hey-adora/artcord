@@ -178,7 +178,7 @@ if #[cfg(feature = "ssr")] {
                 commands::remove_role::run(&ctx, &command, &db, guild_id.0).await
             }
             "show_channels" if user_commander_authorized || no_roles_set => {
-                commands::show_channels::run(&ctx, &command, &db).await
+                commands::show_channels::run(&ctx, &command, &db, guild_id.0).await
             }
             "show_roles" if user_commander_authorized || no_roles_set => {
                 commands::show_roles::run(&ctx, &command, &db, guild_id.0).await

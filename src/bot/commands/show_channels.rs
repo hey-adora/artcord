@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use bson::doc;
 use futures::TryStreamExt;
 use serenity::{
     builder::CreateApplicationCommand,
@@ -13,8 +14,12 @@ pub async fn run(
     ctx: &Context,
     command: &ApplicationCommandInteraction,
     db: &DB,
+    guild_id: u64,
 ) -> Result<(), crate::bot::commands::CommandError> {
-    let channels = db.collection_allowed_channel.find(None, None).await?;
+    let channels = db
+        .collection_allowed_channel
+        .find(doc! { "guild_id": guild_id.to_string() }, None)
+        .await?;
     let channels = channels.try_collect().await.unwrap_or_else(|_| vec![]);
 
     let mut output = String::from("Features and whitelisted channels:");
