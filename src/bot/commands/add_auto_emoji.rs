@@ -38,7 +38,7 @@ pub async fn run(
     //     })
     //     .await?;
     let msg = command.get_interaction_response(&ctx.http).await?;
-    reaction_queue.insert(msg.id.0);
+    reaction_queue.insert(msg.id.0, Vec::new());
 
     // let a = msg.react(&ctx.http, EmojiId()).await?;
 

@@ -17,7 +17,7 @@ use super::save_attachments::SaveAttachmentsError;
 use serenity::model::channel::Reaction;
 
 pub async fn hook_auto_react(
-    ctx: Context,
+    ctx: &Context,
     guild_id: u64,
     msg: &Message,
     db: &DB,

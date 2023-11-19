@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use cfg_if::cfg_if;
 
@@ -81,7 +81,10 @@ cfg_if! {
 if #[cfg(feature = "ssr")] {
     use crate::database::DB;
     use self::hooks::save_attachments::hook_save_attachments;
-    use self::hooks::hook_auto_reaction::hook_auto_react;
+    use self::hooks::{
+        hook_add_reaction::{hook_add_reaction},
+        hook_auto_reaction::{hook_auto_react},
+    };
     use futures::TryStreamExt;
     use mongodb::bson::doc;
     use serenity::client::Context;
@@ -93,6 +96,7 @@ if #[cfg(feature = "ssr")] {
         ChannelId, GuildId, Interaction, InteractionResponseType, MessageId,
     };
     use serenity::model::channel::Reaction;
+    use serenity::model::prelude::ReactionType;
     use serenity::prelude::TypeMapKey;
     use serenity::prelude::GatewayIntents;
     use serenity::{async_trait, Client};
@@ -275,12 +279,14 @@ if #[cfg(feature = "ssr")] {
                 return;
             }
 
-            // println!("emoji_added");
-            match add_reaction.emoji {
-                serenity::model::prelude::ReactionType::Unicode(s) => println!("Unicode: {}", s),
-                serenity::model::prelude::ReactionType::Custom { animated, id, name } => println!("Custom: {}", id),
-                _ => println!("wtf>>>")
+
+            let result = hook_add_reaction(&ctx, guild_id.0, &add_reaction, &db).await;
+
+            if let Err(err) = result {
+                println!("{:?}", err);
+                return;
             }
+            // println!("emoji_added");
 
             // let db = {
             //     let data_read = ctx.data.read().await;
@@ -343,7 +349,7 @@ if #[cfg(feature = "ssr")] {
                 return;
             }
 
-            let result = hook_auto_react(ctx, guild_id.0, &msg, &db).await;
+            let result = hook_auto_react(&ctx, guild_id.0, &msg, &db).await;
 
             if let Err(err) = result {
                 println!("{:?}", err);
@@ -560,7 +566,7 @@ if #[cfg(feature = "ssr")] {
     pub struct ReactionQueue;
 
     impl TypeMapKey for ReactionQueue {
-        type Value = Arc<RwLock<HashSet<u64>>>;
+        type Value = Arc<RwLock<HashMap<u64, Vec<ReactionType>>>>;
     }
 
     pub async fn create_bot(db: crate::database::DB, token: String) -> serenity::Client {
@@ -582,7 +588,7 @@ if #[cfg(feature = "ssr")] {
 
         // let allowed_roles = Arc::new(RwLock::new(HashMap::<String, AllowedRole>::new()));
         // let allowed_channels = Arc::new(RwLock::new(HashMap::<String, AllowedChannel>::new()));
-        let reaction_queue = Arc::new(RwLock::new(HashSet::<u64>::new()));
+        let reaction_queue = Arc::new(RwLock::new(HashMap::<u64, Vec<ReactionType>>::new()));
         {
             let mut data = client.data.write().await;
             data.insert::<crate::database::DB>(db);
