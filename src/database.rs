@@ -172,15 +172,6 @@ impl Img {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct AutoEmoji {
-    pub _id: ObjectId,
-    pub guild_id: String,
-    pub id: String,
-    pub modified_at: DateTime,
-    pub created_at: DateTime,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AllowedGuild {
     pub _id: ObjectId,
     pub id: String,
@@ -203,140 +194,200 @@ impl AllowedGuild {
 
 cfg_if! {
 if #[cfg(feature = "ssr")] {
-        use mongodb::bson::{doc};
+    use mongodb::bson::{doc};
 
-        use mongodb::{options::ClientOptions, Client};
-        use serenity::prelude::TypeMapKey;
-        use std::collections::HashMap;
-        use std::sync::Arc;
-        use tokio::sync::RwLock;
-        use futures::TryStreamExt;
+    use mongodb::{options::ClientOptions, Client};
+    use serenity::prelude::TypeMapKey;
+    use serenity::model::channel::ReactionType;
+    use serenity::model::prelude::EmojiId;
+    use std::collections::HashMap;
+    use std::sync::Arc;
+    use tokio::sync::RwLock;
+    use futures::TryStreamExt;
+    use std::num::ParseIntError;
 
+    #[derive(Debug, Serialize, Deserialize, Clone)]
+    pub struct AutoReaction {
+        pub _id: ObjectId,
+        pub guild_id: String,
+        pub unicode: Option<String>,
+        pub id: Option<String>,
+        pub name: Option<String>,
+        pub animated: bool,
+        pub modified_at: DateTime,
+        pub created_at: DateTime,
+    }
 
-        #[derive(Debug, Serialize, Deserialize, Clone)]
-        pub struct AllowedRole {
-            pub _id: mongodb::bson::oid::ObjectId,
-            pub guild_id: String,
-            pub id: String,
-            pub name: String,
-            pub feature: String,
-            pub modified_at: mongodb::bson::DateTime,
-            pub created_at: mongodb::bson::DateTime,
-        }
+    impl AutoReaction {
+        pub fn to_reaction_type(self) -> Result<ReactionType, ToReactionTypeError>{
+          let reaction: ReactionType = if let Some(unicode) = self.unicode {
+             ReactionType::Unicode(unicode)
+            } else {
+            let id = self.id.ok_or(ToReactionTypeError::Id(format!("{:?}", &self._id)))?.parse::<u64>()?;
+            let name = self.name.ok_or(ToReactionTypeError::Name(format!("{:#?}", &self._id)))?;
 
-        impl TypeMapKey for AllowedRole {
-            type Value = Arc<RwLock<HashMap<String, Self>>>;
-        }
-
-        #[derive(Debug, Serialize, Deserialize, Clone)]
-        pub struct AllowedChannel {
-            pub _id: mongodb::bson::oid::ObjectId,
-            pub guild_id: String,
-            pub id: String,
-            pub name: String,
-            pub feature: String,
-            pub modified_at: mongodb::bson::DateTime,
-            pub created_at: mongodb::bson::DateTime,
-        }
-
-        impl TypeMapKey for AllowedChannel {
-            type Value = Arc<RwLock<HashMap<String, Self>>>;
-        }
-
-
-
-        #[derive(Clone, Debug)]
-        pub struct DB {
-            pub client: mongodb::Client,
-            pub database: mongodb::Database,
-            pub collection_img: mongodb::Collection<Img>,
-            pub collection_user: mongodb::Collection<User>,
-            pub collection_allowed_role: mongodb::Collection<AllowedRole>,
-            pub collection_allowed_channel: mongodb::Collection<AllowedChannel>,
-            collection_allowed_guild: mongodb::Collection<AllowedGuild>,
-            pub collection_auto_emoji: mongodb::Collection<AutoEmoji>,
-        }
-
-        impl DB {
-
-            pub async fn allowed_guild_insert_default(&self, guild_id: String) -> Result<Option<String>, mongodb::error::Error> {
-                let name = String::from("DEFAULT");
-                let allowed_guild = self.collection_allowed_guild.find_one(doc!{"id": &guild_id, "name": &name}, None).await?;
-                if allowed_guild.is_none() {
-                    let allowed_guild = self.collection_allowed_guild.insert_one(AllowedGuild::new(guild_id, name), None).await?;
-                    return Ok(Some(allowed_guild.inserted_id.to_string()));
-                }
-                Ok(None)
+            ReactionType::Custom {
+               animated: self.animated,
+               id: EmojiId(id),
+               name: Some(name)
             }
+          };
 
-            pub async fn allowed_guild_insert(&self, new_guild: AllowedGuild) -> Result<Option<String>, mongodb::error::Error> {
-                let allowed_guild = self.collection_allowed_guild.find_one(doc!{"id": &new_guild.id}, None).await?;
-                if allowed_guild.is_none() {
-                    let allowed_guild = self.collection_allowed_guild.insert_one(new_guild, None).await?;
-                    return Ok(Some(allowed_guild.inserted_id.to_string()));
-                }
-                Ok(None)
-            }
-
-            pub async fn allowed_guild_remove_one(&self, guild_id: &str) -> Result<bool, mongodb::error::Error> {
-                let result = self.collection_allowed_guild.delete_one(doc!{ "id": guild_id }, None).await?;
-                Ok(result.deleted_count > 0)
-            }
-
-            pub async fn allowed_guild_all(&self) -> Result<Vec<AllowedGuild>, mongodb::error::Error> {
-                let allowed_guilds = self.collection_allowed_guild.find(None, None).await?;
-                let allowed_guilds = allowed_guilds.try_collect().await.unwrap_or_else(|_| vec![]);
-                Ok(allowed_guilds)
-            }
-
-            pub async fn allowed_guild_exists(&self, guild_id: &str) -> Result<bool, mongodb::error::Error> {
-                let result = self.collection_allowed_guild.count_documents(doc!{"id": guild_id}, None).await?;
-                Ok(result > 0)
-            }
+          Ok(reaction)
         }
 
-        #[derive(Error, Debug)]
-        pub enum DBError {
-            #[error("Mongodb: {0}.")]
-            Mongo(#[from] mongodb::error::Error),
+       pub fn to_reaction_type_vec(auto_reactions: Vec<AutoReaction>) -> Result<Vec<ReactionType>, ToReactionTypeError> {
+         let mut output: Vec<ReactionType> = Vec::with_capacity(auto_reactions.len());
+         for reaction in auto_reactions {
+             output.push(reaction.to_reaction_type()?);
+         }
+         Ok(output)
+       }
+    }
 
-            #[error("Not found: {0}.")]
-            NotFound(String)
+
+    #[derive(Error, Debug)]
+    pub enum ToReactionTypeError {
+        #[error("Missing reaction id: {0}")]
+        Id(String),
+
+        #[error("Missing reaction name: {0}")]
+        Name(String),
+
+        #[error("Failed to parse id: {0}")]
+        ParseNumber(#[from] ParseIntError),
+    }
+
+
+    #[derive(Debug, Serialize, Deserialize, Clone)]
+    pub struct AllowedRole {
+        pub _id: mongodb::bson::oid::ObjectId,
+        pub guild_id: String,
+        pub id: String,
+        pub name: String,
+        pub feature: String,
+        pub modified_at: mongodb::bson::DateTime,
+        pub created_at: mongodb::bson::DateTime,
+    }
+
+    impl TypeMapKey for AllowedRole {
+        type Value = Arc<RwLock<HashMap<String, Self>>>;
+    }
+
+    #[derive(Debug, Serialize, Deserialize, Clone)]
+    pub struct AllowedChannel {
+        pub _id: mongodb::bson::oid::ObjectId,
+        pub guild_id: String,
+        pub id: String,
+        pub name: String,
+        pub feature: String,
+        pub modified_at: mongodb::bson::DateTime,
+        pub created_at: mongodb::bson::DateTime,
+    }
+
+    impl TypeMapKey for AllowedChannel {
+        type Value = Arc<RwLock<HashMap<String, Self>>>;
+    }
+
+
+
+    #[derive(Clone, Debug)]
+    pub struct DB {
+        pub client: mongodb::Client,
+        pub database: mongodb::Database,
+        pub collection_img: mongodb::Collection<Img>,
+        pub collection_user: mongodb::Collection<User>,
+        pub collection_allowed_role: mongodb::Collection<AllowedRole>,
+        pub collection_allowed_channel: mongodb::Collection<AllowedChannel>,
+        collection_allowed_guild: mongodb::Collection<AllowedGuild>,
+        pub collection_auto_reaction: mongodb::Collection<AutoReaction>,
+    }
+
+    impl DB {
+        pub async fn auto_reactions(&self) -> Result<Vec<AutoReaction>, mongodb::error::Error> {
+            let result = self.collection_auto_reaction.find(None, None).await?;
+            let result = result.try_collect().await.unwrap_or_else(|_| vec![]);
+            Ok(result)
         }
 
-        impl TypeMapKey for DB {
-            type Value = Self;
-        }
-
-        pub async fn create_database(mongo_url: String) -> DB {
-            let mut client_options = ClientOptions::parse(mongo_url)
-                .await
-                .unwrap();
-            client_options.app_name = Some("My App".to_string());
-            let client = Client::with_options(client_options).unwrap();
-
-            let database = client.database("artcord");
-            let collection_img = database.collection::<Img>("img");
-            let collection_user = database.collection::<User>("user");
-            let collection_allowed_channel = database.collection::<AllowedChannel>("allowed_channel");
-            let collection_allowed_role = database.collection::<AllowedRole>("allowed_role");
-            let collection_allowed_guild = database.collection::<AllowedGuild>("allowed_guild");
-            let collection_auto_emoji = database.collection::<AutoEmoji>("auto_emoji");
-
-            println!("Connecting to database...");
-            let db_list = client.list_database_names(doc! {}, None).await.unwrap();
-            println!("Databases: {:?}", db_list);
-
-            DB {
-                database,
-                client,
-                collection_img,
-                collection_user,
-                collection_allowed_channel,
-                collection_allowed_role,
-                collection_allowed_guild,
-                collection_auto_emoji
+        pub async fn allowed_guild_insert_default(&self, guild_id: String) -> Result<Option<String>, mongodb::error::Error> {
+            let name = String::from("DEFAULT");
+            let allowed_guild = self.collection_allowed_guild.find_one(doc!{"id": &guild_id, "name": &name}, None).await?;
+            if allowed_guild.is_none() {
+                let allowed_guild = self.collection_allowed_guild.insert_one(AllowedGuild::new(guild_id, name), None).await?;
+                return Ok(Some(allowed_guild.inserted_id.to_string()));
             }
+            Ok(None)
+        }
+
+        pub async fn allowed_guild_insert(&self, new_guild: AllowedGuild) -> Result<Option<String>, mongodb::error::Error> {
+            let allowed_guild = self.collection_allowed_guild.find_one(doc!{"id": &new_guild.id}, None).await?;
+            if allowed_guild.is_none() {
+                let allowed_guild = self.collection_allowed_guild.insert_one(new_guild, None).await?;
+                return Ok(Some(allowed_guild.inserted_id.to_string()));
+            }
+            Ok(None)
+        }
+
+        pub async fn allowed_guild_remove_one(&self, guild_id: &str) -> Result<bool, mongodb::error::Error> {
+            let result = self.collection_allowed_guild.delete_one(doc!{ "id": guild_id }, None).await?;
+            Ok(result.deleted_count > 0)
+        }
+
+        pub async fn allowed_guild_all(&self) -> Result<Vec<AllowedGuild>, mongodb::error::Error> {
+            let allowed_guilds = self.collection_allowed_guild.find(None, None).await?;
+            let allowed_guilds = allowed_guilds.try_collect().await.unwrap_or_else(|_| vec![]);
+            Ok(allowed_guilds)
+        }
+
+        pub async fn allowed_guild_exists(&self, guild_id: &str) -> Result<bool, mongodb::error::Error> {
+            let result = self.collection_allowed_guild.count_documents(doc!{"id": guild_id}, None).await?;
+            Ok(result > 0)
         }
     }
+
+    #[derive(Error, Debug)]
+    pub enum DBError {
+        #[error("Mongodb: {0}.")]
+        Mongo(#[from] mongodb::error::Error),
+
+        #[error("Not found: {0}.")]
+        NotFound(String)
+    }
+
+    impl TypeMapKey for DB {
+        type Value = Self;
+    }
+
+    pub async fn create_database(mongo_url: String) -> DB {
+        let mut client_options = ClientOptions::parse(mongo_url)
+            .await
+            .unwrap();
+        client_options.app_name = Some("My App".to_string());
+        let client = Client::with_options(client_options).unwrap();
+
+        let database = client.database("artcord");
+        let collection_img = database.collection::<Img>("img");
+        let collection_user = database.collection::<User>("user");
+        let collection_allowed_channel = database.collection::<AllowedChannel>("allowed_channel");
+        let collection_allowed_role = database.collection::<AllowedRole>("allowed_role");
+        let collection_allowed_guild = database.collection::<AllowedGuild>("allowed_guild");
+        let collection_auto_reaction = database.collection::<AutoReaction>("auto_reaction");
+
+        println!("Connecting to database...");
+        let db_list = client.list_database_names(doc! {}, None).await.unwrap();
+        println!("Databases: {:?}", db_list);
+
+        DB {
+            database,
+            client,
+            collection_img,
+            collection_user,
+            collection_allowed_channel,
+            collection_allowed_role,
+            collection_allowed_guild,
+            collection_auto_reaction
+        }
+    }
+}
 }

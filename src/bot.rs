@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use cfg_if::cfg_if;
 
 #[derive(Clone, PartialEq, Debug)]
@@ -79,6 +81,7 @@ cfg_if! {
 if #[cfg(feature = "ssr")] {
     use crate::database::DB;
     use self::hooks::save_attachments::hook_save_attachments;
+    use self::hooks::hook_auto_reaction::hook_auto_react;
     use futures::TryStreamExt;
     use mongodb::bson::doc;
     use serenity::client::Context;
@@ -89,12 +92,15 @@ if #[cfg(feature = "ssr")] {
     use serenity::model::prelude::{
         ChannelId, GuildId, Interaction, InteractionResponseType, MessageId,
     };
+    use serenity::model::channel::Reaction;
+    use serenity::prelude::TypeMapKey;
     use serenity::prelude::GatewayIntents;
     use serenity::{async_trait, Client};
     use thiserror::Error;
+    use tokio::sync::RwLock;
+    use std::sync::Arc;
 
     mod commands;
-    mod events;
     mod hooks;
 
     use commands::FEATURE_COMMANDER;
@@ -214,6 +220,78 @@ if #[cfg(feature = "ssr")] {
 
     #[async_trait]
     impl serenity::client::EventHandler for BotHandler {
+
+        async fn reaction_remove(&self, ctx: Context, remove_reaction: Reaction) {
+            let Some(guild_id) = remove_reaction.guild_id else {
+                return;
+            };
+
+            let (db, reaction_queue) = {
+                let data_read = ctx.data.read().await;
+
+                let db = data_read
+                    .get::<crate::database::DB>()
+                    .expect("Expected crate::database::DB in TypeMap")
+                    .clone();
+                let reaction_queue = data_read
+                    .get::<ReactionQueue>()
+                    .expect("Expected crate::database::DB in TypeMap")
+                    .clone();
+                (db, reaction_queue)
+            };
+
+            let allowed_guild = db.allowed_guild_exists(guild_id.0.to_string().as_str()).await;
+            let Ok(allowed_guild) = allowed_guild else {
+                println!("Mongodb error: {}", allowed_guild.err().unwrap());
+                return;
+            };
+            if !allowed_guild {
+                return;
+            }
+            println!("removed emoji");
+        }
+
+        async fn reaction_add(&self, ctx: Context, add_reaction: Reaction) {
+
+            let Some(guild_id) = add_reaction.guild_id else {
+                return;
+            };
+
+            let db = {
+                let data_read = ctx.data.read().await;
+
+                data_read
+                    .get::<crate::database::DB>()
+                    .expect("Expected crate::database::DB in TypeMap")
+                    .clone()
+            };
+
+            let allowed_guild = db.allowed_guild_exists(guild_id.0.to_string().as_str()).await;
+            let Ok(allowed_guild) = allowed_guild else {
+                println!("Mongodb error: {}", allowed_guild.err().unwrap());
+                return;
+            };
+            if !allowed_guild {
+                return;
+            }
+
+            // println!("emoji_added");
+            match add_reaction.emoji {
+                serenity::model::prelude::ReactionType::Unicode(s) => println!("Unicode: {}", s),
+                serenity::model::prelude::ReactionType::Custom { animated, id, name } => println!("Custom: {}", id),
+                _ => println!("wtf>>>")
+            }
+
+            // let db = {
+            //     let data_read = ctx.data.read().await;
+            //
+            //     data_read
+            //         .get::<crate::database::DB>()
+            //         .expect("Expected crate::database::DB in TypeMap")
+            //         .clone()
+            // };
+        }
+
         async fn message(&self, ctx: Context, msg: serenity::model::channel::Message) {
             let Some(guild_id) = msg.guild_id else {
                 return;
@@ -237,14 +315,14 @@ if #[cfg(feature = "ssr")] {
                     .clone()
             };
 
-                let allowed_guild = db.allowed_guild_exists(guild_id.0.to_string().as_str()).await;
-                let Ok(allowed_guild) = allowed_guild else {
-                    println!("Mongodb error: {}", allowed_guild.err().unwrap());
-                    return;
-                };
-                if !allowed_guild {
-                    return;
-                }
+            let allowed_guild = db.allowed_guild_exists(guild_id.0.to_string().as_str()).await;
+            let Ok(allowed_guild) = allowed_guild else {
+                println!("Mongodb error: {}", allowed_guild.err().unwrap());
+                return;
+            };
+            if !allowed_guild {
+                return;
+            }
 
             let result = hook_save_attachments(
                 &msg.attachments,
@@ -259,6 +337,13 @@ if #[cfg(feature = "ssr")] {
                 false,
             )
             .await;
+
+            if let Err(err) = result {
+                println!("{:?}", err);
+                return;
+            }
+
+            let result = hook_auto_react(ctx, guild_id.0, &msg, &db).await;
 
             if let Err(err) = result {
                 println!("{:?}", err);
@@ -472,6 +557,12 @@ if #[cfg(feature = "ssr")] {
         }
     }
 
+    pub struct ReactionQueue;
+
+    impl TypeMapKey for ReactionQueue {
+        type Value = Arc<RwLock<HashSet<u64>>>;
+    }
+
     pub async fn create_bot(db: crate::database::DB, token: String) -> serenity::Client {
         let framework = StandardFramework::new()
             .configure(|c| c.prefix("~")) // set the bot's prefix to "~"
@@ -481,6 +572,7 @@ if #[cfg(feature = "ssr")] {
         //let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
         let intents = GatewayIntents::GUILD_MESSAGES
             | GatewayIntents::DIRECT_MESSAGES
+            | GatewayIntents::GUILD_MESSAGE_REACTIONS
             | GatewayIntents::MESSAGE_CONTENT;
         let client = Client::builder(token, intents)
             .event_handler(BotHandler)
@@ -490,10 +582,11 @@ if #[cfg(feature = "ssr")] {
 
         // let allowed_roles = Arc::new(RwLock::new(HashMap::<String, AllowedRole>::new()));
         // let allowed_channels = Arc::new(RwLock::new(HashMap::<String, AllowedChannel>::new()));
-
+        let reaction_queue = Arc::new(RwLock::new(HashSet::<u64>::new()));
         {
             let mut data = client.data.write().await;
             data.insert::<crate::database::DB>(db);
+            data.insert::<ReactionQueue>(reaction_queue);
             // data.insert::<AllowedRole>(allowed_roles);
             // data.insert::<AllowedChannel>(allowed_channels);
         }

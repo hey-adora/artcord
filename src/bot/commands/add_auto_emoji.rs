@@ -1,10 +1,12 @@
 use serenity::{
     builder::CreateApplicationCommand,
-    model::prelude::{application_command::ApplicationCommandInteraction, InteractionResponseType},
+    model::prelude::{
+        application_command::ApplicationCommandInteraction, EmojiId, InteractionResponseType,
+    },
     prelude::Context,
 };
 
-use crate::database::DB;
+use crate::{bot::ReactionQueue, database::DB};
 
 pub async fn run(
     ctx: &Context,
@@ -12,26 +14,40 @@ pub async fn run(
     db: &DB,
     guild_id: u64,
 ) -> Result<(), crate::bot::commands::CommandError> {
-    // let role = db
-    //     .collection_allowed_role
-    //     .find_one(
-    //         doc! { "guild_id": guild_id.to_string(), "id": role_option.id.to_string(), "feature": feature_option },
-    //         None,
-    //     )
-    //     .await?;
+    let reaction_queue = {
+        let data_read = ctx.data.read().await;
+
+        data_read
+            .get::<ReactionQueue>()
+            .expect("Expected TypeMap")
+            .clone()
+    };
+    let mut reaction_queue = reaction_queue.write().await;
+
     let mut output = String::from("Loading...");
     let a = command
         .create_interaction_response(&ctx.http, |response| {
-            response
-                .kind(InteractionResponseType::ChannelMessageWithSource)
-                .interaction_response_data(|message| message.content(output))
+            response.kind(InteractionResponseType::DeferredChannelMessageWithSource)
         })
         .await?;
 
-    let result = command
-        .channel_id
-        .send_message(&ctx.http, |msg| {
-            msg.content("React to this message to add auto emoji.")
+    // let result = command
+    //     .channel_id
+    //     .send_message(&ctx.http, |msg| {
+    //         msg.content("React to this message to add auto emoji.")
+    //     })
+    //     .await?;
+    let msg = command.get_interaction_response(&ctx.http).await?;
+    reaction_queue.insert(msg.id.0);
+
+    // let a = msg.react(&ctx.http, EmojiId()).await?;
+
+    command
+        .edit_original_interaction_response(&ctx.http, |message| {
+            message.content(format!(
+                "React to this message to add auto emoji. {}",
+                msg.id.0
+            ))
         })
         .await?;
 
