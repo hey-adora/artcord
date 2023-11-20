@@ -207,7 +207,7 @@ if #[cfg(feature = "ssr")] {
     use std::num::ParseIntError;
     use mongodb::{options::IndexOptions, IndexModel};
 
-    #[derive(Debug, Serialize, Deserialize, Clone)]
+    #[derive(Hash, PartialEq, Eq, Debug, Serialize, Deserialize, Clone)]
     pub struct AutoReaction {
         pub _id: ObjectId,
         pub guild_id: String,
@@ -237,7 +237,42 @@ if #[cfg(feature = "ssr")] {
           Ok(reaction)
         }
 
-        pub fn from_reaction_type(guild_id: u64, reaction_types: Vec<ReactionType>) -> Result<Vec<AutoReaction>, FromReactionTypeError> {
+        pub fn from_reaction_type(guild_id: u64, reaction_type: ReactionType) -> Result<AutoReaction, FromReactionTypeError> {
+            let auto_reaction = match reaction_type {
+                serenity::model::prelude::ReactionType::Unicode(s) => {
+                    let auto_reaction = Self {
+                        _id: ObjectId::new(),
+                        guild_id: guild_id.to_string(),
+                        unicode: Some(s),
+                        id: None,
+                        name: None,
+                        animated: false,
+                        modified_at: DateTime::now(),
+                        created_at: DateTime::now(),
+                    };
+
+                    Ok(auto_reaction)
+                },
+                serenity::model::prelude::ReactionType::Custom { animated, id, name } => {
+                    let auto_reaction = Self {
+                        _id: ObjectId::new(),
+                        guild_id: guild_id.to_string(),
+                        unicode: None,
+                        id: Some(id.0.to_string()),
+                        name,
+                        animated,
+                        modified_at: DateTime::now(),
+                        created_at: DateTime::now(),
+                    };
+
+                    Ok(auto_reaction)
+                }
+                _ => Err(FromReactionTypeError::Invalid),
+            }?;
+            Ok(auto_reaction)
+        }
+
+        pub fn from_reaction_type_vec(guild_id: u64, reaction_types: Vec<ReactionType>) -> Result<Vec<AutoReaction>, FromReactionTypeError> {
 
             let mut auto_reactions: Vec<AutoReaction> = Vec::new();
             for reaction in reaction_types {
@@ -353,9 +388,9 @@ if #[cfg(feature = "ssr")] {
     // Err(mongodb::error::Error::custom(Arc::new("invalid ReactionType type".to_string())) )
 
     impl DB {
-        pub async fn auto_reactoin_get_by_auto_emoji(&self, auto_reaction: &AutoReaction) -> Result<(), mongodb::error::Error> {
-            // self.collection_auto_reaction.find_one(doc! { "id": auto_reaction.id, "guild_id": auto_reaction.guild_id, "name": auto_reaction.name, "animated": auto_reaction.animated }, None).await?;
-            Ok(())
+        pub async fn auto_reactoin_exists(&self, auto_reaction: &AutoReaction) -> Result<bool, mongodb::error::Error> {
+            let result = self.collection_auto_reaction.find_one(doc! { "id": &auto_reaction.id, "guild_id": auto_reaction.guild_id.as_str(), "name": &auto_reaction.name, "animated": auto_reaction.animated, "unicode": &auto_reaction.unicode }, None).await?;
+            Ok(result.is_some())
         }
 
         pub async fn auto_reactoin_insert_many_from_type(&self, auto_reactions: Vec<AutoReaction>) -> Result<(), mongodb::error::Error> {

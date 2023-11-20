@@ -103,6 +103,7 @@ if #[cfg(feature = "ssr")] {
     use thiserror::Error;
     use tokio::sync::RwLock;
     use std::sync::Arc;
+    use crate::database::AutoReaction;
 
     mod commands;
     mod hooks;
@@ -252,7 +253,14 @@ if #[cfg(feature = "ssr")] {
             if !allowed_guild {
                 return;
             }
-            println!("removed emoji");
+
+            let result = hook_add_reaction(&ctx, true, guild_id.0, &remove_reaction, &db).await;
+
+            if let Err(err) = result {
+                println!("{:?}", err);
+                return;
+            }
+            // println!("removed emoji");
         }
 
         async fn reaction_add(&self, ctx: Context, add_reaction: Reaction) {
@@ -280,7 +288,7 @@ if #[cfg(feature = "ssr")] {
             }
 
 
-            let result = hook_add_reaction(&ctx, guild_id.0, &add_reaction, &db).await;
+            let result = hook_add_reaction(&ctx, false, guild_id.0, &add_reaction, &db).await;
 
             if let Err(err) = result {
                 println!("{:?}", err);
@@ -563,10 +571,24 @@ if #[cfg(feature = "ssr")] {
         }
     }
 
-    pub struct ReactionQueue;
+    pub struct ReactionQueue {
+         pub msg_id: u64,
+         pub reactions: Vec<AutoReaction>,
+         pub add: bool
+    }
+
+    impl ReactionQueue {
+        pub fn new(msg_id: u64, add: bool) -> Self {
+            Self {
+                msg_id,
+                reactions: Vec::new(),
+                add
+            }
+        }
+    }
 
     impl TypeMapKey for ReactionQueue {
-        type Value = Arc<RwLock<HashMap<u64, Vec<ReactionType>>>>;
+        type Value = Arc<RwLock<Option<Self>>>;
     }
 
     pub async fn create_bot(db: crate::database::DB, token: String) -> serenity::Client {
@@ -588,7 +610,7 @@ if #[cfg(feature = "ssr")] {
 
         // let allowed_roles = Arc::new(RwLock::new(HashMap::<String, AllowedRole>::new()));
         // let allowed_channels = Arc::new(RwLock::new(HashMap::<String, AllowedChannel>::new()));
-        let reaction_queue = Arc::new(RwLock::new(HashMap::<u64, Vec<ReactionType>>::new()));
+        let reaction_queue = Arc::new(RwLock::new(None));
         {
             let mut data = client.data.write().await;
             data.insert::<crate::database::DB>(db);
