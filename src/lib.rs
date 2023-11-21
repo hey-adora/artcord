@@ -1,3 +1,5 @@
+#![feature(box_patterns)]
+
 pub mod app;
 pub mod bot;
 pub mod database;

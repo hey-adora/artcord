@@ -8,6 +8,7 @@ use serenity::model::prelude::{
 use thiserror::Error;
 
 use super::hooks::save_attachments::SaveAttachmentsError;
+use crate::database::ToReactionTypeError;
 
 pub mod add_auto_emoji;
 pub mod add_channel;
@@ -15,6 +16,8 @@ pub mod add_guild;
 pub mod add_role;
 pub mod guilds;
 pub mod leave;
+// pub mod add_reaction_channel;
+pub mod remove_auto_emoji;
 pub mod remove_channel;
 pub mod remove_guild;
 pub mod remove_role;
@@ -27,8 +30,22 @@ pub mod who;
 
 pub const FEATURE_GALLERY: &str = "gallery";
 pub const FEATURE_COMMANDER: &str = "commander";
-pub const CHANNEL_FEATURES: [&str; 1] = [FEATURE_GALLERY];
+pub const FEATURE_REACT: &str = "react";
+// pub const REACT_FEATURES: [&str; 1] = [FEATURE_GALLERY];
+pub const CHANNEL_FEATURES: [&str; 2] = [FEATURE_GALLERY, FEATURE_REACT];
 pub const ROLE_FEATURES: [&str; 2] = [FEATURE_COMMANDER, FEATURE_GALLERY];
+
+// pub fn is_valid_react_feature(feature: &str) -> Result<(), CommandError> {
+//     for feat in REACT_FEATURES {
+//         if feature == feat.to_string().as_str() {
+//             return Ok(());
+//         }
+//     }
+//     return Err(CommandError::OptionNotFound(format!(
+//         "feature '{}' not found in {:?}",
+//         feature, &REACT_FEATURES
+//     )));
+// }
 
 pub fn is_valid_channel_feature(feature: &str) -> Result<(), CommandError> {
     for feat in CHANNEL_FEATURES {
@@ -56,6 +73,9 @@ pub fn is_valid_role_feature(feature: &str) -> Result<(), CommandError> {
 
 #[derive(Error, Debug)]
 pub enum CommandError {
+    #[error("ToReactionTypeError: {0}")]
+    ToReactionTypeError(#[from] ToReactionTypeError),
+
     #[error("Failed to parse number: {0}")]
     Number(#[from] ParseIntError),
 

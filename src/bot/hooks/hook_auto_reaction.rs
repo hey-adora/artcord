@@ -9,7 +9,7 @@ use serenity::{
 };
 
 use crate::{
-    bot::ReactionQueue,
+    bot::{commands::FEATURE_REACT, ReactionQueue},
     database::{AutoReaction, ToReactionTypeError, DB},
 };
 
@@ -21,7 +21,16 @@ pub async fn hook_auto_react(
     guild_id: u64,
     msg: &Message,
     db: &DB,
+    force: bool,
 ) -> Result<(), HookReactError> {
+    if !force {
+        if !db
+            .feature_exists(guild_id, msg.channel_id.0, FEATURE_REACT)
+            .await?
+        {
+            return Ok(());
+        }
+    }
     let mut should_react = false;
 
     // let reaction_queue = {
@@ -92,7 +101,7 @@ pub async fn hook_auto_react(
     }
 
     if should_react {
-        let reactions = AutoReaction::to_reaction_type_vec(db.auto_reactions().await?)?;
+        let reactions = db.auto_reactions(guild_id).await?;
 
         if reactions.len() < 1 {
             return Ok(());
@@ -109,8 +118,30 @@ pub async fn hook_auto_react(
                 selected: selected_reaction,
                 total: reactions.len(),
             })?;
-        msg.react(&ctx.http, reaction.to_owned().clone()).await?;
+        let result = msg
+            .react(&ctx.http, reaction.to_owned().to_reaction_type()?)
+            .await;
 
+        match result {
+            Ok(_) => Ok(()),
+            Err(serenity::Error::Http(box serenity::http::HttpError::UnsuccessfulRequest(res)))
+                if res.status_code == 400
+                    && res.error.code == 10014
+                    && res.error.message.as_str() == "Unknown Emoji" =>
+            {
+                println!("Error, emoji doesnt exist: {:#?}", reaction);
+                db.auto_reaction_delete_one(reaction).await?;
+                Ok(())
+            }
+            Err(err) => Err(err),
+        }?;
+
+        // if let Err(serenity::Error::Http(box serenity::http::HttpError::UnsuccessfulRequest(res))) = result {
+        //     let uwknow_emoji = res.status_code == 400 && res.error.code == 10014 && res.error.message.as_str() == "Unknown Emoji";
+        //     println!("{:#?}", uwknow_emoji);
+        //     //box serenity::http::HttpError::UnsuccessfulRequest(res)
+        //     return;
+        // };
         // .collection_allowed_rol        let emoji = ctx.http.get_emoji(guild_id, emoji_id).await?;
         // msg.react(&ctx.http);
     }

@@ -52,18 +52,25 @@ pub async fn run(
         ReactionType::Unicode(CONFIRM_REACTION.to_string()),
     )
     .await?;
+
     msg.react(&ctx.http, ReactionType::Unicode(CLOSE_REACTION.to_string()))
         .await?;
 
+    let reactions = db.auto_reactions(guild_id).await?;
+
+    for reaction in reactions {
+        msg.react(&ctx.http, reaction.to_reaction_type()?).await?;
+    }
+
     reaction_queue_map.insert(
         guild_id,
-        ReactionQueue::new(msg.channel_id.0, msg.id.0, true),
+        ReactionQueue::new(msg.channel_id.0, msg.id.0, false),
     );
 
     command
         .edit_original_interaction_response(&ctx.http, |message| {
             message.content(format!(
-                "React to this message to add auto emoji. {}",
+                "React to this message to remove auto emoji. {}",
                 msg.id.0
             ))
         })
@@ -74,6 +81,6 @@ pub async fn run(
 
 pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicationCommand {
     command
-        .name("add_auto_emoji")
-        .description("React to add emoji.")
+        .name("remove_auto_emoji")
+        .description("React to remove emoji.")
 }

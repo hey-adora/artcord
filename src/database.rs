@@ -1,4 +1,4 @@
-use bson::{oid::ObjectId, DateTime};
+use bson::{oid::ObjectId, DateTime, Document};
 use bytecheck::CheckBytes;
 use cfg_if::cfg_if;
 use rkyv::{
@@ -388,9 +388,32 @@ if #[cfg(feature = "ssr")] {
     // Err(mongodb::error::Error::custom(Arc::new("invalid ReactionType type".to_string())) )
 
     impl DB {
+        pub async fn feature_exists(&self, guild_id: u64, channel_id: u64, feature: &str) -> Result<bool, mongodb::error::Error> {
+            let channel = self
+                .collection_allowed_channel
+                .find_one(
+                    doc! { "guild_id": guild_id.to_string(), "id": channel_id.to_string(), "feature": feature.to_string() },
+                    None,
+                )
+                .await?;
+            Ok(channel.is_some())
+        }
+
+        pub async fn auto_reaction_delete_one(&self, auto_reaction: &AutoReaction) -> Result<bool, mongodb::error::Error> {
+            let result = self.collection_auto_reaction.delete_one(doc!{ "id": &auto_reaction.id, "guild_id": auto_reaction.guild_id.as_str(), "name": &auto_reaction.name, "animated": auto_reaction.animated, "unicode": &auto_reaction.unicode }, None).await?;
+            Ok(result.deleted_count > 0)
+        }
+
         pub async fn auto_reactoin_exists(&self, auto_reaction: &AutoReaction) -> Result<bool, mongodb::error::Error> {
             let result = self.collection_auto_reaction.find_one(doc! { "id": &auto_reaction.id, "guild_id": auto_reaction.guild_id.as_str(), "name": &auto_reaction.name, "animated": auto_reaction.animated, "unicode": &auto_reaction.unicode }, None).await?;
             Ok(result.is_some())
+        }
+
+        pub async fn auto_reactoin_delete_many(&self, auto_reactions: Vec<AutoReaction>) -> Result<(), mongodb::error::Error> {
+            let filter = doc!{ "$or": auto_reactions.into_iter().map(|auto_reaction| doc! { "id": &auto_reaction.id, "guild_id": auto_reaction.guild_id.as_str(), "name": &auto_reaction.name, "animated": auto_reaction.animated, "unicode": &auto_reaction.unicode }).collect::<Vec<Document>>() };
+            // println!("{:#?}", &filter);
+            self.collection_auto_reaction.delete_many(filter, None).await?;
+            Ok(())
         }
 
         pub async fn auto_reactoin_insert_many_from_type(&self, auto_reactions: Vec<AutoReaction>) -> Result<(), mongodb::error::Error> {
@@ -398,8 +421,8 @@ if #[cfg(feature = "ssr")] {
             Ok(())
         }
 
-        pub async fn auto_reactions(&self) -> Result<Vec<AutoReaction>, mongodb::error::Error> {
-            let result = self.collection_auto_reaction.find(None, None).await?;
+        pub async fn auto_reactions(&self, guild_id: u64) -> Result<Vec<AutoReaction>, mongodb::error::Error> {
+            let result = self.collection_auto_reaction.find(doc!{"guild_id": guild_id.to_string()}, None).await?;
             let result = result.try_collect().await.unwrap_or_else(|_| vec![]);
             Ok(result)
         }

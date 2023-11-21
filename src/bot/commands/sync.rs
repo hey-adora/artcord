@@ -57,10 +57,7 @@ pub async fn run(
         let result = hook_save_attachments(
             &message.attachments,
             db,
-            message
-                .timestamp
-                .timestamp_nanos_opt()
-                .ok_or(CommandError::Time)?,
+            message.timestamp.timestamp_millis(),
             guild_id,
             channel_option.id.0,
             message.id.0,
@@ -146,10 +143,7 @@ pub async fn run(
             let result = hook_save_attachments(
                 &message.attachments,
                 db,
-                message
-                    .timestamp
-                    .timestamp_nanos_opt()
-                    .ok_or(CommandError::Time)?,
+                message.timestamp.timestamp_millis(),
                 guild_id,
                 channel_option.id.0,
                 message.id.0,

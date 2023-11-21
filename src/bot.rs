@@ -95,6 +95,7 @@ if #[cfg(feature = "ssr")] {
     use serenity::model::prelude::{
         ChannelId, GuildId, Interaction, InteractionResponseType, MessageId,
     };
+    use serenity::model::prelude::EmojiId;
     use serenity::model::channel::Reaction;
     use serenity::model::prelude::ReactionType;
     use serenity::prelude::TypeMapKey;
@@ -212,6 +213,9 @@ if #[cfg(feature = "ssr")] {
             "add_auto_emoji" if user_commander_authorized || no_roles_set => {
                 commands::add_auto_emoji::run(&ctx, &command, &db, guild_id.0).await
             }
+            "remove_auto_emoji" if user_commander_authorized || no_roles_set => {
+                commands::remove_auto_emoji::run(&ctx, &command, &db, guild_id.0).await
+            }
             "sync" if user_gallery_authorized || no_roles_set => {
                 commands::sync::run(&ctx, &command, &db, guild_id.0).await
             }
@@ -311,14 +315,7 @@ if #[cfg(feature = "ssr")] {
                 return;
             };
 
-
-            let Some(time) = msg.timestamp.timestamp_nanos_opt() else {
-                println!(
-                    "Error failed to get time for guild: {}, msg: {}",
-                    guild_id, msg.id.0
-                );
-                return;
-            };
+            let time = msg.timestamp.timestamp_millis();
 
             let db = {
                 let data_read = ctx.data.read().await;
@@ -357,7 +354,9 @@ if #[cfg(feature = "ssr")] {
                 return;
             }
 
-            let result = hook_auto_react(&ctx, guild_id.0, &msg, &db).await;
+            let a = msg.react(&ctx.http, ReactionType::Custom { animated: false, id: EmojiId(1175429915999490152), name: Some(String::from("done")) }).await;
+
+            let result = hook_auto_react(&ctx, guild_id.0, &msg, &db, false).await;
 
             if let Err(err) = result {
                 println!("{:?}", err);
@@ -545,6 +544,7 @@ if #[cfg(feature = "ssr")] {
                         .create_application_command(|command| commands::add_channel::register(command))
                         .create_application_command(|command| commands::add_role::register(command))
                         .create_application_command(|command| commands::remove_guild::register(command))
+                        .create_application_command(|command| commands::remove_auto_emoji::register(command))
                         .create_application_command(|command| commands::add_guild::register(command))
                         .create_application_command(|command| commands::show_guilds::register(command))
                         .create_application_command(|command| commands::remove_role::register(command))
@@ -573,14 +573,16 @@ if #[cfg(feature = "ssr")] {
 
     pub struct ReactionQueue {
          pub msg_id: u64,
+         pub channel_id: u64,
          pub reactions: Vec<AutoReaction>,
          pub add: bool
     }
 
     impl ReactionQueue {
-        pub fn new(msg_id: u64, add: bool) -> Self {
+        pub fn new(channel_id: u64, msg_id: u64, add: bool) -> Self {
             Self {
                 msg_id,
+                channel_id,
                 reactions: Vec::new(),
                 add
             }
@@ -588,7 +590,7 @@ if #[cfg(feature = "ssr")] {
     }
 
     impl TypeMapKey for ReactionQueue {
-        type Value = Arc<RwLock<Option<Self>>>;
+        type Value = Arc<RwLock<HashMap<u64, Self>>>;
     }
 
     pub async fn create_bot(db: crate::database::DB, token: String) -> serenity::Client {
@@ -610,7 +612,7 @@ if #[cfg(feature = "ssr")] {
 
         // let allowed_roles = Arc::new(RwLock::new(HashMap::<String, AllowedRole>::new()));
         // let allowed_channels = Arc::new(RwLock::new(HashMap::<String, AllowedChannel>::new()));
-        let reaction_queue = Arc::new(RwLock::new(None));
+        let reaction_queue = Arc::new(RwLock::new(HashMap::new()));
         {
             let mut data = client.data.write().await;
             data.insert::<crate::database::DB>(db);

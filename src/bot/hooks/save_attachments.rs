@@ -23,14 +23,10 @@ pub async fn hook_save_attachments(
     force: bool,
 ) -> Result<(), SaveAttachmentsError> {
     if !force {
-        let channel = db
-            .collection_allowed_channel
-            .find_one(
-                doc! { "id": channel_id.to_string(), "feature": FEATURE_GALLERY.to_string() },
-                None,
-            )
-            .await?;
-        if let None = channel {
+        if !db
+            .feature_exists(guild_id, channel_id, FEATURE_GALLERY)
+            .await?
+        {
             return Ok(());
         }
     }

@@ -169,6 +169,7 @@ impl MyWs {
             doc! { "$lookup": doc! { "from": "user", "localField": "user_id", "foreignField": "id", "as": "user"} },
             doc! { "$unwind": "$user" }
         ];
+        println!("{:#?}", pipeline);
 
         let mut imgs = db.collection_img.aggregate(pipeline, None).await?;
 
