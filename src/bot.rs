@@ -397,14 +397,8 @@ if #[cfg(feature = "ssr")] {
                     return;
                 }
 
-            let result = db
-                .collection_img
-                .update_one(
-                    doc! { "id": deleted_message_id.0.to_string() },
-                    doc! { "$set": { "show": false } },
-                    None,
-                )
-                .await;
+            let result = db.img_hide(guild_id.0, deleted_message_id.0).await;
+
             let Ok(result) = result else {
                 println!(
                     "ERROR: failed to hide img '{}': {}",
@@ -414,7 +408,7 @@ if #[cfg(feature = "ssr")] {
                 return;
             };
 
-            if result.modified_count > 0 {
+            if result {
                 println!("IMG HIDDEN: {}", deleted_message_id);
             }
         }
@@ -449,14 +443,15 @@ if #[cfg(feature = "ssr")] {
             }
 
             for deleted_message_id in multiple_deleted_messages_id {
-                let result = db
-                    .collection_img
-                    .update_one(
-                        doc! { "id": deleted_message_id.0.to_string() },
-                        doc! { "$set": { "show": false } },
-                        None,
-                    )
-                    .await;
+                let result = db.img_hide(guild_id.0, deleted_message_id.0).await;
+                // let result = db
+                //     .collection_img
+                //     .update_one(
+                //         doc! { "id": deleted_message_id.0.to_string() },
+                //         doc! { "$set": { "show": false } },
+                //         None,
+                //     )
+                //     .await;
                 let Ok(_) = result else {
                     println!(
                         "ERROR: failed to hide img '{}': {}",

@@ -10,7 +10,10 @@ use rkyv::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::bot::ImgQuality;
+use crate::{
+    bot::ImgQuality,
+    server::{ServerMsg, ServerMsgImg},
+};
 
 #[derive(
     rkyv::Archive,
@@ -377,7 +380,7 @@ if #[cfg(feature = "ssr")] {
     pub struct DB {
         pub client: mongodb::Client,
         pub database: mongodb::Database,
-        pub collection_img: mongodb::Collection<Img>,
+        collection_img: mongodb::Collection<Img>,
         pub collection_user: mongodb::Collection<User>,
         pub collection_allowed_role: mongodb::Collection<AllowedRole>,
         pub collection_allowed_channel: mongodb::Collection<AllowedChannel>,
@@ -388,6 +391,83 @@ if #[cfg(feature = "ssr")] {
     // Err(mongodb::error::Error::custom(Arc::new("invalid ReactionType type".to_string())) )
 
     impl DB {
+        pub async fn img_aggregate_gallery(&self, amount: u32, from: DateTime)  -> Result<ServerMsg, mongodb::error::Error> {
+
+            let  pipeline = vec![
+                doc! { "$sort": doc! { "created_at": -1 } },
+                doc! { "$match": doc! { "created_at": { "$lt": from }, "show": true } },
+                doc! { "$limit": Some( amount.clamp(25, 10000) as i64) },
+                doc! { "$lookup": doc! { "from": "user", "localField": "user_id", "foreignField": "id", "as": "user"} },
+                doc! { "$unwind": "$user" }
+            ];
+            // println!("{:#?}", pipeline);
+
+            let mut imgs = self.collection_img.aggregate(pipeline, None).await?;
+
+            let mut send_this: Vec<ServerMsgImg> = Vec::new();
+
+            while let Some(result) = imgs.try_next().await? {
+                let doc: ServerMsgImg = mongodb::bson::from_document(result)?;
+                send_this.push(doc);
+            };
+
+            Ok(ServerMsg::Imgs(send_this))
+         }
+
+        pub async fn img_find_one(&self, guild_id: u64, file_hash: &str) -> Result<Option<Img>, mongodb::error::Error> {
+            let found_img = self
+                .collection_img
+                .find_one(
+                    doc! {
+                        "guild_id": guild_id.to_string(),
+                        "org_hash": file_hash.clone()
+                    },
+                    None,
+                )
+                .await?;
+            Ok(found_img)
+        }
+
+        pub async fn img_hide(&self, guild_id: u64, msg_id: u64) -> Result<bool, mongodb::error::Error> {
+            let result = self
+                .collection_img
+                .update_one(
+                    doc! { "guild_id": guild_id.to_string(), "id": msg_id.to_string() },
+                    doc! { "$set": { "show": false } },
+                    None,
+                )
+                .await?;
+
+            Ok(result.matched_count > 0)
+        }
+
+        pub async fn img_update_one_by_hash(&self, guild_id: u64, file_hash: &str, update: Document) -> Result<(), mongodb::error::Error> {
+            self
+                .collection_img
+                .update_one(
+                    doc! { "guild_id": guild_id.to_string(), "org_hash": file_hash },
+                    doc! {
+                        "$set": update
+                    },
+                    None,
+                )
+                .await?;
+
+            Ok(())
+        }
+
+        pub async fn img_insert(&self, img: &Img) -> Result<(), mongodb::error::Error> {
+            let is_ms = img.created_at.timestamp_millis() < 9999999999999;
+            if !is_ms {
+             return Err(mongodb::error::Error::custom(Arc::new(format!("created_at: {}", is_ms))) );
+            }
+            let is_ms = img.modified_at.timestamp_millis() < 9999999999999;
+            if !is_ms {
+             return Err(mongodb::error::Error::custom(Arc::new(format!("modified_at: {}", is_ms))) );
+            }
+            self.collection_img.insert_one(img, None).await?;
+            Ok(())
+        }
 
         pub async fn reset_img_time(&self, guild_id: u64) -> Result<(), mongodb::error::Error> {
             let ops = mongodb::options::FindOptions::builder().sort(doc!{"created_at": 1}).build();

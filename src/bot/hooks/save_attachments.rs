@@ -263,7 +263,7 @@ pub async fn save_user(
 
         if update.len() > 0 {
             update.insert("modified_at", mongodb::bson::DateTime::now());
-            db.collection_img
+            db.collection_user
                 .update_one(
                     doc! { "id": format!("{}", user_id) },
                     doc! {
@@ -360,15 +360,16 @@ pub async fn save_attachment(
         }?;
     }
 
-    let found_img = db
-        .collection_img
-        .find_one(
-            doc! {
-                "org_hash": file_hash_hex.clone()
-            },
-            None,
-        )
-        .await?;
+    let found_img = db.img_find_one(guild_id, file_hash_hex.as_str()).await?;
+    // let found_img = db
+    //     .collection_img
+    //     .find_one(
+    //         doc! {
+    //             "org_hash": file_hash_hex.clone()
+    //         },
+    //         None,
+    //     )
+    //     .await?;
 
     if let Some(found_img) = found_img {
         let db_img_names = ["has_low", "has_medium", "has_high"];
@@ -405,16 +406,18 @@ pub async fn save_attachment(
         if update.len() > 0 {
             update.insert("modified_at", mongodb::bson::DateTime::now());
             let update_msg = format!("{}: {:#?}", file_hash_hex, &update);
-            let _update_status = db
-                .collection_img
-                .update_one(
-                    doc! { "org_hash": file_hash_hex.clone() },
-                    doc! {
-                        "$set": update
-                    },
-                    None,
-                )
+            db.img_update_one_by_hash(guild_id, file_hash_hex.as_str(), update)
                 .await?;
+            // let _update_status = db
+            //     .collection_img
+            //     .update_one(
+            //         doc! { "org_hash": file_hash_hex.clone() },
+            //         doc! {
+            //             "$set": update
+            //         },
+            //         None,
+            //     )
+            //     .await?;
             Ok(SaveAttachmentResult::Updated(update_msg))
         } else {
             Ok(SaveAttachmentResult::None(file_hash_hex))
@@ -443,7 +446,7 @@ pub async fn save_attachment(
             created_at: mongodb::bson::DateTime::from_millis(timestamp),
         };
 
-        db.collection_img.insert_one(&img, None).await?;
+        db.img_insert(&img).await?;
         Ok(SaveAttachmentResult::Created(file_hash_hex))
     }
 }

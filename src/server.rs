@@ -160,29 +160,29 @@ struct MyWs {
 }
 
 
-impl MyWs {
-    pub async fn gallery_handler(db: crate::database::DB, amount: u32, from: DateTime) -> Result<ServerMsg, ServerMsgError> {
-        let  pipeline = vec![
-            doc! { "$sort": doc! { "created_at": -1 } },
-            doc! { "$match": doc! { "created_at": { "$lt": from }, "show": true } },
-            doc! { "$limit": Some( amount.clamp(25, 10000) as i64) },
-            doc! { "$lookup": doc! { "from": "user", "localField": "user_id", "foreignField": "id", "as": "user"} },
-            doc! { "$unwind": "$user" }
-        ];
-        println!("{:#?}", pipeline);
-
-        let mut imgs = db.collection_img.aggregate(pipeline, None).await?;
-
-        let mut send_this: Vec<ServerMsgImg> = Vec::new();
-
-        while let Some(result) = imgs.try_next().await? {
-            let doc: ServerMsgImg = mongodb::bson::from_document(result)?;
-            send_this.push(doc);
-        };
-
-        Ok(ServerMsg::Imgs(send_this))
-    }
-}
+// impl MyWs {
+//     pub async fn gallery_handler(db: crate::database::DB, amount: u32, from: DateTime) -> Result<ServerMsg, ServerMsgError> {
+//         let  pipeline = vec![
+//             doc! { "$sort": doc! { "created_at": -1 } },
+//             doc! { "$match": doc! { "created_at": { "$lt": from }, "show": true } },
+//             doc! { "$limit": Some( amount.clamp(25, 10000) as i64) },
+//             doc! { "$lookup": doc! { "from": "user", "localField": "user_id", "foreignField": "id", "as": "user"} },
+//             doc! { "$unwind": "$user" }
+//         ];
+//         println!("{:#?}", pipeline);
+//
+//         let mut imgs = db.collection_img.aggregate(pipeline, None).await?;
+//
+//         let mut send_this: Vec<ServerMsgImg> = Vec::new();
+//
+//         while let Some(result) = imgs.try_next().await? {
+//             let doc: ServerMsgImg = mongodb::bson::from_document(result)?;
+//             send_this.push(doc);
+//         };
+//
+//         Ok(ServerMsg::Imgs(send_this))
+//     }
+// }
 
 impl Actor for MyWs {
     type Context = ws::WebsocketContext<Self>;
@@ -249,9 +249,10 @@ impl Handler<ByteActor> for MyWs {
                 recipient.do_send(VecActor(bytes.into_vec()));
                 return;
             };
-            let server_msg: Result<ServerMsg, ServerMsgError> = match client_msg {
+            let server_msg: Result<ServerMsg, mongodb::error::Error> = match client_msg {
                 ClientMsg::GalleryInit { amount, from} => {
-                    MyWs::gallery_handler(db, amount, from).await
+                    db.img_aggregate_gallery(amount, from).await
+                    // MyWs::gallery_handler(db, amount, from).await
                 }
             };
 
