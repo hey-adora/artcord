@@ -180,6 +180,9 @@ if #[cfg(feature = "ssr")] {
             "add_role" if user_commander_authorized || no_roles_set => {
                 commands::add_role::run(&ctx, &command, &db, guild_id.0).await
             }
+            "reset_time" if user_commander_authorized || no_roles_set => {
+                commands::reset_time::run(&ctx, &command, &db, guild_id.0).await
+            }
             "add_channel" if user_commander_authorized || no_roles_set => {
                 commands::add_channel::run(&ctx, &command, &db, guild_id.0).await
             }
@@ -545,6 +548,7 @@ if #[cfg(feature = "ssr")] {
                         .create_application_command(|command| commands::add_role::register(command))
                         .create_application_command(|command| commands::remove_guild::register(command))
                         .create_application_command(|command| commands::remove_auto_emoji::register(command))
+                        .create_application_command(|command| commands::reset_time::register(command))
                         .create_application_command(|command| commands::add_guild::register(command))
                         .create_application_command(|command| commands::show_guilds::register(command))
                         .create_application_command(|command| commands::remove_role::register(command))

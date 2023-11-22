@@ -388,6 +388,48 @@ if #[cfg(feature = "ssr")] {
     // Err(mongodb::error::Error::custom(Arc::new("invalid ReactionType type".to_string())) )
 
     impl DB {
+
+        pub async fn reset_img_time(&self, guild_id: u64) -> Result<(), mongodb::error::Error> {
+            let ops = mongodb::options::FindOptions::builder().sort(doc!{"created_at": 1}).build();
+            let mut cursor = self.collection_img.find(None, ops).await?;
+            let mut modified_count = 0;
+            let mut count = 0;
+
+            while let Some(img) = cursor.try_next().await? {
+               if count % 1000 == 0 {
+                   println!("{}, {}", count, modified_count);
+               }
+
+               let mut update_doc = Document::new();
+
+               let ms = img.created_at.timestamp_millis();
+               let is_ms = ms < 9999999999999;
+               if !is_ms {
+                 let to_ms = if is_ms {ms} else {ms/1000000};
+                 let created_at = DateTime::from_millis(to_ms);
+                 update_doc.insert("created_at", created_at);
+               }
+
+               let ms = img.modified_at.timestamp_millis();
+               let is_ms = ms < 9999999999999;
+               if !is_ms {
+                 let to_ms = if is_ms {ms} else {ms/1000000};
+                 let modified_at = DateTime::from_millis(to_ms);
+                 update_doc.insert("modified_at", modified_at);
+               }
+
+               if update_doc.len() > 0 {
+                     self.collection_img.update_one( doc!{ "_id": img._id }, doc!{"$set": update_doc}, None).await?;
+                     modified_count += 1;
+               }
+
+               count += 1;
+            }
+            println!("{}, {}", count, modified_count);
+
+           Ok(())
+        }
+
         pub async fn feature_exists(&self, guild_id: u64, channel_id: u64, feature: &str) -> Result<bool, mongodb::error::Error> {
             let channel = self
                 .collection_allowed_channel

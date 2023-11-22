@@ -16,6 +16,7 @@ pub mod add_guild;
 pub mod add_role;
 pub mod guilds;
 pub mod leave;
+pub mod reset_time;
 // pub mod add_reaction_channel;
 pub mod remove_auto_emoji;
 pub mod remove_channel;
