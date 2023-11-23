@@ -24,29 +24,31 @@ impl ImgQuality {
         format!("/assets/gallery/org_{}.{}", hex, format)
     }
 
-    pub fn gen_img_path_org(hex: &str, format: &str) -> String {
+    pub fn gen_img_path_org(root: &str, hex: &str, format: &str) -> String {
+        // format!("target/site/gallery/org_{}.{}", hex, format)
         format!("target/site/gallery/org_{}.{}", hex, format)
     }
 
-    pub fn gen_img_path_high(hex: &str) -> String {
+    pub fn gen_img_path_high(root: &str, hex: &str) -> String {
         format!("target/site/gallery/high_{}.webp", hex)
     }
 
-    pub fn gen_img_path_medium(hex: &str) -> String {
+    pub fn gen_img_path_medium(root: &str, hex: &str) -> String {
         format!("target/site/gallery/medium_{}.webp", hex)
     }
 
-    pub fn gen_img_path_low(hex: &str) -> String {
+    pub fn gen_img_path_low(root: &str, hex: &str) -> String {
         format!("target/site/gallery/low_{}.webp", hex)
     }
 
-    pub fn gen_low_medium_high_paths(hex: &str) -> [String; 3] {
-        [
-            ImgQuality::gen_img_path_low(hex),
-            ImgQuality::gen_img_path_medium(hex),
-            ImgQuality::gen_img_path_high(hex),
-        ]
-    }
+    // pub fn gen_low_medium_high_paths(hex: &str) -> [String; 4] {
+    //     [
+    //         ImgQuality::gen_img_path_org(hex),
+    //         ImgQuality::gen_img_path_low(hex),
+    //         ImgQuality::gen_img_path_medium(hex),
+    //         ImgQuality::gen_img_path_high(hex),
+    //     ]
+    // }
 
     pub fn sizes() -> [u32; 3] {
         [360, 720, 1080]
@@ -105,6 +107,7 @@ if #[cfg(feature = "ssr")] {
     use tokio::sync::RwLock;
     use std::sync::Arc;
     use crate::database::AutoReaction;
+    use crate::server::ArcStr;
 
     mod commands;
     mod hooks;
@@ -125,6 +128,7 @@ if #[cfg(feature = "ssr")] {
     struct BotHandler;
 
     pub async fn resolve_command(
+        gallery_root_dir: &str,
         ctx: &Context,
         command: &ApplicationCommandInteraction,
         db: &DB
@@ -220,7 +224,7 @@ if #[cfg(feature = "ssr")] {
                 commands::remove_auto_emoji::run(&ctx, &command, &db, guild_id.0).await
             }
             "sync" if user_gallery_authorized || no_roles_set => {
-                commands::sync::run(&ctx, &command, &db, guild_id.0).await
+                commands::sync::run(gallery_root_dir, &ctx, &command, &db, guild_id.0).await
             }
             name => Err(crate::bot::commands::CommandError::NotImplemented(
                 name.to_string(),
@@ -320,13 +324,18 @@ if #[cfg(feature = "ssr")] {
 
             let time = msg.timestamp.timestamp_millis();
 
-            let db = {
+            let (db, gallery_root_dir) = {
                 let data_read = ctx.data.read().await;
 
-                data_read
+                let db = data_read
                     .get::<crate::database::DB>()
                     .expect("Expected crate::database::DB in TypeMap")
-                    .clone()
+                    .clone();
+                let gallery_root_dir = data_read
+                    .get::<ArcStr>()
+                    .expect("Expected crate::database::DB in TypeMap")
+                    .clone();
+                (db, gallery_root_dir)
             };
 
             let allowed_guild = db.allowed_guild_exists(guild_id.0.to_string().as_str()).await;
@@ -339,6 +348,7 @@ if #[cfg(feature = "ssr")] {
             }
 
             let result = hook_save_attachments(
+                &*gallery_root_dir,
                 &msg.attachments,
                 &db,
                 time,
@@ -470,13 +480,18 @@ if #[cfg(feature = "ssr")] {
                 let Some(guild_id) = command.guild_id else {
                     return;
                 };
-                let db = {
+                let (db, gallery_root_dir) = {
                     let data_read = ctx.data.read().await;
 
-                    data_read
+                    let db = data_read
                         .get::<crate::database::DB>()
                         .expect("Expected crate::database::DB in TypeMap")
-                        .clone()
+                        .clone();
+                    let gallery_root_dir = data_read
+                        .get::<ArcStr>()
+                        .expect("Expected crate::database::DB in TypeMap")
+                        .clone();
+                    (db, gallery_root_dir)
                 };
                 let allowed_guild = db.allowed_guild_exists(guild_id.0.to_string().as_str()).await;
                 let Ok(allowed_guild) = allowed_guild else {
@@ -486,7 +501,7 @@ if #[cfg(feature = "ssr")] {
                 if !allowed_guild {
                     return;
                 }
-                let result = resolve_command(&ctx, &command, &db).await;
+                let result = resolve_command(&*gallery_root_dir, &ctx, &command, &db).await;
                 if let Err(err) = result {
                     println!("Error: {}", err);
                     // command.
@@ -592,7 +607,7 @@ if #[cfg(feature = "ssr")] {
         type Value = Arc<RwLock<HashMap<u64, Self>>>;
     }
 
-    pub async fn create_bot(db: crate::database::DB, token: String) -> serenity::Client {
+    pub async fn create_bot(db: crate::database::DB, token: String, gallery_root_dir: &str) -> serenity::Client {
         let framework = StandardFramework::new()
             .configure(|c| c.prefix("~")) // set the bot's prefix to "~"
             .group(&GENERAL_GROUP);
@@ -616,6 +631,7 @@ if #[cfg(feature = "ssr")] {
             let mut data = client.data.write().await;
             data.insert::<crate::database::DB>(db);
             data.insert::<ReactionQueue>(reaction_queue);
+            data.insert::<ArcStr>(Arc::from(gallery_root_dir));
             // data.insert::<AllowedRole>(allowed_roles);
             // data.insert::<AllowedChannel>(allowed_channels);
         }

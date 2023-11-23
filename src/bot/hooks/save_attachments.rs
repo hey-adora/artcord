@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use thiserror::Error;
 
 pub async fn hook_save_attachments(
+    gallery_root_dir: &str,
     attachments: &[serenity::model::channel::Attachment],
     db: &DB,
     timestamp: i64,
@@ -51,7 +52,14 @@ pub async fn hook_save_attachments(
                 continue;
             }
             match save_attachment(
-                &db, timestamp, guild_id, channel_id, author_id, msg_id, attachment,
+                gallery_root_dir,
+                &db,
+                timestamp,
+                guild_id,
+                channel_id,
+                author_id,
+                msg_id,
+                attachment,
             )
             .await
             {
@@ -294,6 +302,7 @@ pub async fn save_user(
 }
 
 pub async fn save_attachment(
+    gallery_root_dir: &str,
     db: &DB,
     timestamp: i64,
     guild_id: u64,
@@ -323,10 +332,10 @@ pub async fn save_attachment(
     //let file_stem = file_name.file_stem().unwrap().to_str().unwrap();
     let file_ext = file_name.extension().unwrap().to_str().unwrap();
 
-    let org_img_path = format!("target/site/gallery/org_{}.{}", file_hash_hex, file_ext);
-    let low_img_path = format!("target/site/gallery/low_{}.webp", file_hash_hex);
-    let medium_img_path = format!("target/site/gallery/medium_{}.webp", file_hash_hex);
-    let high_img_path = format!("target/site/gallery/high_{}.webp", file_hash_hex);
+    let org_img_path = format!("{}/org_{}.{}", gallery_root_dir, file_hash_hex, file_ext);
+    let low_img_path = format!("{}/low_{}.webp", gallery_root_dir, file_hash_hex);
+    let medium_img_path = format!("{}/medium_{}.webp", gallery_root_dir, file_hash_hex);
+    let high_img_path = format!("{}/high_{}.webp", gallery_root_dir, file_hash_hex);
 
     let paths = [low_img_path, medium_img_path, high_img_path];
     let mut paths_state = [false, false, false];

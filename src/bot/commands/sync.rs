@@ -13,6 +13,7 @@ use super::CommandError;
 pub const DISCORD_MAX_MSG_REQUEST_SIZE: i64 = 100;
 
 pub async fn run(
+    gallery_root_dir: &str,
     ctx: &Context,
     command: &ApplicationCommandInteraction,
     db: &DB,
@@ -55,6 +56,7 @@ pub async fn run(
 
     for message in &messages {
         let result = hook_save_attachments(
+            gallery_root_dir,
             &message.attachments,
             db,
             message.timestamp.timestamp_millis(),
@@ -141,6 +143,7 @@ pub async fn run(
 
         for message in &messages {
             let result = hook_save_attachments(
+                gallery_root_dir,
                 &message.attachments,
                 db,
                 message.timestamp.timestamp_millis(),

@@ -325,8 +325,13 @@ pub async fn favicon() -> actix_web::Result<actix_files::NamedFile> {
 #[derive(Clone)]
 pub struct ServerState {
     sessions: Arc<Mutex<HashMap<uuid::Uuid,Addr<MyWs>>>>,
-
+    gallery_root_dir: Arc<str>,
     db: crate::database::DB,
+}
+
+pub struct ArcStr;
+impl TypeMapKey for ArcStr {
+    type Value = Arc<str>;
 }
 
 async fn overview(
@@ -342,7 +347,7 @@ async fn overview(
     HttpResponse::Ok().body(format!("Live connection: {}", sessions.len()))
 }
 
-pub async fn create_server(db: crate::database::DB) -> Server {
+pub async fn create_server(db: crate::database::DB, galley_root_dir: &str) -> Server {
     let conf = get_configuration(None).await.unwrap();
     let addr = conf.leptos_options.site_addr;
     let routes = generate_route_list(crate::app::App);
@@ -351,6 +356,7 @@ pub async fn create_server(db: crate::database::DB) -> Server {
     let sessions = Arc::new(Mutex::new(HashMap::<uuid::Uuid, Addr<MyWs>>::new()));
 
 
+    let galley_root_dir = galley_root_dir.to_string();
     HttpServer::new(move || {
         let leptos_options = &conf.leptos_options;
         let site_root = &leptos_options.site_root;
@@ -358,6 +364,7 @@ pub async fn create_server(db: crate::database::DB) -> Server {
         App::new()
             .app_data(web::Data::new(ServerState {
                 sessions: sessions.clone(),
+                gallery_root_dir: Arc::from(site_root.as_str()),
                 db: db.clone(),
             }))
             .route("/overview", web::get().to(overview))
@@ -365,6 +372,7 @@ pub async fn create_server(db: crate::database::DB) -> Server {
             .route("/ws/", web::get().to(index))
             .route("/api/{tail:.*}", leptos_actix::handle_server_fns())
             .service(Files::new("/pkg", format!("{site_root}/pkg")))
+            .service(Files::new("/assets/gallery", galley_root_dir.clone()))
             .service(Files::new("/assets", site_root))
 
             .leptos_routes(
