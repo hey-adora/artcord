@@ -595,7 +595,7 @@ if #[cfg(feature = "ssr")] {
     }
 
     impl TypeMapKey for DB {
-        type Value = Self;
+        type Value = Arc<Self>;
     }
 
     pub async fn create_database(mongo_url: String) -> DB {

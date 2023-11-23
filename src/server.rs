@@ -326,7 +326,7 @@ pub async fn favicon() -> actix_web::Result<actix_files::NamedFile> {
 pub struct ServerState {
     sessions: Arc<Mutex<HashMap<uuid::Uuid,Addr<MyWs>>>>,
     gallery_root_dir: Arc<str>,
-    db: crate::database::DB,
+    db: Arc<crate::database::DB>,
 }
 
 pub struct ArcStr;
@@ -347,7 +347,7 @@ async fn overview(
     HttpResponse::Ok().body(format!("Live connection: {}", sessions.len()))
 }
 
-pub async fn create_server(db: crate::database::DB, galley_root_dir: &str) -> Server {
+pub async fn create_server(db: Arc<crate::database::DB>, galley_root_dir: &str) -> Server {
     let conf = get_configuration(None).await.unwrap();
     let addr = conf.leptos_options.site_addr;
     let routes = generate_route_list(crate::app::App);

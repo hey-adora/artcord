@@ -501,7 +501,7 @@ if #[cfg(feature = "ssr")] {
                 if !allowed_guild {
                     return;
                 }
-                let result = resolve_command(&*gallery_root_dir, &ctx, &command, &db).await;
+                let result = resolve_command(&gallery_root_dir, &ctx, &command, &db).await;
                 if let Err(err) = result {
                     println!("Error: {}", err);
                     // command.
@@ -607,7 +607,7 @@ if #[cfg(feature = "ssr")] {
         type Value = Arc<RwLock<HashMap<u64, Self>>>;
     }
 
-    pub async fn create_bot(db: crate::database::DB, token: String, gallery_root_dir: &str) -> serenity::Client {
+    pub async fn create_bot(db: Arc<crate::database::DB>, token: String, gallery_root_dir: &str) -> serenity::Client {
         let framework = StandardFramework::new()
             .configure(|c| c.prefix("~")) // set the bot's prefix to "~"
             .group(&GENERAL_GROUP);

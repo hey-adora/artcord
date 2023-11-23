@@ -18,7 +18,7 @@ async fn main() -> std::io::Result<()> {
     let discord_default_guild =
         std::env::var("DISCORD_DEFAULT_GUILD").expect("ENV MISSING: DISCORD_DEFAULT_GUILD");
 
-    let db = create_database(mongo_url).await;
+    let db = std::sync::Arc::new(create_database(mongo_url).await);
     db.allowed_guild_insert_default(discord_default_guild)
         .await
         .unwrap();
