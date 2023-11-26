@@ -17,6 +17,7 @@ module.exports = {
       backgroundImage: {
         'line-pattern': "url('/assets/bg.svg')",
         'the-star': "url('/assets/star.svg')",
+        'sword_lady': "url('/assets/sword_lady.webp')",
       },
       boxShadow: {
         'glowy': '0px 0px 15px 2px #ECCEFF',
