@@ -360,6 +360,7 @@ pub async fn create_server(db: Arc<crate::database::DB>, galley_root_dir: &str) 
     HttpServer::new(move || {
         let leptos_options = &conf.leptos_options;
         let site_root = &leptos_options.site_root;
+        println!("site root: {}", site_root);
 
         App::new()
             .app_data(web::Data::new(ServerState {
