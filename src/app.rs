@@ -1,6 +1,5 @@
 use crate::app::utils::GlobalState;
 use crate::server::ServerMsg;
-use components::navbar::Navbar;
 use leptos::logging::log;
 use leptos::*;
 use leptos_meta::*;
@@ -112,17 +111,13 @@ pub fn App() -> impl IntoView {
         <Title text="Artcord"/>
         <Body  class=move || format!("text-low-purple  bg-gradient-to-br from-mid-purple to-dark-purple   {}", if global_state.nav_open.get() == true { "overflow-hidden w-screen h-screen" } else { "" })  />
         <Router>
-            <div id="home" class="pt-4 grid grid-rows-[auto_1fr] min-h-screen" >
-                // {move || connected()}
-                <Navbar/>
-                <main    class=" scroll-mt-[10rem] grid grid-rows-[1fr] pt-4 gap-6       ">
+                <main class="scroll-mt-[10rem] flex flex-col">
                     <Routes>
                         <Route path="" view=HomePage/>
                         <Route path="/gallery" view=GalleryPage/>
                         <Route path="/*any" view=NotFound/>
                     </Routes>
                 </main>
-            </div>
         </Router>
     }
 }

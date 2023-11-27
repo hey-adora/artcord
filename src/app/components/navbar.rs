@@ -49,7 +49,7 @@ pub fn Navbar() -> impl IntoView {
     });
 
     view! {
-        <nav  id="thenav" class=move || { format!("sticky  text-low-purple top-0 z-[100] px-6 flex   gap-2  duration-500 {} {}", if nav_tran() == true { "bg-transparent"  } else { "bg-gradient-to-r from-mid-purple to-dark-purple" }, if global_state.nav_open.get() == true { "w-[100vw] h-[100vh]" } else { "items-center justify-between transition-all" } ) }>
+        <nav  id="thenav" class=move || { format!("fixed  text-low-purple w-full top-0 z-[100] px-6  flex   gap-2  duration-500 {} {}", if nav_tran() == true && global_state.nav_open.get() != true { " py-2 bg-dark-night"  } else { "bg-gradient-to-r from-mid-purple to-dark-purple" }, if global_state.nav_open.get() == true { "w-[100vw] h-[100vh]" } else { "items-center justify-between transition-all" } ) }>
             <div class=move || format!("flex gap-6 items-center {}", if global_state.nav_open.get() == true { " flex-col w-full " } else { " " })>
                 {
                     move || {

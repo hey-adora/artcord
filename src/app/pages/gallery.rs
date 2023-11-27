@@ -268,7 +268,7 @@ pub fn GalleryPage() -> impl IntoView {
                 }
             }
         }
-        <section on:scroll=section_scroll _ref=gallery_section class="relative bg-sword-lady  overflow-x-hidden content-start overflow-y-scroll " style=move|| format!("max-height: calc(100vh - 80px); ")>
+        <section on:scroll=section_scroll _ref=gallery_section class="relative   overflow-x-hidden content-start overflow-y-scroll " style=move|| format!("max-height: calc(100vh - 80px); ")>
             <For each=global_state.gallery_imgs key=|state| state.id let:img >
                 {
                     let height = format!("{}px", &img.new_height);

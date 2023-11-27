@@ -13,11 +13,12 @@ module.exports = {
         "mid-purple": "#925CB3",
         "dark-purple": "#250157",
         "dark2-purple": "#642B87",
+        "dark-night": "#1A2625"
       },
       backgroundImage: {
         'line-pattern': "url('/assets/bg.svg')",
         'the-star': "url('/assets/star.svg')",
-        'sword_lady': "url('/assets/sword_lady.webp')",
+        'sword-lady': "url('/assets/sword_lady.webp')",
       },
       boxShadow: {
         'glowy': '0px 0px 15px 2px #ECCEFF',
