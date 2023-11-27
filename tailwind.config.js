@@ -13,7 +13,8 @@ module.exports = {
         "mid-purple": "#925CB3",
         "dark-purple": "#250157",
         "dark2-purple": "#642B87",
-        "dark-night": "#1A2625"
+        "dark-night": "#1A2625",
+        "light-flower": "#E6C5E8"
       },
       backgroundImage: {
         'line-pattern': "url('/assets/bg.svg')",

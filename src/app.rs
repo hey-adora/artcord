@@ -111,13 +111,11 @@ pub fn App() -> impl IntoView {
         <Title text="Artcord"/>
         <Body  class=move || format!("text-low-purple  bg-gradient-to-br from-mid-purple to-dark-purple   {}", if global_state.nav_open.get() == true { "overflow-hidden w-screen h-screen" } else { "" })  />
         <Router>
-                <main class="scroll-mt-[10rem] flex flex-col">
-                    <Routes>
-                        <Route path="" view=HomePage/>
-                        <Route path="/gallery" view=GalleryPage/>
-                        <Route path="/*any" view=NotFound/>
-                    </Routes>
-                </main>
+                <Routes>
+                    <Route path="" view=HomePage/>
+                    <Route path="/gallery" view=GalleryPage/>
+                    <Route path="/*any" view=NotFound/>
+                </Routes>
         </Router>
     }
 }

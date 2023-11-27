@@ -1,3 +1,4 @@
+use crate::app::components::navbar::{shrink_nav, Navbar};
 use bson::DateTime;
 use chrono::Utc;
 use leptos::ev::resize;
@@ -123,6 +124,7 @@ pub fn GalleryPage() -> impl IntoView {
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
     let gallery_section = create_node_ref::<Section>();
     let selected_img: RwSignal<Option<SelectedImg>> = create_rw_signal(None);
+    let nav_tran = global_state.nav_tran;
 
     // create_effect(move |_| {
     //     let sizes = [
@@ -224,6 +226,8 @@ pub fn GalleryPage() -> impl IntoView {
         let scroll_height = section.scroll_height();
         let client_width = section.client_width();
 
+        shrink_nav(nav_tran, scroll_top as u32);
+
         let left = scroll_height - (client_height + scroll_top);
 
         if left < client_height {
@@ -268,32 +272,38 @@ pub fn GalleryPage() -> impl IntoView {
                 }
             }
         }
-        <section on:scroll=section_scroll _ref=gallery_section class="relative   overflow-x-hidden content-start overflow-y-scroll " style=move|| format!("max-height: calc(100vh - 80px); ")>
-            <For each=global_state.gallery_imgs key=|state| state.id let:img >
-                {
-                    let height = format!("{}px", &img.new_height);
-                    let with = format!("{}px", &img.new_width);
-                    let bg_img = format!("url('{}')", &img.display_preview);
-                    let top = format!("{}px", img.top);
-                    let left = format!("{}px", img.left);
 
-                    view! {
-                        <div
-                            class="absolute bg-center bg-contain transition-shadow bg-no-repeat flex-shrink-0 font-bold grid place-items-center border hover:shadow-glowy hover:z-[101]  duration-300 bg-mid-purple  border-low-purple"
-                            style:height=height
-                            style:width=with
-                            style:background-image=bg_img
-                            style:top=top
-                            style:left=left
-                            on:click= move |_| select_click_img(&img)
-                        >
-                            // <div class="relative flex opacity-0 hover:opacity-100 transition duration-300 w-full h-full flex-col text-center justify-center gap-2  "  >
-                            //     <div class="absolute bg-dark-purple bottom-0 left-0 translate-y-full w-full">{&img.user.name}</div>
-                            // </div>
-                        </div>
+        <main class="grid grid-rows-[auto_1fr] min-h-[100svh]">
+            <div class=move || format!("{}", if nav_tran() {"h-[4rem]"} else {"h-[3rem]"})>
+               <Navbar/>
+            </div>
+            <section on:scroll=section_scroll _ref=gallery_section class="relative content-start overflow-x-hidden overflow-y-scroll h-full" >
+                <For each=global_state.gallery_imgs key=|state| state.id let:img >
+                    {
+                        let height = format!("{}px", &img.new_height);
+                        let with = format!("{}px", &img.new_width);
+                        let bg_img = format!("url('{}')", &img.display_preview);
+                        let top = format!("{}px", img.top);
+                        let left = format!("{}px", img.left);
+
+                        view! {
+                            <div
+                                class="absolute bg-center bg-contain transition-shadow bg-no-repeat flex-shrink-0 font-bold grid place-items-center border hover:shadow-glowy hover:z-[101]  duration-300 bg-mid-purple  border-low-purple"
+                                style:height=height
+                                style:width=with
+                                style:background-image=bg_img
+                                style:top=top
+                                style:left=left
+                                on:click= move |_| select_click_img(&img)
+                            >
+                                // <div class="relative flex opacity-0 hover:opacity-100 transition duration-300 w-full h-full flex-col text-center justify-center gap-2  "  >
+                                //     <div class="absolute bg-dark-purple bottom-0 left-0 translate-y-full w-full">{&img.user.name}</div>
+                                // </div>
+                            </div>
+                        }
                     }
-                }
-            </For>
-        </section>
+                </For>
+            </section>
+        </main>
     }
 }

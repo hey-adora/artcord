@@ -4,6 +4,20 @@ use web_sys::MouseEvent;
 
 use crate::app::utils::{get_window_path, GlobalState, ScrollSection};
 
+pub fn shrink_nav(nav_tran: RwSignal<bool>, y: u32) {
+    if y > 100 {
+        if nav_tran.with(|&s| s) {
+            //log!("FALSE: {}", y());
+            nav_tran.set(false);
+        }
+    } else {
+        if nav_tran.with(|&s| !s) {
+            //log!("TRUE: {}", y());
+            nav_tran.set(true);
+        }
+    }
+}
+
 #[component]
 pub fn Navbar() -> impl IntoView {
     //let a = use_context::<TestContext>().expect("Failed to provide test context.");
@@ -16,21 +30,6 @@ pub fn Navbar() -> impl IntoView {
             .nav_open
             .update(|open: &mut bool| *open = !*open);
     };
-
-    create_effect(move |_| {
-        let (_, y) = use_window_scroll();
-        if y() > 100f64 {
-            if nav_tran.with(|&s| s) {
-                //log!("FALSE: {}", y());
-                nav_tran.set(false);
-            }
-        } else {
-            if nav_tran.with(|&s| !s) {
-                //log!("TRUE: {}", y());
-                nav_tran.set(true);
-            }
-        }
-    });
 
     create_effect(move |_| {
         use_interval_fn(
@@ -49,7 +48,7 @@ pub fn Navbar() -> impl IntoView {
     });
 
     view! {
-        <nav  id="thenav" class=move || { format!("fixed  text-low-purple w-full top-0 z-[100] px-6  flex   gap-2  duration-500 {} {}", if nav_tran() == true && global_state.nav_open.get() != true { " py-2 bg-dark-night"  } else { "bg-gradient-to-r from-mid-purple to-dark-purple" }, if global_state.nav_open.get() == true { "w-[100vw] h-[100vh]" } else { "items-center justify-between transition-all" } ) }>
+        <nav  id="thenav" class=move || { format!("fixed backdrop-blur text-low-purple w-full top-0 z-[100] px-6  flex   gap-2  duration-500  bg-gradient-to-r from-dark-night/75 to-light-flower/75 supports-backdrop-blur:from-dark-night/95 supports-backdrop-blur:to-light-flower/95 {} {}", if nav_tran() == true && global_state.nav_open.get() != true { " py-2 "  } else { "" }, if global_state.nav_open.get() == true { "w-[100vw] h-[100vh]" } else { "items-center justify-between transition-all" } ) }>
             <div class=move || format!("flex gap-6 items-center {}", if global_state.nav_open.get() == true { " flex-col w-full " } else { " " })>
                 {
                     move || {

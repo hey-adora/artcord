@@ -623,6 +623,10 @@ video {
   height: 30px;
 }
 
+.h-\[3rem\] {
+  height: 3rem;
+}
+
 .h-\[48px\] {
   height: 48px;
 }
@@ -637,6 +641,10 @@ video {
 
 .h-screen {
   height: 100vh;
+}
+
+.max-h-\[100svh\] {
+  max-height: 100svh;
 }
 
 .min-h-\[100svh\] {
@@ -685,16 +693,16 @@ video {
   resize: both;
 }
 
-.scroll-mt-\[10rem\] {
-  scroll-margin-top: 10rem;
-}
-
 .grid-cols-\[1fr\] {
   grid-template-columns: 1fr;
 }
 
 .grid-rows-\[1fr\] {
   grid-template-rows: 1fr;
+}
+
+.grid-rows-\[auto_1fr\] {
+  grid-template-rows: auto 1fr;
 }
 
 .grid-rows-\[auto_auto_1fr\] {
@@ -807,11 +815,6 @@ video {
   border-color: transparent;
 }
 
-.bg-dark-night {
-  --tw-bg-opacity: 1;
-  background-color: rgb(26 38 37 / var(--tw-bg-opacity));
-}
-
 .bg-dark-purple {
   --tw-bg-opacity: 1;
   background-color: rgb(37 1 87 / var(--tw-bg-opacity));
@@ -839,6 +842,12 @@ video {
   background-image: url('/assets/sword_lady.webp');
 }
 
+.from-dark-night\/75 {
+  --tw-gradient-from: rgb(26 38 37 / 0.75) var(--tw-gradient-from-position);
+  --tw-gradient-to: rgb(26 38 37 / 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+
 .from-mid-purple {
   --tw-gradient-from: #925CB3 var(--tw-gradient-from-position);
   --tw-gradient-to: rgb(146 92 179 / 0) var(--tw-gradient-to-position);
@@ -859,6 +868,10 @@ video {
   --tw-gradient-to: rgb(37 1 87 / 0.5) var(--tw-gradient-to-position);
 }
 
+.to-light-flower\/75 {
+  --tw-gradient-to: rgb(230 197 232 / 0.75) var(--tw-gradient-to-position);
+}
+
 .bg-contain {
   background-size: contain;
 }
@@ -873,6 +886,10 @@ video {
 
 .bg-center {
   background-position: center;
+}
+
+.bg-\[right_70\%_bottom_0\] {
+  background-position: right 70% bottom 0;
 }
 
 .bg-no-repeat {
@@ -972,6 +989,12 @@ video {
 
 .filter {
   filter: var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow);
+}
+
+.backdrop-blur {
+  --tw-backdrop-blur: blur(8px);
+  -webkit-backdrop-filter: var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);
+          backdrop-filter: var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);
 }
 
 .transition {
@@ -1086,6 +1109,10 @@ html {
     display: grid;
   }
 
+  .md\:h-\[6rem\] {
+    height: 6rem;
+  }
+
   .md\:grid-cols-\[1fr_1fr\] {
     grid-template-columns: 1fr 1fr;
   }
@@ -1099,6 +1126,16 @@ html {
   }
 
   .md\:bg-center {
+    background-position: center;
+  }
+
+  .md\:bg-\[right_70\%_bottom_0\] {
+    background-position: right 70% bottom 0;
+  }
+}
+
+@media (min-width: 1024px) {
+  .lg\:bg-center {
     background-position: center;
   }
 }
