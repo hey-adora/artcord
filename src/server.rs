@@ -1,9 +1,14 @@
+use std::net::{Ipv4Addr, SocketAddrV4};
+use std::ops::Deref;
+
 use crate::bot::ImgQuality;
 use crate::database::User;
 use crate::database::{DT, OBJ};
 use bson::oid::ObjectId;
 use bson::DateTime;
 use cfg_if::cfg_if;
+use leptos::leptos_config::ConfFile;
+use leptos::LeptosOptions;
 use rkyv::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -347,8 +352,22 @@ async fn overview(
     HttpResponse::Ok().body(format!("Live connection: {}", sessions.len()))
 }
 
-pub async fn create_server(db: Arc<crate::database::DB>, galley_root_dir: &str) -> Server {
-    let conf = get_configuration(None).await.unwrap();
+pub async fn create_server(db: Arc<crate::database::DB>, galley_root_dir: &str, assets_root_dir: &str) -> Server {
+    let conf = ConfFile {
+        leptos_options: LeptosOptions {
+            output_name: String::from("leptos_start"),
+            site_root: String::from("target/front"),
+            site_pkg_dir: String::from("pkg"),
+            env: leptos::leptos_config::Env::DEV,
+            site_addr: std::net::SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 3000)),
+            reload_port: 3001,
+            reload_external_port: None,
+            reload_ws_protocol: leptos::leptos_config::ReloadWSProtocol::WS,
+            not_found_path: String::from("/404")
+        }
+    };
+    // let conf = get_configuration(None).await.unwrap();
+    println!("CONFIG: {:#?}", &conf);
     let addr = conf.leptos_options.site_addr;
     let routes = generate_route_list(crate::app::App);
     println!("listening on http://{}", &addr);
@@ -357,24 +376,25 @@ pub async fn create_server(db: Arc<crate::database::DB>, galley_root_dir: &str) 
 
 
     let galley_root_dir = galley_root_dir.to_string();
+    let assets_root_dir = assets_root_dir.to_string();
     HttpServer::new(move || {
         let leptos_options = &conf.leptos_options;
-        let site_root = &leptos_options.site_root;
-        println!("site root: {}", site_root);
+        // let site_root = &leptos_options.site_root;
+        println!("site root: {}", assets_root_dir.as_str());
 
         App::new()
             .app_data(web::Data::new(ServerState {
                 sessions: sessions.clone(),
-                gallery_root_dir: Arc::from(site_root.as_str()),
+                gallery_root_dir: Arc::from(galley_root_dir.as_str()),
                 db: db.clone(),
             }))
             .route("/overview", web::get().to(overview))
             .route("/favicon.ico", web::get().to(favicon))
             .route("/ws/", web::get().to(index))
             .route("/api/{tail:.*}", leptos_actix::handle_server_fns())
-            .service(Files::new("/pkg", format!("{site_root}/pkg")))
             .service(Files::new("/assets/gallery", galley_root_dir.clone()))
-            .service(Files::new("/assets", site_root))
+            .service(Files::new("/assets", assets_root_dir.as_str()))
+            .service(Files::new("/pkg", format!("{}/pkg", assets_root_dir.as_str())))
 
             .leptos_routes(
                 leptos_options.to_owned(),

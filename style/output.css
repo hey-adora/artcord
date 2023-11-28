@@ -888,10 +888,6 @@ video {
   background-position: center;
 }
 
-.bg-\[right_70\%_bottom_0\] {
-  background-position: right 70% bottom 0;
-}
-
 .bg-no-repeat {
   background-repeat: no-repeat;
 }
@@ -1123,10 +1119,6 @@ html {
 
   .md\:gap-\[4rem\] {
     gap: 4rem;
-  }
-
-  .md\:bg-center {
-    background-position: center;
   }
 
   .md\:bg-\[right_70\%_bottom_0\] {

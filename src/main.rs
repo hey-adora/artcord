@@ -12,6 +12,7 @@ use std::env;
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     dotenv().ok();
+    let assets_root_dir = env::var("ASSETS_ROOT_DIR").expect("ENV MISSING: ASSETS_ROOT_DIR");
     let gallery_root_dir = env::var("GALLERY_ROOT_DIR").expect("ENV MISSING: GALLERY_ROOT_DIR");
     let token = env::var("DISCORD_BOT_TOKEN").expect("ENV MISSING: DISCORD_BOT_TOKEN");
     let mongo_url = std::env::var("MONGO_URL").expect("ENV MISSING: MONGO_URL");
@@ -24,7 +25,7 @@ async fn main() -> std::io::Result<()> {
         .unwrap();
 
     let mut bot_server = create_bot(db.clone(), token, gallery_root_dir.as_str()).await;
-    let web_server = create_server(db, gallery_root_dir.as_str()).await;
+    let web_server = create_server(db, gallery_root_dir.as_str(), assets_root_dir.as_str()).await;
 
     let r = try_join!(
         async { web_server.await.or_else(|e| Err(e.to_string())) },

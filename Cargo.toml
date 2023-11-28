@@ -137,6 +137,7 @@ bytecheck = { version = "~0.6.11", features = ["simdutf8", "std"] }
 
 
 [features]
+default = ["ssr"]
 csr = ["leptos/csr", "leptos_meta/csr", "leptos_router/csr"]
 hydrate = ["leptos/hydrate", "leptos_meta/hydrate", "leptos_router/hydrate"]
 ssr = [
