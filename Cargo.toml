@@ -7,19 +7,19 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-actix-files = { version = "0.6", optional = true }
-actix-web = { version = "4", optional = true, features = ["macros"] }
-console_error_panic_hook = "0.1"
+actix-files = { version = "0.6.2", optional = true }
+actix-web = { version = "4.4.0", optional = true, features = ["macros"] }
+console_error_panic_hook = "0.1.7"
 cfg-if = "1"
 http = { version = "1.0.0", optional = true }
-leptos = { version = "0.5", features = ["nightly"] }
-leptos_meta = { version = "0.5", features = ["nightly"] }
-leptos_actix = { version = "0.5", optional = true }
-leptos_router = { version = "0.5", features = ["nightly"] }
-wasm-bindgen = { version = "=0.2.88", features = [] }
+leptos = { version = "0.5.3", features = ["nightly"] }
+leptos_meta = { version = "0.5.3", features = ["nightly"] }
+leptos_actix = { version = "0.5.3", optional = true }
+leptos_router = { version = "0.5.3", features = ["nightly"] }
+wasm-bindgen = { version = "=0.2.89", features = [] }
 leptos-use = { version = "0.8.2", features = [] }
-web-sys = { version = "0.3.64", features = [] }
-js-sys = { version = "0.3.64", features = [] }
+web-sys = { version = "0.3.66", features = [] }
+js-sys = { version = "0.3.66", features = [] }
 rand = { version = "0.8.5", features = [] }
 actix-web-actors = { version = "4.2.0", features = [], optional = true }
 actix = { version = "0.13.1", features = [], optional = true }
@@ -31,8 +31,9 @@ futures = { version = "0.3.28", features = [
   "std",
   "futures-executor",
 ], optional = true }
-serenity = { version = "0.11.6", features = [
+serenity = { version = "0.11.7", features = [
   "base64",
+  "tokio",
   "builder",
   "bytes",
   "cache",
@@ -51,7 +52,6 @@ serenity = { version = "0.11.6", features = [
   "rustls_backend",
   "standard_framework",
   "static_assertions",
-  "tokio",
   "typemap_rev",
   "utils",
   "uwl",
@@ -133,7 +133,7 @@ chrono = { version = "0.4.31", features = [
 thiserror = "1.0.50"
 tokio = { version = "1.33.0", optional = true }
 bson = { version = "2.7.0" }
-bytecheck = { version = "~0.6.11", features = ["simdutf8", "std"] }
+bytecheck = { version = "0.6.11", features = ["simdutf8", "std"] }
 
 
 [features]
