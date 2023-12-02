@@ -37,7 +37,7 @@ pub fn HomePage() -> impl IntoView {
     };
 
     view! {
-        <main  on:scroll=on_scroll _ref=scroll_el class="flex flex-col overflow-y-scroll max-h-[100svh]  ">
+        <main  on:scroll=on_scroll _ref=scroll_el class="flex flex-col overflow-y-scroll   ">
             <Navbar/>
             <section id="home" class=" px-6 py-6 2xl:px-[6rem] desktop:px-[16rem]  grid grid-rows-[auto_auto_1fr] grid-cols-[1fr]  min-h-[100svh] " >
                 <div class="h-[4rem] md:h-[6rem]"></div>
@@ -70,7 +70,7 @@ pub fn HomePage() -> impl IntoView {
                     </a>
                 </div>
             </section>
-            <section  id="about" class="backdrop-blur-[50px] bg-gradient-to-r from-dark-night2/25 to-light-flower/10 px-6 py-6 2xl:px-[6rem] desktop:px-[16rem] flex flex-col md:grid md:grid-rows-[auto_1fr_1fr_1fr_auto] md:grid-cols-[1fr_1fr] gap-8 md:gap-x-24 lg:gap-x-[6rem]  text-[1.3rem] " >
+            <section  id="about" class="backdrop-blur-[50px] bg-gradient-to-r from-dark-night2/25 to-light-flower/10 px-6 py-6 2xl:px-[6rem] desktop:px-[16rem] flex flex-col md:grid md:grid-rows-[auto_1fr_1fr_1fr_auto] md:grid-cols-[1fr_1fr] gap-8 md:gap-x-24 lg:gap-x-[6rem]  text-[1.3rem] min-h-[100svh]" >
                 <div class="col-span-2 h-[4rem] "></div>
                 <p class=""><img class="w-[2rem] h-[2rem] inline px-1" src="/assets/about_unleash.svg"/><strong>"Unleash"</strong>" Your Artistic Spirit: Whether you're a seasoned artist, an aspiring creator, or someone who simply appreciates the beauty of art, ArtCord welcomes everyone. Explore a diverse range of styles, mediums, fandoms and techniques that spark inspiration"</p>
                 <p class=""><img class="w-[2rem] h-[2rem] inline px-1" src="/assets/about_connect.svg"/><strong>"Connect"</strong>" with Like-minded people: Forge connections with fellow artists and art-enjoyers from around the globe. Share your work, exchange tips, and engage in conversations. We're proud to have many friendly and welcoming members that support each other!" </p>
