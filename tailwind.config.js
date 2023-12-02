@@ -14,12 +14,16 @@ module.exports = {
         "dark-purple": "#250157",
         "dark2-purple": "#642B87",
         "dark-night": "#1A2625",
-        "light-flower": "#E6C5E8"
+        "dark-night2": "#1A2621",
+        "light-flower": "#E6C5E8",
+        "second-one": "#823679",
+        "first-one": "#41355E",
       },
       backgroundImage: {
         'line-pattern': "url('/assets/bg.svg')",
         'the-star': "url('/assets/star.svg')",
         'sword-lady': "url('/assets/sword_lady.webp')",
+        'sword-ico': "url('/assets/sword.svg')",
       },
       boxShadow: {
         'glowy': '0px 0px 15px 2px #ECCEFF',
@@ -27,7 +31,11 @@ module.exports = {
       fontFamily: {
         'barcode': ['\"Libre Barcode 128 Text\"'],
       },
+      screens: {
+        'desktop': '1700px',
+      },
     },
+
   },
   plugins: [],
 }

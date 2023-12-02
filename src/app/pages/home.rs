@@ -37,17 +37,17 @@ pub fn HomePage() -> impl IntoView {
     };
 
     view! {
-        <main on:scroll=on_scroll _ref=scroll_el class="flex flex-col overflow-y-scroll max-h-[100svh] ">
+        <main  on:scroll=on_scroll _ref=scroll_el class="flex flex-col overflow-y-scroll max-h-[100svh]  ">
             <Navbar/>
-            <section class=" px-6 py-6 bg-sword-lady bg-[right_85%_bottom_0] md:bg-[right_70%_bottom_0] lg:bg-center bg-cover bg-no-repeat grid grid-rows-[auto_auto_1fr] grid-cols-[1fr]  min-h-[100svh]" >
+            <section id="home" class=" px-6 py-6 2xl:px-[6rem] desktop:px-[16rem]  grid grid-rows-[auto_auto_1fr] grid-cols-[1fr]  min-h-[100svh] " >
                 <div class="h-[4rem] md:h-[6rem]"></div>
-                <div class="flex flex-col gap-[2rem] md:gap-[4rem]  max-w-min">
+                <div class="flex flex-col gap-[2rem] md:gap-[4rem]  max-w-min ">
                     <div class="text-left flex flex-col justify-start">
                         <h2 class="text-[2rem] font-bold whitespace-nowrap ">"Discord Art Server"</h2>
                         <p class="text-[1.3rem]">"Where creativity knows no bounds and artistic expression finds its true home! "</p>
                         <div class="flex gap-8 mt-4 items-center ">
-                            <a target="_blank" href="https://discord.gg/habmw7Ehga" class="flex gap-2 items-center text-[1rem] font-black bg-half-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] hover:bg-dark-purple transition-colors duration-300 " >
-                                <img src="/assets/discord.svg"/>
+                            <a target="_blank" href="https://discord.gg/habmw7Ehga" class="flex gap-2 items-center text-[1rem] h-12 font-black bg-gradient-to-br from-first-one to-second-one hover:to-dark-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem]  transition-colors duration-300 " >
+                                <img class="h-8" src="/assets/discord.svg"/>
                                 "Join"
                             </a>
                             <a href="#about" class=" text-[1rem] cursor-pointer border-b-[0.30rem] border-low-purple font-bold whitespace-nowrap">"Read More"</a>
@@ -57,7 +57,7 @@ pub fn HomePage() -> impl IntoView {
                         <h3 class="text-[2rem] font-bold">"Art Gallery"</h3>
                         <p class="text-[1.3rem]">"With thousands of unique art posted by the community"</p>
                         <div class="flex gap-8 mt-4 items-center ">
-                            <a target="_blank" href="/gallery" class="flex gap-2 items-center text-[1rem] font-black bg-half-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] hover:bg-dark-purple transition-colors duration-300 " >
+                            <a target="_blank" href="/gallery" class="bg-gradient-to-br from-first-one to-second-one hover:to-dark-purple flex h-12 gap-2 items-center text-[1rem] font-black bg-half-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] hover:bg-dark-purple transition-colors duration-300 " >
                                 "Galley"
                             </a>
                         </div>
@@ -70,37 +70,17 @@ pub fn HomePage() -> impl IntoView {
                     </a>
                 </div>
             </section>
-            <section  id="about" class=" line-bg px-6 py-6 flex flex-col md:grid md:grid-rows-[1fr_1fr_1fr_auto] md:grid-cols-[1fr_1fr] gap-0" style=move|| format!("min-height: calc(100vh - 50px)")>
-                <div>
-                    <h4 class="text-[3rem] font-bold" >"About Us"</h4>
-                    <p class="text-[1.5rem]" >"We're a community of artists who love to create, share, and learn. We're open to all types of art, from traditional to digital, and we're always looking for new members!"</p>
-                </div>
-                <img class="mx-auto hidden md:block" src="assets/circle.svg" alt=""/>
-                <img class="mx-auto hidden md:block" src="assets/rectangle.svg" alt=""/>
-                <div>
-                    <h4 class="text-[3rem] font-bold" >"You Can"</h4>
-                    <p class="text-[1.5rem]">
-                        "Share your art with other artists." <br/>
-                        "Get feedback on your art." <br/>
-                        "Find inspiration from other artists." <br/>
-                        "Collaborate with other artists on projects."
-                    </p>
-                </div>
-                <div>
-                    <h4 class="text-[3rem] font-bold" >"We Have"</h4>
-                    <p class="text-[1.5rem] flex flex-col gap-4">
-                        <div class="flex gap-4">
-                            <span>"Challenges"</span>
-                            <span>"Art Arena"</span>
-                        </div>
-                        <div class="flex gap-4">
-                            <span>"Reaction Roles"</span>
-                            <span>"24x7 Support"</span>
-                        </div>
-                    </p>
-                </div>
-                <img class="mx-auto hidden md:block" src="assets/triangle2.svg" alt=""/>
-                <div class=" mt-auto text-[3rem] col-span-2 text-center font-barcode">"Copyrighted  2023"</div>
+            <section  id="about" class="backdrop-blur-[50px] bg-gradient-to-r from-dark-night2/25 to-light-flower/10 px-6 py-6 2xl:px-[6rem] desktop:px-[16rem] flex flex-col md:grid md:grid-rows-[auto_1fr_1fr_1fr_auto] md:grid-cols-[1fr_1fr] gap-8 md:gap-x-24 lg:gap-x-[6rem]  text-[1rem] lg:text-[1.5rem] 2xl:text-[1.5rem] desktop:text-[1.7rem]" >
+                <div class="col-span-2 h-[4rem] "></div>
+                <p class=""><strong>"Unleash"</strong>" Your Artistic Spirit: Whether you're a seasoned artist, an aspiring creator, or someone who simply appreciates the beauty of art, ArtCord welcomes everyone. Explore a diverse range of styles, mediums, fandoms and techniques that spark inspiration"</p>
+                <p class=""><strong>"Connect"</strong>" with Like-minded people: Forge connections with fellow artists and art-enjoyers from around the globe. Share your work, exchange tips, and engage in conversations. We're proud to have many friendly and welcoming members that support each other!" </p>
+                <p class=""><strong>"Challenges"</strong> " and Events: Elevate your skills and challenge your artistic boundaries with our ecreative challenges and events. From themed prompts to collaborative projects, ArtCord provides a platform to push your creativity to new heights. Sometimes we also hold Giveaways with prizes!" </p>
+                <p class=""><strong>"Showcase"</strong> " Your Masterpieces: Your art deserves to be seen! Showcase your masterpieces in dedicated channels, where the spotlight is on you. Receive constructive feedback, encouragement, and applause from an appreciative audience. Your art can also be seen on our website!" </p>
+                <p class=""><strong>"Learn and Share"</strong> " Knowledge: Whether you're a beginner seeking guidance or an expert willing to share your wisdom, ArtCord is welcoming you! Learn new techniques, discover resources, and contribute to a collective pool of artistic wisdom."</p>
+                <p class=""><strong>"Join the ArtCord"</strong>" Family: We believe that art has the power to connect people across borders and languages. Join ArtCord and become a part of a global family where creativity flows endlessly and art is appreciated."</p>
+                <a target="_blank" href="https://discord.gg/habmw7Ehga" class=" transition-shadow duration-300 hover:shadow-wow col-span-2 bg-sword-ico bg-contain bg-center w-[10rem] h-[10rem] bg-no-repeat grid place-items-center text-center mx-auto cursor-pointer  font-black text-[3rem]">
+                    "JOIN"
+                </a>
             </section>
         </main>
     }
