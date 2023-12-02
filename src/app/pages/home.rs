@@ -63,7 +63,7 @@ pub fn HomePage() -> impl IntoView {
                         </div>
                     </div>
                 </div>
-                <div class="  grid place-items-center mt-auto text-center font-bold text-white ">
+                <div class="  grid place-items-center mt-auto text-center font-bold text-white  ">
                     <a href="#about" class="flex flex-col gap-2 justify-center">
                         "About"
                         <img class="h-[2rem]" src="/assets/triangle.svg"/>
