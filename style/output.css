@@ -935,6 +935,14 @@ video {
   background-position: center;
 }
 
+.bg-\[right_95\%_bottom_0\] {
+  background-position: right 95% bottom 0;
+}
+
+.bg-\[right_65\%_bottom_0\] {
+  background-position: right 65% bottom 0;
+}
+
 .bg-no-repeat {
   background-repeat: no-repeat;
 }
@@ -1187,6 +1195,10 @@ html {
   .sm\:hidden {
     display: none;
   }
+
+  .sm\:bg-center {
+    background-position: center;
+  }
 }
 
 @media (min-width: 768px) {
@@ -1215,8 +1227,20 @@ html {
          column-gap: 6rem;
   }
 
+  .md\:bg-cover {
+    background-size: cover;
+  }
+
   .md\:bg-\[right_70\%_bottom_0\] {
     background-position: right 70% bottom 0;
+  }
+
+  .md\:bg-\[right_85\%_bottom_0\] {
+    background-position: right 85% bottom 0;
+  }
+
+  .md\:bg-center {
+    background-position: center;
   }
 }
 

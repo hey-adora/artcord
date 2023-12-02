@@ -109,7 +109,7 @@ pub fn App() -> impl IntoView {
 
         <Stylesheet id="leptos" href="/pkg/leptos_start.css"/>
         <Title text="Artcord"/>
-        <Body  class=move || format!("text-low-purple    bg-fixed bg-sword-lady bg-[right_85%_bottom_0] md:bg-[right_70%_bottom_0] xl:bg-center bg-cover bg-no-repeat  bg-dark-night2 {}", if global_state.nav_open.get() == true { "overflow-hidden w-screen h-[dvh]" } else { "" })  />
+        <Body  class=move || format!("text-low-purple    bg-fixed bg-sword-lady  bg-[right_65%_bottom_0] md:bg-center bg-cover bg-no-repeat  bg-dark-night2 {}", if global_state.nav_open.get() == true { "overflow-hidden w-screen h-[dvh]" } else { "" })  />
         <Router>
                 <Routes>
                     <Route path="" view=HomePage/>
