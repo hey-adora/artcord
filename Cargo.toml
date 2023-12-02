@@ -1,3 +1,5 @@
+cargo-features = ["codegen-backend"]
+
 [package]
 name = "artcord"
 version = "0.1.0"
@@ -6,6 +8,20 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[target.wasm32-unknown-unknown]
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=/usr/bin/mold", "-Zcodegen-backend=cranelift"]
+codegen-backend = "cranelift"
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[unstable]
+codegen-backend = true
+
 [dependencies]
 actix-files = { version = "0.6.2", optional = true }
 actix-web = { version = "4.4.0", optional = true, features = ["macros"] }
@@ -13,9 +29,9 @@ console_error_panic_hook = "0.1.7"
 cfg-if = "1"
 http = { version = "1.0.0", optional = true }
 leptos = { version = "0.5.3", features = ["nightly"] }
-leptos_meta = { version = "0.5.3", features = ["nightly"] }
-leptos_actix = { version = "0.5.3", optional = true }
-leptos_router = { version = "0.5.3", features = ["nightly"] }
+leptos_meta = { version = "0.5.4", features = ["nightly"] }
+leptos_actix = { version = "0.5.4", optional = true }
+leptos_router = { version = "0.5.4", features = ["nightly"] }
 wasm-bindgen = { version = "=0.2.89", features = [] }
 leptos-use = { version = "0.8.2", features = [] }
 web-sys = { version = "0.3.66", features = [] }
