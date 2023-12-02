@@ -595,6 +595,10 @@ video {
   display: block;
 }
 
+.inline {
+  display: inline;
+}
+
 .flex {
   display: flex;
 }
@@ -659,6 +663,10 @@ video {
   height: 100vh;
 }
 
+.h-\[1rem\] {
+  height: 1rem;
+}
+
 .max-h-\[100svh\] {
   max-height: 100svh;
 }
@@ -689,6 +697,14 @@ video {
 
 .w-screen {
   width: 100vw;
+}
+
+.w-\[1rem\] {
+  width: 1rem;
+}
+
+.w-\[2rem\] {
+  width: 2rem;
 }
 
 .max-w-min {
@@ -955,6 +971,11 @@ video {
 .py-\[0\.15rem\] {
   padding-top: 0.15rem;
   padding-bottom: 0.15rem;
+}
+
+.px-1 {
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
 }
 
 .pl-2 {
