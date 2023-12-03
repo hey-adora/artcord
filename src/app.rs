@@ -104,7 +104,7 @@ pub fn App() -> impl IntoView {
         <meta name="keywords" content="artcord,art,gallery,server,discord,community"/>
         <meta name="twitter:title" content="Artcord"/>
         <meta name="twitter:description" content="Art Community!"/>
-        <meta name="twitter:image" content="/assets/overview.png"/>
+        <meta name="twitter:image" content="/assets/overview.webp"/>
         <meta name="twitter:card" content="summary_large_image"/>
 
         <Stylesheet id="leptos" href="/pkg/leptos_start.css"/>
