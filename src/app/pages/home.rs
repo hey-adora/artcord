@@ -37,7 +37,7 @@ pub fn HomePage() -> impl IntoView {
     };
 
     view! {
-        <main  on:scroll=on_scroll _ref=scroll_el class="flex flex-col overflow-y-scroll   ">
+        <main  on:scroll=on_scroll _ref=scroll_el class="flex flex-col ">
             <Navbar/>
             <section id="home" class=" px-6 py-6 2xl:px-[6rem] desktop:px-[16rem]  grid grid-rows-[auto_auto_1fr] grid-cols-[1fr]  min-h-[100svh] " >
                 <div class="h-[4rem] md:h-[6rem]"></div>
