@@ -255,7 +255,7 @@ pub fn GalleryPage() -> impl IntoView {
             move || {
                 match selected_img.get() {
                     Some(img) => Some(view! {
-                        <div on:click=move |_| { selected_img.set(None); } class=" absolute grid grid-rows-[1fr] left-0 top-0 w-screen h-screen place-items-center bg-gradient-to-br from-mid-purple/50 to-dark-purple/50 z-[150] ">
+                        <div on:click=move |_| { selected_img.set(None); } class=" absolute grid grid-rows-[1fr] left-0 top-0 w-screen h-[100dvh] place-items-center bg-gradient-to-br from-mid-purple/50 to-dark-purple/50 z-[150] ">
                             <div  >
                                 <div class="flex justify-between items-center rounded-t-lg bg-dark-purple pl-2">
                                        <div class="flex gap-2">
@@ -265,7 +265,7 @@ pub fn GalleryPage() -> impl IntoView {
                                        </div>
                                      <img class="cursor-pointer border-2 border-low-purple rounded-full bg-mid-purple w-[30px] h-[30px] p-1 m-2" src="assets/x.svg"/>
                                 </div>
-                                <img class="bg-mid-purple object-contain " alt="loading..." style=move|| format!("max-height: calc(100vh - 70px); max-width: 100vw; height: min({1}px, calc(100vw * ( {1} / {0} ))); aspect-ratio: {0} / {1};", img.width, img.height) on:click=move |e| { e.stop_propagation();  } src=img.org_url/>
+                                <img class="bg-mid-purple object-contain " alt="loading..." style=move|| format!("max-height: calc(100dvh - 70px); max-width: 100vw; height: min({1}px, calc(100vw * ( {1} / {0} ))); aspect-ratio: {0} / {1};", img.width, img.height) on:click=move |e| { e.stop_propagation();  } src=img.org_url/>
                             </div>
                         </div> }),
                 None => None
@@ -273,7 +273,7 @@ pub fn GalleryPage() -> impl IntoView {
             }
         }
 
-        <main class="grid grid-rows-[auto_1fr] min-h-[100svh]">
+        <main class="grid grid-rows-[auto_1fr] min-h-[100dvh]">
             <div class=move || format!("{}", if nav_tran() {"h-[4rem]"} else {"h-[3rem]"})>
                <Navbar/>
             </div>

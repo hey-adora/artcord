@@ -663,12 +663,12 @@ video {
   height: 100vh;
 }
 
-.h-\[1rem\] {
-  height: 1rem;
+.h-\[100dvh\] {
+  height: 100dvh;
 }
 
-.max-h-\[100svh\] {
-  max-height: 100svh;
+.min-h-\[100dvh\] {
+  min-height: 100dvh;
 }
 
 .min-h-\[100svh\] {
@@ -681,6 +681,10 @@ video {
 
 .w-\[10rem\] {
   width: 10rem;
+}
+
+.w-\[2rem\] {
+  width: 2rem;
 }
 
 .w-\[3\.5rem\] {
@@ -697,14 +701,6 @@ video {
 
 .w-screen {
   width: 100vw;
-}
-
-.w-\[1rem\] {
-  width: 1rem;
-}
-
-.w-\[2rem\] {
-  width: 2rem;
 }
 
 .max-w-min {
@@ -927,20 +923,12 @@ video {
   background-attachment: fixed;
 }
 
-.bg-\[right_85\%_bottom_0\] {
-  background-position: right 85% bottom 0;
+.bg-\[right_65\%_bottom_0\] {
+  background-position: right 65% bottom 0;
 }
 
 .bg-center {
   background-position: center;
-}
-
-.bg-\[right_95\%_bottom_0\] {
-  background-position: right 95% bottom 0;
-}
-
-.bg-\[right_65\%_bottom_0\] {
-  background-position: right 65% bottom 0;
 }
 
 .bg-no-repeat {
@@ -954,6 +942,11 @@ video {
 
 .p-1 {
   padding: 0.25rem;
+}
+
+.px-1 {
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
 }
 
 .px-4 {
@@ -979,11 +972,6 @@ video {
 .py-\[0\.15rem\] {
   padding-top: 0.15rem;
   padding-bottom: 0.15rem;
-}
-
-.px-1 {
-  padding-left: 0.25rem;
-  padding-right: 0.25rem;
 }
 
 .pl-2 {
@@ -1195,10 +1183,6 @@ html {
   .sm\:hidden {
     display: none;
   }
-
-  .sm\:bg-center {
-    background-position: center;
-  }
 }
 
 @media (min-width: 768px) {
@@ -1227,18 +1211,6 @@ html {
          column-gap: 6rem;
   }
 
-  .md\:bg-cover {
-    background-size: cover;
-  }
-
-  .md\:bg-\[right_70\%_bottom_0\] {
-    background-position: right 70% bottom 0;
-  }
-
-  .md\:bg-\[right_85\%_bottom_0\] {
-    background-position: right 85% bottom 0;
-  }
-
   .md\:bg-center {
     background-position: center;
   }
@@ -1249,16 +1221,6 @@ html {
     -moz-column-gap: 6rem;
          column-gap: 6rem;
   }
-
-  .lg\:text-\[1\.5rem\] {
-    font-size: 1.5rem;
-  }
-}
-
-@media (min-width: 1280px) {
-  .xl\:bg-center {
-    background-position: center;
-  }
 }
 
 @media (min-width: 1536px) {
@@ -1266,19 +1228,11 @@ html {
     padding-left: 6rem;
     padding-right: 6rem;
   }
-
-  .\32xl\:text-\[1\.5rem\] {
-    font-size: 1.5rem;
-  }
 }
 
 @media (min-width: 1700px) {
   .desktop\:px-\[16rem\] {
     padding-left: 16rem;
     padding-right: 16rem;
-  }
-
-  .desktop\:text-\[1\.7rem\] {
-    font-size: 1.7rem;
   }
 }

@@ -57,7 +57,7 @@ pub fn HomePage() -> impl IntoView {
                         <h3 class="text-[2rem] font-bold">"Art Gallery"</h3>
                         <p class="text-[1.3rem]">"With thousands of unique art posted by the community"</p>
                         <div class="flex gap-8 mt-4 items-center ">
-                            <a target="_blank" href="/gallery" class="bg-gradient-to-br from-first-one to-second-one hover:to-dark-purple flex h-12 gap-2 items-center text-[1rem] font-black bg-half-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] hover:bg-dark-purple transition-colors duration-300 " >
+                            <a href="/gallery" class="bg-gradient-to-br from-first-one to-second-one hover:to-dark-purple flex h-12 gap-2 items-center text-[1rem] font-black bg-half-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] hover:bg-dark-purple transition-colors duration-300 " >
                                 "Galley"
                             </a>
                         </div>
