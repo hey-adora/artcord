@@ -110,7 +110,7 @@ pub fn App() -> impl IntoView {
         <meta http-equiv="Pragma" content="no-cache"/>
         <meta http-equiv="Expires" content="0"/>
 
-        <Stylesheet id="leptos" href="/pkg/leptos_start.css"/>
+        <Stylesheet id="leptos" href="/pkg/leptos_start1.css"/>
         <Title text="Artcord"/>
         <Body  class=move || format!("text-low-purple    bg-fixed bg-sword-lady  bg-[right_65%_bottom_0] md:bg-center bg-cover bg-no-repeat  bg-dark-night2 {}", if global_state.nav_open.get() == true { "overflow-hidden w-screen h-[dvh]" } else { "" })  />
         <Router>
