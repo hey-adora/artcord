@@ -106,6 +106,9 @@ pub fn App() -> impl IntoView {
         <meta name="twitter:description" content="Art Community!"/>
         <meta name="twitter:image" content="/assets/overview.webp"/>
         <meta name="twitter:card" content="summary_large_image"/>
+        <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+        <meta http-equiv="Pragma" content="no-cache"/>
+        <meta http-equiv="Expires" content="0"/>
 
         <Stylesheet id="leptos" href="/pkg/leptos_start.css"/>
         <Title text="Artcord"/>
