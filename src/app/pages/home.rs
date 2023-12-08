@@ -69,6 +69,9 @@ pub fn HomePage() -> impl IntoView {
                         <img class="h-[2rem]" src="/assets/triangle.svg"/>
                     </a>
                 </div>
+                <div class="absolute right-0 bottom-0">
+                    "By AYYWA"
+                </div>
             </section>
             <section  id="about" class="backdrop-blur-[50px] bg-gradient-to-r from-dark-night2/25 to-light-flower/10 px-6 py-6 2xl:px-[6rem] desktop:px-[16rem] flex flex-col md:grid md:grid-rows-[auto_1fr_1fr_1fr_auto] md:grid-cols-[1fr_1fr] gap-8 md:gap-x-24 lg:gap-x-[6rem]  text-[1.3rem] min-h-[100svh]" >
                 <div class="col-span-2 h-[4rem] "></div>
