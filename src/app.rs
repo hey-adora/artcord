@@ -11,6 +11,7 @@ use leptos_use::{
 use pages::gallery::GalleryPage;
 use pages::home::HomePage;
 use pages::not_found::NotFound;
+use pages::profile::Profile;
 use std::rc::Rc;
 
 pub mod components;
@@ -117,6 +118,7 @@ pub fn App() -> impl IntoView {
                 <Routes>
                     <Route path="" view=HomePage/>
                     <Route path="/gallery" view=GalleryPage/>
+                    <Route path="/user/:id" view=Profile/>
                     <Route path="/*any" view=NotFound/>
                 </Routes>
         </Router>
