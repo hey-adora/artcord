@@ -619,6 +619,10 @@ video {
   height: 2rem;
 }
 
+.h-\[100dvh\] {
+  height: 100dvh;
+}
+
 .h-\[100vh\] {
   height: 100vh;
 }
@@ -657,14 +661,6 @@ video {
 
 .h-full {
   height: 100%;
-}
-
-.h-screen {
-  height: 100vh;
-}
-
-.h-\[100dvh\] {
-  height: 100dvh;
 }
 
 .min-h-\[100dvh\] {

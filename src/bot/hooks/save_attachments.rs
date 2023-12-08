@@ -33,7 +33,15 @@ pub async fn hook_save_attachments(
     }
 
     if attachments.len() > 0 {
-        let user = save_user(&db, author_name, guild_id, author_id, author_avatar).await?;
+        let user = save_user(
+            gallery_root_dir,
+            &db,
+            author_name,
+            guild_id,
+            author_id,
+            author_avatar,
+        )
+        .await?;
         println!(
             "{}",
             match user {
@@ -183,6 +191,7 @@ pub fn save_webp(
 }
 
 pub async fn save_user_pfp(
+    gallery_root_dir: &str,
     user_id: u64,
     pfp_hash: Option<String>,
     mongo_user: &Option<User>,
@@ -196,7 +205,7 @@ pub async fn save_user_pfp(
 
     // format!("{:x}", u128::from_be_bytes(file_hash_bytes))
     //let md5_bytes: [u8; 16] = u128::from_str_radix(&user_pfp_hash, 16)?.to_be_bytes();
-    let pfp_img_path = format!("target/site/gallery/pfp_{}.webp", user_id);
+    let pfp_img_path = format!("{}/pfp_{}.webp", gallery_root_dir, user_id);
     let pfp_url = format!(
         "https://cdn.discordapp.com/avatars/{}/{}.webp",
         user_id, user_pfp_hash
@@ -223,6 +232,7 @@ pub async fn save_user_pfp(
 }
 
 pub async fn save_user(
+    gallery_root_dir: &str,
     db: &DB,
     name: String,
     guild_id: u64,
@@ -234,7 +244,7 @@ pub async fn save_user(
         .find_one(doc! { "id": format!("{}", user_id) }, None)
         .await?;
 
-    let pfp = save_user_pfp(user_id, pfp_hash, &user).await;
+    let pfp = save_user_pfp(gallery_root_dir, user_id, pfp_hash, &user).await;
     let pfp_hash = match pfp {
         Ok(result) => Ok(Some(result.into_string())),
         Err(e) => match e {
