@@ -1,3 +1,4 @@
+use bson::oid::ObjectId;
 use bson::DateTime;
 use chrono::Utc;
 
@@ -16,6 +17,8 @@ use crate::{
     server::{ClientMsg, ServerMsgImg},
 };
 
+use super::components::gallery::GalleryImg;
+
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum ScrollSection {
     Home,
@@ -25,7 +28,8 @@ pub enum ScrollSection {
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct ServerMsgImgResized {
-    pub id: u128,
+    pub _id: ObjectId,
+    // pub id: u128,
     pub quality: ImgQuality,
     pub display_high: String,
     pub display_preview: String,
@@ -36,10 +40,10 @@ pub struct ServerMsgImgResized {
     pub format: String,
     pub width: u32,
     pub height: u32,
-    pub new_width: f64,
-    pub new_height: f64,
-    pub top: f64,
-    pub left: f64,
+    pub new_width: RwSignal<f32>,
+    pub new_height: RwSignal<f32>,
+    pub top: RwSignal<f32>,
+    pub left: RwSignal<f32>,
     pub has_high: bool,
     pub has_medium: bool,
     pub has_low: bool,
@@ -47,20 +51,74 @@ pub struct ServerMsgImgResized {
     pub created_at: DateTime,
 }
 
+impl Default for ServerMsgImgResized {
+    fn default() -> Self {
+        Self {
+            _id: ObjectId::new(),
+            quality: ImgQuality::Org,
+            display_preview: String::from(
+                "/assets/gallery/org_2552bd2db66978a9b3675721e95d1cbd.png",
+            ),
+            display_high: String::from("/assets/gallery/org_2552bd2db66978a9b3675721e95d1cbd.png"),
+            user: User {
+                _id: ObjectId::new(),
+                guild_id: String::from("1159766826620817419"),
+                id: String::from("id"),
+                name: String::from("name"),
+                pfp_hash: Some(String::from("pfp_hash")),
+                modified_at: DateTime::from_millis(Utc::now().timestamp_millis()),
+                created_at: DateTime::from_millis(Utc::now().timestamp_millis()),
+            },
+            user_id: String::from("1159037321283375174"),
+            msg_id: String::from("1177244237021073450"),
+            org_hash: String::from("2552bd2db66978a9b3675721e95d1cbd"),
+            format: String::from("png"),
+            width: 233,
+            height: 161,
+            new_width: RwSignal::new(233.0),
+            new_height: RwSignal::new(161.0),
+            top: RwSignal::new(0.0),
+            left: RwSignal::new(0.0),
+            has_high: false,
+            has_medium: false,
+            has_low: false,
+            modified_at: DateTime::from_millis(Utc::now().timestamp_millis()),
+            created_at: DateTime::from_millis(Utc::now().timestamp_millis()),
+        }
+    }
+}
+
+impl GalleryImg for ServerMsgImgResized {
+    fn mark_as_modified(&mut self, id: u128) {
+        // self.id = id;
+    }
+    fn set_pos(&mut self, left: f32, top: f32, new_width: f32, new_height: f32) {
+        self.left.set(left);
+        self.top.set(top);
+        self.new_width.set(new_width);
+        self.new_height.set(new_height);
+    }
+
+    fn get_size(&self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+}
+
 impl From<ServerMsgImg> for ServerMsgImgResized {
     fn from(value: ServerMsgImg) -> Self {
         let quality = value.pick_quality();
         let display_preview = quality.gen_link_preview(&value.org_hash, &value.format);
         Self {
+            _id: value._id,
             quality,
             display_preview,
-            id: rand::thread_rng().gen::<u128>(),
+            // id: rand::thread_rng().gen::<u128>(),
             display_high: ImgQuality::gen_link_org(&value.org_hash, &value.format),
             user: value.user,
-            new_width: value.width as f64,
-            new_height: value.height as f64,
-            top: 0.0,
-            left: 0.0,
+            new_width: RwSignal::new(value.width as f32),
+            new_height: RwSignal::new(value.height as f32),
+            top: RwSignal::new(0.0),
+            left: RwSignal::new(0.0),
             user_id: value.user_id,
             msg_id: value.id,
             org_hash: value.org_hash,

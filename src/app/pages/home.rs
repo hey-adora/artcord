@@ -69,7 +69,7 @@ pub fn HomePage() -> impl IntoView {
                         <img class="h-[2rem]" src="/assets/triangle.svg"/>
                     </a>
                 </div>
-                <div class="absolute right-0 bottom-0">
+                <div>
                     "By AYYWA"
                 </div>
             </section>

@@ -1,9 +1,12 @@
+use crate::app::components::gallery::{resize_imgs, NEW_IMG_HEIGHT};
 use crate::app::utils::GlobalState;
+use crate::app::utils::ServerMsgImgResized;
 use crate::server::ServerMsg;
 use leptos::logging::log;
 use leptos::*;
 use leptos_meta::*;
 use leptos_router::*;
+use leptos_use::use_document;
 use leptos_use::utils::Pausable;
 use leptos_use::{
     use_interval_fn, use_websocket_with_options, UseWebSocketOptions, UseWebsocketReturn,
@@ -36,6 +39,47 @@ pub fn App() -> impl IntoView {
         } = use_websocket_with_options(
             "/ws/",
             UseWebSocketOptions::default()
+                .on_message_bytes(move |bytes| {
+                    if bytes.is_empty() {
+                        log!("Empty byte msg received.");
+                        return;
+                    };
+
+                    let server_msg = ServerMsg::from_bytes(&bytes);
+                    let Ok(server_msg) = server_msg else {
+                        log!("Error decoding msg: {}", server_msg.err().unwrap());
+                        return;
+                    };
+
+                    let server_msg_name = server_msg.name();
+
+                    match server_msg {
+                        ServerMsg::Reset => {
+                            log!("RESETING");
+                            document().location().unwrap().reload().unwrap();
+                        }
+                        ServerMsg::Imgs(new_imgs) => {
+                            let new_imgs = new_imgs
+                                .iter()
+                                .map(|img| ServerMsgImgResized::from(img.to_owned()))
+                                .collect::<Vec<ServerMsgImgResized>>();
+
+                            global_state.gallery_imgs.update(|imgs| {
+                                imgs.extend(new_imgs);
+                                let document = document();
+                                let gallery_section = document.get_element_by_id("gallery_section");
+                                let Some(gallery_section) = gallery_section else {
+                                    return;
+                                };
+                                let width = gallery_section.client_width() as u32;
+                                resize_imgs(NEW_IMG_HEIGHT, width, imgs);
+                            });
+
+                            global_state.socket_state_reset(&server_msg_name);
+                        }
+                        msg => global_state.socket_recv.set(msg),
+                    };
+                })
                 .immediate(true)
                 .reconnect_limit(0)
                 .reconnect_interval(10000),

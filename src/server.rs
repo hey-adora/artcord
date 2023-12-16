@@ -7,6 +7,7 @@ use crate::database::{DT, OBJ};
 use bson::oid::ObjectId;
 use bson::DateTime;
 use cfg_if::cfg_if;
+use chrono::Utc;
 use leptos::leptos_config::ConfFile;
 use leptos::*;
 use rkyv::{Deserialize, Serialize};
@@ -44,6 +45,35 @@ pub struct ServerMsgImg {
 
     #[with(DT)]
     pub created_at: bson::datetime::DateTime,
+}
+
+impl Default for ServerMsgImg {
+    fn default() -> Self {
+        Self {
+            _id: ObjectId::new(),
+            user: User {
+                _id: ObjectId::new(),
+                guild_id: String::from("1159766826620817419"),
+                id: String::from("id"),
+                name: String::from("name"),
+                pfp_hash: Some(String::from("pfp_hash")),
+                modified_at: DateTime::from_millis(Utc::now().timestamp_millis()),
+                created_at: DateTime::from_millis(Utc::now().timestamp_millis()),
+            },
+            org_url: String::from("wow"),
+            user_id: String::from("1159037321283375174"),
+            id: String::from("1177244237021073450"),
+            org_hash: String::from("2552bd2db66978a9b3675721e95d1cbd"),
+            format: String::from("png"),
+            width: 233,
+            height: 161,
+            has_high: false,
+            has_medium: false,
+            has_low: false,
+            modified_at: DateTime::from_millis(Utc::now().timestamp_millis()),
+            created_at: DateTime::from_millis(Utc::now().timestamp_millis()),
+        }
+    }
 }
 
 impl ServerMsgImg {

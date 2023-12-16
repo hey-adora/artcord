@@ -86,7 +86,7 @@ pub fn Navbar() -> impl IntoView {
                                     "Join"
                                 </a>
                                 <button class="block sm:hidden h-[48px]" on:click=on_nav_click >
-                                    <img class="    " src="assets/burger.svg" alt=""/>
+                                    <img class="    " src="/assets/burger.svg" alt=""/>
                                 </button>
                             </div>
                            }

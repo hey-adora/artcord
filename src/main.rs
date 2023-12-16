@@ -1,5 +1,6 @@
 #![feature(future_join)]
 #![feature(box_patterns)]
+#![allow(unused_variables, unused_imports)]
 
 use artcord::bot::create_bot;
 use artcord::database::create_database;

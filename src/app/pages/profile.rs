@@ -7,8 +7,8 @@ pub fn Profile() -> impl IntoView {
     view! {
         <main>
             <Navbar/>
-            <section>
-                "test"
+            <section class="pt-[4rem] md:pt-[6rem]">
+                "test8"
             </section>
         </main>
     }

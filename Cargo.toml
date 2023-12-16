@@ -24,6 +24,8 @@ crate-type = ["cdylib", "rlib"]
 [profile.dev]
 opt-level = 0
 rustflags = ["-Z", "threads=24"]
+incremental = true
+codegen-units = 256
 #linker = "clang"
 #rustflags = ["-C", "link-arg=--ld-path=/usr/bin/mold"]
 #codegen-backend = "cranelift"
