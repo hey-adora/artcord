@@ -50,84 +50,6 @@ pub fn GalleryPage() -> impl IntoView {
     let nav_tran = global_state.nav_tran;
     let imgs = global_state.gallery_imgs;
     let temp_gallery_imgs = RwSignal::new(create_client_test_imgs());
-    // let a = use_interval_fn(
-    //     move || {
-    //         log!("ya ya");
-    //         // open();
-    //     },
-    //     1000,
-    // );
-
-    // create_effect(move |_| {
-    //     global_state.socket_recv.with(|server_msg| {
-    //         if let ServerMsg::Imgs(new_imgs) = server_msg {
-    //             if !new_imgs.is_empty() {
-    //                 let new_imgs = new_imgs
-    //                     .iter()
-    //                     .map(|img| ServerMsgImgResized::from(img.to_owned()))
-    //                     .collect::<Vec<ServerMsgImgResized>>();
-    //                 global_state.gallery_imgs.update(|imgs| {
-    //                     imgs.extend(new_imgs);
-    //                     // imgs.extend(temp_gallery_imgs.get());
-    //                     // resize_imgs(250, 1091, imgs);
-    //                     // let section = gallery_section.get_untracked();
-    //                     // if let Some(section) = section {
-    //                     //     let width = section.client_width() as u32;
-    //                     //
-    //                     //     resize_imgs(NEW_IMG_HEIGHT, width, imgs);
-    //                     // };
-    //                 });
-    //                 // global_gallery_imgs.update(|imgs| {
-    //                 //     imgs.extend(new_imgs);
-    //                 //     let section = gallery_section.get_untracked();
-    //                 //     if let Some(section) = section {
-    //                 //         let width = section.client_width() as u32;
-    //                 //
-    //                 //         resize_imgs(NEW_IMG_HEIGHT, width, imgs);
-    //                 //     };
-    //                 // });
-    //             }
-    //             global_state.socket_state_reset(&server_msg.name());
-    //         }
-    //     });
-    // });
-
-    // let received_imgs: RwSignal<Vec<ServerMsgImgResized>> = RwSignal::new(Vec::new());
-    // // let received_imgs: RwSignal<ServerMsg> = RwSignal::new(ServerMsg::None);
-    //
-    // create_effect(move |_| {
-    //     // let mut a = create_client_test_imgs();
-    //     received_imgs.with(move |new_imgs| {
-    //         let a = vec![ServerMsgImgResized::default()];
-    //         global_state
-    //             .gallery_imgs
-    //             .set([global_state.gallery_imgs.get(), a.clone()].concat());
-    //         global_state.gallery_imgs.update(|imgs| {
-    //             // yyy.set(create_client_test_imgs());
-    //             // let mut new_imgs: Vec<ServerMsgImgResized> = Vec::new();
-    //             // for _ in 0..25 {
-    //             //     imgs.push(ServerMsgImgResized::default());
-    //             //     // new_imgs.push(ServerMsgImgResized::default());
-    //             // }
-    //             imgs.extend([ServerMsgImgResized::default()]);
-    //             // imgs.extend_from_slice(&new_imgs);
-    //             // imgs.extend_from_slice(&new_imgs[..]);
-    //         });
-    //         // global_state.gallery_imgs.update(|imgs| {
-    //         //     resize_imgs(250, 1091, imgs);
-    //         // });
-    //     });
-    // });
-
-    // create_effect(move |_| {
-    //     received_imgs.with(|server_msg| {
-    //         global_state.gallery_imgs.update(|imgs| {
-    //             imgs.extend_from_slice(&create_client_test_imgs()[..]);
-    //             resize_imgs(250, 1091, imgs);
-    //         });
-    //         global_state.socket_state_reset(&server_msg.name());
-    //     });
-    // });
 
     create_effect(move |_| {
         nav_tran.set(true);
@@ -138,27 +60,9 @@ pub fn GalleryPage() -> impl IntoView {
         for _ in 0..25 {
             new_imgs.push(ServerMsgImg::default());
         }
-        // imgs.update(move |imgs| {
-        //     imgs.extend(new_imgs);
-        //     resize_imgs(250, 426, imgs);
-        // });
         global_state
             .socket_recv
             .set(ServerMsg::Imgs(new_imgs.clone()));
-        // received_imgs.set(ServerMsg::Imgs(new_imgs));
-        // received_imgs.update(ServerMsg::Imgs(new_imgs));
-
-        // let client_imgs = create_client_test_imgs();
-        // received_imgs.set(client_imgs);
-
-        // received_imgs.update(|imgs| {
-        //     imgs.extend(client_imgs);
-        // });
-
-        // global_state.gallery_imgs.update(|imgs| {
-        //     imgs.extend_from_slice(&new_imgs);
-        //     resize_imgs(250, 1091, imgs);
-        // });
     };
 
     view! {
