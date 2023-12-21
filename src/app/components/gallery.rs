@@ -114,6 +114,15 @@ fn create_client_test_imgs() -> Vec<ServerMsgImgResized> {
     new_imgs
 }
 
+#[derive(Clone)]
+pub struct SelectedImg {
+    pub org_url: String,
+    pub author_name: String,
+    pub author_pfp: String,
+    pub width: u32,
+    pub height: u32,
+}
+
 //F: Fn(ServerMsgImgResized) -> IV + 'static, IV: IntoView
 #[component]
 pub fn Gallery<

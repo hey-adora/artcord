@@ -1,4 +1,4 @@
-use crate::app::components::gallery::{resize_imgs, Gallery};
+use crate::app::components::gallery::{resize_imgs, Gallery, SelectedImg};
 use crate::app::components::navbar::{shrink_nav, Navbar};
 use bson::DateTime;
 use chrono::Utc;
@@ -42,15 +42,6 @@ fn create_server_test_imgs() -> Vec<ServerMsgImg> {
         new_imgs.push(ServerMsgImg::default());
     }
     new_imgs
-}
-
-#[derive(Clone)]
-struct SelectedImg {
-    pub org_url: String,
-    pub author_name: String,
-    pub author_pfp: String,
-    pub width: u32,
-    pub height: u32,
 }
 
 #[component]

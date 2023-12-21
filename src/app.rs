@@ -6,6 +6,7 @@ use leptos::logging::log;
 use leptos::*;
 use leptos_meta::*;
 use leptos_router::*;
+use leptos_use::core::ConnectionReadyState;
 use leptos_use::use_document;
 use leptos_use::utils::Pausable;
 use leptos_use::{
@@ -88,8 +89,13 @@ pub fn App() -> impl IntoView {
 
         let Pausable { pause, resume, .. } = use_interval_fn(
             move || {
-                log!("RECONNECTING");
-                open();
+                let state = ready_state.get_untracked();
+                if state == ConnectionReadyState::Closed {
+                    log!("RECONNECTING");
+                    open();
+                } else {
+                    log!("{}", state);
+                }
             },
             3000,
         );
