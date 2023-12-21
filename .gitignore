@@ -17,3 +17,4 @@ playwright/.cache/
 dist
 .env
 assets/gallery
+gallery
