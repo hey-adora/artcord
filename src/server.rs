@@ -188,6 +188,7 @@ use leptos_actix::{generate_route_list, LeptosRoutes};
 use serenity::prelude::*;
 use actix_web::dev::Server;
 use std::{num::ParseIntError, sync::Arc};
+use std::sync::RwLock;
 
 struct MyWs {
     id: uuid::Uuid,
@@ -223,7 +224,7 @@ impl Actor for MyWs {
     type Context = ws::WebsocketContext<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        let sessions = self.server_state.sessions.try_lock();
+        let sessions = self.server_state.sessions.write();
         let Ok(mut sessions) = sessions else {
             let error = sessions.err().unwrap();
             println!("Locking WS sessions error: {}", error);
@@ -234,7 +235,7 @@ impl Actor for MyWs {
     }
 
     fn stopped(&mut self, ctx: &mut Self::Context) {
-        let sessions = self.server_state.sessions.try_lock();
+        let sessions = self.server_state.sessions.write();
         let Ok(mut sessions) = sessions else {
             let error = sessions.err().unwrap();
             println!("Locking WS sessions error: {}", error);
@@ -359,7 +360,7 @@ pub async fn favicon() -> actix_web::Result<actix_files::NamedFile> {
 
 #[derive(Clone)]
 pub struct ServerState {
-    sessions: Arc<Mutex<HashMap<uuid::Uuid,Addr<MyWs>>>>,
+    sessions: Arc<RwLock<HashMap<uuid::Uuid,Addr<MyWs>>>>,
     gallery_root_dir: Arc<str>,
     db: Arc<crate::database::DB>,
 }
@@ -374,7 +375,7 @@ async fn overview(
     _stream: web::Payload,
     server_state: actix_web::web::Data<ServerState>
     ) -> impl Responder {
-    let sessions = server_state.sessions.try_lock();
+    let sessions = server_state.sessions.read();
     let Ok(sessions) = sessions else {
         let error = sessions.err().unwrap();
         return HttpResponse::InternalServerError().body(format!("Error: {}", error));
@@ -402,7 +403,7 @@ pub async fn create_server(db: Arc<crate::database::DB>, galley_root_dir: &str, 
     let routes = generate_route_list(crate::app::App);
     println!("listening on http://{}", &addr);
 
-    let sessions = Arc::new(Mutex::new(HashMap::<uuid::Uuid, Addr<MyWs>>::new()));
+    let sessions = Arc::new(RwLock::new(HashMap::<uuid::Uuid, Addr<MyWs>>::new()));
 
 
     let galley_root_dir = galley_root_dir.to_string();
