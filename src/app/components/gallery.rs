@@ -122,6 +122,7 @@ pub fn Gallery<
         //     amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
         //     from: DateTime::from_millis(Utc::now().timestamp_millis()),
         // };
+        loaded_sig.set(true);
 
         //global_state.socket_send(msg);
     });

@@ -65,6 +65,10 @@ pub fn App() -> impl IntoView {
                                 .map(|img| ServerMsgImgResized::from(img.to_owned()))
                                 .collect::<Vec<ServerMsgImgResized>>();
 
+                            // if !global_state.page_galley.gallery_loaded.get_untracked() {
+                            //     global_state.page_galley.gallery_loaded.set(true);
+                            // }
+
                             global_state.page_galley.gallery_imgs.update(|imgs| {
                                 imgs.extend(new_imgs);
                                 let document = document();
@@ -75,15 +79,12 @@ pub fn App() -> impl IntoView {
                                 let width = gallery_section.client_width() as u32;
                                 resize_imgs(NEW_IMG_HEIGHT, width, imgs);
                             });
-                            if !global_state.page_galley.gallery_loaded.get_untracked() {
-                                global_state.page_galley.gallery_loaded.set(true);
-                            }
                         }
                         ServerMsg::ProfileImgs(new_imgs) => {
                             let Some(new_imgs) = new_imgs else {
-                                global_state.page_profile.gallery_loaded.set(true);
+                                //global_state.page_profile.gallery_loaded.set(true);
                                 global_state.page_profile.not_found.set(true);
-                                global_state.socket_state_reset(&server_msg_name);
+                                //global_state.socket_state_reset(&server_msg_name);
                                 return;
                             };
 
@@ -103,9 +104,9 @@ pub fn App() -> impl IntoView {
                                 resize_imgs(NEW_IMG_HEIGHT, width, imgs);
                             });
 
-                            if !global_state.page_profile.gallery_loaded.get_untracked() {
-                                global_state.page_profile.gallery_loaded.set(true);
-                            }
+                            // if !global_state.page_profile.gallery_loaded.get_untracked() {
+                            //     global_state.page_profile.gallery_loaded.set(true);
+                            // }
                         }
                         msg => global_state.socket_recv.set(msg),
                     };

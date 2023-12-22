@@ -119,20 +119,43 @@ pub fn ProfileGallery() -> impl IntoView {
     });
 
     create_effect(move |_| {
+        let Some(new_user) = params.with(|p| p.get("id").cloned()) else {
+            return;
+        };
+
+        let same_user = if let Some(user) = global_state.page_profile.user.get() {
+            new_user == user
+        } else {
+            log!("wtf3");
+            false
+        };
+
+        if !same_user {
+            global_state.page_profile.gallery_imgs.set(vec![]);
+            global_state.page_profile.user.set_untracked(Some(new_user));
+            loaded_sig.set(false);
+        }
+    });
+
+    create_effect(move |_| {
         let connected = global_state.socket_connected.get();
-        let loaded = loaded_sig.get();
-        let same_user = params.with(|p| {
-            if let Some(user) = global_state.page_profile.user.get() {
-                if let Some(new_user) = p.get("id") {
-                    return *new_user == user;
-                }
-            }
-            return false;
-        });
-        if (loaded || !connected) && same_user {
-            // log!("ITS NOT READY LOADED");
+        if !connected {
             return;
         }
+
+        let loaded = loaded_sig.get();
+        if loaded {
+            return;
+        }
+
+        // if !same_user {
+        //     global_state.page_profile.user.set(Some(new_user));
+        // }
+        // if !connected || same_user {
+        //     // log!("ITS NOT READY LOADED");
+        //     return;
+        // }
+        //log!("{}", same_user);
 
         let Some(section) = gallery_section.get() else {
             return;
@@ -153,6 +176,7 @@ pub fn ProfileGallery() -> impl IntoView {
         //     amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
         //     from: DateTime::from_millis(Utc::now().timestamp_millis()),
         // };
+        loaded_sig.set(true);
 
         //global_state.socket_send(msg);
     });
