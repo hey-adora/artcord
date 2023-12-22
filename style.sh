@@ -1,0 +1,1 @@
+tailwindcss -i input.css -o style/output.css -c tailwind.config.js -w

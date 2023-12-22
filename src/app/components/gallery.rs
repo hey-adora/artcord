@@ -132,7 +132,7 @@ pub fn Gallery<
             <Show when=move||!loaded_sig.get()>
               <div>"LOADING..."</div>
             </Show>
-            <Show when=move||loaded_sig.get()>
+            <Show when=move||loaded_sig.get() && global_gallery_imgs.with(|imgs|imgs.len() < 1)>
               <div>"No Images Found."</div>
             </Show>
             <For each=move || global_gallery_imgs.get().into_iter().enumerate()  key=|state| state.1._id let:data > {
