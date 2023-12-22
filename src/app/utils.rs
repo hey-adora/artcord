@@ -135,6 +135,40 @@ impl From<ServerMsgImg> for ServerMsgImgResized {
 }
 
 #[derive(Copy, Clone, Debug)]
+pub struct PageProfileState {
+    pub not_found: RwSignal<bool>,
+    pub user: RwSignal<Option<String>>,
+    pub gallery_imgs: RwSignal<Vec<ServerMsgImgResized>>,
+    pub gallery_loaded: RwSignal<bool>,
+}
+
+impl PageProfileState {
+    pub fn new() -> Self {
+        Self {
+            not_found: RwSignal::new(false),
+            user: RwSignal::new(None),
+            gallery_imgs: RwSignal::new(Vec::new()),
+            gallery_loaded: RwSignal::new(false),
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct PageGalleryState {
+    pub gallery_imgs: RwSignal<Vec<ServerMsgImgResized>>,
+    pub gallery_loaded: RwSignal<bool>,
+}
+
+impl PageGalleryState {
+    pub fn new() -> Self {
+        Self {
+            gallery_imgs: create_rw_signal(Vec::new()),
+            gallery_loaded: create_rw_signal(false),
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
 pub struct GlobalState {
     pub section: RwSignal<ScrollSection>,
     pub nav_open: RwSignal<bool>,
@@ -143,8 +177,8 @@ pub struct GlobalState {
     pub socket_send: RwSignal<Rc<dyn Fn(Vec<u8>)>>,
     pub socket_recv: RwSignal<ServerMsg>,
     pub socket_timestamps: RwSignal<HashMap<&'static str, i64>>,
-    pub gallery_imgs: RwSignal<Vec<ServerMsgImgResized>>,
-    pub gallery_loaded: RwSignal<bool>,
+    pub page_galley: PageGalleryState,
+    pub page_profile: PageProfileState,
 }
 
 impl GlobalState {
@@ -157,8 +191,8 @@ impl GlobalState {
             socket_connected: create_rw_signal(false),
             socket_recv: create_rw_signal(ServerMsg::None),
             socket_timestamps: create_rw_signal(HashMap::new()),
-            gallery_imgs: create_rw_signal(Vec::new()),
-            gallery_loaded: create_rw_signal(false),
+            page_galley: PageGalleryState::new(),
+            page_profile: PageProfileState::new(),
         }
     }
 

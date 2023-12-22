@@ -391,6 +391,34 @@ if #[cfg(feature = "ssr")] {
     // Err(mongodb::error::Error::custom(Arc::new("invalid ReactionType type".to_string())) )
 
     impl DB {
+        pub async fn img_aggregate_user_gallery(&self, amount: u32, from: DateTime, user_id: &str)  -> Result<ServerMsg, mongodb::error::Error> {
+
+            let user = self.collection_user.find_one(doc!{"id": user_id}, None).await?;
+            if let None = user {
+                    return Ok(ServerMsg::ProfileImgs(None));
+            }
+
+            let  pipeline = vec![
+                doc! { "$sort": doc! { "created_at": -1 } },
+                doc! { "$match": doc! { "created_at": { "$lt": from }, "show": true, "user_id": user_id } },
+                doc! { "$limit": Some( amount.clamp(25, 10000) as i64) },
+                doc! { "$lookup": doc! { "from": "user", "localField": "user_id", "foreignField": "id", "as": "user"} },
+                doc! { "$unwind": "$user" }
+            ];
+            // println!("{:#?}", pipeline);
+
+            let mut imgs = self.collection_img.aggregate(pipeline, None).await?;
+
+            let mut send_this: Vec<ServerMsgImg> = Vec::new();
+
+            while let Some(result) = imgs.try_next().await? {
+                let doc: ServerMsgImg = mongodb::bson::from_document(result)?;
+                send_this.push(doc);
+            };
+
+            Ok(ServerMsg::ProfileImgs(Some(send_this)))
+         }
+
         pub async fn img_aggregate_gallery(&self, amount: u32, from: DateTime)  -> Result<ServerMsg, mongodb::error::Error> {
 
             let  pipeline = vec![

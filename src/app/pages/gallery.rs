@@ -11,7 +11,9 @@ use rand::Rng;
 use web_sys::{Event, MouseEvent};
 
 use crate::app::utils::{GlobalState, ServerMsgImgResized};
-use crate::server::{ClientMsg, ServerMsg, ServerMsgImg, SERVER_MSG_IMGS_NAME};
+use crate::server::{
+    ClientMsg, ServerMsg, ServerMsgImg, SERVER_MSG_IMGS_NAME, SERVER_MSG_PROFILE_IMGS_NAME,
+};
 
 // fn calc(width: f64, sizes: &[(f64, f64)]) -> f64 {
 //     let mut ratio: f64 = 0.0;
@@ -48,7 +50,7 @@ fn create_server_test_imgs() -> Vec<ServerMsgImg> {
 pub fn GalleryPage() -> impl IntoView {
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
     let nav_tran = global_state.nav_tran;
-    let imgs = global_state.gallery_imgs;
+    let imgs = global_state.page_galley.gallery_imgs;
     // let temp_gallery_imgs = RwSignal::new(create_client_test_imgs());
     let selected_img: RwSignal<Option<SelectedImg>> = create_rw_signal(None);
 
@@ -95,7 +97,7 @@ pub fn GalleryPage() -> impl IntoView {
                                             <img class="border border-low-purple rounded-full bg-mid-purple h-[25px] " src=img.author_pfp/>
                                             <div>{img.author_name}</div>
                                        </div>
-                                     <img class="cursor-pointer border-2 border-low-purple rounded-full bg-mid-purple w-[30px] h-[30px] p-1 m-2" src="assets/x.svg"/>
+                                     <img class="cursor-pointer border-2 border-low-purple rounded-full bg-mid-purple w-[30px] h-[30px] p-1 m-2" src="/assets/x.svg"/>
                                 </div>
                                 <img class="bg-mid-purple object-contain " alt="loading..." style=move|| format!("max-height: calc(100dvh - 70px); max-width: 100vw; height: min({1}px, calc(100vw * ( {1} / {0} ))); aspect-ratio: {0} / {1};", img.width, img.height) on:click=move |e| { e.stop_propagation();  } src=img.org_url/>
                             </div>
@@ -107,7 +109,7 @@ pub fn GalleryPage() -> impl IntoView {
         // <button on:click=add_imgs>"add more"</button>
         <main class=move||format!("grid grid-rows-[1fr] min-h-[100dvh] transition-all duration-300 {}", if nav_tran() {"pt-[4rem]"} else {"pt-[0rem]"})>
                <Navbar/>
-                 <Gallery global_gallery_imgs=imgs on_click=select_click_img on_fetch=on_fetch />
+                 <Gallery global_gallery_imgs=imgs on_click=select_click_img on_fetch=on_fetch loaded_sig=global_state.page_galley.gallery_loaded connection_load_state_name=SERVER_MSG_IMGS_NAME  />
             // <div class=move || format!("{}", if nav_tran() {"h-[4rem]"} else {"h-[3rem]"})>
             // </div>
         </main>

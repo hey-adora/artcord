@@ -132,6 +132,8 @@ pub fn Gallery<
     global_gallery_imgs: RwSignal<Vec<ServerMsgImgResized>>,
     on_click: OnClick,
     on_fetch: OnFetch,
+    loaded_sig: RwSignal<bool>,
+    connection_load_state_name: &'static str,
 ) -> impl IntoView {
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
     let gallery_section = create_node_ref::<Section>();
@@ -149,7 +151,7 @@ pub fn Gallery<
     //     });
     // });
     let section_scroll = move |_: Event| {
-        if !global_state.socket_state_is_ready(SERVER_MSG_IMGS_NAME) {
+        if !global_state.socket_state_is_ready(connection_load_state_name) {
             return;
         }
 
@@ -159,8 +161,6 @@ pub fn Gallery<
         }) else {
             return;
         };
-
-        let section = gallery_section;
 
         let Some(section) = gallery_section.get_untracked() else {
             return;
@@ -176,6 +176,7 @@ pub fn Gallery<
         let left = scroll_height - (client_height + scroll_top);
 
         if left < client_height {
+            global_state.socket_state_used(connection_load_state_name);
             on_fetch(
                 last,
                 calc_fit_count(client_width as u32, client_height as u32) * 2,
@@ -185,7 +186,6 @@ pub fn Gallery<
             //     from: last,
             // };
             // global_state.socket_send(msg);
-            global_state.socket_state_used(SERVER_MSG_IMGS_NAME);
         }
     };
 
@@ -206,7 +206,7 @@ pub fn Gallery<
 
     create_effect(move |_| {
         let connected = global_state.socket_connected.get();
-        let loaded = global_state.gallery_loaded.get();
+        let loaded = loaded_sig.get();
         if loaded || !connected {
             // log!("ITS NOT READY LOADED");
             return;
@@ -220,6 +220,8 @@ pub fn Gallery<
         let client_height = section.client_height();
         let client_width = section.client_width();
 
+        global_state.socket_state_used(connection_load_state_name);
+
         on_fetch(
             DateTime::from_millis(Utc::now().timestamp_millis()),
             calc_fit_count(client_width as u32, client_height as u32) * 2,
@@ -231,11 +233,16 @@ pub fn Gallery<
         // };
 
         //global_state.socket_send(msg);
-        global_state.gallery_loaded.set(true);
     });
 
     view! {
         <section id="gallery_section" on:scroll=section_scroll _ref=gallery_section class="relative content-start overflow-x-hidden overflow-y-scroll h-full" >
+            <Show when=move||!loaded_sig.get()>
+              <div>"LOADING..."</div>
+            </Show>
+            <Show when=move||loaded_sig.get()>
+              <div>"No Images Found."</div>
+            </Show>
             <For each=move || global_gallery_imgs.get().into_iter().enumerate()  key=|state| state.1._id let:data > {
                     let img = data.1;
                     let i = data.0;

@@ -1,15 +1,18 @@
 use bson::DateTime;
+use leptos::logging::log;
 use leptos::*;
+use leptos_router::use_params_map;
 
 use crate::app::components::gallery::{Gallery, SelectedImg};
 use crate::app::components::navbar::Navbar;
 use crate::app::utils::{GlobalState, ServerMsgImgResized};
-use crate::server::ClientMsg;
+use crate::server::{ClientMsg, SERVER_MSG_PROFILE_IMGS_NAME};
 
 #[component]
 pub fn Profile() -> impl IntoView {
+    let params = use_params_map();
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
-    let imgs = global_state.gallery_imgs;
+    let imgs = global_state.page_profile.gallery_imgs;
     let nav_tran = global_state.nav_tran;
     let selected_img: RwSignal<Option<SelectedImg>> = create_rw_signal(None);
 
@@ -24,7 +27,17 @@ pub fn Profile() -> impl IntoView {
     };
 
     let on_fetch = move |from: DateTime, amount: u32| {
-        let msg = ClientMsg::GalleryInit { amount, from };
+        let id = params.with(|p| p.get("id").cloned());
+        let Some(id) = id else {
+            log!("user not found.");
+            return;
+        };
+
+        let msg = ClientMsg::UserGalleryInit {
+            amount,
+            from,
+            user_id: String::from(id),
+        };
         global_state.socket_send(msg);
     };
 
@@ -41,7 +54,7 @@ pub fn Profile() -> impl IntoView {
                                             <img class="border border-low-purple rounded-full bg-mid-purple h-[25px] " src=img.author_pfp/>
                                             <div>{img.author_name}</div>
                                        </div>
-                                     <img class="cursor-pointer border-2 border-low-purple rounded-full bg-mid-purple w-[30px] h-[30px] p-1 m-2" src="assets/x.svg"/>
+                                     <img class="cursor-pointer border-2 border-low-purple rounded-full bg-mid-purple w-[30px] h-[30px] p-1 m-2" src="/assets/x.svg"/>
                                 </div>
                                 <img class="bg-mid-purple object-contain " alt="loading..." style=move|| format!("max-height: calc(100dvh - 70px); max-width: 100vw; height: min({1}px, calc(100vw * ( {1} / {0} ))); aspect-ratio: {0} / {1};", img.width, img.height) on:click=move |e| { e.stop_propagation();  } src=img.org_url/>
                             </div>
@@ -53,7 +66,7 @@ pub fn Profile() -> impl IntoView {
 
         <main class=move||format!("grid grid-rows-[1fr] min-h-[100dvh] transition-all duration-300 {}", if nav_tran() {"pt-[4rem]"} else {"pt-[0rem]"})>
             <Navbar/>
-            <Gallery global_gallery_imgs=imgs on_click=select_click_img on_fetch=on_fetch />
+            <Gallery global_gallery_imgs=imgs on_click=select_click_img on_fetch=on_fetch  loaded_sig=global_state.page_profile.gallery_loaded connection_load_state_name=SERVER_MSG_PROFILE_IMGS_NAME />
         </main>
     }
 }

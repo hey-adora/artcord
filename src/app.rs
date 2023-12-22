@@ -65,7 +65,34 @@ pub fn App() -> impl IntoView {
                                 .map(|img| ServerMsgImgResized::from(img.to_owned()))
                                 .collect::<Vec<ServerMsgImgResized>>();
 
-                            global_state.gallery_imgs.update(|imgs| {
+                            global_state.page_galley.gallery_imgs.update(|imgs| {
+                                imgs.extend(new_imgs);
+                                let document = document();
+                                let gallery_section = document.get_element_by_id("gallery_section");
+                                let Some(gallery_section) = gallery_section else {
+                                    return;
+                                };
+                                let width = gallery_section.client_width() as u32;
+                                resize_imgs(NEW_IMG_HEIGHT, width, imgs);
+                            });
+                            if !global_state.page_galley.gallery_loaded.get_untracked() {
+                                global_state.page_galley.gallery_loaded.set(true);
+                            }
+                        }
+                        ServerMsg::ProfileImgs(new_imgs) => {
+                            let Some(new_imgs) = new_imgs else {
+                                global_state.page_profile.gallery_loaded.set(true);
+                                global_state.page_profile.not_found.set(true);
+                                global_state.socket_state_reset(&server_msg_name);
+                                return;
+                            };
+
+                            let new_imgs = new_imgs
+                                .iter()
+                                .map(|img| ServerMsgImgResized::from(img.to_owned()))
+                                .collect::<Vec<ServerMsgImgResized>>();
+
+                            global_state.page_profile.gallery_imgs.update(|imgs| {
                                 imgs.extend(new_imgs);
                                 let document = document();
                                 let gallery_section = document.get_element_by_id("gallery_section");
@@ -76,10 +103,13 @@ pub fn App() -> impl IntoView {
                                 resize_imgs(NEW_IMG_HEIGHT, width, imgs);
                             });
 
-                            global_state.socket_state_reset(&server_msg_name);
+                            if !global_state.page_profile.gallery_loaded.get_untracked() {
+                                global_state.page_profile.gallery_loaded.set(true);
+                            }
                         }
                         msg => global_state.socket_recv.set(msg),
                     };
+                    global_state.socket_state_reset(&server_msg_name);
                 })
                 .immediate(true)
                 .reconnect_limit(0)

@@ -95,11 +95,13 @@ impl ServerMsgImg {
 #[archive_attr(derive(Debug))]
 pub enum ServerMsg {
     Imgs(Vec<ServerMsgImg>),
+    ProfileImgs(Option<Vec<ServerMsgImg>>),
     None,
     Reset,
 }
 
 pub const SERVER_MSG_IMGS_NAME: &str = "imgs";
+pub const SERVER_MSG_PROFILE_IMGS_NAME: &str = "profile_imgs";
 pub const SERVER_MSG_RESET_NAME: &str = "reset";
 pub const SERVER_MSG_NONE_NAME: &str = "NONE";
 
@@ -107,6 +109,7 @@ impl ServerMsg {
     pub fn name(&self) -> String {
         match self {
             ServerMsg::Imgs(_a) => String::from(SERVER_MSG_IMGS_NAME),
+            ServerMsg::ProfileImgs(_a) => String::from(SERVER_MSG_PROFILE_IMGS_NAME),
             ServerMsg::Reset => String::from(SERVER_MSG_RESET_NAME),
             ServerMsg::None => String::from(SERVER_MSG_NONE_NAME),
         }
@@ -149,6 +152,15 @@ pub enum ClientMsg {
 
         #[with(DT)]
         from: DateTime,
+    },
+
+    UserGalleryInit {
+        amount: u32,
+
+        #[with(DT)]
+        from: DateTime,
+
+        user_id: String,
     },
 }
 
@@ -289,6 +301,9 @@ impl Handler<ByteActor> for MyWs {
                 ClientMsg::GalleryInit { amount, from} => {
                     db.img_aggregate_gallery(amount, from).await
                     // MyWs::gallery_handler(db, amount, from).await
+                },
+                ClientMsg::UserGalleryInit {amount, from, user_id} => {
+                    db.img_aggregate_user_gallery(amount, from, &user_id).await
                 }
             };
 
