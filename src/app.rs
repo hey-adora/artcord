@@ -1,6 +1,6 @@
-use crate::app::components::gallery::{resize_imgs, NEW_IMG_HEIGHT};
 use crate::app::utils::GlobalState;
 use crate::app::utils::ServerMsgImgResized;
+use crate::app::utils::{resize_imgs, NEW_IMG_HEIGHT};
 use crate::server::ServerMsg;
 use leptos::logging::log;
 use leptos::*;

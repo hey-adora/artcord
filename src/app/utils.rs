@@ -17,8 +17,6 @@ use crate::{
     server::{ClientMsg, ServerMsgImg},
 };
 
-use super::components::gallery::GalleryImg;
-
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum ScrollSection {
     Home,
@@ -254,4 +252,116 @@ pub fn get_window_path() -> String {
     } else {
         String::from("/")
     }
+}
+
+#[derive(Clone)]
+pub struct SelectedImg {
+    pub org_url: String,
+    pub author_name: String,
+    pub author_pfp: String,
+    pub author_id: String,
+    pub width: u32,
+    pub height: u32,
+}
+
+pub const NEW_IMG_HEIGHT: u32 = 250;
+
+pub trait GalleryImg {
+    fn get_size(&self) -> (u32, u32);
+    fn set_pos(&mut self, left: f32, top: f32, new_width: f32, new_height: f32);
+    fn mark_as_modified(&mut self, id: u128);
+}
+
+pub fn resize_img<T: GalleryImg>(
+    top: &mut f32,
+    max_width: u32,
+    new_row_start: usize,
+    new_row_end: usize,
+    imgs: &mut [T],
+) {
+    let mut total_ratio: f32 = 0f32;
+
+    for i in new_row_start..(new_row_end + 1) {
+        let (width, height) = imgs[i].get_size();
+        total_ratio += width as f32 / height as f32;
+    }
+    let optimal_height: f32 = max_width as f32 / total_ratio;
+    let mut left: f32 = 0.0;
+
+    for i in new_row_start..(new_row_end + 1) {
+        // let line = String::new();
+        let (width, height) = imgs[i].get_size();
+        let new_width = optimal_height * (width as f32 / height as f32);
+        let new_height = optimal_height;
+        imgs[i].set_pos(left, *top, new_width, new_height);
+        // imgs[i].new_width = optimal_height * (imgs[i].width as f64 / imgs[i].height as f64);
+        // imgs[i].new_height = optimal_height;
+        // imgs[i].left = left;
+        // imgs[i].top = *top;
+        left += new_width;
+    }
+
+    // let mut total: f64 = 0.0;
+    // for i in new_row_start..(new_row_end + 1) {
+    //     total += imgs[i].new_width;
+    // }
+    // log!("line: {}", total);
+
+    *top += optimal_height;
+}
+
+pub fn resize_imgs<T: GalleryImg>(new_height: u32, max_width: u32, imgs: &mut [T]) -> () {
+    let loop_start = 0;
+    let loop_end = imgs.len();
+    let mut new_row_start: usize = 0;
+    let mut new_row_end: usize = if loop_end > 0 { loop_end - 1 } else { 0 };
+    let mut current_row_filled_width: u32 = 0;
+    // let new_height: u32 = NEW_IMG_HEIGHT;
+    let mut top: f32 = 0.0;
+
+    let mut rand = rand::thread_rng();
+    for index in loop_start..loop_end {
+        let org_img = &mut imgs[index];
+        let (width, height) = org_img.get_size();
+        // let width: u32 = org_img.width;
+        // let height: u32 = org_img.height;
+        let ratio: f32 = width as f32 / height as f32;
+        let height_diff: u32 = if height < new_height {
+            0
+        } else {
+            height - new_height
+        };
+        let new_width: u32 = width - (height_diff as f32 * ratio) as u32;
+        let id = rand.gen::<u128>();
+        org_img.mark_as_modified(id);
+
+        if (current_row_filled_width + new_width) <= max_width {
+            current_row_filled_width += new_width;
+            new_row_end = index;
+            if index == loop_end - 1 {
+                resize_img(&mut top, max_width, new_row_start, new_row_end, imgs);
+            }
+        } else {
+            resize_img(&mut top, max_width, new_row_start, new_row_end, imgs);
+
+            new_row_start = index;
+            new_row_end = index;
+            current_row_filled_width = new_width;
+            if index == loop_end - 1 {
+                resize_img(&mut top, max_width, new_row_start, new_row_end, imgs);
+            }
+        }
+    }
+}
+
+pub fn calc_fit_count(width: u32, height: u32) -> u32 {
+    (width * height) / (NEW_IMG_HEIGHT * NEW_IMG_HEIGHT)
+}
+
+pub fn create_client_test_imgs() -> Vec<ServerMsgImgResized> {
+    let mut new_imgs: Vec<ServerMsgImgResized> = Vec::new();
+    for _ in 0..25 {
+        new_imgs.push(ServerMsgImgResized::default());
+    }
+    new_imgs
 }

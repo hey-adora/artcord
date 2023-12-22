@@ -1,5 +1,6 @@
-use crate::app::components::gallery::{resize_imgs, Gallery, SelectedImg};
+use crate::app::components::gallery::Gallery;
 use crate::app::components::navbar::{shrink_nav, Navbar};
+use crate::app::utils::{resize_imgs, SelectedImg};
 use bson::DateTime;
 use chrono::Utc;
 use leptos::ev::resize;
@@ -73,6 +74,7 @@ pub fn GalleryPage() -> impl IntoView {
             org_url: img.display_high.clone(),
             author_name: img.user.name.clone(),
             author_pfp: format!("/assets/gallery/pfp_{}.webp", img.user.id.clone()),
+            author_id: img.user_id.clone(),
             width: img.width,
             height: img.height,
         }))
@@ -90,16 +92,16 @@ pub fn GalleryPage() -> impl IntoView {
                 match selected_img.get() {
                     Some(img) => Some(view! {
                         <div on:click=move |_| { selected_img.set(None); } class=" absolute grid grid-rows-[1fr] left-0 top-0 w-screen h-[100dvh] place-items-center bg-gradient-to-br from-mid-purple/50 to-dark-purple/50 z-[150] ">
-                            <div  >
+                            <div on:click=move |e| { e.stop_propagation();  }  >
                                 <div class="flex justify-between items-center rounded-t-lg bg-dark-purple pl-2">
                                        <div class="flex gap-2">
                                             <div>"By "</div>
                                             <img class="border border-low-purple rounded-full bg-mid-purple h-[25px] " src=img.author_pfp/>
-                                            <div>{img.author_name}</div>
+                                            <a href=move||format!("/user/{}", img.author_id)>{img.author_name}</a>
                                        </div>
-                                     <img class="cursor-pointer border-2 border-low-purple rounded-full bg-mid-purple w-[30px] h-[30px] p-1 m-2" src="/assets/x.svg"/>
+                                     <img on:click=move |_| { selected_img.set(None); } class="cursor-pointer border-2 border-low-purple rounded-full bg-mid-purple w-[30px] h-[30px] p-1 m-2" src="/assets/x.svg"/>
                                 </div>
-                                <img class="bg-mid-purple object-contain " alt="loading..." style=move|| format!("max-height: calc(100dvh - 70px); max-width: 100vw; height: min({1}px, calc(100vw * ( {1} / {0} ))); aspect-ratio: {0} / {1};", img.width, img.height) on:click=move |e| { e.stop_propagation();  } src=img.org_url/>
+                                <img class="bg-mid-purple object-contain " alt="loading..." style=move|| format!("max-height: calc(100dvh - 70px); max-width: 100vw; height: min({1}px, calc(100vw * ( {1} / {0} ))); aspect-ratio: {0} / {1};", img.width, img.height) src=img.org_url/>
                             </div>
                         </div> }),
                 None => None
