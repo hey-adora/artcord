@@ -5,6 +5,7 @@ use leptos::ev::resize;
 use leptos::html::{ElementDescriptor, Section};
 use leptos::logging::log;
 use leptos::*;
+use leptos_router::use_location;
 use leptos_use::{use_event_listener, use_window};
 use rand::Rng;
 use web_sys::Event;
@@ -29,6 +30,7 @@ pub fn Gallery<
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
     let gallery_section = create_node_ref::<Section>();
     let nav_tran = global_state.nav_tran;
+    let location = use_location();
 
     // create_effect(move |_| {
     //     global_gallery_imgs.update_untracked(move |imgs| {
@@ -92,6 +94,24 @@ pub fn Gallery<
                     resize_imgs(NEW_IMG_HEIGHT, width, imgs);
                 };
             });
+        });
+    });
+
+    create_effect(move |_| {
+        let loaded = loaded_sig.get_untracked();
+        if !loaded {
+            return;
+        }
+        let _ = location.pathname.get();
+        let _ = location.hash.get();
+
+        global_gallery_imgs.update(|imgs| {
+            let section = gallery_section.get_untracked();
+            if let Some(section) = section {
+                let width = section.client_width() as u32;
+
+                resize_imgs(NEW_IMG_HEIGHT, width, imgs);
+            };
         });
     });
 

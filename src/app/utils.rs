@@ -103,6 +103,9 @@ impl GalleryImg for ServerMsgImgResized {
     fn get_size(&self) -> (u32, u32) {
         (self.width, self.height)
     }
+    fn get_pos(&self) -> (f32, f32) {
+        (self.left.get_untracked(), self.top.get_untracked())
+    }
 }
 
 impl From<ServerMsgImg> for ServerMsgImgResized {
@@ -271,17 +274,19 @@ pub const NEW_IMG_HEIGHT: u32 = 250;
 
 pub trait GalleryImg {
     fn get_size(&self) -> (u32, u32);
+    fn get_pos(&self) -> (f32, f32);
     fn set_pos(&mut self, left: f32, top: f32, new_width: f32, new_height: f32);
     fn mark_as_modified(&mut self, id: u128);
 }
 
-pub fn resize_img<T: GalleryImg>(
+pub fn resize_img<T: GalleryImg + Debug>(
     top: &mut f32,
     max_width: u32,
     new_row_start: usize,
     new_row_end: usize,
     imgs: &mut [T],
 ) {
+    //log!("TOP21: {}", top);
     let mut total_ratio: f32 = 0f32;
 
     for i in new_row_start..(new_row_end + 1) {
@@ -301,8 +306,10 @@ pub fn resize_img<T: GalleryImg>(
         // imgs[i].new_height = optimal_height;
         // imgs[i].left = left;
         // imgs[i].top = *top;
+        //log!("{}:{:#?}", i,imgs[i].get_pos());
         left += new_width;
     }
+   // log!("{:#?}", imgs);
 
     // let mut total: f64 = 0.0;
     // for i in new_row_start..(new_row_end + 1) {
@@ -311,9 +318,65 @@ pub fn resize_img<T: GalleryImg>(
     // log!("line: {}", total);
 
     *top += optimal_height;
+    //log!("TOP22: {}", top);
 }
 
+pub fn resize_img2<T: GalleryImg + Debug>(
+    top: &mut f32,
+    max_width: u32,
+    new_row_start: usize,
+    new_row_end: usize,
+    imgs: &mut [T],
+) {
+    //log!("TOP: {}", top);
+    let mut optimal_count = (max_width as i32 / NEW_IMG_HEIGHT as i32) - (new_row_end - new_row_start)as i32;
+    if optimal_count < 0 {
+        optimal_count = 0;
+    }
+    let mut total_ratio: f32 = optimal_count as f32;
+    if max_width < NEW_IMG_HEIGHT * 3 {
+        total_ratio = 0.0;
+    }
+
+
+   // let mut total_ratio: f32 = 0.0;
+
+    for i in new_row_start..(new_row_end + 1) {
+        let (width, height) = imgs[i].get_size();
+        total_ratio += width as f32 / height as f32;
+    }
+    let optimal_height: f32 = max_width as f32 / total_ratio;
+    let mut left: f32 = 0.0;
+
+    for i in new_row_start..(new_row_end + 1) {
+        // let line = String::new();
+        let (width, height) = imgs[i].get_size();
+        let new_width = optimal_height * (width as f32 / height as f32);
+        let new_height = optimal_height;
+        imgs[i].set_pos(left, *top, new_width, new_height);
+        // imgs[i].new_width = optimal_height * (imgs[i].width as f64 / imgs[i].height as f64);
+        // imgs[i].new_height = optimal_height;
+        // imgs[i].left = left;
+        // imgs[i].top = *top;
+        //log!("{}:{:#?}", i,imgs[i].get_pos());
+        left += new_width;
+    }
+
+
+    // let mut total: f64 = 0.0;
+    // for i in new_row_start..(new_row_end + 1) {
+    //     total += imgs[i].new_width;
+    // }
+    // log!("line: {}", total);
+
+    *top += optimal_height;
+    //log!("TOP2: {}", top);
+}
+
+
 pub fn resize_imgs<T: GalleryImg + Debug>(new_height: u32, max_width: u32, imgs: &mut [T]) -> () {
+    //log!("RESIZING!!!!!!!!!!!!");
+
     let loop_start = 0;
     let loop_end = imgs.len();
     //log!("resize: {} {} {:#?}", new_height, loop_end, imgs);
@@ -338,21 +401,27 @@ pub fn resize_imgs<T: GalleryImg + Debug>(new_height: u32, max_width: u32, imgs:
         let new_width: u32 = width - (height_diff as f32 * ratio) as u32;
         let id = rand.gen::<u128>();
         org_img.mark_as_modified(id);
+        //log!("ADDING: {} {} {} {}", index, new_row_start, new_row_end, top);
 
         if (current_row_filled_width + new_width) <= max_width {
+            //log!("REMOVING1: {} {} {} {}", index, new_row_start, new_row_end, top);
+
             current_row_filled_width += new_width;
             new_row_end = index;
+
             if index == loop_end - 1 {
-                resize_img(&mut top, max_width, new_row_start, new_row_end, imgs);
+                resize_img2(&mut top, max_width, new_row_start, new_row_end, imgs);
             }
         } else {
-            resize_img(&mut top, max_width, new_row_start, new_row_end, imgs);
-
+            if index != 0{
+                //log!("REMOVING2: {} {} {} {}", index, new_row_start, new_row_end, top);
+                resize_img(&mut top, max_width, new_row_start, new_row_end, imgs);
+            }
             new_row_start = index;
             new_row_end = index;
             current_row_filled_width = new_width;
             if index == loop_end - 1 {
-                resize_img(&mut top, max_width, new_row_start, new_row_end, imgs);
+                resize_img2(&mut top, max_width, new_row_start, new_row_end, imgs);
             }
         }
     }

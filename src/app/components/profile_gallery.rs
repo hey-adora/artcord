@@ -5,7 +5,7 @@ use leptos::ev::resize;
 use leptos::html::{ElementDescriptor, Section};
 use leptos::logging::log;
 use leptos::*;
-use leptos_router::use_params_map;
+use leptos_router::{use_location, use_params_map};
 use leptos_use::{use_event_listener, use_window};
 use rand::Rng;
 use web_sys::Event;
@@ -26,6 +26,7 @@ pub fn ProfileGallery() -> impl IntoView {
     let selected_img: RwSignal<Option<SelectedImg>> = create_rw_signal(None);
     let loaded_sig = global_state.page_profile.gallery_loaded;
     let connection_load_state_name = SERVER_MSG_PROFILE_IMGS_NAME;
+    let location = use_location();
 
 
     let on_click = move |img: ServerMsgImgResized| {
@@ -62,6 +63,24 @@ pub fn ProfileGallery() -> impl IntoView {
         };
         global_state.socket_send(msg);
     };
+
+    create_effect(move |_| {
+        let loaded = loaded_sig.get_untracked();
+        if !loaded {
+            return;
+        }
+        let _ = location.pathname.get();
+        let _ = location.hash.get();
+
+        global_gallery_imgs.update(|imgs| {
+            let section = gallery_section.get_untracked();
+            if let Some(section) = section {
+                let width = section.client_width() as u32;
+
+                resize_imgs(NEW_IMG_HEIGHT, width, imgs);
+            };
+        });
+    });
 
     // create_effect(move |_| {
     //     global_gallery_imgs.update_untracked(move |imgs| {
