@@ -3,10 +3,12 @@ use bson::DateTime;
 use chrono::Utc;
 
 use leptos::*;
+use leptos::logging::log;
 use leptos::{create_rw_signal, window, RwSignal, SignalGetUntracked};
 use leptos_use::core::ConnectionReadyState;
 use rand::Rng;
 use std::{collections::HashMap, rc::Rc};
+use std::fmt::Debug;
 use wasm_bindgen::JsValue;
 use web_sys::Location;
 
@@ -22,6 +24,7 @@ pub enum ScrollSection {
     Home,
     About,
     Gallery,
+    UserProfile,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -135,7 +138,7 @@ impl From<ServerMsgImg> for ServerMsgImgResized {
 #[derive(Copy, Clone, Debug)]
 pub struct PageProfileState {
     pub not_found: RwSignal<bool>,
-    pub user: RwSignal<Option<String>>,
+    pub user: RwSignal<Option<User>>,
     pub gallery_imgs: RwSignal<Vec<ServerMsgImgResized>>,
     pub gallery_loaded: RwSignal<bool>,
 }
@@ -310,9 +313,10 @@ pub fn resize_img<T: GalleryImg>(
     *top += optimal_height;
 }
 
-pub fn resize_imgs<T: GalleryImg>(new_height: u32, max_width: u32, imgs: &mut [T]) -> () {
+pub fn resize_imgs<T: GalleryImg + Debug>(new_height: u32, max_width: u32, imgs: &mut [T]) -> () {
     let loop_start = 0;
     let loop_end = imgs.len();
+    //log!("resize: {} {} {:#?}", new_height, loop_end, imgs);
     let mut new_row_start: usize = 0;
     let mut new_row_end: usize = if loop_end > 0 { loop_end - 1 } else { 0 };
     let mut current_row_filled_width: u32 = 0;

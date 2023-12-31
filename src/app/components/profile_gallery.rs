@@ -13,7 +13,7 @@ use web_sys::Event;
 use crate::app::utils::{
     calc_fit_count, resize_imgs, GlobalState, SelectedImg, ServerMsgImgResized, NEW_IMG_HEIGHT,
 };
-use crate::server::{ClientMsg, ServerMsg, SERVER_MSG_IMGS_NAME, SERVER_MSG_PROFILE_IMGS_NAME};
+use crate::server::{ClientMsg, ServerMsg, SERVER_MSG_IMGS_NAME, SERVER_MSG_PROFILE_IMGS_NAME, SERVER_MSG_PROFILE};
 
 //F: Fn(ServerMsgImgResized) -> IV + 'static, IV: IntoView
 #[component]
@@ -27,6 +27,7 @@ pub fn ProfileGallery() -> impl IntoView {
     let loaded_sig = global_state.page_profile.gallery_loaded;
     let connection_load_state_name = SERVER_MSG_PROFILE_IMGS_NAME;
 
+
     let on_click = move |img: ServerMsgImgResized| {
         selected_img.set(Some(SelectedImg {
             org_url: img.display_high.clone(),
@@ -39,16 +40,25 @@ pub fn ProfileGallery() -> impl IntoView {
     };
 
     let on_fetch = move |from: DateTime, amount: u32| {
-        let id = params.with(|p| p.get("id").cloned());
-        let Some(id) = id else {
-            log!("user not found.");
+        //log!("Fetch this amount: {}", amount);
+        // let user = global_state.page_profile.user.get_untracked();
+        // let Some(user) = user else {
+        //     return;
+        // };
+        let Some(new_user) = params.with(|p| p.get("id").cloned()) else {
             return;
         };
+        //log!("sending fetch for user: {}", &new_user);
+        // let id = params.with(|p| p.get("id").cloned());
+        // let Some(id) = id else {
+        //     log!("user not found.");
+        //     return;
+        // };
 
         let msg = ClientMsg::UserGalleryInit {
             amount,
             from,
-            user_id: String::from(id),
+            user_id: String::from(new_user),
         };
         global_state.socket_send(msg);
     };
@@ -118,24 +128,52 @@ pub fn ProfileGallery() -> impl IntoView {
         });
     });
 
+    // create_effect(move |_| {
+    //     log!("yo yo mf {:?}", global_state.page_profile.user.get());
+    // });
+
+
     create_effect(move |_| {
         let Some(new_user) = params.with(|p| p.get("id").cloned()) else {
             return;
         };
 
-        let same_user = if let Some(user) = global_state.page_profile.user.get() {
-            new_user == user
+        let user = global_state.page_profile.user.get();
+
+        let same_user = if let Some(ref user) = user {
+            new_user == user.id
         } else {
-            log!("wtf3");
             false
         };
 
+        if !global_state.socket_state_is_ready(SERVER_MSG_PROFILE) {
+            return;
+        }
+
+        //log!("22222user updated??gffgdfgf {}, {:?}", new_user, &user);
+
         if !same_user {
-            global_state.page_profile.gallery_imgs.set(vec![]);
-            global_state.page_profile.user.set_untracked(Some(new_user));
+           // log!("user updated??gffgdfgf {}, {:?}", new_user, &user);
             loaded_sig.set(false);
+            let msg = ClientMsg::User {
+                user_id: String::from(new_user),
+            };
+            global_state.socket_send(msg);
+
         }
     });
+
+    // create_effect(move |_| {
+    //     let user = global_state.page_profile.user.get();
+    //     let Some(user) = user else {
+    //         return;
+    //     };
+    //
+    //     log!("nanananananananan {}", user.id);
+    //
+    //     global_state.page_profile.gallery_imgs.set(vec![]);
+    //     loaded_sig.set(false);
+    // });
 
     create_effect(move |_| {
         let connected = global_state.socket_connected.get();
@@ -143,10 +181,23 @@ pub fn ProfileGallery() -> impl IntoView {
             return;
         }
 
-        let loaded = loaded_sig.get();
+        let loaded = loaded_sig.get_untracked();
         if loaded {
             return;
         }
+
+        let user = global_state.page_profile.user.get();
+        let Some(user) = user else {
+            return;
+        };
+
+        if !global_state.socket_state_is_ready(SERVER_MSG_PROFILE_IMGS_NAME) {
+            return;
+        }
+
+
+
+
 
         // if !same_user {
         //     global_state.page_profile.user.set(Some(new_user));
@@ -157,15 +208,19 @@ pub fn ProfileGallery() -> impl IntoView {
         // }
         //log!("{}", same_user);
 
-        let Some(section) = gallery_section.get() else {
+        let Some(section) = gallery_section.get_untracked() else {
             return;
         };
+
+        //log!("ON PROFILE INIT");
         // log!("THIS SHOULDN'T HAPPEN {} {}", loaded, connected);
 
         let client_height = section.client_height();
         let client_width = section.client_width();
 
         global_state.socket_state_used(connection_load_state_name);
+
+        global_gallery_imgs.set(vec![]);
 
         on_fetch(
             DateTime::from_millis(Utc::now().timestamp_millis()),
@@ -203,7 +258,7 @@ pub fn ProfileGallery() -> impl IntoView {
                 }
             }
         }
-        <section id="gallery_section" on:scroll=section_scroll _ref=gallery_section class="relative content-start overflow-x-hidden overflow-y-scroll h-full" >
+        <section id="profile_gallery_section" on:scroll=section_scroll _ref=gallery_section class="relative content-start overflow-x-hidden overflow-y-scroll h-full" >
             <Show when=move||!loaded_sig.get()>
               <div>"LOADING..."</div>
             </Show>

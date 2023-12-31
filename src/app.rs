@@ -88,6 +88,8 @@ pub fn App() -> impl IntoView {
                                 return;
                             };
 
+                            //log!("PROFILE IMGS RECEIVED: {:?}", new_imgs.len());
+
                             let new_imgs = new_imgs
                                 .iter()
                                 .map(|img| ServerMsgImgResized::from(img.to_owned()))
@@ -96,7 +98,7 @@ pub fn App() -> impl IntoView {
                             global_state.page_profile.gallery_imgs.update(|imgs| {
                                 imgs.extend(new_imgs);
                                 let document = document();
-                                let gallery_section = document.get_element_by_id("gallery_section");
+                                let gallery_section = document.get_element_by_id("profile_gallery_section");
                                 let Some(gallery_section) = gallery_section else {
                                     return;
                                 };
@@ -104,9 +106,23 @@ pub fn App() -> impl IntoView {
                                 resize_imgs(NEW_IMG_HEIGHT, width, imgs);
                             });
 
+
+
                             // if !global_state.page_profile.gallery_loaded.get_untracked() {
                             //     global_state.page_profile.gallery_loaded.set(true);
                             // }
+                        }
+                        ServerMsg::Profile(new_user) => {
+                            if let Some(new_user) = new_user {
+                               //log!("USER RECEIVED: {:?}", &new_user.id);
+                                global_state.page_profile.gallery_imgs.set(vec![]);
+                                global_state.page_profile.gallery_loaded.set(false);
+                                global_state.page_profile.user.update(move |user| {
+                                    *user = Some(new_user);
+                                });
+                            } else {
+                               // log!("where is it????");
+                            }
                         }
                         msg => global_state.socket_recv.set(msg),
                     };

@@ -96,12 +96,14 @@ impl ServerMsgImg {
 pub enum ServerMsg {
     Imgs(Vec<ServerMsgImg>),
     ProfileImgs(Option<Vec<ServerMsgImg>>),
+    Profile(Option<User>),
     None,
     Reset,
 }
 
 pub const SERVER_MSG_IMGS_NAME: &str = "imgs";
 pub const SERVER_MSG_PROFILE_IMGS_NAME: &str = "profile_imgs";
+pub const SERVER_MSG_PROFILE: &str = "profile";
 pub const SERVER_MSG_RESET_NAME: &str = "reset";
 pub const SERVER_MSG_NONE_NAME: &str = "NONE";
 
@@ -110,6 +112,7 @@ impl ServerMsg {
         match self {
             ServerMsg::Imgs(_a) => String::from(SERVER_MSG_IMGS_NAME),
             ServerMsg::ProfileImgs(_a) => String::from(SERVER_MSG_PROFILE_IMGS_NAME),
+            ServerMsg::Profile(_) => String::from(SERVER_MSG_PROFILE),
             ServerMsg::Reset => String::from(SERVER_MSG_RESET_NAME),
             ServerMsg::None => String::from(SERVER_MSG_NONE_NAME),
         }
@@ -160,6 +163,10 @@ pub enum ClientMsg {
         #[with(DT)]
         from: DateTime,
 
+        user_id: String,
+    },
+
+    User {
         user_id: String,
     },
 }
@@ -304,6 +311,9 @@ impl Handler<ByteActor> for MyWs {
                 },
                 ClientMsg::UserGalleryInit {amount, from, user_id} => {
                     db.img_aggregate_user_gallery(amount, from, &user_id).await
+                },
+                ClientMsg::User {user_id} => {
+                    db.user_find_one(&user_id).await
                 }
             };
 
@@ -314,7 +324,7 @@ impl Handler<ByteActor> for MyWs {
 
             let bytes = rkyv::to_bytes::<_, 256>(&server_msg);
             let Ok(bytes) = bytes else {
-                println!("Failed to serialize serevr msg: {}", bytes.err().unwrap());
+                println!("Failed to serialize server msg: {}", bytes.err().unwrap());
                 return;
             };
 

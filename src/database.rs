@@ -391,6 +391,12 @@ if #[cfg(feature = "ssr")] {
     // Err(mongodb::error::Error::custom(Arc::new("invalid ReactionType type".to_string())) )
 
     impl DB {
+        pub async fn user_find_one(&self, user_id: &str) -> Result<ServerMsg, mongodb::error::Error> {
+            let user = self.collection_user.find_one(doc!{"id": user_id}, None).await?;
+            //println!("wtf{:?}", user);
+            Ok(ServerMsg::Profile(user))
+        }
+
         pub async fn img_aggregate_user_gallery(&self, amount: u32, from: DateTime, user_id: &str)  -> Result<ServerMsg, mongodb::error::Error> {
 
             let user = self.collection_user.find_one(doc!{"id": user_id}, None).await?;
@@ -415,6 +421,8 @@ if #[cfg(feature = "ssr")] {
                 let doc: ServerMsgImg = mongodb::bson::from_document(result)?;
                 send_this.push(doc);
             };
+
+            //println!("Len: {}", send_this.len());
 
             Ok(ServerMsg::ProfileImgs(Some(send_this)))
          }

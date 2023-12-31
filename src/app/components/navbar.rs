@@ -1,4 +1,6 @@
 use leptos::*;
+use leptos::logging::log;
+use leptos_router::use_location;
 use leptos_use::{use_interval_fn, use_window_scroll};
 use web_sys::MouseEvent;
 
@@ -30,22 +32,33 @@ pub fn Navbar() -> impl IntoView {
             .nav_open
             .update(|open: &mut bool| *open = !*open);
     };
+    let l = use_location();
+
 
     create_effect(move |_| {
-        use_interval_fn(
-            move || {
-                let section: ScrollSection = match get_window_path().as_str() {
-                    "/gallery" => ScrollSection::Gallery,
-                    "/#about" => ScrollSection::About,
-                    _ => ScrollSection::Home,
-                };
-                if section != global_state.section.get() {
-                    global_state.section.set(section);
-                }
-            },
-            300,
-        );
+        let section: ScrollSection = match format!("{}{}", l.pathname.get(), l.hash.get()).as_str() {
+            "/gallery" => ScrollSection::Gallery,
+            "/#about" => ScrollSection::About,
+            s if s.contains("/user/") => ScrollSection::UserProfile,
+            _ => ScrollSection::Home,
+        };
+        if section != global_state.section.get() {
+            global_state.section.set(section);
+        }
     });
+
+    let title = move || {
+        let mut output = String::from("ArtCord");
+
+        let a = if section() == ScrollSection::UserProfile {
+            let profile_user = global_state.page_profile.user.get();
+            if let Some(prof) = profile_user {
+                //output =
+            }
+        };
+
+        output
+    };
 
     view! {
         <nav  id="thenav" class=move || { format!("fixed backdrop-blur text-low-purple w-full top-0 z-[100] px-6 2xl:px-[6rem] desktop:px-[16rem]  flex   gap-2  duration-500  bg-gradient-to-r from-dark-night2/75 to-light-flower/10 supports-backdrop-blur:from-dark-night2/95 supports-backdrop-blur:to-light-flower/95 {} {}", if nav_tran() == true && global_state.nav_open.get() != true { " py-2 "  } else { "" }, if global_state.nav_open.get() == true { "w-[100vw] h-[100vh]" } else { "items-center justify-between transition-all" } ) }>
@@ -62,7 +75,7 @@ pub fn Navbar() -> impl IntoView {
                         } else {
                             view! {
                                 <div>
-                                    <a href="/" class="  font-bold text-[2rem] ">{  move || format!("ArtCord") }</a>
+                                    <a href="/" class="  font-bold text-[2rem] ">{  title()  }</a>
                                 </div>
                             }
                         }
@@ -71,7 +84,7 @@ pub fn Navbar() -> impl IntoView {
                 <ul class=move || format!(" gap-2  text-center {}", if global_state.nav_open.get() == true { " flex-col text-[2rem] flex flex-col h-full" } else { "hidden sm:flex text-[1rem] " })>
                     <li><a on:click=move |_| { global_state.nav_open.set(false); } href="/#home" class=move || { format!( " w-[3.5rem] cursor-pointer border-b-[0.30rem] transition duration-300 font-bold {} ", if section() == ScrollSection::Home  { "border-low-purple font-bold" } else { "border-transparent hover:border-low-purple/40 text-low-purple/60 hover:text-low-purple " } ) } >"Home"</a></li>
                     <li><a on:click=move |_| { global_state.nav_open.set(false); } href="/#about" class=move || { format!( " w-[3.5rem] cursor-pointer border-b-[0.30rem] transition duration-300 font-bold {} ", if section() == ScrollSection::About { "border-low-purple font-bold" } else { "border-transparent hover:border-low-purple/40 text-low-purple/60 hover:text-low-purple " } ) } >"About"</a></li>
-                    <li><a on:click=move |_| { global_state.nav_open.set(false); } href="/gallery" class=move || { format!( " w-[3.5rem] cursor-pointer border-b-[0.30rem] transition duration-300 font-bold {} ", if section() == ScrollSection::Gallery { "border-low-purple font-bold" } else { "border-transparent hover:border-low-purple/40 text-low-purple/60 hover:text-low-purple " } ) } >"Gallery"</a></li>
+                    <li><a on:click=move |_| { global_state.nav_open.set(false); } href="/gallery" class=move || { format!( " w-[3.5rem] cursor-pointer border-b-[0.30rem] transition duration-300 font-bold {} ", if section() == ScrollSection::Gallery || section() == ScrollSection::UserProfile { "border-low-purple font-bold" } else { "border-transparent hover:border-low-purple/40 text-low-purple/60 hover:text-low-purple " } ) } >"Gallery"</a></li>
                 </ul>
             </div>
             {
