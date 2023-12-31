@@ -200,7 +200,7 @@ pub fn App() -> impl IntoView {
         <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
         <meta name="description" content="Art Community!"/>
         <meta name="keywords" content="artcord,art,gallery,server,discord,community"/>
-        <meta name="twitter:title" content="Artcord"/>
+        <meta name="twitter:title" content="ArtCord"/>
         <meta name="twitter:description" content="Art Community!"/>
         <meta name="twitter:image" content="/assets/overview.webp"/>
         <meta name="twitter:card" content="summary_large_image"/>
@@ -209,7 +209,7 @@ pub fn App() -> impl IntoView {
         <meta http-equiv="Expires" content="0"/>
 
         <Stylesheet id="leptos" href="/pkg/leptos_start3.css"/>
-        <Title text="Artcord"/>
+        <Title text="ArtCord"/>
         <Body  class=move || format!("text-low-purple    bg-fixed bg-sword-lady  bg-[right_65%_bottom_0] md:bg-center bg-cover bg-no-repeat  bg-dark-night2 {}", if global_state.nav_open.get() == true { "overflow-hidden w-screen h-[dvh]" } else { "" })  />
         <Router>
                 <Routes>
