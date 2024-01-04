@@ -20,6 +20,13 @@ use crate::{
 };
 
 #[derive(Clone, Copy, PartialEq, Debug)]
+pub enum LoadingNotFound {
+    NotLoaded,
+    Loaded,
+    NotFound
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum ScrollSection {
     Home,
     About,
@@ -140,19 +147,19 @@ impl From<ServerMsgImg> for ServerMsgImgResized {
 
 #[derive(Copy, Clone, Debug)]
 pub struct PageProfileState {
-    pub not_found: RwSignal<bool>,
+   // pub not_found: RwSignal<bool>,
     pub user: RwSignal<Option<User>>,
     pub gallery_imgs: RwSignal<Vec<ServerMsgImgResized>>,
-    pub gallery_loaded: RwSignal<bool>,
+    pub gallery_loaded: RwSignal<LoadingNotFound>,
 }
 
 impl PageProfileState {
     pub fn new() -> Self {
         Self {
-            not_found: RwSignal::new(false),
+    //        not_found: RwSignal::new(false),
             user: RwSignal::new(None),
             gallery_imgs: RwSignal::new(Vec::new()),
-            gallery_loaded: RwSignal::new(false),
+            gallery_loaded: RwSignal::new(LoadingNotFound::NotLoaded),
         }
     }
 }
@@ -213,7 +220,7 @@ impl GlobalState {
         let bytes = bytes.into_vec();
         self.socket_send.get_untracked()(bytes);
     }
-
+    
     pub fn socket_state_is_ready(&self, name: &str) -> bool {
         let socket_state = self
             .socket_timestamps

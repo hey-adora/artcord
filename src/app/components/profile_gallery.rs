@@ -10,9 +10,7 @@ use leptos_use::{use_event_listener, use_window};
 use rand::Rng;
 use web_sys::Event;
 
-use crate::app::utils::{
-    calc_fit_count, resize_imgs, GlobalState, SelectedImg, ServerMsgImgResized, NEW_IMG_HEIGHT,
-};
+use crate::app::utils::{calc_fit_count, resize_imgs, GlobalState, SelectedImg, ServerMsgImgResized, NEW_IMG_HEIGHT, LoadingNotFound};
 use crate::server::{ClientMsg, ServerMsg, SERVER_MSG_IMGS_NAME, SERVER_MSG_PROFILE_IMGS_NAME, SERVER_MSG_PROFILE};
 
 //F: Fn(ServerMsgImgResized) -> IV + 'static, IV: IntoView
@@ -65,8 +63,8 @@ pub fn ProfileGallery() -> impl IntoView {
     };
 
     create_effect(move |_| {
-        let loaded = loaded_sig.get_untracked();
-        if !loaded {
+        let loaded = loaded_sig.with_untracked(|state| *state == LoadingNotFound::NotLoaded);
+        if loaded {
             return;
         }
         let _ = location.pathname.get();
@@ -173,7 +171,7 @@ pub fn ProfileGallery() -> impl IntoView {
 
         if !same_user {
            // log!("user updated??gffgdfgf {}, {:?}", new_user, &user);
-            loaded_sig.set(false);
+           //loaded_sig.set(LoadingNotFound::NotLoaded);
             let msg = ClientMsg::User {
                 user_id: String::from(new_user),
             };
@@ -200,7 +198,7 @@ pub fn ProfileGallery() -> impl IntoView {
             return;
         }
 
-        let loaded = loaded_sig.get_untracked();
+        let loaded = loaded_sig.with(|state|*state==LoadingNotFound::Loaded);
         if loaded {
             return;
         }
@@ -250,7 +248,7 @@ pub fn ProfileGallery() -> impl IntoView {
         //     amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
         //     from: DateTime::from_millis(Utc::now().timestamp_millis()),
         // };
-        loaded_sig.set(true);
+        loaded_sig.set(LoadingNotFound::Loaded);
 
         //global_state.socket_send(msg);
     });
@@ -278,10 +276,10 @@ pub fn ProfileGallery() -> impl IntoView {
             }
         }
         <section id="profile_gallery_section" on:scroll=section_scroll _ref=gallery_section class="relative content-start overflow-x-hidden overflow-y-scroll h-full" >
-            <Show when=move||!loaded_sig.get()>
+            <Show when=move||loaded_sig.with(|state| *state == LoadingNotFound::NotLoaded)>
               <div>"LOADING..."</div>
             </Show>
-            <Show when=move||loaded_sig.get() && global_gallery_imgs.with(|imgs|imgs.len() < 1)>
+            <Show when=move||loaded_sig.with(|state| *state == LoadingNotFound::NotFound) >
               <div>"No Images Found."</div>
             </Show>
             <For each=move || global_gallery_imgs.get().into_iter().enumerate()  key=|state| state.1._id let:data > {

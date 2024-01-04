@@ -1,4 +1,4 @@
-use crate::app::utils::GlobalState;
+use crate::app::utils::{GlobalState, LoadingNotFound};
 use crate::app::utils::ServerMsgImgResized;
 use crate::app::utils::{resize_imgs, NEW_IMG_HEIGHT};
 use crate::server::ServerMsg;
@@ -83,7 +83,7 @@ pub fn App() -> impl IntoView {
                         ServerMsg::ProfileImgs(new_imgs) => {
                             let Some(new_imgs) = new_imgs else {
                                 //global_state.page_profile.gallery_loaded.set(true);
-                                global_state.page_profile.not_found.set(true);
+                                global_state.page_profile.gallery_loaded.set(LoadingNotFound::NotFound);
                                 //global_state.socket_state_reset(&server_msg_name);
                                 return;
                             };
@@ -116,11 +116,13 @@ pub fn App() -> impl IntoView {
                             if let Some(new_user) = new_user {
                                //log!("USER RECEIVED: {:?}", &new_user.id);
                                 global_state.page_profile.gallery_imgs.set(vec![]);
-                                global_state.page_profile.gallery_loaded.set(false);
+                                global_state.page_profile.gallery_loaded.set(LoadingNotFound::NotLoaded);
                                 global_state.page_profile.user.update(move |user| {
                                     *user = Some(new_user);
                                 });
                             } else {
+                                global_state.page_profile.gallery_imgs.set(vec![]);
+                                global_state.page_profile.gallery_loaded.set(LoadingNotFound::NotFound);
                                // log!("where is it????");
                             }
                         }
