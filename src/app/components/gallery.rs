@@ -10,9 +10,7 @@ use leptos_use::{use_event_listener, use_window};
 use rand::Rng;
 use web_sys::Event;
 
-use crate::app::utils::{
-    calc_fit_count, resize_imgs, GlobalState, SelectedImg, ServerMsgImgResized, NEW_IMG_HEIGHT,
-};
+use crate::app::utils::{calc_fit_count, resize_imgs, GlobalState, SelectedImg, ServerMsgImgResized, NEW_IMG_HEIGHT, LoadingNotFound};
 use crate::server::{ClientMsg, ServerMsg, SERVER_MSG_IMGS_NAME};
 
 //F: Fn(ServerMsgImgResized) -> IV + 'static, IV: IntoView
@@ -24,7 +22,7 @@ pub fn Gallery<
     global_gallery_imgs: RwSignal<Vec<ServerMsgImgResized>>,
     on_click: OnClick,
     on_fetch: OnFetch,
-    loaded_sig: RwSignal<bool>,
+    loaded_sig: RwSignal<LoadingNotFound>,
     connection_load_state_name: &'static str,
 ) -> impl IntoView {
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
@@ -98,7 +96,7 @@ pub fn Gallery<
     });
 
     create_effect(move |_| {
-        let loaded = loaded_sig.get_untracked();
+        let loaded = loaded_sig.with_untracked(|state|*state == LoadingNotFound::Loaded);
         if !loaded {
             return;
         }
@@ -117,8 +115,8 @@ pub fn Gallery<
 
     create_effect(move |_| {
         let connected = global_state.socket_connected.get();
-        let loaded = loaded_sig.get();
-        if loaded || !connected {
+        let loaded = loaded_sig.with(|state| *state == LoadingNotFound::NotLoaded);
+        if !loaded || !connected {
             // log!("ITS NOT READY LOADED");
             return;
         }
@@ -142,17 +140,17 @@ pub fn Gallery<
         //     amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
         //     from: DateTime::from_millis(Utc::now().timestamp_millis()),
         // };
-        loaded_sig.set(true);
+        loaded_sig.set(LoadingNotFound::Loading);
 
         //global_state.socket_send(msg);
     });
 
     view! {
         <section id="gallery_section" on:scroll=section_scroll _ref=gallery_section class="relative content-start overflow-x-hidden overflow-y-scroll h-full" >
-            <Show when=move||!loaded_sig.get()>
+            <Show when=move||loaded_sig.with(|state| *state == LoadingNotFound::NotLoaded || *state == LoadingNotFound::Loading)>
               <div>"LOADING..."</div>
             </Show>
-            <Show when=move||loaded_sig.get() && global_gallery_imgs.with(|imgs|imgs.len() < 1)>
+            <Show when=move||loaded_sig.with(|state| *state == LoadingNotFound::NotFound) >
               <div>"No Images Found."</div>
             </Show>
             <For each=move || global_gallery_imgs.get().into_iter().enumerate()  key=|state| state.1._id let:data > {

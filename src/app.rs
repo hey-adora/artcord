@@ -60,25 +60,31 @@ pub fn App() -> impl IntoView {
                             document().location().unwrap().reload().unwrap();
                         }
                         ServerMsg::Imgs(new_imgs) => {
-                            let new_imgs = new_imgs
-                                .iter()
-                                .map(|img| ServerMsgImgResized::from(img.to_owned()))
-                                .collect::<Vec<ServerMsgImgResized>>();
+                            if new_imgs.is_empty() {
+                                global_state.page_galley.gallery_loaded.set(LoadingNotFound::NotFound);
+                            } else {
+                                let new_imgs = new_imgs
+                                    .iter()
+                                    .map(|img| ServerMsgImgResized::from(img.to_owned()))
+                                    .collect::<Vec<ServerMsgImgResized>>();
 
-                            // if !global_state.page_galley.gallery_loaded.get_untracked() {
-                            //     global_state.page_galley.gallery_loaded.set(true);
-                            // }
+                                // if !global_state.page_galley.gallery_loaded.get_untracked() {
+                                //     global_state.page_galley.gallery_loaded.set(true);
+                                // }
 
-                            global_state.page_galley.gallery_imgs.update(|imgs| {
-                                imgs.extend(new_imgs);
-                                let document = document();
-                                let gallery_section = document.get_element_by_id("gallery_section");
-                                let Some(gallery_section) = gallery_section else {
-                                    return;
-                                };
-                                let width = gallery_section.client_width() as u32;
-                                resize_imgs(NEW_IMG_HEIGHT, width, imgs);
-                            });
+
+                                global_state.page_galley.gallery_imgs.update(|imgs| {
+                                    imgs.extend(new_imgs);
+                                    let document = document();
+                                    let gallery_section = document.get_element_by_id("gallery_section");
+                                    let Some(gallery_section) = gallery_section else {
+                                        return;
+                                    };
+                                    let width = gallery_section.client_width() as u32;
+                                    resize_imgs(NEW_IMG_HEIGHT, width, imgs);
+                                });
+                                global_state.page_galley.gallery_loaded.set(LoadingNotFound::Loaded);
+                            }
                         }
                         ServerMsg::ProfileImgs(new_imgs) => {
                             let Some(new_imgs) = new_imgs else {
@@ -88,29 +94,35 @@ pub fn App() -> impl IntoView {
                                 return;
                             };
 
-                            //log!("PROFILE IMGS RECEIVED: {:?}", new_imgs.len());
+                            if new_imgs.is_empty() {
+                                global_state.page_profile.gallery_loaded.set(LoadingNotFound::NotFound);
+                            } else {
+                                //log!("PROFILE IMGS RECEIVED: {:?}", new_imgs.len());
 
-                            let new_imgs = new_imgs
-                                .iter()
-                                .map(|img| ServerMsgImgResized::from(img.to_owned()))
-                                .collect::<Vec<ServerMsgImgResized>>();
+                                let new_imgs = new_imgs
+                                    .iter()
+                                    .map(|img| ServerMsgImgResized::from(img.to_owned()))
+                                    .collect::<Vec<ServerMsgImgResized>>();
 
-                            global_state.page_profile.gallery_imgs.update(|imgs| {
-                                imgs.extend(new_imgs);
-                                let document = document();
-                                let gallery_section = document.get_element_by_id("profile_gallery_section");
-                                let Some(gallery_section) = gallery_section else {
-                                    return;
-                                };
-                                let width = gallery_section.client_width() as u32;
-                                resize_imgs(NEW_IMG_HEIGHT, width, imgs);
-                            });
+                                global_state.page_profile.gallery_imgs.update(|imgs| {
+                                    imgs.extend(new_imgs);
+                                    let document = document();
+                                    let gallery_section = document.get_element_by_id("profile_gallery_section");
+                                    let Some(gallery_section) = gallery_section else {
+                                        return;
+                                    };
+                                    let width = gallery_section.client_width() as u32;
+                                    resize_imgs(NEW_IMG_HEIGHT, width, imgs);
+                                });
+                                global_state.page_profile.gallery_loaded.set(LoadingNotFound::Loaded);
 
 
+                                // if !global_state.page_profile.gallery_loaded.get_untracked() {
+                                //     global_state.page_profile.gallery_loaded.set(true);
+                                // }
+                            }
 
-                            // if !global_state.page_profile.gallery_loaded.get_untracked() {
-                            //     global_state.page_profile.gallery_loaded.set(true);
-                            // }
+
                         }
                         ServerMsg::Profile(new_user) => {
                             if let Some(new_user) = new_user {

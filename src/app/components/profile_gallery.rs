@@ -63,8 +63,8 @@ pub fn ProfileGallery() -> impl IntoView {
     };
 
     create_effect(move |_| {
-        let loaded = loaded_sig.with_untracked(|state| *state == LoadingNotFound::NotLoaded);
-        if loaded {
+        let loaded = loaded_sig.with_untracked(|state| *state == LoadingNotFound::Loaded);
+        if !loaded {
             return;
         }
         let _ = location.pathname.get();
@@ -198,8 +198,8 @@ pub fn ProfileGallery() -> impl IntoView {
             return;
         }
 
-        let loaded = loaded_sig.with(|state|*state==LoadingNotFound::Loaded);
-        if loaded {
+        let loaded = loaded_sig.with(|state|*state==LoadingNotFound::NotLoaded);
+        if !loaded {
             return;
         }
 
@@ -248,7 +248,7 @@ pub fn ProfileGallery() -> impl IntoView {
         //     amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
         //     from: DateTime::from_millis(Utc::now().timestamp_millis()),
         // };
-        loaded_sig.set(LoadingNotFound::Loaded);
+        loaded_sig.set(LoadingNotFound::Loading);
 
         //global_state.socket_send(msg);
     });
@@ -276,7 +276,7 @@ pub fn ProfileGallery() -> impl IntoView {
             }
         }
         <section id="profile_gallery_section" on:scroll=section_scroll _ref=gallery_section class="relative content-start overflow-x-hidden overflow-y-scroll h-full" >
-            <Show when=move||loaded_sig.with(|state| *state == LoadingNotFound::NotLoaded)>
+            <Show when=move||loaded_sig.with(|state| *state == LoadingNotFound::NotLoaded || *state == LoadingNotFound::Loading)>
               <div>"LOADING..."</div>
             </Show>
             <Show when=move||loaded_sig.with(|state| *state == LoadingNotFound::NotFound) >

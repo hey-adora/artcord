@@ -22,6 +22,7 @@ use crate::{
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum LoadingNotFound {
     NotLoaded,
+    Loading,
     Loaded,
     NotFound
 }
@@ -167,14 +168,14 @@ impl PageProfileState {
 #[derive(Copy, Clone, Debug)]
 pub struct PageGalleryState {
     pub gallery_imgs: RwSignal<Vec<ServerMsgImgResized>>,
-    pub gallery_loaded: RwSignal<bool>,
+    pub gallery_loaded: RwSignal<LoadingNotFound>,
 }
 
 impl PageGalleryState {
     pub fn new() -> Self {
         Self {
             gallery_imgs: create_rw_signal(Vec::new()),
-            gallery_loaded: create_rw_signal(false),
+            gallery_loaded: create_rw_signal(LoadingNotFound::NotLoaded),
         }
     }
 }
@@ -220,7 +221,7 @@ impl GlobalState {
         let bytes = bytes.into_vec();
         self.socket_send.get_untracked()(bytes);
     }
-    
+
     pub fn socket_state_is_ready(&self, name: &str) -> bool {
         let socket_state = self
             .socket_timestamps
