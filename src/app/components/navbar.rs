@@ -4,7 +4,7 @@ use leptos_router::use_location;
 use leptos_use::{use_interval_fn, use_window_scroll};
 use web_sys::MouseEvent;
 
-use crate::app::utils::{get_window_path, GlobalState, ScrollSection};
+use crate::app::utils::{get_window_path, GlobalState, LoadingNotFound, ScrollSection};
 
 pub fn shrink_nav(nav_tran: RwSignal<bool>, y: u32) {
     if y > 100 {
@@ -49,15 +49,25 @@ pub fn Navbar() -> impl IntoView {
 
     let title = move || {
         let mut output = String::from("ArtCord");
-
-        let a = if section() == ScrollSection::UserProfile {
-            let profile_user = global_state.page_profile.user.get();
-            if let Some(prof) = profile_user {
-                //output =
+       // log!("{:?} {:?}", global_state.section.get(), global_state.page_profile.gallery_loaded.get());
+        if global_state.section.get() == ScrollSection::UserProfile && global_state.page_profile.gallery_loaded.get() == LoadingNotFound::Loaded {
+            if let Some(user) = global_state.page_profile.user.get() {
+                let pfp_url = format!("/assets/gallery/pfp_{}.webp", user.id.clone());
+              //  log!("wow1");
+                return view!{
+                    <div class="flex gap-4">
+                        <img class="border border-low-purple rounded-full bg-mid-purple h-[45px] " src=pfp_url/>
+                        <p class="text-ellipsis overflow-hidden"> {user.name} </p>
+                    </div>
+                };
             }
-        };
-
-        output
+        }
+       // log!("wow2");
+        view! {
+            <div>
+                <p class="text-ellipsis overflow-hidden">{output}</p>
+           </div>
+        }
     };
 
     view! {
@@ -68,7 +78,7 @@ pub fn Navbar() -> impl IntoView {
                         if global_state.nav_open.get() == true {
                             view! {
                                 <div class="w-full flex justify-between font-bold text-[2rem]" >
-                                    <div>{  move || format!("ArtCord") }</div>
+                                    <div>{ title() }</div>
                                     <button on:click=on_nav_click>X</button>
                                 </div>
                             }

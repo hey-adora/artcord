@@ -60,7 +60,7 @@ pub fn App() -> impl IntoView {
                             document().location().unwrap().reload().unwrap();
                         }
                         ServerMsg::Imgs(new_imgs) => {
-                            if new_imgs.is_empty() {
+                            if new_imgs.is_empty() && global_state.page_galley.gallery_loaded.get_untracked() == LoadingNotFound::Loading {
                                 global_state.page_galley.gallery_loaded.set(LoadingNotFound::NotFound);
                             } else {
                                 let new_imgs = new_imgs
@@ -94,7 +94,7 @@ pub fn App() -> impl IntoView {
                                 return;
                             };
 
-                            if new_imgs.is_empty() {
+                            if new_imgs.is_empty() && global_state.page_profile.gallery_loaded.get_untracked() == LoadingNotFound::Loading {
                                 global_state.page_profile.gallery_loaded.set(LoadingNotFound::NotFound);
                             } else {
                                 //log!("PROFILE IMGS RECEIVED: {:?}", new_imgs.len());

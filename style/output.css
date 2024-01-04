@@ -653,6 +653,10 @@ video {
   height: 3rem;
 }
 
+.h-\[45px\] {
+  height: 45px;
+}
+
 .h-\[48px\] {
   height: 48px;
 }
@@ -778,6 +782,10 @@ video {
   gap: 2rem;
 }
 
+.gap-4 {
+  gap: 1rem;
+}
+
 .overflow-hidden {
   overflow: hidden;
 }
@@ -788,6 +796,10 @@ video {
 
 .overflow-y-scroll {
   overflow-y: scroll;
+}
+
+.text-ellipsis {
+  text-overflow: ellipsis;
 }
 
 .whitespace-nowrap {
