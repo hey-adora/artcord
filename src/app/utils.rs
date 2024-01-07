@@ -12,10 +12,10 @@ use std::fmt::Debug;
 use wasm_bindgen::JsValue;
 use web_sys::Location;
 
-use crate::bot::ImgQuality;
 use crate::{
     database::User,
 };
+use crate::bot::img_quality::ImgQuality;
 use crate::server::client_msg::ClientMsg;
 use crate::server::server_msg::ServerMsg;
 use crate::server::server_msg_img::ServerMsgImg;

@@ -9,7 +9,7 @@ use serenity::{
 };
 
 use crate::{
-    bot::{commands::FEATURE_REACT, ReactionQueue},
+    bot::{commands::FEATURE_REACT},
     database::{AutoReaction, ToReactionTypeError, DB},
 };
 

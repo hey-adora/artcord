@@ -9,10 +9,9 @@ use rkyv::{
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use crate::bot::img_quality::ImgQuality;
 
-use crate::{
-    bot::ImgQuality,
-};
+
 use crate::server::server_msg::ServerMsg;
 use crate::server::server_msg_img::ServerMsgImg;
 

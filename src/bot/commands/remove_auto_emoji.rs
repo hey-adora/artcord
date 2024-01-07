@@ -10,10 +10,10 @@ use serenity::{
 use crate::{
     bot::{
         hooks::hook_add_reaction::{CLOSE_REACTION, CONFIRM_REACTION},
-        ReactionQueue,
     },
     database::DB,
 };
+use crate::bot::create_bot::ReactionQueue;
 
 pub async fn run(
     ctx: &Context,

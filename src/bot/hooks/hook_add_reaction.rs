@@ -14,13 +14,13 @@ use serenity::{
 };
 
 use crate::{
-    bot::ReactionQueue,
     database::{AutoReaction, FromReactionTypeError, ToReactionTypeError, DB},
 };
 
 use super::save_attachments::SaveAttachmentsError;
 use serenity::model::channel::Reaction;
 use std::sync::Arc;
+use crate::bot::create_bot::ReactionQueue;
 
 pub const CONFIRM_REACTION: &str = "✅";
 pub const CLOSE_REACTION: &str = "❌";

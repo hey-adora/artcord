@@ -1,7 +1,7 @@
 use bson::DateTime;
 use bson::oid::ObjectId;
 use chrono::Utc;
-use crate::bot::ImgQuality;
+use crate::bot::img_quality::ImgQuality;
 use crate::database::User;
 use crate::database::DT;
 use crate::database::OBJ;

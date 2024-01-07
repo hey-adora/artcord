@@ -8,6 +8,7 @@ use artcord::database::create_database;
 use dotenv::dotenv;
 use futures::try_join;
 use std::env;
+use artcord::bot::create_bot::create_bot;
 use artcord::server::create_server::create_server;
 
 #[cfg(feature = "ssr")]
