@@ -13,11 +13,12 @@ use wasm_bindgen::JsValue;
 use web_sys::Location;
 
 use crate::bot::ImgQuality;
-use crate::server::ServerMsg;
 use crate::{
     database::User,
-    server::{ClientMsg, ServerMsgImg},
 };
+use crate::server::client_msg::ClientMsg;
+use crate::server::server_msg::ServerMsg;
+use crate::server::server_msg_img::ServerMsgImg;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum LoadingNotFound {

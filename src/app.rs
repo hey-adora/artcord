@@ -1,7 +1,6 @@
 use crate::app::utils::{GlobalState, LoadingNotFound};
 use crate::app::utils::ServerMsgImgResized;
 use crate::app::utils::{resize_imgs, NEW_IMG_HEIGHT};
-use crate::server::ServerMsg;
 use leptos::logging::log;
 use leptos::*;
 use leptos_meta::*;
@@ -17,6 +16,7 @@ use pages::home::HomePage;
 use pages::not_found::NotFound;
 use pages::profile::Profile;
 use std::rc::Rc;
+use crate::server::server_msg::ServerMsg;
 
 pub mod components;
 pub mod pages;

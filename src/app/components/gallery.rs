@@ -11,7 +11,6 @@ use rand::Rng;
 use web_sys::Event;
 
 use crate::app::utils::{calc_fit_count, resize_imgs, GlobalState, SelectedImg, ServerMsgImgResized, NEW_IMG_HEIGHT, LoadingNotFound};
-use crate::server::{ClientMsg, ServerMsg, SERVER_MSG_IMGS_NAME};
 
 //F: Fn(ServerMsgImgResized) -> IV + 'static, IV: IntoView
 #[component]

@@ -12,8 +12,9 @@ use thiserror::Error;
 
 use crate::{
     bot::ImgQuality,
-    server::{ServerMsg, ServerMsgImg},
 };
+use crate::server::server_msg::ServerMsg;
+use crate::server::server_msg_img::ServerMsgImg;
 
 #[derive(
     rkyv::Archive,

@@ -6,7 +6,6 @@ use leptos_router::use_params_map;
 use crate::app::components::navbar::Navbar;
 use crate::app::components::profile_gallery::ProfileGallery;
 use crate::app::utils::{GlobalState, ServerMsgImgResized};
-use crate::server::{ClientMsg, SERVER_MSG_PROFILE_IMGS_NAME};
 
 #[component]
 pub fn Profile() -> impl IntoView {

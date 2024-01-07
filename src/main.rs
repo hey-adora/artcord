@@ -4,10 +4,11 @@
 
 use artcord::bot::create_bot;
 use artcord::database::create_database;
-use artcord::server::create_server;
+
 use dotenv::dotenv;
 use futures::try_join;
 use std::env;
+use artcord::server::create_server::create_server;
 
 #[cfg(feature = "ssr")]
 #[actix_web::main]

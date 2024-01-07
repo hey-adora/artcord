@@ -12,24 +12,9 @@ use rand::Rng;
 use web_sys::{Event, MouseEvent};
 
 use crate::app::utils::{GlobalState, ServerMsgImgResized};
-use crate::server::{
-    ClientMsg, ServerMsg, ServerMsgImg, SERVER_MSG_IMGS_NAME, SERVER_MSG_PROFILE_IMGS_NAME,
-};
-
-// fn calc(width: f64, sizes: &[(f64, f64)]) -> f64 {
-//     let mut ratio: f64 = 0.0;
-//     for size in sizes {
-//         ratio += size.0 / size.1;
-//     }
-//     let height = width / ratio;
-//
-//     let mut reized_total_width: f64 = 0.0;
-//     for size in sizes {
-//         reized_total_width += f64::trunc((height * (size.0 / size.1)) * 1000.0) / 1000.0;
-//     }
-//
-//     reized_total_width
-// }
+use crate::server::client_msg::ClientMsg;
+use crate::server::server_msg::SERVER_MSG_IMGS_NAME;
+use crate::server::server_msg_img::ServerMsgImg;
 
 fn create_client_test_imgs() -> Vec<ServerMsgImgResized> {
     let mut new_imgs: Vec<ServerMsgImgResized> = Vec::new();
@@ -52,22 +37,11 @@ pub fn GalleryPage() -> impl IntoView {
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
     let nav_tran = global_state.nav_tran;
     let imgs = global_state.page_galley.gallery_imgs;
-    // let temp_gallery_imgs = RwSignal::new(create_client_test_imgs());
     let selected_img: RwSignal<Option<SelectedImg>> = create_rw_signal(None);
 
     create_effect(move |_| {
         nav_tran.set(true);
     });
-
-    // let add_imgs = move |_: MouseEvent| {
-    //     let mut new_imgs: Vec<ServerMsgImg> = Vec::new();
-    //     for _ in 0..25 {
-    //         new_imgs.push(ServerMsgImg::default());
-    //     }
-    //     global_state
-    //         .socket_recv
-    //         .set(ServerMsg::Imgs(new_imgs.clone()));
-    // };
 
     let select_click_img = move |img: ServerMsgImgResized| {
         selected_img.set(Some(SelectedImg {

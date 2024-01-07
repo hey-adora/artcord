@@ -81,6 +81,8 @@ impl ImgQuality {
 
 cfg_if! {
 if #[cfg(feature = "ssr")] {
+
+
     use crate::database::DB;
     use self::hooks::save_attachments::hook_save_attachments;
     use self::hooks::{
@@ -107,12 +109,16 @@ if #[cfg(feature = "ssr")] {
     use tokio::sync::RwLock;
     use std::sync::Arc;
     use crate::database::AutoReaction;
-    use crate::server::ArcStr;
 
     mod commands;
     mod hooks;
 
     use commands::FEATURE_COMMANDER;
+
+    pub struct ArcStr;
+    impl TypeMapKey for ArcStr {
+        type Value = Arc<str>;
+    }
 
     #[group]
     #[commands(ping)]

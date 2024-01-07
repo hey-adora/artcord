@@ -11,7 +11,8 @@ use rand::Rng;
 use web_sys::Event;
 
 use crate::app::utils::{calc_fit_count, resize_imgs, GlobalState, SelectedImg, ServerMsgImgResized, NEW_IMG_HEIGHT, LoadingNotFound};
-use crate::server::{ClientMsg, ServerMsg, SERVER_MSG_IMGS_NAME, SERVER_MSG_PROFILE_IMGS_NAME, SERVER_MSG_PROFILE};
+use crate::server::client_msg::ClientMsg;
+use crate::server::server_msg::{SERVER_MSG_PROFILE, SERVER_MSG_PROFILE_IMGS_NAME};
 
 //F: Fn(ServerMsgImgResized) -> IV + 'static, IV: IntoView
 #[component]
@@ -39,20 +40,9 @@ pub fn ProfileGallery() -> impl IntoView {
     };
 
     let on_fetch = move |from: DateTime, amount: u32| {
-        //log!("Fetch this amount: {}", amount);
-        // let user = global_state.page_profile.user.get_untracked();
-        // let Some(user) = user else {
-        //     return;
-        // };
         let Some(new_user) = params.with(|p| p.get("id").cloned()) else {
             return;
         };
-        //log!("sending fetch for user: {}", &new_user);
-        // let id = params.with(|p| p.get("id").cloned());
-        // let Some(id) = id else {
-        //     log!("user not found.");
-        //     return;
-        // };
 
         let msg = ClientMsg::UserGalleryInit {
             amount,
@@ -80,17 +70,6 @@ pub fn ProfileGallery() -> impl IntoView {
         });
     });
 
-    // create_effect(move |_| {
-    //     global_gallery_imgs.update_untracked(move |imgs| {
-    //         log!("once on load");
-    //         let section = gallery_section.get_untracked();
-    //         if let Some(section) = section {
-    //             let width = section.client_width() as u32;
-    //
-    //             resize_imgs(NEW_IMG_HEIGHT, width, imgs);
-    //         };
-    //     });
-    // });
     let section_scroll = move |_: Event| {
         if !global_state.socket_state_is_ready(connection_load_state_name) {
             return;
@@ -122,11 +101,6 @@ pub fn ProfileGallery() -> impl IntoView {
                 last,
                 calc_fit_count(client_width as u32, client_height as u32) * 2,
             );
-            // let msg = ClientMsg::GalleryInit {
-            //     amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
-            //     from: last,
-            // };
-            // global_state.socket_send(msg);
         }
     };
 
@@ -145,11 +119,6 @@ pub fn ProfileGallery() -> impl IntoView {
         });
     });
 
-    // create_effect(move |_| {
-    //     log!("yo yo mf {:?}", global_state.page_profile.user.get());
-    // });
-
-
     create_effect(move |_| {
         let Some(new_user) = params.with(|p| p.get("id").cloned()) else {
             return;
@@ -167,11 +136,7 @@ pub fn ProfileGallery() -> impl IntoView {
             return;
         }
 
-        //log!("22222user updated??gffgdfgf {}, {:?}", new_user, &user);
-
         if !same_user {
-           // log!("user updated??gffgdfgf {}, {:?}", new_user, &user);
-           //loaded_sig.set(LoadingNotFound::NotLoaded);
             let msg = ClientMsg::User {
                 user_id: String::from(new_user),
             };
@@ -179,18 +144,6 @@ pub fn ProfileGallery() -> impl IntoView {
 
         }
     });
-
-    // create_effect(move |_| {
-    //     let user = global_state.page_profile.user.get();
-    //     let Some(user) = user else {
-    //         return;
-    //     };
-    //
-    //     log!("nanananananananan {}", user.id);
-    //
-    //     global_state.page_profile.gallery_imgs.set(vec![]);
-    //     loaded_sig.set(false);
-    // });
 
     create_effect(move |_| {
         let connected = global_state.socket_connected.get();
@@ -212,25 +165,9 @@ pub fn ProfileGallery() -> impl IntoView {
             return;
         }
 
-
-
-
-
-        // if !same_user {
-        //     global_state.page_profile.user.set(Some(new_user));
-        // }
-        // if !connected || same_user {
-        //     // log!("ITS NOT READY LOADED");
-        //     return;
-        // }
-        //log!("{}", same_user);
-
         let Some(section) = gallery_section.get_untracked() else {
             return;
         };
-
-        //log!("ON PROFILE INIT");
-        // log!("THIS SHOULDN'T HAPPEN {} {}", loaded, connected);
 
         let client_height = section.client_height();
         let client_width = section.client_width();
@@ -244,13 +181,7 @@ pub fn ProfileGallery() -> impl IntoView {
             calc_fit_count(client_width as u32, client_height as u32) * 2,
         );
 
-        // let msg = ClientMsg::GalleryInit {
-        //     amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
-        //     from: DateTime::from_millis(Utc::now().timestamp_millis()),
-        // };
         loaded_sig.set(LoadingNotFound::Loading);
-
-        //global_state.socket_send(msg);
     });
 
     view! {
