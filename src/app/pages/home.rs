@@ -58,7 +58,7 @@ pub fn HomePage() -> impl IntoView {
                         <p class="text-[1.3rem]">"With thousands of unique art posted by the community"</p>
                         <div class="flex gap-8 mt-4 items-center ">
                             <a href="/gallery" class="bg-gradient-to-br from-first-one to-second-one hover:to-dark-purple flex h-12 gap-2 items-center text-[1rem] font-black bg-half-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] hover:bg-dark-purple transition-colors duration-300 " >
-                                "Galley"
+                                "Gallery"
                             </a>
                         </div>
                     </div>
@@ -70,7 +70,7 @@ pub fn HomePage() -> impl IntoView {
                     </a>
                 </div>
                 <div>
-                    "By AYYWA"
+                    "Background by AYYWA"
                 </div>
             </section>
             <section  id="about" class="backdrop-blur-[50px] bg-gradient-to-r from-dark-night2/25 to-light-flower/10 px-6 py-6 2xl:px-[6rem] desktop:px-[16rem] flex flex-col md:grid md:grid-rows-[auto_1fr_1fr_1fr_auto] md:grid-cols-[1fr_1fr] gap-8 md:gap-x-24 lg:gap-x-[6rem]  text-[1.3rem] min-h-[100svh]" >
