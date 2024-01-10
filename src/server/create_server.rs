@@ -11,9 +11,11 @@ use leptos_actix::{generate_route_list, LeptosRoutes};
 use serenity::prelude::*;
 use actix_web::dev::Server;
 use std::{num::ParseIntError, sync::Arc};
+use std::net::{IpAddr, SocketAddr};
 use std::sync::RwLock;
 use thiserror::Error;
-use crate::server::ws_connection::WsConnection;
+use crate::server::client_msg::WsPath;
+use crate::server::ws_connection::{WsConnection};
 
 impl Actor for ServerState {
     type Context = actix::Context<Self>;
@@ -24,9 +26,15 @@ async fn index(
     stream: web::Payload,
     server_state: actix_web::web::Data<ServerState>
 ) -> Result<HttpResponse, actix_web::Error> {
+    let Some(peer) = req.peer_addr() else {
+        println!("Error: failed to get peer_addr().");
+        return HttpResponse::BadRequest().await;
+    };
+
     ws::start(
         WsConnection {
             id: uuid::Uuid::new_v4(),
+            ip: peer.ip(),
             server_state: server_state.get_ref().to_owned().clone()
         },
         &req,
@@ -40,7 +48,8 @@ pub async fn favicon() -> actix_web::Result<actix_files::NamedFile> {
 
 #[derive(Clone)]
 pub struct ServerState {
-    pub sessions: Arc<RwLock<HashMap<uuid::Uuid,Addr<WsConnection >>>>,
+    pub throttle_time: Arc<RwLock<HashMap<WsPath, (u64, HashMap<IpAddr, u64 >)>>>,
+    pub sessions: Arc<RwLock<HashMap<uuid::Uuid, Addr<WsConnection > >>>,
     pub gallery_root_dir: Arc<str>,
     pub db: Arc<crate::database::DB>,
 }
@@ -81,6 +90,7 @@ pub async fn create_server(db: Arc<crate::database::DB>, galley_root_dir: &str, 
 
         App::new()
             .app_data(web::Data::new(ServerState {
+                throttle_time:  Arc::new(RwLock::new(HashMap::new())),
                 sessions: sessions.clone(),
                 gallery_root_dir: Arc::from(galley_root_dir.as_str()),
                 db: db.clone(),

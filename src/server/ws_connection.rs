@@ -1,3 +1,4 @@
+use std::net::{IpAddr, SocketAddr};
 use actix_web_actors::ws::{self, CloseCode, CloseReason, ProtocolError};
 use actix::{Actor, Addr, AsyncContext, Handler, Recipient, StreamHandler};
 use actix_web::web::Bytes;
@@ -7,8 +8,11 @@ use crate::server::server_msg::ServerMsg;
 
 pub struct WsConnection {
     pub id: uuid::Uuid,
+    pub ip: IpAddr,
     pub server_state: ServerState
 }
+
+
 
 pub struct VecActor(pub Vec<u8>);
 
@@ -35,6 +39,7 @@ impl Actor for WsConnection {
             ctx.close(Some(CloseReason::from(CloseCode::Error)));
             return;
         };
+
         sessions.insert(self.id, ctx.address());
     }
 
