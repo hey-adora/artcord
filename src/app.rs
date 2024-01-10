@@ -1,6 +1,7 @@
-use crate::app::utils::{GlobalState, LoadingNotFound};
 use crate::app::utils::ServerMsgImgResized;
 use crate::app::utils::{resize_imgs, NEW_IMG_HEIGHT};
+use crate::app::utils::{GlobalState, LoadingNotFound};
+use crate::server::server_msg::ServerMsg;
 use leptos::logging::log;
 use leptos::*;
 use leptos_meta::*;
@@ -16,7 +17,6 @@ use pages::home::HomePage;
 use pages::not_found::NotFound;
 use pages::profile::Profile;
 use std::rc::Rc;
-use crate::server::server_msg::ServerMsg;
 
 pub mod components;
 pub mod pages;
@@ -60,8 +60,14 @@ pub fn App() -> impl IntoView {
                             document().location().unwrap().reload().unwrap();
                         }
                         ServerMsg::Imgs(new_imgs) => {
-                            if new_imgs.is_empty() && global_state.page_galley.gallery_loaded.get_untracked() == LoadingNotFound::Loading {
-                                global_state.page_galley.gallery_loaded.set(LoadingNotFound::NotFound);
+                            if new_imgs.is_empty()
+                                && global_state.page_galley.gallery_loaded.get_untracked()
+                                    == LoadingNotFound::Loading
+                            {
+                                global_state
+                                    .page_galley
+                                    .gallery_loaded
+                                    .set(LoadingNotFound::NotFound);
                             } else {
                                 let new_imgs = new_imgs
                                     .iter()
@@ -72,30 +78,42 @@ pub fn App() -> impl IntoView {
                                 //     global_state.page_galley.gallery_loaded.set(true);
                                 // }
 
-
                                 global_state.page_galley.gallery_imgs.update(|imgs| {
                                     imgs.extend(new_imgs);
                                     let document = document();
-                                    let gallery_section = document.get_element_by_id("gallery_section");
+                                    let gallery_section =
+                                        document.get_element_by_id("gallery_section");
                                     let Some(gallery_section) = gallery_section else {
                                         return;
                                     };
                                     let width = gallery_section.client_width() as u32;
                                     resize_imgs(NEW_IMG_HEIGHT, width, imgs);
                                 });
-                                global_state.page_galley.gallery_loaded.set(LoadingNotFound::Loaded);
+                                global_state
+                                    .page_galley
+                                    .gallery_loaded
+                                    .set(LoadingNotFound::Loaded);
                             }
                         }
                         ServerMsg::ProfileImgs(new_imgs) => {
                             let Some(new_imgs) = new_imgs else {
                                 //global_state.page_profile.gallery_loaded.set(true);
-                                global_state.page_profile.gallery_loaded.set(LoadingNotFound::NotFound);
+                                global_state
+                                    .page_profile
+                                    .gallery_loaded
+                                    .set(LoadingNotFound::NotFound);
                                 //global_state.socket_state_reset(&server_msg_name);
                                 return;
                             };
 
-                            if new_imgs.is_empty() && global_state.page_profile.gallery_loaded.get_untracked() == LoadingNotFound::Loading {
-                                global_state.page_profile.gallery_loaded.set(LoadingNotFound::NotFound);
+                            if new_imgs.is_empty()
+                                && global_state.page_profile.gallery_loaded.get_untracked()
+                                    == LoadingNotFound::Loading
+                            {
+                                global_state
+                                    .page_profile
+                                    .gallery_loaded
+                                    .set(LoadingNotFound::NotFound);
                             } else {
                                 //log!("PROFILE IMGS RECEIVED: {:?}", new_imgs.len());
 
@@ -107,35 +125,42 @@ pub fn App() -> impl IntoView {
                                 global_state.page_profile.gallery_imgs.update(|imgs| {
                                     imgs.extend(new_imgs);
                                     let document = document();
-                                    let gallery_section = document.get_element_by_id("profile_gallery_section");
+                                    let gallery_section =
+                                        document.get_element_by_id("profile_gallery_section");
                                     let Some(gallery_section) = gallery_section else {
                                         return;
                                     };
                                     let width = gallery_section.client_width() as u32;
                                     resize_imgs(NEW_IMG_HEIGHT, width, imgs);
                                 });
-                                global_state.page_profile.gallery_loaded.set(LoadingNotFound::Loaded);
-
+                                global_state
+                                    .page_profile
+                                    .gallery_loaded
+                                    .set(LoadingNotFound::Loaded);
 
                                 // if !global_state.page_profile.gallery_loaded.get_untracked() {
                                 //     global_state.page_profile.gallery_loaded.set(true);
                                 // }
                             }
-
-
                         }
                         ServerMsg::Profile(new_user) => {
                             if let Some(new_user) = new_user {
-                               //log!("USER RECEIVED: {:?}", &new_user.id);
+                                //log!("USER RECEIVED: {:?}", &new_user.id);
                                 global_state.page_profile.gallery_imgs.set(vec![]);
-                                global_state.page_profile.gallery_loaded.set(LoadingNotFound::NotLoaded);
+                                global_state
+                                    .page_profile
+                                    .gallery_loaded
+                                    .set(LoadingNotFound::NotLoaded);
                                 global_state.page_profile.user.update(move |user| {
                                     *user = Some(new_user);
                                 });
                             } else {
                                 global_state.page_profile.gallery_imgs.set(vec![]);
-                                global_state.page_profile.gallery_loaded.set(LoadingNotFound::NotFound);
-                               // log!("where is it????");
+                                global_state
+                                    .page_profile
+                                    .gallery_loaded
+                                    .set(LoadingNotFound::NotFound);
+                                // log!("where is it????");
                             }
                         }
                         msg => global_state.socket_recv.set(msg),
@@ -222,7 +247,7 @@ pub fn App() -> impl IntoView {
         <meta http-equiv="Pragma" content="no-cache"/>
         <meta http-equiv="Expires" content="0"/>
 
-        <Stylesheet id="leptos" href="/pkg/leptos_start4.css"/>
+        <Stylesheet id="leptos" href="/pkg/leptos_start5.css"/>
         <Title text="ArtCord"/>
         <Body  class=move || format!("text-low-purple    bg-fixed bg-sword-lady  bg-[right_65%_bottom_0] md:bg-center bg-cover bg-no-repeat  bg-dark-night2 {}", if global_state.nav_open.get() == true { "overflow-hidden w-screen h-[dvh]" } else { "" })  />
         <Router>
