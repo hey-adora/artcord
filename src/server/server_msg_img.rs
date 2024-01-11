@@ -1,20 +1,20 @@
-use bson::DateTime;
-use bson::oid::ObjectId;
-use chrono::Utc;
 use crate::bot::img_quality::ImgQuality;
-use crate::database::User;
-use crate::database::DT;
-use crate::database::OBJ;
+use crate::database::models::user::User;
+use crate::database::rkw::date_time::DT;
+use crate::database::rkw::object_id::OBJ;
+use bson::oid::ObjectId;
+use bson::DateTime;
+use chrono::Utc;
 
 #[derive(
-rkyv::Archive,
-rkyv::Deserialize,
-rkyv::Serialize,
-Debug,
-PartialEq,
-Clone,
-serde::Serialize,
-serde::Deserialize,
+    rkyv::Archive,
+    rkyv::Deserialize,
+    rkyv::Serialize,
+    Debug,
+    PartialEq,
+    Clone,
+    serde::Serialize,
+    serde::Deserialize,
 )]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
@@ -82,4 +82,3 @@ impl ServerMsgImg {
         }
     }
 }
-

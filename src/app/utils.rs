@@ -2,20 +2,18 @@ use bson::oid::ObjectId;
 use bson::DateTime;
 use chrono::Utc;
 
-use leptos::*;
 use leptos::logging::log;
+use leptos::*;
 use leptos::{create_rw_signal, window, RwSignal, SignalGetUntracked};
 use leptos_use::core::ConnectionReadyState;
 use rand::Rng;
-use std::{collections::HashMap, rc::Rc};
 use std::fmt::Debug;
+use std::{collections::HashMap, rc::Rc};
 use wasm_bindgen::JsValue;
 use web_sys::Location;
 
-use crate::{
-    database::User,
-};
 use crate::bot::img_quality::ImgQuality;
+use crate::database::models::user::User;
 use crate::server::client_msg::ClientMsg;
 use crate::server::server_msg::ServerMsg;
 use crate::server::server_msg_img::ServerMsgImg;
@@ -25,7 +23,7 @@ pub enum LoadingNotFound {
     NotLoaded,
     Loading,
     Loaded,
-    NotFound
+    NotFound,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -149,7 +147,7 @@ impl From<ServerMsgImg> for ServerMsgImgResized {
 
 #[derive(Copy, Clone, Debug)]
 pub struct PageProfileState {
-   // pub not_found: RwSignal<bool>,
+    // pub not_found: RwSignal<bool>,
     pub user: RwSignal<Option<User>>,
     pub gallery_imgs: RwSignal<Vec<ServerMsgImgResized>>,
     pub gallery_loaded: RwSignal<LoadingNotFound>,
@@ -158,7 +156,7 @@ pub struct PageProfileState {
 impl PageProfileState {
     pub fn new() -> Self {
         Self {
-    //        not_found: RwSignal::new(false),
+            //        not_found: RwSignal::new(false),
             user: RwSignal::new(None),
             gallery_imgs: RwSignal::new(Vec::new()),
             gallery_loaded: RwSignal::new(LoadingNotFound::NotLoaded),
@@ -318,7 +316,7 @@ pub fn resize_img<T: GalleryImg + Debug>(
         //log!("{}:{:#?}", i,imgs[i].get_pos());
         left += new_width;
     }
-   // log!("{:#?}", imgs);
+    // log!("{:#?}", imgs);
 
     // let mut total: f64 = 0.0;
     // for i in new_row_start..(new_row_end + 1) {
@@ -338,7 +336,8 @@ pub fn resize_img2<T: GalleryImg + Debug>(
     imgs: &mut [T],
 ) {
     //log!("TOP: {}", top);
-    let mut optimal_count = (max_width as i32 / NEW_IMG_HEIGHT as i32) - (new_row_end - new_row_start)as i32;
+    let mut optimal_count =
+        (max_width as i32 / NEW_IMG_HEIGHT as i32) - (new_row_end - new_row_start) as i32;
     if optimal_count < 0 {
         optimal_count = 0;
     }
@@ -347,8 +346,7 @@ pub fn resize_img2<T: GalleryImg + Debug>(
         total_ratio = 0.0;
     }
 
-
-   // let mut total_ratio: f32 = 0.0;
+    // let mut total_ratio: f32 = 0.0;
 
     for i in new_row_start..(new_row_end + 1) {
         let (width, height) = imgs[i].get_size();
@@ -371,7 +369,6 @@ pub fn resize_img2<T: GalleryImg + Debug>(
         left += new_width;
     }
 
-
     // let mut total: f64 = 0.0;
     // for i in new_row_start..(new_row_end + 1) {
     //     total += imgs[i].new_width;
@@ -381,7 +378,6 @@ pub fn resize_img2<T: GalleryImg + Debug>(
     *top += optimal_height;
     //log!("TOP2: {}", top);
 }
-
 
 pub fn resize_imgs<T: GalleryImg + Debug>(new_height: u32, max_width: u32, imgs: &mut [T]) -> () {
     //log!("RESIZING!!!!!!!!!!!!");
@@ -422,7 +418,7 @@ pub fn resize_imgs<T: GalleryImg + Debug>(new_height: u32, max_width: u32, imgs:
                 resize_img2(&mut top, max_width, new_row_start, new_row_end, imgs);
             }
         } else {
-            if index != 0{
+            if index != 0 {
                 //log!("REMOVING2: {} {} {} {}", index, new_row_start, new_row_end, top);
                 resize_img(&mut top, max_width, new_row_start, new_row_end, imgs);
             }

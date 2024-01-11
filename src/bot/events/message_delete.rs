@@ -1,3 +1,4 @@
+use crate::database::create_database::DB;
 use serenity::client::Context;
 use serenity::model::id::{ChannelId, GuildId, MessageId};
 
@@ -11,17 +12,18 @@ pub async fn message_delete(
         return;
     };
 
-
     let db = {
         let data_read = ctx.data.read().await;
 
         data_read
-            .get::<crate::database::DB>()
+            .get::<DB>()
             .expect("Expected crate::database::DB in TypeMap")
             .clone()
     };
 
-    let allowed_guild = db.allowed_guild_exists(guild_id.0.to_string().as_str()).await;
+    let allowed_guild = db
+        .allowed_guild_exists(guild_id.0.to_string().as_str())
+        .await;
     let Ok(allowed_guild) = allowed_guild else {
         println!("Mongodb error: {}", allowed_guild.err().unwrap());
         return;

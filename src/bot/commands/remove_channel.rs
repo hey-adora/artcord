@@ -1,3 +1,4 @@
+use crate::database::create_database::DB;
 use bson::doc;
 use serenity::{
     builder::CreateApplicationCommand,
@@ -7,8 +8,6 @@ use serenity::{
     },
     prelude::Context,
 };
-
-use crate::database::DB;
 
 use super::{get_option_channel, get_option_string, is_valid_channel_feature, CHANNEL_FEATURES};
 

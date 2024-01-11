@@ -7,13 +7,9 @@ use serenity::{
     prelude::Context,
 };
 
-use crate::{
-    bot::{
-        hooks::hook_add_reaction::{CLOSE_REACTION, CONFIRM_REACTION},
-    },
-    database::DB,
-};
 use crate::bot::create_bot::ReactionQueue;
+use crate::bot::hooks::hook_add_reaction::{CLOSE_REACTION, CONFIRM_REACTION};
+use crate::database::create_database::DB;
 
 pub async fn run(
     ctx: &Context,

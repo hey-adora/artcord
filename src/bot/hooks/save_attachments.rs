@@ -1,5 +1,7 @@
 use crate::bot::commands::FEATURE_GALLERY;
-use crate::database::{User, DB};
+use crate::database::create_database::DB;
+use crate::database::models::img::Img;
+use crate::database::models::user::User;
 use image::EncodableLayout;
 use mongodb::bson::doc;
 use serenity::model::channel::Attachment;
@@ -446,7 +448,7 @@ pub async fn save_attachment(
             .with_guessed_format()?
             .decode()?;
 
-        let img = crate::database::Img {
+        let img = Img {
             _id: mongodb::bson::oid::ObjectId::new(),
             show: true,
             guild_id: guild_id.to_string(),

@@ -1,13 +1,13 @@
+use crate::bot::commands;
+use crate::bot::commands::FEATURE_COMMANDER;
+use crate::bot::create_bot::ArcStr;
+use crate::database::create_database::DB;
 use bson::doc;
 use futures::TryStreamExt;
 use serenity::client::Context;
-use serenity::model::prelude::{Interaction, InteractionResponseType};
 use serenity::model::prelude::application_command::ApplicationCommandInteraction;
-use crate::bot::{commands};
-use crate::bot::commands::FEATURE_COMMANDER;
-use crate::database::DB;
+use serenity::model::prelude::{Interaction, InteractionResponseType};
 use thiserror::Error;
-use crate::bot::create_bot::ArcStr;
 
 pub async fn interaction_create(ctx: Context, interaction: Interaction) {
     if let Interaction::ApplicationCommand(command) = interaction {
@@ -18,7 +18,7 @@ pub async fn interaction_create(ctx: Context, interaction: Interaction) {
             let data_read = ctx.data.read().await;
 
             let db = data_read
-                .get::<crate::database::DB>()
+                .get::<DB>()
                 .expect("Expected crate::database::DB in TypeMap")
                 .clone();
             let gallery_root_dir = data_read
@@ -27,7 +27,9 @@ pub async fn interaction_create(ctx: Context, interaction: Interaction) {
                 .clone();
             (db, gallery_root_dir)
         };
-        let allowed_guild = db.allowed_guild_exists(guild_id.0.to_string().as_str()).await;
+        let allowed_guild = db
+            .allowed_guild_exists(guild_id.0.to_string().as_str())
+            .await;
         let Ok(allowed_guild) = allowed_guild else {
             println!("Mongodb error: {}", allowed_guild.err().unwrap());
             return;
@@ -68,7 +70,7 @@ pub async fn resolve_command(
     gallery_root_dir: &str,
     ctx: &Context,
     command: &ApplicationCommandInteraction,
-    db: &DB
+    db: &DB,
 ) -> Result<(), ResolveCommandError> {
     let command_name = command.data.name.as_str();
     let guild_id = command

@@ -8,12 +8,11 @@ use serenity::{
     prelude::Context,
 };
 
-use crate::{
-    bot::{commands::FEATURE_REACT},
-    database::{AutoReaction, ToReactionTypeError, DB},
-};
+use crate::bot::commands::FEATURE_REACT;
 
 use super::save_attachments::SaveAttachmentsError;
+use crate::database::create_database::DB;
+use crate::database::models::auto_reaction::ToReactionTypeError;
 use serenity::model::channel::Reaction;
 
 pub async fn hook_auto_react(

@@ -1,15 +1,16 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-use serenity::prelude::{GatewayIntents, TypeMapKey};
 use crate::bot::events;
+use crate::database::create_database::DB;
+use crate::database::models::auto_reaction::AutoReaction;
 use serenity::client::Context;
 use serenity::framework::StandardFramework;
 use serenity::model::channel::Reaction;
 use serenity::model::id::{ChannelId, GuildId, MessageId};
 use serenity::model::prelude::Interaction;
-use tokio::sync::RwLock;
-use crate::database::AutoReaction;
+use serenity::prelude::{GatewayIntents, TypeMapKey};
 use serenity::{async_trait, Client};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 pub struct ArcStr;
 impl TypeMapKey for ArcStr {
@@ -20,7 +21,6 @@ struct BotHandler;
 
 #[async_trait]
 impl serenity::client::EventHandler for BotHandler {
-
     async fn reaction_remove(&self, ctx: Context, remove_reaction: Reaction) {
         events::reaction_remove::reaction_remove(ctx, remove_reaction).await;
     }
@@ -40,7 +40,8 @@ impl serenity::client::EventHandler for BotHandler {
         deleted_message_id: MessageId,
         guild_id: Option<GuildId>,
     ) {
-        events::message_delete::message_delete(ctx, _channel_id, deleted_message_id, guild_id).await;
+        events::message_delete::message_delete(ctx, _channel_id, deleted_message_id, guild_id)
+            .await;
     }
 
     async fn message_delete_bulk(
@@ -50,7 +51,13 @@ impl serenity::client::EventHandler for BotHandler {
         multiple_deleted_messages_id: Vec<MessageId>,
         guild_id: Option<GuildId>,
     ) {
-        events::message_delete_bulk::message_delete_bulk(ctx, _channel_id, multiple_deleted_messages_id, guild_id).await;
+        events::message_delete_bulk::message_delete_bulk(
+            ctx,
+            _channel_id,
+            multiple_deleted_messages_id,
+            guild_id,
+        )
+        .await;
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
@@ -66,7 +73,7 @@ pub struct ReactionQueue {
     pub msg_id: u64,
     pub channel_id: u64,
     pub reactions: Vec<AutoReaction>,
-    pub add: bool
+    pub add: bool,
 }
 
 impl ReactionQueue {
@@ -75,7 +82,7 @@ impl ReactionQueue {
             msg_id,
             channel_id,
             reactions: Vec::new(),
-            add
+            add,
         }
     }
 }
@@ -84,7 +91,7 @@ impl TypeMapKey for ReactionQueue {
     type Value = Arc<RwLock<HashMap<u64, Self>>>;
 }
 
-pub async fn create_bot(db: Arc<crate::database::DB>, token: String, gallery_root_dir: &str) -> serenity::Client {
+pub async fn create_bot(db: Arc<DB>, token: String, gallery_root_dir: &str) -> serenity::Client {
     let framework = StandardFramework::new();
 
     let intents = GatewayIntents::GUILD_MESSAGES
@@ -100,7 +107,7 @@ pub async fn create_bot(db: Arc<crate::database::DB>, token: String, gallery_roo
     let reaction_queue = Arc::new(RwLock::new(HashMap::new()));
     {
         let mut data = client.data.write().await;
-        data.insert::<crate::database::DB>(db);
+        data.insert::<DB>(db);
         data.insert::<ReactionQueue>(reaction_queue);
         data.insert::<ArcStr>(Arc::from(gallery_root_dir));
     }

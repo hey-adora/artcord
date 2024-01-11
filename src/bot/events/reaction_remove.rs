@@ -1,7 +1,8 @@
-use serenity::model::channel::Reaction;
-use serenity::client::Context;
 use crate::bot::create_bot::ReactionQueue;
 use crate::bot::hooks::hook_add_reaction::hook_add_reaction;
+use crate::database::create_database::DB;
+use serenity::client::Context;
+use serenity::model::channel::Reaction;
 
 pub async fn reaction_remove(ctx: Context, remove_reaction: Reaction) {
     let Some(guild_id) = remove_reaction.guild_id else {
@@ -12,7 +13,7 @@ pub async fn reaction_remove(ctx: Context, remove_reaction: Reaction) {
         let data_read = ctx.data.read().await;
 
         let db = data_read
-            .get::<crate::database::DB>()
+            .get::<DB>()
             .expect("Expected crate::database::DB in TypeMap")
             .clone();
         let reaction_queue = data_read
@@ -22,7 +23,9 @@ pub async fn reaction_remove(ctx: Context, remove_reaction: Reaction) {
         (db, reaction_queue)
     };
 
-    let allowed_guild = db.allowed_guild_exists(guild_id.0.to_string().as_str()).await;
+    let allowed_guild = db
+        .allowed_guild_exists(guild_id.0.to_string().as_str())
+        .await;
     let Ok(allowed_guild) = allowed_guild else {
         println!("Mongodb error: {}", allowed_guild.err().unwrap());
         return;

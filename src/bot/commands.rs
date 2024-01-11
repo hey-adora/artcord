@@ -1,5 +1,6 @@
 use std::num::ParseIntError;
 
+use crate::database::models::auto_reaction::ToReactionTypeError;
 use serenity::model::prelude::{
     application_command::{CommandDataOption, CommandDataOptionValue},
     channel::PartialChannel,
@@ -8,7 +9,6 @@ use serenity::model::prelude::{
 use thiserror::Error;
 
 use super::hooks::save_attachments::SaveAttachmentsError;
-use crate::database::ToReactionTypeError;
 
 pub mod add_auto_emoji;
 pub mod add_channel;

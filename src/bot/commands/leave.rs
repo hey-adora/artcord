@@ -1,3 +1,4 @@
+use crate::database::create_database::DB;
 use serenity::{
     builder::CreateApplicationCommand,
     model::prelude::{
@@ -6,8 +7,6 @@ use serenity::{
     },
     prelude::Context,
 };
-
-use crate::database::DB;
 
 use super::get_option_string;
 

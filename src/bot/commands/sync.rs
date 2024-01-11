@@ -1,6 +1,6 @@
 use crate::bot::commands::{get_option_channel, get_option_integer};
 use crate::bot::hooks::save_attachments::{self, hook_save_attachments};
-use crate::database::DB;
+use crate::database::create_database::DB;
 use chrono::Utc;
 use serenity::builder::CreateApplicationCommand;
 use serenity::model::prelude::application_command::ApplicationCommandInteraction;

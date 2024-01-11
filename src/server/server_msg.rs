@@ -1,9 +1,9 @@
-use rkyv::{Deserialize, Serialize};
-use thiserror::Error;
-use crate::database::User;
+use crate::database::models::user::User;
 use crate::server::server_msg_img::ServerMsgImg;
+use rkyv::{Archive, Deserialize, Serialize};
+use thiserror::Error;
 
-#[derive(rkyv::Archive, Deserialize, Serialize, Debug, PartialEq)]
+#[derive(Archive, Deserialize, Serialize, Debug, PartialEq)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum ServerMsg {

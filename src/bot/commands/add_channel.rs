@@ -1,3 +1,5 @@
+use crate::database::create_database::DB;
+use crate::database::models::allowed_channel::AllowedChannel;
 use serenity::{
     builder::CreateApplicationCommand,
     model::prelude::{
@@ -5,8 +7,6 @@ use serenity::{
     },
     prelude::Context,
 };
-
-use crate::database::{AllowedChannel, DB};
 
 use super::{get_option_channel, get_option_string, is_valid_channel_feature, CHANNEL_FEATURES};
 

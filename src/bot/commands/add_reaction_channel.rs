@@ -6,8 +6,6 @@ use serenity::{
     prelude::Context,
 };
 
-use crate::database::{AllowedChannel, DB};
-
 use super::{
     get_option_channel, get_option_string, is_valid_channel_feature, is_valid_react_feature,
     CHANNEL_FEATURES,

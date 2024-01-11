@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::database::create_database::DB;
 use bson::doc;
 use futures::TryStreamExt;
 use serenity::{
@@ -7,8 +8,6 @@ use serenity::{
     model::prelude::{application_command::ApplicationCommandInteraction, InteractionResponseType},
     prelude::Context,
 };
-
-use crate::database::DB;
 
 pub async fn run(
     ctx: &Context,

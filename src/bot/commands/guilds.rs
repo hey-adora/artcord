@@ -1,10 +1,9 @@
+use crate::database::create_database::DB;
 use serenity::{
     builder::CreateApplicationCommand,
     model::prelude::{application_command::ApplicationCommandInteraction, InteractionResponseType},
     prelude::Context,
 };
-
-use crate::database::DB;
 
 pub async fn run(
     ctx: &Context,

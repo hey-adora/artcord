@@ -1,3 +1,5 @@
+use crate::database::create_database::DB;
+use crate::database::models::allowed_guild::AllowedGuild;
 use bson::doc;
 use serenity::{
     builder::CreateApplicationCommand,
@@ -6,8 +8,6 @@ use serenity::{
     },
     prelude::Context,
 };
-
-use crate::database::{AllowedGuild, AllowedRole, DB};
 
 use super::{get_option_role, get_option_string, is_valid_role_feature, ROLE_FEATURES};
 
