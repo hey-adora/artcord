@@ -39,7 +39,7 @@ pub enum WsPath {
 }
 
 impl WsPath {
-    pub fn to_ms(&self) -> u64 {
+    pub fn to_ms(&self) -> i64 {
         match self {
             WsPath::Gallery => 60 * 1000,
             WsPath::UserGallery => 60 * 1000,
@@ -56,19 +56,19 @@ impl WsPath {
     }
 }
 
-impl Into<WsPath> for ClientMsg {
-    fn into(self) -> WsPath {
-        match self {
-            ClientMsg::GalleryInit { amount, from } => WsPath::Gallery,
-            ClientMsg::UserGalleryInit {
-                from,
-                amount,
-                user_id,
-            } => WsPath::UserGallery,
-            ClientMsg::User { user_id } => WsPath::User,
-        }
-    }
-}
+// impl Into<WsPath> for ClientMsg {
+//     fn into(self) -> WsPath {
+//         match self {
+//             ClientMsg::GalleryInit { amount, from } => WsPath::Gallery,
+//             ClientMsg::UserGalleryInit {
+//                 from,
+//                 amount,
+//                 user_id,
+//             } => WsPath::UserGallery,
+//             ClientMsg::User { user_id } => WsPath::User,
+//         }
+//     }
+// }
 
 impl From<&ClientMsg> for WsPath {
     fn from(value: &ClientMsg) -> Self {
@@ -108,11 +108,11 @@ impl ClientMsg {
         &self,
         throttle_time: &mut HashMap<WsPath, (u64, HashMap<IpAddr, u64>)>,
         ip: &IpAddr,
+        path: WsPath,
         current_time: i64,
         duration: i64,
         max_count: u64,
     ) -> bool {
-        let path: WsPath = self.into();
         //println!("DEBUG: {:?}", &path);
         //println!("HASHMAP: {:?}", &throttle_time);
 
@@ -189,6 +189,7 @@ mod ClientMsgTests {
                 let result = msg.throttle(
                     throttle_times,
                     &ip,
+                    path,
                     *current_time.borrow(),
                     duration,
                     max_count,
