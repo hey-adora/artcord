@@ -184,7 +184,7 @@ mod ClientMsgTests {
             for i in start..=max_count {
                 let throttle_times = &mut *throttle_times.borrow_mut();
                 let msg = msg.borrow();
-                let path: WsPath = msg.clone().into();
+                let path: WsPath = (&*msg).into();
 
                 let result = msg.throttle(
                     throttle_times,
