@@ -123,3 +123,33 @@ pub enum ServerMsgError {
     #[error("Bson: {0}.")]
     Bson(#[from] mongodb::bson::de::Error),
 }
+
+// #[cfg(test)]
+// mod ClientMsgTests {
+//     use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+//     use serde::{Deserialize, Serialize};
+//
+//     #[derive(Debug, Serialize, Deserialize)]
+//     struct Acc {
+//         name: String,
+//         exp: u64,
+//     }
+//
+//     #[test]
+//     fn jwt() {
+//         let key = b"secret";
+//         let acc = Acc {
+//             name: "wowza".to_string(),
+//             exp: 0,
+//         };
+//         let header = Header::new(Algorithm::HS512);
+//         let token =
+//             encode(&header, &acc, &EncodingKey::from_secret(key)).expect("Failed to create token");
+//
+//         let mut validation = Validation::new(Algorithm::HS512);
+//         //validation.validate_exp = false;
+//         let dec = decode::<Acc>(&token, &DecodingKey::from_secret(key), &validation)
+//             .expect("Invalid key");
+//         println!("help");
+//     }
+// }
