@@ -165,6 +165,8 @@ tokio = { version = "1.33.0", optional = true }
 bson = { version = "2.7.0" }
 bytecheck = { version = "0.6.11", features = ["simdutf8", "std"] }
 jsonwebtoken = "9.2.0"
+bcrypt = "0.15.0"
+base64 = "0.21.7"
 
 
 [features]

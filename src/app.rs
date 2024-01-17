@@ -1,3 +1,5 @@
+use crate::app::pages::login::Login;
+use crate::app::pages::register::Register;
 use crate::app::utils::ServerMsgImgResized;
 use crate::app::utils::{resize_imgs, NEW_IMG_HEIGHT};
 use crate::app::utils::{GlobalState, LoadingNotFound};
@@ -254,6 +256,8 @@ pub fn App() -> impl IntoView {
                 <Routes>
                     <Route path="" view=HomePage/>
                     <Route path="/gallery" view=GalleryPage/>
+                    <Route path="/login" view=Login/>
+                    <Route path="/register" view=Register/>
                     <Route path="/user/:id" view=Profile/>
                     <Route path="/*any" view=NotFound/>
                 </Routes>

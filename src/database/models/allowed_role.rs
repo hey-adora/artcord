@@ -1,5 +1,6 @@
 #[cfg(feature = "ssr")]
 pub mod bot;
+//mod queries;
 
 use bson::oid::ObjectId;
 use bson::DateTime;

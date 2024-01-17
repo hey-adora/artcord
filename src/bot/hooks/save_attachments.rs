@@ -241,10 +241,7 @@ pub async fn save_user(
     user_id: u64,
     pfp_hash: Option<String>,
 ) -> Result<SaveUserResult, SaveUserError> {
-    let user = db
-        .collection_user
-        .find_one(doc! { "id": format!("{}", user_id) }, None)
-        .await?;
+    let user = db.user_find_one(&user_id.to_string()).await?;
 
     let pfp = save_user_pfp(gallery_root_dir, user_id, pfp_hash, &user).await;
     let pfp_hash = match pfp {
@@ -283,15 +280,7 @@ pub async fn save_user(
 
         if update.len() > 0 {
             update.insert("modified_at", mongodb::bson::DateTime::now());
-            db.collection_user
-                .update_one(
-                    doc! { "id": format!("{}", user_id) },
-                    doc! {
-                        "$set": update.clone()
-                    },
-                    None,
-                )
-                .await?;
+            db.user_update_one_raw(&user_id.to_string(), update.clone()).await?;
             Ok(SaveUserResult::Updated(format!("{}", update)))
         } else {
             Ok(SaveUserResult::None)
@@ -307,7 +296,7 @@ pub async fn save_user(
             created_at: mongodb::bson::DateTime::now(),
         };
 
-        db.collection_user.insert_one(&user, None).await?;
+        db.user_insert_one(user).await?;
 
         Ok(SaveUserResult::Created)
     };

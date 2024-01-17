@@ -21,10 +21,10 @@ pub async fn run(
     let feature_option = get_option_string(command.data.options.get(1))?;
 
     let role = db
-        .collection_allowed_role
-        .find_one(
-            doc! { "guild_id": guild_id.to_string(), "id": role_option.id.to_string(), "feature": feature_option },
-            None,
+        .allowed_role_find_one(
+            &guild_id.to_string(),
+            &role_option.id.to_string(),
+            feature_option,
         )
         .await?;
 
@@ -47,10 +47,7 @@ pub async fn run(
         modified_at: mongodb::bson::DateTime::now(),
     };
 
-    let _result = db
-        .collection_allowed_role
-        .insert_one(allowed_role, None)
-        .await?;
+    db.allowed_role_insert_one(allowed_role).await?;
 
     crate::bot::commands::show_roles::run(ctx, command, db, guild_id).await?;
 

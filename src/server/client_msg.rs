@@ -29,6 +29,15 @@ pub enum ClientMsg {
     User {
         user_id: String,
     },
+
+    Login {
+        email: String,
+        password: String,
+    },
+    Register {
+        email: String,
+        password: String,
+    },
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
@@ -36,6 +45,8 @@ pub enum WsPath {
     Gallery,
     UserGallery,
     User,
+    Login,
+    Register,
 }
 
 impl WsPath {
@@ -44,6 +55,8 @@ impl WsPath {
             WsPath::Gallery => 60 * 1000,
             WsPath::UserGallery => 60 * 1000,
             WsPath::User => 60 * 1000,
+            WsPath::Login => 60 * 1000,
+            WsPath::Register => 60 * 1000,
         }
     }
 
@@ -52,6 +65,8 @@ impl WsPath {
             WsPath::Gallery => 10,
             WsPath::UserGallery => 10,
             WsPath::User => 10,
+            WsPath::Login => 10,
+            WsPath::Register => 10,
         }
     }
 }
@@ -80,6 +95,8 @@ impl From<&ClientMsg> for WsPath {
                 user_id,
             } => WsPath::UserGallery,
             ClientMsg::User { user_id } => WsPath::User,
+            ClientMsg::Login { email, password } => WsPath::Login,
+            ClientMsg::Register { email, password } => WsPath::Register,
         }
     }
 }

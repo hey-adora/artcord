@@ -7,9 +7,12 @@ use artcord::bot::create_bot;
 use artcord::bot::create_bot::create_bot;
 use artcord::database::create_database::create_database;
 use artcord::server::create_server::create_server;
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
 use dotenv::dotenv;
 use futures::try_join;
 use std::env;
+use std::sync::Arc;
 
 #[cfg(feature = "ssr")]
 #[actix_web::main]
@@ -21,14 +24,24 @@ async fn main() -> std::io::Result<()> {
     let mongo_url = std::env::var("MONGO_URL").expect("ENV MISSING: MONGO_URL");
     let discord_default_guild =
         std::env::var("DISCORD_DEFAULT_GUILD").expect("ENV MISSING: DISCORD_DEFAULT_GUILD");
+    let pepper_base64 = std::env::var("PEPPER_BASE64").expect("ENV MISSING: PEPPER_BASE64");
 
-    let db = std::sync::Arc::new(create_database(mongo_url).await);
+    let assets_root_dir: Arc<String> = Arc::new(assets_root_dir);
+    let gallery_root_dir: Arc<String> = Arc::new(gallery_root_dir);
+
+    let pepper = BASE64_STANDARD
+        .decode(pepper_base64)
+        .expect("Failed to decode PEPPER_BASE64 from .env, invalid base64?");
+    let pepper = String::from_utf8(pepper).expect("Failed to generate string from decoded PEPPER_BASE64 from .env, pepper must contain ascii characters from 32 to 126");
+    let pepper = Arc::new(pepper);
+
+    let db = Arc::new(create_database(mongo_url).await);
     db.allowed_guild_insert_default(discord_default_guild)
         .await
         .unwrap();
 
     let mut bot_server = create_bot(db.clone(), token, gallery_root_dir.as_str()).await;
-    let web_server = create_server(db, gallery_root_dir.as_str(), assets_root_dir.as_str()).await;
+    let web_server = create_server(db, gallery_root_dir, assets_root_dir, pepper).await;
 
     let r = try_join!(
         async { web_server.await.or_else(|e| Err(e.to_string())) },

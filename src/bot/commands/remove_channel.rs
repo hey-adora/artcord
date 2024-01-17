@@ -23,11 +23,7 @@ pub async fn run(
     is_valid_channel_feature(feature_option)?;
 
     let result = db
-        .collection_allowed_channel
-        .delete_one(
-            doc! { "id": channel_option.id.0.to_string(), "feature": feature_option },
-            None,
-        )
+        .remove_channel(&channel_option.id.0.to_string(), feature_option)
         .await?;
 
     if result.deleted_count < 1 {

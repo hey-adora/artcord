@@ -82,13 +82,15 @@ pub async fn resolve_command(
         .as_ref()
         .ok_or(ResolveCommandError::MustRunInGuild)?;
 
-    let roles = db
-        .collection_allowed_role
-        .find(doc! { "guild_id": guild_id.to_string() }, None)
-        .await?
-        .try_collect()
-        .await
-        .unwrap_or_else(|_| vec![]);
+    let roles = db.allowed_role_find_all(&guild_id.to_string()).await?;
+
+    // let roles = db
+    //     .collection_allowed_role
+    //     .find(doc! { "guild_id": guild_id.to_string() }, None)
+    //     .await?
+    //     .try_collect()
+    //     .await
+    //     .unwrap_or_else(|_| vec![]);
 
     let no_roles_set = roles.len() < 1;
     let user_commander_authorized = roles

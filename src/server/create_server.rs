@@ -51,8 +51,9 @@ pub async fn favicon() -> actix_web::Result<actix_files::NamedFile> {
 pub struct ServerState {
     pub throttle_time: Arc<RwLock<HashMap<WsPath, (u64, HashMap<IpAddr, u64>)>>>,
     pub sessions: Arc<RwLock<HashMap<uuid::Uuid, Addr<WsConnection>>>>,
-    pub gallery_root_dir: Arc<str>,
+    pub gallery_root_dir: Arc<String>,
     pub db: Arc<DB>,
+    pub pepper: Arc<String>,
 }
 
 async fn overview(
@@ -68,7 +69,12 @@ async fn overview(
     HttpResponse::Ok().body(format!("Live connection: {}", sessions.len()))
 }
 
-pub async fn create_server(db: Arc<DB>, galley_root_dir: &str, assets_root_dir: &str) -> Server {
+pub async fn create_server(
+    db: Arc<DB>,
+    galley_root_dir: Arc<String>,
+    assets_root_dir: Arc<String>,
+    pepper: Arc<String>,
+) -> Server {
     let conf = get_configuration(None).await.unwrap();
     println!("CONFIG: {:#?}", &conf);
     let addr = conf.leptos_options.site_addr;
@@ -77,28 +83,29 @@ pub async fn create_server(db: Arc<DB>, galley_root_dir: &str, assets_root_dir: 
 
     let sessions = Arc::new(RwLock::new(HashMap::<uuid::Uuid, Addr<WsConnection>>::new()));
 
-    let galley_root_dir = galley_root_dir.to_string();
-    let assets_root_dir = assets_root_dir.to_string();
+    //let galley_root_dir = galley_root_dir.to_string();
+    //let assets_root_dir = assets_root_dir.to_string();
     HttpServer::new(move || {
         let leptos_options = &conf.leptos_options;
         // let site_root = &leptos_options.site_root;
-        println!("site root: {}", assets_root_dir.as_str());
-        let pkg_url = format!("{}/pkg", assets_root_dir.as_str());
+        println!("site root: {}", &*assets_root_dir);
+        let pkg_url = format!("{}/pkg", &*assets_root_dir);
         println!("pkg dir: {}", pkg_url);
 
         App::new()
             .app_data(web::Data::new(ServerState {
                 throttle_time: Arc::new(RwLock::new(HashMap::new())),
                 sessions: sessions.clone(),
-                gallery_root_dir: Arc::from(galley_root_dir.as_str()),
+                gallery_root_dir: galley_root_dir.clone(),
                 db: db.clone(),
+                pepper: pepper.clone(),
             }))
             .route("/overview", web::get().to(overview))
             .route("/favicon.ico", web::get().to(favicon))
             .route("/ws/", web::get().to(index))
             .route("/api/{tail:.*}", leptos_actix::handle_server_fns())
-            .service(Files::new("/assets/gallery", galley_root_dir.clone()))
-            .service(Files::new("/assets", assets_root_dir.as_str()))
+            .service(Files::new("/assets/gallery", &*galley_root_dir))
+            .service(Files::new("/assets", &*assets_root_dir))
             .service(Files::new("/pkg", pkg_url))
             .leptos_routes(
                 leptos_options.to_owned(),

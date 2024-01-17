@@ -22,10 +22,10 @@ pub async fn run(
     is_valid_role_feature(feature_option)?;
 
     let result = db
-        .collection_allowed_role
-        .delete_one(
-            doc! { "guild_id": guild_id.to_string(), "id": role_option.id.0.to_string(), "feature": feature_option },
-            None,
+        .remove_allowed_role(
+            &guild_id.to_string(),
+            &role_option.id.0.to_string(),
+            feature_option,
         )
         .await?;
 

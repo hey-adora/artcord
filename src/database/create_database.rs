@@ -1,3 +1,4 @@
+use crate::database::models::acc::Acc;
 use crate::database::models::allowed_channel::AllowedChannel;
 use crate::database::models::allowed_guild::AllowedGuild;
 use crate::database::models::allowed_role::AllowedRole;
@@ -6,9 +7,12 @@ use crate::database::models::img::Img;
 use crate::database::models::user::User;
 use crate::server::server_msg::ServerMsg;
 use crate::server::server_msg_img::ServerMsgImg;
-use bson::{doc, DateTime, Document};
+use bson::oid::ObjectId;
+use bson::{doc, Bson, DateTime, Document};
+use chrono::Utc;
 use futures::TryStreamExt;
 use mongodb::options::{ClientOptions, IndexOptions};
+use mongodb::results::{DeleteResult, InsertOneResult};
 use mongodb::{Client, IndexModel};
 use serenity::prelude::TypeMapKey;
 use std::sync::Arc;
@@ -19,11 +23,12 @@ pub struct DB {
     pub client: mongodb::Client,
     pub database: mongodb::Database,
     collection_img: mongodb::Collection<Img>,
-    pub collection_user: mongodb::Collection<User>,
-    pub collection_allowed_role: mongodb::Collection<AllowedRole>,
-    pub collection_allowed_channel: mongodb::Collection<AllowedChannel>,
+    collection_user: mongodb::Collection<User>,
+    collection_allowed_role: mongodb::Collection<AllowedRole>,
+    collection_allowed_channel: mongodb::Collection<AllowedChannel>,
     collection_allowed_guild: mongodb::Collection<AllowedGuild>,
-    pub collection_auto_reaction: mongodb::Collection<AutoReaction>,
+    collection_auto_reaction: mongodb::Collection<AutoReaction>,
+    collection_acc: mongodb::Collection<Acc>,
 }
 
 impl TypeMapKey for DB {
@@ -33,13 +38,180 @@ impl TypeMapKey for DB {
 // Err(mongodb::error::Error::custom(Arc::new("invalid ReactionType type".to_string())) )
 
 impl DB {
-    pub async fn user_find_one(&self, user_id: &str) -> Result<ServerMsg, mongodb::error::Error> {
-        let user = self
+    pub async fn acc_exists(&self, email: &str) -> Result<Option<Acc>, mongodb::error::Error> {
+        let acc = self
+            .collection_acc
+            .find_one(doc! { "email": email }, None)
+            .await?;
+
+        Ok(acc)
+    }
+    pub async fn create_acc(&self, acc: Acc) -> Result<Bson, mongodb::error::Error> {
+        // let acc = self
+        //     .collection_acc
+        //     .find_one(doc! { "email": email }, None)
+        //     .await?;
+        // if let Some(_) = acc {
+        //     return Err(mongodb::error::Error::custom(Arc::new(format!(
+        //         "Email '{}' is already registered.",
+        //         email
+        //     ))));
+        // }
+
+        let result = self.collection_acc.insert_one(acc, None).await?;
+
+        //Err(mongodb::error::Error::custom(Arc::new("invalid ReactionType type".to_string())) )
+
+        Ok(result.inserted_id)
+    }
+
+    pub async fn allowed_role_find_one(
+        &self,
+        guild_id: &str,
+        role_id: &str,
+        feature_option: &str,
+    ) -> Result<Option<AllowedRole>, mongodb::error::Error> {
+        let role = self
+            .collection_allowed_role
+            .find_one(
+                doc! { "guild_id": guild_id, "id": role_id, "feature": feature_option },
+                None,
+            )
+            .await?;
+
+        Ok(role)
+    }
+
+    pub async fn remove_allowed_role(
+        &self,
+        guild_id: &str,
+        role_id: &str,
+        feature_option: &str,
+    ) -> Result<DeleteResult, mongodb::error::Error> {
+        let result = self
+            .collection_allowed_role
+            .delete_one(
+                doc! { "guild_id": guild_id, "id": role_id, "feature": feature_option },
+                None,
+            )
+            .await?;
+
+        Ok(result)
+    }
+
+    // pub async fn allowed_role_find_all(&self, guild_id: &str) -> Result<Vec<AllowedRole>, mongodb::error::Error> {
+    //     let result = self
+    //         .collection_allowed_role
+    //         .find(doc! { "guild_id": guild_id }, None)
+    //         .await?
+    //         .try_collect()
+    //         .await
+    //         .unwrap_or_else(|_| vec![]);
+    //
+    //     Ok(result)
+    // }
+
+    pub async fn allowed_role_insert_one(
+        &self,
+        allowed_channel: AllowedRole,
+    ) -> Result<InsertOneResult, mongodb::error::Error> {
+        let result = self
+            .collection_allowed_role
+            .insert_one(allowed_channel, None)
+            .await?;
+
+        Ok(result)
+    }
+
+    pub async fn allowed_channel_insert_one(
+        &self,
+        allowed_channel: AllowedChannel,
+    ) -> Result<InsertOneResult, mongodb::error::Error> {
+        let result = self
+            .collection_allowed_channel
+            .insert_one(allowed_channel, None)
+            .await?;
+
+        Ok(result)
+    }
+
+    pub async fn allowed_role_find_all(
+        &self,
+        guild_id: &str,
+    ) -> Result<Vec<AllowedRole>, mongodb::error::Error> {
+        let result = self
+            .collection_allowed_role
+            .find(doc! { "guild_id": guild_id }, None)
+            .await?;
+        let result = result.try_collect().await.unwrap_or_else(|_| vec![]);
+
+        Ok(result)
+    }
+
+    pub async fn allowed_channel_find_all(
+        &self,
+        guild_id: &str,
+    ) -> Result<Vec<AllowedChannel>, mongodb::error::Error> {
+        let result = self
+            .collection_allowed_channel
+            .find(doc! { "guild_id": guild_id }, None)
+            .await?;
+        let result = result.try_collect().await.unwrap_or_else(|_| vec![]);
+
+        Ok(result)
+    }
+
+    pub async fn remove_channel(
+        &self,
+        id: &str,
+        feature: &str,
+    ) -> Result<DeleteResult, mongodb::error::Error> {
+        let result = self
+            .collection_allowed_channel
+            .delete_one(doc! { "id": id, "feature": feature }, None)
+            .await?;
+
+        Ok(result)
+    }
+
+    pub async fn user_insert_one(
+        &self,
+        user: User,
+    ) -> Result<InsertOneResult, mongodb::error::Error> {
+        let result = self.collection_user.insert_one(user, None).await?;
+
+        Ok(result)
+    }
+
+    pub async fn user_update_one_raw(
+        &self,
+        user_id: &str,
+        update: Document,
+    ) -> Result<(), mongodb::error::Error> {
+        self.collection_user
+            .update_one(
+                doc! { "id": user_id },
+                doc! {
+                    "$set": update.clone()
+                },
+                None,
+            )
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn user_find_one(
+        &self,
+        user_id: &str,
+    ) -> Result<Option<User>, mongodb::error::Error> {
+        let result = self
             .collection_user
             .find_one(doc! {"id": user_id}, None)
             .await?;
         //println!("wtf{:?}", user);
-        Ok(ServerMsg::Profile(user))
+        // Ok(ServerMsg::Profile(user))
+        Ok(result)
     }
 
     pub async fn img_aggregate_user_gallery(
@@ -359,6 +531,8 @@ impl DB {
 }
 
 pub async fn create_database(mongo_url: String) -> DB {
+    println!("Connecting to database...");
+
     let mut client_options = ClientOptions::parse(mongo_url).await.unwrap();
     client_options.app_name = Some("My App".to_string());
     let client = Client::with_options(client_options).unwrap();
@@ -369,6 +543,7 @@ pub async fn create_database(mongo_url: String) -> DB {
     let collection_allowed_channel = database.collection::<AllowedChannel>("allowed_channel");
     let collection_allowed_role = database.collection::<AllowedRole>("allowed_role");
     let collection_allowed_guild = database.collection::<AllowedGuild>("allowed_guild");
+    let collection_acc = database.collection::<Acc>("acc");
 
     let opts = IndexOptions::builder().unique(true).build();
     let index = IndexModel::builder()
@@ -382,7 +557,6 @@ pub async fn create_database(mongo_url: String) -> DB {
         .await
         .expect("Failed to create collection index.");
 
-    println!("Connecting to database...");
     let db_list = client.list_database_names(doc! {}, None).await.unwrap();
     println!("Databases: {:?}", db_list);
 
@@ -395,6 +569,7 @@ pub async fn create_database(mongo_url: String) -> DB {
         collection_allowed_role,
         collection_allowed_guild,
         collection_auto_reaction,
+        collection_acc,
     }
 }
 

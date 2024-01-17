@@ -31,3 +31,4 @@ pub struct User {
     #[with(DT)]
     pub created_at: DateTime,
 }
+

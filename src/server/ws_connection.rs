@@ -1,12 +1,16 @@
+use crate::database::models::acc::Acc;
 use crate::server::client_msg::{ClientMsg, WsPath};
 use crate::server::create_server::ServerState;
+use crate::server::registration_invalid::{RegistrationInvalidMsg, BCRYPT_COST};
 use crate::server::server_msg::ServerMsg;
 use actix::{Actor, Addr, AsyncContext, Handler, Recipient, StreamHandler};
 use actix_web::web::Bytes;
 use actix_web_actors::ws::{self, CloseCode, CloseReason, ProtocolError};
 use chrono::Utc;
+use rand::Rng;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::LockResult;
+use thiserror::Error;
 
 pub struct WsConnection {
     pub id: uuid::Uuid,
@@ -66,6 +70,7 @@ impl Handler<ByteActor> for WsConnection {
 
     fn handle(&mut self, msg: ByteActor, ctx: &mut Self::Context) -> () {
         let db = self.server_state.db.clone();
+        let pepper = self.server_state.pepper.clone();
         let throttle_time = self.server_state.throttle_time.clone();
         let ip = self.ip.clone();
         let recipient: Recipient<_> = ctx.address().recipient();
@@ -105,23 +110,91 @@ impl Handler<ByteActor> for WsConnection {
                 return;
             }
 
-            let server_msg: Result<ServerMsg, mongodb::error::Error> = match client_msg {
+            let server_msg: Result<ServerMsg, ServerMsgCreationError> = match client_msg {
                 ClientMsg::GalleryInit { amount, from } => {
-                    db.img_aggregate_gallery(amount, from).await
+                    db.img_aggregate_gallery(amount, from)
+                        .await
+                        .or_else(|e| Err(ServerMsgCreationError::from(e)))
                     // MyWs::gallery_handler(db, amount, from).await
                 }
                 ClientMsg::UserGalleryInit {
                     amount,
                     from,
                     user_id,
-                } => db.img_aggregate_user_gallery(amount, from, &user_id).await,
-                ClientMsg::User { user_id } => db.user_find_one(&user_id).await,
+                } => db
+                    .img_aggregate_user_gallery(amount, from, &user_id)
+                    .await
+                    .or_else(|e| Err(ServerMsgCreationError::from(e))),
+                ClientMsg::User { user_id } => db
+                    .user_find_one(&user_id)
+                    .await
+                    .and_then(|user| Ok(ServerMsg::Profile(user)))
+                    .or_else(|e| Err(ServerMsgCreationError::from(e))),
+                ClientMsg::Login { email, password } => {
+                    println!("LOGIN '{}' '{}'", email, password);
+
+                    Ok(ServerMsg::None)
+                }
+                ClientMsg::Register { email, password } => {
+                    // let salt: String = (0..256)
+                    //     .map(|_| char::from(rand::thread_rng().gen_range(32..127)))
+                    //     .collect();
+                    let email_code: String = (0..25)
+                        .map(|_| char::from(rand::thread_rng().gen_range(32..127)))
+                        .collect();
+                    let (invalid, email_error, password_error) =
+                        RegistrationInvalidMsg::validate_registration(&email, &password);
+                    if invalid == false {
+                        let password = format!("{}{}", &password, &pepper);
+                        let password_hash = bcrypt::hash(&password, BCRYPT_COST);
+                        if let Ok(password_hash) = password_hash {
+                            //let verified = bcrypt::verify(&password, &password_hash);
+                            // if let Ok(verified) = verified {
+                            //     println!(
+                            //         "REGISTER:\nemail:'{}'\npassword:'{}'\npassword_hash:'{}'\npassword_verified:'{}'",
+                            //         email, password, password_hash, verified
+                            //     );
+                            //
+                            //     Ok(ServerMsg::None)
+                            // } else {
+                            //     Err(ServerMsgCreationError::from(verified.err().unwrap()))
+                            // }
+                            // println!(
+                            //     "REGISTER:\nemail:'{}'\npassword:'{}'\npassword_hash:'{}'\npassword_verified:'{}'",
+                            //     email, password, password_hash, verified
+                            // );
+                            //db.
+                            let acc = Acc::new(&email, &password_hash, &email_code);
+                            let result = db
+                                .create_acc(acc)
+                                .await
+                                .and_then(|e| Ok(ServerMsg::RegistrationCompleted))
+                                .or_else(|e| Err(ServerMsgCreationError::from(e)));
+
+                            result
+                        } else {
+                            Err(ServerMsgCreationError::from(password_hash.err().unwrap()))
+                        }
+                    } else {
+                        println!(
+                            "INVALID: {} {:?} {:?}",
+                            invalid, email_error, password_error
+                        );
+                        Ok(ServerMsg::None)
+                    }
+
+                    // let Ok(password_hash) = password_hash else {
+                    //     return ServerMsgCreationError::from(password_hash.err().unwrap());
+                    // };
+                }
             };
 
             let Ok(server_msg) = server_msg else {
                 println!("Failed to create server msg: {}", server_msg.err().unwrap());
                 return;
             };
+
+            println!("222222222 {:?}", server_msg);
 
             let bytes = rkyv::to_bytes::<_, 256>(&server_msg);
             let Ok(bytes) = bytes else {
@@ -153,4 +226,13 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsConnection {
             }
         }
     }
+}
+
+#[derive(Error, Debug)]
+pub enum ServerMsgCreationError {
+    #[error("Mongodb error: {0}")]
+    MongoDB(#[from] mongodb::error::Error),
+
+    #[error("Bcrypt error: {0}")]
+    Bcrypt(#[from] bcrypt::BcryptError),
 }

@@ -1,5 +1,5 @@
-use leptos::*;
 use leptos::logging::log;
+use leptos::*;
 use leptos_router::use_location;
 use leptos_use::{use_interval_fn, use_window_scroll};
 use web_sys::MouseEvent;
@@ -34,9 +34,9 @@ pub fn Navbar() -> impl IntoView {
     };
     let l = use_location();
 
-
     create_effect(move |_| {
-        let section: ScrollSection = match format!("{}{}", l.pathname.get(), l.hash.get()).as_str() {
+        let section: ScrollSection = match format!("{}{}", l.pathname.get(), l.hash.get()).as_str()
+        {
             "/gallery" => ScrollSection::Gallery,
             "/#about" => ScrollSection::About,
             s if s.contains("/user/") => ScrollSection::UserProfile,
@@ -49,12 +49,14 @@ pub fn Navbar() -> impl IntoView {
 
     let title = move || {
         let mut output = String::from("ArtCord");
-       // log!("{:?} {:?}", global_state.section.get(), global_state.page_profile.gallery_loaded.get());
-        if global_state.section.get() == ScrollSection::UserProfile && global_state.page_profile.gallery_loaded.get() == LoadingNotFound::Loaded {
+        // log!("{:?} {:?}", global_state.section.get(), global_state.page_profile.gallery_loaded.get());
+        if global_state.section.get() == ScrollSection::UserProfile
+            && global_state.page_profile.gallery_loaded.get() == LoadingNotFound::Loaded
+        {
             if let Some(user) = global_state.page_profile.user.get() {
                 let pfp_url = format!("/assets/gallery/pfp_{}.webp", user.id.clone());
-              //  log!("wow1");
-                return view!{
+                //  log!("wow1");
+                return view! {
                     <div class="flex gap-4">
                         <img class="border border-low-purple rounded-full bg-mid-purple h-[45px] " src=pfp_url/>
                         <p class="text-ellipsis overflow-hidden"> {user.name} </p>
@@ -62,7 +64,7 @@ pub fn Navbar() -> impl IntoView {
                 };
             }
         }
-       // log!("wow2");
+        // log!("wow2");
         view! {
             <div>
                 <p class="text-ellipsis overflow-hidden">{output}</p>
@@ -102,11 +104,17 @@ pub fn Navbar() -> impl IntoView {
                     if global_state.nav_open.get() == false {
                        Some(
                         view! {
-                            <div class=move || format!("{}", if global_state.nav_open.get() == true { " hidden " } else { " " }) >
+                            <div class=move || format!(" flex gap-2 {}", if global_state.nav_open.get() == true { " hidden " } else { " " }) >
                                 // { move || global_state.nav_open.get() }
                                 <a target="_blank" href="https://discord.gg/habmw7Ehga" class="hidden h-12 sm:flex gap-2 items-center text-[1rem] font-black bg-gradient-to-br from-first-one to-second-one hover:to-dark-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] transition-colors duration-300 " >
                                     <img class="h-8" src="/assets/discord.svg"/>
                                     "Join"
+                                </a>
+                                <a href="/login" class="hidden h-12 sm:flex gap-2 items-center text-[1rem] font-black bg-gradient-to-br from-first-one to-second-one hover:to-dark-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] transition-colors duration-300 " >
+                                    "Login"
+                                </a>
+                                <a href="/register" class="hidden h-12 sm:flex gap-2 items-center text-[1rem] font-black bg-gradient-to-br from-first-one to-second-one hover:to-dark-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] transition-colors duration-300 " >
+                                    "Register"
                                 </a>
                                 <button class="block sm:hidden h-[48px]" on:click=on_nav_click >
                                     <img class="    " src="/assets/burger.svg" alt=""/>

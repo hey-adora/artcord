@@ -49,6 +49,7 @@ impl Default for ServerMsgImg {
                 guild_id: String::from("1159766826620817419"),
                 id: String::from("id"),
                 name: String::from("name"),
+                //  acc: None,
                 pfp_hash: Some(String::from("pfp_hash")),
                 modified_at: DateTime::from_millis(Utc::now().timestamp_millis()),
                 created_at: DateTime::from_millis(Utc::now().timestamp_millis()),

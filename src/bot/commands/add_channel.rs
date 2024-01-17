@@ -30,11 +30,8 @@ pub async fn run(
         created_at: mongodb::bson::DateTime::now(),
         modified_at: mongodb::bson::DateTime::now(),
     };
-
-    let _result = db
-        .collection_allowed_channel
-        .insert_one(allowed_channel, None)
-        .await?;
+    
+    db.allowed_channel_insert_one(allowed_channel).await?;
 
     crate::bot::commands::show_channels::run(ctx, command, db, guild_id).await?;
 

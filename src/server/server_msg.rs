@@ -2,6 +2,7 @@ use crate::database::models::user::User;
 use crate::server::server_msg_img::ServerMsgImg;
 use rkyv::{Archive, Deserialize, Serialize};
 use thiserror::Error;
+use crate::server::registration_invalid::RegistrationInvalidMsg;
 
 #[derive(Archive, Deserialize, Serialize, Debug, PartialEq)]
 #[archive(compare(PartialEq), check_bytes)]
@@ -10,6 +11,8 @@ pub enum ServerMsg {
     Imgs(Vec<ServerMsgImg>),
     ProfileImgs(Option<Vec<ServerMsgImg>>),
     Profile(Option<User>),
+    RegistrationInvalid(RegistrationInvalidMsg),
+    RegistrationCompleted,
     None,
     Reset,
 }
@@ -18,6 +21,8 @@ pub const SERVER_MSG_IMGS_NAME: &str = "imgs";
 pub const SERVER_MSG_PROFILE_IMGS_NAME: &str = "profile_imgs";
 pub const SERVER_MSG_PROFILE: &str = "profile";
 pub const SERVER_MSG_RESET_NAME: &str = "reset";
+pub const SERVER_MSG_REGISTRATION_COMPLETED: &str = "registration_completed";
+pub const SERVER_MSG_REGISTRATION_INVALID: &str = "registration_invalid";
 pub const SERVER_MSG_NONE_NAME: &str = "NONE";
 
 impl ServerMsg {
@@ -26,6 +31,8 @@ impl ServerMsg {
             ServerMsg::Imgs(_a) => String::from(SERVER_MSG_IMGS_NAME),
             ServerMsg::ProfileImgs(_a) => String::from(SERVER_MSG_PROFILE_IMGS_NAME),
             ServerMsg::Profile(_) => String::from(SERVER_MSG_PROFILE),
+            ServerMsg::RegistrationInvalid(_) => String::from(SERVER_MSG_REGISTRATION_INVALID),
+            ServerMsg::RegistrationCompleted => String::from(SERVER_MSG_REGISTRATION_COMPLETED),
             ServerMsg::Reset => String::from(SERVER_MSG_RESET_NAME),
             ServerMsg::None => String::from(SERVER_MSG_NONE_NAME),
         }
