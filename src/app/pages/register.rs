@@ -8,20 +8,20 @@ use leptos::*;
 use web_sys::SubmitEvent;
 
 #[derive(Copy, Clone, Debug)]
-pub struct GlobalRegistrationState {
-    pub loading_state: RwSignal<RegistrationLoadingState>,
+pub struct GlobalAuthState {
+    pub loading_state: RwSignal<AuthLoadingState>,
 }
 
-impl GlobalRegistrationState {
+impl GlobalAuthState {
     pub fn new() -> Self {
         Self {
-            loading_state: RwSignal::new(RegistrationLoadingState::Ready),
+            loading_state: RwSignal::new(AuthLoadingState::Ready),
         }
     }
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum RegistrationLoadingState {
+pub enum AuthLoadingState {
     Connecting,
     Ready,
     Processing,
@@ -58,6 +58,20 @@ pub fn validate_registration(
     let invalid = email_error.is_some() || password_error.is_some();
 
     (invalid, email_error, password_error)
+}
+
+pub fn auth_input_show_error(signal: RwSignal<Option<String>>) -> bool {
+    signal.with(|value| {
+        let Some(value) = value else {
+            return false;
+        };
+
+        if value.len() < 1 {
+            return false;
+        }
+
+        true
+    })
 }
 
 #[component]
@@ -110,38 +124,24 @@ pub fn Register() -> impl IntoView {
 
         global_state.socket_send(msg);
 
-        loading_state.set(RegistrationLoadingState::Processing);
-    };
-
-    let show_error_when = |signal: RwSignal<Option<String>>| -> bool {
-        signal.with(|value| {
-            let Some(value) = value else {
-                return false;
-            };
-
-            if value.len() < 1 {
-                return false;
-            }
-
-            true
-        })
+        loading_state.set(AuthLoadingState::Processing);
     };
 
     create_effect(move |_| {
         let connected = global_state.socket_connected.get();
         let current_loading_state = loading_state.get_untracked();
 
-        if !connected && current_loading_state != RegistrationLoadingState::Connecting {
+        if !connected && current_loading_state != AuthLoadingState::Connecting {
             suspended_loading_state.set(current_loading_state);
-            loading_state.set(RegistrationLoadingState::Connecting);
-        } else if connected && current_loading_state == RegistrationLoadingState::Connecting {
+            loading_state.set(AuthLoadingState::Connecting);
+        } else if connected && current_loading_state == AuthLoadingState::Connecting {
             loading_state.set(suspended_loading_state.get_untracked());
         }
     });
 
     create_effect(move |_| {
         let current_loading_state = loading_state.get();
-        if let RegistrationLoadingState::Failed(msg) = current_loading_state {
+        if let AuthLoadingState::Failed(msg) = current_loading_state {
             input_general_error.set(msg.general_error);
             input_email_error.set(msg.email_error);
             input_password_error.set(msg.password_error);
@@ -161,30 +161,30 @@ pub fn Register() -> impl IntoView {
     view! {
         <main class=move||format!("grid grid-rows-[1fr] place-items-center min-h-[100dvh] transition-all duration-300 pt-[4rem]")>
             <Navbar/>
-            <section class="text-center text-black flex flex-col justify-center max-w-[20rem] w-full min-h-[20rem] bg-white rounded-3xl p-5" style:display=move || if loading_state.get() == RegistrationLoadingState::Completed { "flex" } else {"none"} >
+            <section class="text-center text-black flex flex-col justify-center max-w-[20rem] w-full min-h-[20rem] bg-white rounded-3xl p-5" style:display=move || if loading_state.get() == AuthLoadingState::Completed { "flex" } else {"none"} >
                     "Registration Completed\nVerify Email."
             </section>
-            <section class="text-center text-black flex flex-col justify-center max-w-[20rem] w-full min-h-[20rem] bg-white rounded-3xl p-5" style:display=move || if loading_state.get() == RegistrationLoadingState::Processing { "flex" } else {"none"} >
+            <section class="text-center text-black flex flex-col justify-center max-w-[20rem] w-full min-h-[20rem] bg-white rounded-3xl p-5" style:display=move || if loading_state.get() == AuthLoadingState::Processing { "flex" } else {"none"} >
                     "Processing..."
             </section>
-            <section class="text-center text-black flex flex-col justify-center max-w-[20rem] w-full min-h-[20rem] bg-white rounded-3xl p-5" style:display=move || if loading_state.get() == RegistrationLoadingState::Connecting { "flex" } else {"none"} >
+            <section class="text-center text-black flex flex-col justify-center max-w-[20rem] w-full min-h-[20rem] bg-white rounded-3xl p-5" style:display=move || if loading_state.get() == AuthLoadingState::Connecting { "flex" } else {"none"} >
                     "Connecting..."
             </section>
-             <section class=" flex flex-col justify-center max-w-[20rem] w-full min-h-[20rem] bg-white rounded-3xl p-5" style:display=move || if match loading_state.get() { RegistrationLoadingState::Ready =>true, RegistrationLoadingState::Failed(_) => true, _ => false } { "flex" } else {"none"} >
+             <section class=" flex flex-col justify-center max-w-[20rem] w-full min-h-[20rem] bg-white rounded-3xl p-5" style:display=move || if match loading_state.get() { AuthLoadingState::Ready =>true, AuthLoadingState::Failed(_) => true, _ => false } { "flex" } else {"none"} >
                         <form class="text-black flex flex-col gap-5 " on:submit=on_submit>
-                            <Show when=move || show_error_when(input_general_error) >
+                            <Show when=move || auth_input_show_error(input_general_error) >
                                     <div class="text-red-600 text-center">{input_general_error.get()}</div>
                             </Show>
                             <div class="flex flex-col">
                                 <label for="email" class="">"Email"</label>
-                                <Show when=move || show_error_when(input_email_error) >
+                                <Show when=move || auth_input_show_error(input_email_error) >
                                     <div class="text-red-600">{input_email_error.get()}</div>
                                 </Show>
                                 <input class="border-black border-b-2 border-solid" _ref=input_email id="email" type="text"/>
                             </div>
                             <div class="flex flex-col" >
                                 <label for="password" class="">"Password"</label>
-                                <Show when=move || show_error_when(input_password_error) >
+                                <Show when=move || auth_input_show_error(input_password_error) >
                                     <div class="text-red-600">{input_password_error.get()}</div>
                                 </Show>
                                 <input class="border-black border-b-2 border-solid" _ref=input_password id="password" type="text"/>

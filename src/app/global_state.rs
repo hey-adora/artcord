@@ -1,11 +1,13 @@
-use leptos::{create_rw_signal, RwSignal, SignalGetUntracked, SignalUpdateUntracked, SignalWithUntracked};
-use std::rc::Rc;
-use std::collections::HashMap;
-use chrono::Utc;
-use crate::app::pages::register::GlobalRegistrationState;
+use crate::app::pages::register::GlobalAuthState;
 use crate::app::utils::{PageGalleryState, PageProfileState, ScrollSection};
 use crate::server::client_msg::ClientMsg;
 use crate::server::server_msg::ServerMsg;
+use chrono::Utc;
+use leptos::{
+    create_rw_signal, RwSignal, SignalGetUntracked, SignalUpdateUntracked, SignalWithUntracked,
+};
+use std::collections::HashMap;
+use std::rc::Rc;
 
 #[derive(Copy, Clone, Debug)]
 pub struct GlobalState {
@@ -18,18 +20,20 @@ pub struct GlobalState {
     pub socket_timestamps: RwSignal<HashMap<&'static str, i64>>,
     pub page_galley: PageGalleryState,
     pub page_profile: PageProfileState,
-    pub pages: Pages
+    pub pages: Pages,
 }
 
 #[derive(Copy, Clone, Debug)]
 pub struct Pages {
-    pub registration: GlobalRegistrationState
+    pub registration: GlobalAuthState,
+    pub login: GlobalAuthState,
 }
 
 impl Pages {
     pub fn new() -> Self {
         Self {
-            registration: GlobalRegistrationState::new()
+            registration: GlobalAuthState::new(),
+            login: GlobalAuthState::new(),
         }
     }
 }
@@ -46,7 +50,7 @@ impl GlobalState {
             socket_timestamps: create_rw_signal(HashMap::new()),
             page_galley: PageGalleryState::new(),
             page_profile: PageProfileState::new(),
-            pages: Pages::new()
+            pages: Pages::new(),
         }
     }
 
@@ -98,7 +102,3 @@ impl GlobalState {
         });
     }
 }
-
-
-
-
