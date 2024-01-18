@@ -1,1 +1,1 @@
-mod registration;
+pub mod ws_registration;

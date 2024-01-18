@@ -180,6 +180,16 @@ impl PageGalleryState {
 }
 
 #[derive(Copy, Clone, Debug)]
+pub struct Registration {
+    
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct Pages {
+    
+}
+
+#[derive(Copy, Clone, Debug)]
 pub struct GlobalState {
     pub section: RwSignal<ScrollSection>,
     pub nav_open: RwSignal<bool>,

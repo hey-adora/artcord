@@ -3,6 +3,7 @@ use crate::server::client_msg::{ClientMsg, WsPath};
 use crate::server::create_server::ServerState;
 use crate::server::registration_invalid::{RegistrationInvalidMsg, BCRYPT_COST};
 use crate::server::server_msg::ServerMsg;
+use crate::server::ws_route::ws_registration::ws_register;
 use actix::{Actor, Addr, AsyncContext, Handler, Recipient, StreamHandler};
 use actix_web::web::Bytes;
 use actix_web_actors::ws::{self, CloseCode, CloseReason, ProtocolError};
@@ -110,6 +111,8 @@ impl Handler<ByteActor> for WsConnection {
                 return;
             }
 
+            println!("1");
+
             let server_msg: Result<ServerMsg, ServerMsgCreationError> = match client_msg {
                 ClientMsg::GalleryInit { amount, from } => {
                     db.img_aggregate_gallery(amount, from)
@@ -136,58 +139,10 @@ impl Handler<ByteActor> for WsConnection {
                     Ok(ServerMsg::None)
                 }
                 ClientMsg::Register { email, password } => {
-                    // let salt: String = (0..256)
-                    //     .map(|_| char::from(rand::thread_rng().gen_range(32..127)))
-                    //     .collect();
-                    let email_code: String = (0..25)
-                        .map(|_| char::from(rand::thread_rng().gen_range(32..127)))
-                        .collect();
-                    let (invalid, email_error, password_error) =
-                        RegistrationInvalidMsg::validate_registration(&email, &password);
-                    if invalid == false {
-                        let password = format!("{}{}", &password, &pepper);
-                        let password_hash = bcrypt::hash(&password, BCRYPT_COST);
-                        if let Ok(password_hash) = password_hash {
-                            //let verified = bcrypt::verify(&password, &password_hash);
-                            // if let Ok(verified) = verified {
-                            //     println!(
-                            //         "REGISTER:\nemail:'{}'\npassword:'{}'\npassword_hash:'{}'\npassword_verified:'{}'",
-                            //         email, password, password_hash, verified
-                            //     );
-                            //
-                            //     Ok(ServerMsg::None)
-                            // } else {
-                            //     Err(ServerMsgCreationError::from(verified.err().unwrap()))
-                            // }
-                            // println!(
-                            //     "REGISTER:\nemail:'{}'\npassword:'{}'\npassword_hash:'{}'\npassword_verified:'{}'",
-                            //     email, password, password_hash, verified
-                            // );
-                            //db.
-                            let acc = Acc::new(&email, &password_hash, &email_code);
-                            let result = db
-                                .create_acc(acc)
-                                .await
-                                .and_then(|e| Ok(ServerMsg::RegistrationCompleted))
-                                .or_else(|e| Err(ServerMsgCreationError::from(e)));
-
-                            result
-                        } else {
-                            Err(ServerMsgCreationError::from(password_hash.err().unwrap()))
-                        }
-                    } else {
-                        println!(
-                            "INVALID: {} {:?} {:?}",
-                            invalid, email_error, password_error
-                        );
-                        Ok(ServerMsg::None)
-                    }
-
-                    // let Ok(password_hash) = password_hash else {
-                    //     return ServerMsgCreationError::from(password_hash.err().unwrap());
-                    // };
+                    ws_register(db, pepper, email, password).await
                 }
             };
+            println!("8");
 
             let Ok(server_msg) = server_msg else {
                 println!("Failed to create server msg: {}", server_msg.err().unwrap());

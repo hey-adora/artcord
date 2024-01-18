@@ -1,7 +1,7 @@
 use rkyv::{Archive, Deserialize, Serialize};
 
 pub const MINIMUM_PASSWORD_LENGTH: usize = 10;
-pub const BCRYPT_COST: u32 = 31;
+pub const BCRYPT_COST: u32 = 12;
 
 #[derive(Archive, Deserialize, Serialize, Debug, PartialEq)]
 #[archive(compare(PartialEq), check_bytes)]

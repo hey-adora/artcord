@@ -229,7 +229,7 @@ pub fn App() -> impl IntoView {
                     if current_state == false {
                         global_state.socket_connected.set(true);
                     }
-                    global_state.socket_connected.set(true);
+                    //global_state.socket_connected.set(true);
                     pause()
                 }
                 _ => (),

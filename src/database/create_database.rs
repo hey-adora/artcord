@@ -38,7 +38,7 @@ impl TypeMapKey for DB {
 // Err(mongodb::error::Error::custom(Arc::new("invalid ReactionType type".to_string())) )
 
 impl DB {
-    pub async fn acc_exists(&self, email: &str) -> Result<Option<Acc>, mongodb::error::Error> {
+    pub async fn acc_find_one(&self, email: &str) -> Result<Option<Acc>, mongodb::error::Error> {
         let acc = self
             .collection_acc
             .find_one(doc! { "email": email }, None)
