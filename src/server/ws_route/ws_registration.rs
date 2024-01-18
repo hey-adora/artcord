@@ -12,30 +12,37 @@ pub async fn ws_register(
     email: String,
     password: String,
 ) -> Result<ServerMsg, ServerMsgCreationError> {
-    println!("2");
+    //println!("2");
     // let salt: String = (0..256)
     //     .map(|_| char::from(rand::thread_rng().gen_range(32..127)))
     //     .collect();
     let email_code: String = (0..25)
         .map(|_| char::from(rand::thread_rng().gen_range(32..127)))
         .collect();
-    println!("3");
+    //println!("3");
 
     let (invalid, email_error, password_error) =
         RegistrationInvalidMsg::validate_registration(&email, &password);
 
     if invalid == true {
-        println!(
-            "INVALID: {} {:?} {:?}",
-            invalid, email_error, password_error
-        );
-        return Ok(ServerMsg::None);
+        // println!(
+        //     "INVALID: {} {:?} {:?}",
+        //     invalid, email_error, password_error
+        // );
+        return Ok(ServerMsg::RegistrationInvalid(RegistrationInvalidMsg {
+            general_error: None,
+            password_error,
+            email_error,
+        }));
     }
 
     let acc = db.acc_find_one(&email).await?;
     if let Some(acc) = acc {
-        println!("Acc already exists.");
-        return Ok(ServerMsg::None);
+        //println!("Acc already exists.");
+        return Ok(ServerMsg::RegistrationInvalid(
+            RegistrationInvalidMsg::new()
+                .general(format!("Account with email '{}' already exists.", &email)),
+        ));
     };
 
     let password = format!("{}{}", &password, &pepper);

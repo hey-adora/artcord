@@ -111,7 +111,7 @@ impl Handler<ByteActor> for WsConnection {
                 return;
             }
 
-            println!("1");
+            //println!("1");
 
             let server_msg: Result<ServerMsg, ServerMsgCreationError> = match client_msg {
                 ClientMsg::GalleryInit { amount, from } => {
@@ -142,14 +142,14 @@ impl Handler<ByteActor> for WsConnection {
                     ws_register(db, pepper, email, password).await
                 }
             };
-            println!("8");
+            //println!("8");
 
             let Ok(server_msg) = server_msg else {
                 println!("Failed to create server msg: {}", server_msg.err().unwrap());
                 return;
             };
 
-            println!("222222222 {:?}", server_msg);
+            //println!("222222222 {:?}", server_msg);
 
             let bytes = rkyv::to_bytes::<_, 256>(&server_msg);
             let Ok(bytes) = bytes else {

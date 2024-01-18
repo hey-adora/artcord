@@ -1,11 +1,9 @@
-use bson::DateTime;
-use leptos::logging::log;
 use leptos::*;
 use leptos_router::use_params_map;
 
 use crate::app::components::navbar::Navbar;
 use crate::app::components::profile_gallery::ProfileGallery;
-use crate::app::utils::{GlobalState, ServerMsgImgResized};
+use crate::app::global_state::GlobalState;
 
 #[component]
 pub fn Profile() -> impl IntoView {

@@ -1,16 +1,15 @@
-use crate::app::components::navbar::{shrink_nav, Navbar};
+use crate::app::components::navbar::shrink_nav;
 use bson::DateTime;
 use chrono::Utc;
 use leptos::ev::resize;
-use leptos::html::{ElementDescriptor, Section};
-use leptos::logging::log;
+use leptos::html::Section;
 use leptos::*;
 use leptos_router::{use_location, use_params_map};
 use leptos_use::{use_event_listener, use_window};
-use rand::Rng;
 use web_sys::Event;
+use crate::app::global_state::GlobalState;
 
-use crate::app::utils::{calc_fit_count, resize_imgs, GlobalState, SelectedImg, ServerMsgImgResized, NEW_IMG_HEIGHT, LoadingNotFound};
+use crate::app::utils::{calc_fit_count, LoadingNotFound, NEW_IMG_HEIGHT, resize_imgs, SelectedImg, ServerMsgImgResized};
 use crate::server::client_msg::ClientMsg;
 use crate::server::server_msg::{SERVER_MSG_PROFILE, SERVER_MSG_PROFILE_IMGS_NAME};
 

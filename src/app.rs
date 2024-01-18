@@ -1,15 +1,14 @@
 use crate::app::pages::login::Login;
-use crate::app::pages::register::Register;
+use crate::app::pages::register::{Register, RegistrationLoadingState};
 use crate::app::utils::ServerMsgImgResized;
-use crate::app::utils::{resize_imgs, NEW_IMG_HEIGHT};
-use crate::app::utils::{GlobalState, LoadingNotFound};
+use crate::app::utils::{NEW_IMG_HEIGHT, resize_imgs};
+use crate::app::utils::LoadingNotFound;
 use crate::server::server_msg::ServerMsg;
 use leptos::logging::log;
 use leptos::*;
 use leptos_meta::*;
 use leptos_router::*;
 use leptos_use::core::ConnectionReadyState;
-use leptos_use::use_document;
 use leptos_use::utils::Pausable;
 use leptos_use::{
     use_interval_fn, use_websocket_with_options, UseWebSocketOptions, UseWebsocketReturn,
@@ -19,10 +18,12 @@ use pages::home::HomePage;
 use pages::not_found::NotFound;
 use pages::profile::Profile;
 use std::rc::Rc;
+use global_state::GlobalState;
 
 pub mod components;
 pub mod pages;
 pub mod utils;
+pub mod global_state;
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -60,6 +61,9 @@ pub fn App() -> impl IntoView {
                         ServerMsg::Reset => {
                             log!("RESETING");
                             document().location().unwrap().reload().unwrap();
+                        }
+                        ServerMsg::None => {
+                            
                         }
                         ServerMsg::Imgs(new_imgs) => {
                             if new_imgs.is_empty()
@@ -165,7 +169,13 @@ pub fn App() -> impl IntoView {
                                 // log!("where is it????");
                             }
                         }
-                        msg => global_state.socket_recv.set(msg),
+                        ServerMsg::RegistrationCompleted => {
+                            global_state.pages.registration.loading_state.set(RegistrationLoadingState::Completed);
+                        }
+                        ServerMsg::RegistrationInvalid(invalid) => {
+                            global_state.pages.registration.loading_state.set(RegistrationLoadingState::Failed(invalid));
+                        }
+                      //  msg => global_state.socket_recv.set(msg),
                     };
                     global_state.socket_state_reset(&server_msg_name);
                 })
@@ -188,30 +198,30 @@ pub fn App() -> impl IntoView {
             3000,
         );
 
-        create_effect(move |_| {
-            log!("{:?}", message.get());
-        });
+        // create_effect(move |_| {
+        //     log!("{:?}", message.get());
+        // });
 
-        create_effect(move |_| {
-            let Some(bytes) = message_bytes.get() else {
-                log!("Empty byte msg received.");
-                return;
-            };
-
-            let server_msg = ServerMsg::from_bytes(&bytes);
-            let Ok(server_msg) = server_msg else {
-                log!("Error decoding msg: {}", server_msg.err().unwrap());
-                return;
-            };
-
-            match server_msg {
-                ServerMsg::Reset => {
-                    log!("RESETING");
-                    document().location().unwrap().reload().unwrap();
-                }
-                msg => global_state.socket_recv.set(msg),
-            };
-        });
+        // create_effect(move |_| {
+        //     let Some(bytes) = message_bytes.get() else {
+        //         log!("Empty byte msg received.");
+        //         return;
+        //     };
+        // 
+        //     let server_msg = ServerMsg::from_bytes(&bytes);
+        //     let Ok(server_msg) = server_msg else {
+        //         log!("Error decoding msg: {}", server_msg.err().unwrap());
+        //         return;
+        //     };
+        // 
+        //     match server_msg {
+        //         ServerMsg::Reset => {
+        //             log!("RESETING");
+        //             document().location().unwrap().reload().unwrap();
+        //         }
+        //         msg => global_state.socket_recv.set(msg),
+        //     };
+        // });
 
         create_effect(move |_| {
             let state = ready_state.get();

@@ -1,17 +1,11 @@
 use crate::app::components::gallery::Gallery;
-use crate::app::components::navbar::{shrink_nav, Navbar};
-use crate::app::utils::{resize_imgs, SelectedImg};
+use crate::app::components::navbar::Navbar;
+use crate::app::utils::SelectedImg;
 use bson::DateTime;
-use chrono::Utc;
-use leptos::ev::resize;
-use leptos::html::Section;
-use leptos::logging::log;
 use leptos::*;
-use leptos_use::{use_event_listener, use_interval_fn, use_window};
-use rand::Rng;
-use web_sys::{Event, MouseEvent};
+use crate::app::global_state::GlobalState;
 
-use crate::app::utils::{GlobalState, ServerMsgImgResized};
+use crate::app::utils::ServerMsgImgResized;
 use crate::server::client_msg::ClientMsg;
 use crate::server::server_msg::SERVER_MSG_IMGS_NAME;
 use crate::server::server_msg_img::ServerMsgImg;

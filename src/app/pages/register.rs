@@ -1,11 +1,33 @@
 use crate::app::components::navbar::Navbar;
-use crate::app::utils::GlobalState;
+use crate::app::global_state::GlobalState;
 use crate::server::client_msg::ClientMsg;
 use crate::server::registration_invalid::{RegistrationInvalidMsg, MINIMUM_PASSWORD_LENGTH};
 use leptos::html::Input;
 use leptos::logging::log;
 use leptos::*;
 use web_sys::SubmitEvent;
+
+#[derive(Copy, Clone, Debug)]
+pub struct GlobalRegistrationState {
+    pub loading_state: RwSignal<RegistrationLoadingState>,
+}
+
+impl GlobalRegistrationState {
+    pub fn new() -> Self {
+        Self {
+            loading_state: RwSignal::new(RegistrationLoadingState::Ready),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum RegistrationLoadingState {
+    Connecting,
+    Ready,
+    Processing,
+    Completed,
+    Failed(RegistrationInvalidMsg),
+}
 
 pub fn validate_registration(
     email: &str,
@@ -41,11 +63,14 @@ pub fn validate_registration(
 #[component]
 pub fn Register() -> impl IntoView {
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
+    let loading_state = global_state.pages.registration.loading_state;
+    let suspended_loading_state = RwSignal::new(loading_state.get_untracked());
 
     let input_email: NodeRef<Input> = create_node_ref();
     let input_password: NodeRef<Input> = create_node_ref();
     let input_password_confirm: NodeRef<Input> = create_node_ref();
 
+    let input_general_error: RwSignal<Option<String>> = RwSignal::new(None);
     let input_email_error: RwSignal<Option<String>> = RwSignal::new(None);
     let input_password_error: RwSignal<Option<String>> = RwSignal::new(None);
 
@@ -84,52 +109,91 @@ pub fn Register() -> impl IntoView {
         let msg = ClientMsg::Register { password, email };
 
         global_state.socket_send(msg);
+
+        loading_state.set(RegistrationLoadingState::Processing);
     };
 
     let show_error_when = |signal: RwSignal<Option<String>>| -> bool {
-        let Some(value) = signal.get() else {
-            return false;
-        };
+        signal.with(|value| {
+            let Some(value) = value else {
+                return false;
+            };
 
-        if value.len() < 1 {
-            return false;
-        }
+            if value.len() < 1 {
+                return false;
+            }
 
-        true
+            true
+        })
     };
 
+    create_effect(move |_| {
+        let connected = global_state.socket_connected.get();
+        let current_loading_state = loading_state.get_untracked();
+
+        if !connected && current_loading_state != RegistrationLoadingState::Connecting {
+            suspended_loading_state.set(current_loading_state);
+            loading_state.set(RegistrationLoadingState::Connecting);
+        } else if connected && current_loading_state == RegistrationLoadingState::Connecting {
+            loading_state.set(suspended_loading_state.get_untracked());
+        }
+    });
+
+    create_effect(move |_| {
+        let current_loading_state = loading_state.get();
+        if let RegistrationLoadingState::Failed(msg) = current_loading_state {
+            input_general_error.set(msg.general_error);
+            input_email_error.set(msg.email_error);
+            input_password_error.set(msg.password_error);
+        }
+    });
+
+    // create_effect(move |_| {
+    //     log!("LOADING STATE {:?}", loading_state.get());
+    // });
+    //
+    // create_effect(move |_| {
+    //     log!("GENERAL ERROR {:?}", input_general_error.get());
+    // });
+
+    // create_effect(move |_| {});
+
     view! {
-        <main class=move||format!("grid grid-rows-[1fr] min-h-[100dvh] transition-all duration-300 pt-[4rem]")>
+        <main class=move||format!("grid grid-rows-[1fr] place-items-center min-h-[100dvh] transition-all duration-300 pt-[4rem]")>
             <Navbar/>
-            <section style:display=move || { format!("{}", if global_state.socket_connected.with(|state| *state == false) { "block" } else {"none"}) } >
+            <section class="text-center text-black flex flex-col justify-center max-w-[20rem] w-full min-h-[20rem] bg-white rounded-3xl p-5" style:display=move || if loading_state.get() == RegistrationLoadingState::Completed { "flex" } else {"none"} >
+                    "Registration Completed\nVerify Email."
+            </section>
+            <section class="text-center text-black flex flex-col justify-center max-w-[20rem] w-full min-h-[20rem] bg-white rounded-3xl p-5" style:display=move || if loading_state.get() == RegistrationLoadingState::Processing { "flex" } else {"none"} >
+                    "Processing..."
+            </section>
+            <section class="text-center text-black flex flex-col justify-center max-w-[20rem] w-full min-h-[20rem] bg-white rounded-3xl p-5" style:display=move || if loading_state.get() == RegistrationLoadingState::Connecting { "flex" } else {"none"} >
                     "Connecting..."
             </section>
-             <section style:display=move || {
-                format!("{}", if global_state.socket_connected.with(|state| {
-                    log!("{} {}", state, *state == true);
-                    *state == true
-                }) { "block" } else {"none"})
-            } >
-                        <form class="text-black flex flex-col gap-2 w-[20rem] mx-auto bg-black" on:submit=on_submit>
+             <section class=" flex flex-col justify-center max-w-[20rem] w-full min-h-[20rem] bg-white rounded-3xl p-5" style:display=move || if match loading_state.get() { RegistrationLoadingState::Ready =>true, RegistrationLoadingState::Failed(_) => true, _ => false } { "flex" } else {"none"} >
+                        <form class="text-black flex flex-col gap-5 " on:submit=on_submit>
+                            <Show when=move || show_error_when(input_general_error) >
+                                    <div class="text-red-600 text-center">{input_general_error.get()}</div>
+                            </Show>
                             <div class="flex flex-col">
-                                <label for="email" class="text-white">"Email"</label>
+                                <label for="email" class="">"Email"</label>
                                 <Show when=move || show_error_when(input_email_error) >
-                                    <div class="text-white">{input_email_error.get()}</div>
+                                    <div class="text-red-600">{input_email_error.get()}</div>
                                 </Show>
-                                <input _ref=input_email id="email" type="text"/>
+                                <input class="border-black border-b-2 border-solid" _ref=input_email id="email" type="text"/>
                             </div>
                             <div class="flex flex-col" >
-                                <label for="password" class="text-white">"Password"</label>
+                                <label for="password" class="">"Password"</label>
                                 <Show when=move || show_error_when(input_password_error) >
-                                    <div class="text-white">{input_password_error.get()}</div>
+                                    <div class="text-red-600">{input_password_error.get()}</div>
                                 </Show>
-                                <input _ref=input_password id="password" type="text"/>
+                                <input class="border-black border-b-2 border-solid" _ref=input_password id="password" type="text"/>
                             </div>
                             <div class="flex flex-col" >
-                                <label for="password_confirm" class="text-white">"Password confirm"</label>
-                                <input _ref=input_password_confirm id="password_confirm" type="text"/>
+                                <label for="password_confirm" class="">"Password confirm"</label>
+                                <input class="border-black border-b-2 border-solid" _ref=input_password_confirm id="password_confirm" type="text"/>
                             </div>
-                            <input class="text-white" type="submit" value="Register" />
+                            <input class="border-black border-2 border-solid rounded hover:text-white hover:bg-black transition-colors duration-300" type="submit" value="Register" />
                         </form>
                 </section>
 

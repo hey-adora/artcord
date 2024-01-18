@@ -1,12 +1,9 @@
 use crate::app::components::navbar::shrink_nav;
-use crate::app::{components::navbar::Navbar, utils::GlobalState};
+use crate::app::components::navbar::Navbar;
 use leptos::html::Main;
-use leptos::logging::log;
 use leptos::*;
-use leptos_use::{
-    use_scroll, use_scroll_with_options, use_window_scroll, UseScrollOptions, UseScrollReturn,
-};
 use web_sys::Event;
+use crate::app::global_state::GlobalState;
 
 #[component]
 pub fn HomePage() -> impl IntoView {

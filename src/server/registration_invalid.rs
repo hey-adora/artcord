@@ -3,7 +3,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 pub const MINIMUM_PASSWORD_LENGTH: usize = 10;
 pub const BCRYPT_COST: u32 = 12;
 
-#[derive(Archive, Deserialize, Serialize, Debug, PartialEq)]
+#[derive(Archive, Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct RegistrationInvalidMsg {
@@ -32,5 +32,19 @@ impl RegistrationInvalidMsg {
         let invalid = email_error.is_some() || password_error.is_some();
 
         (invalid, email_error, password_error)
+    }
+
+    pub fn new() -> Self {
+        Self {
+            general_error: None,
+            email_error: None,
+            password_error: None,
+        }
+    }
+
+    pub fn general(mut self, error: String) -> Self {
+        self.general_error = Some(error);
+
+        self
     }
 }

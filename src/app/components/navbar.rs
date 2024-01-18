@@ -1,10 +1,9 @@
-use leptos::logging::log;
 use leptos::*;
 use leptos_router::use_location;
-use leptos_use::{use_interval_fn, use_window_scroll};
 use web_sys::MouseEvent;
+use crate::app::global_state::GlobalState;
 
-use crate::app::utils::{get_window_path, GlobalState, LoadingNotFound, ScrollSection};
+use crate::app::utils::{LoadingNotFound, ScrollSection};
 
 pub fn shrink_nav(nav_tran: RwSignal<bool>, y: u32) {
     if y > 100 {
