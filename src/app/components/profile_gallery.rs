@@ -1,4 +1,5 @@
 use crate::app::components::navbar::shrink_nav;
+use crate::app::global_state::GlobalState;
 use bson::DateTime;
 use chrono::Utc;
 use leptos::ev::resize;
@@ -7,9 +8,10 @@ use leptos::*;
 use leptos_router::{use_location, use_params_map};
 use leptos_use::{use_event_listener, use_window};
 use web_sys::Event;
-use crate::app::global_state::GlobalState;
 
-use crate::app::utils::{calc_fit_count, LoadingNotFound, NEW_IMG_HEIGHT, resize_imgs, SelectedImg, ServerMsgImgResized};
+use crate::app::utils::{
+    calc_fit_count, resize_imgs, LoadingNotFound, SelectedImg, ServerMsgImgResized, NEW_IMG_HEIGHT,
+};
 use crate::server::client_msg::ClientMsg;
 use crate::server::server_msg::{SERVER_MSG_PROFILE, SERVER_MSG_PROFILE_IMGS_NAME};
 
@@ -25,7 +27,6 @@ pub fn ProfileGallery() -> impl IntoView {
     let loaded_sig = global_state.page_profile.gallery_loaded;
     let connection_load_state_name = SERVER_MSG_PROFILE_IMGS_NAME;
     let location = use_location();
-
 
     let on_click = move |img: ServerMsgImgResized| {
         selected_img.set(Some(SelectedImg {
@@ -95,7 +96,7 @@ pub fn ProfileGallery() -> impl IntoView {
         let left = scroll_height - (client_height + scroll_top);
 
         if left < client_height {
-            global_state.socket_state_used(connection_load_state_name);
+            //global_state.socket_state_used(connection_load_state_name);
             on_fetch(
                 last,
                 calc_fit_count(client_width as u32, client_height as u32) * 2,
@@ -140,7 +141,6 @@ pub fn ProfileGallery() -> impl IntoView {
                 user_id: String::from(new_user),
             };
             global_state.socket_send(msg);
-
         }
     });
 
@@ -150,7 +150,7 @@ pub fn ProfileGallery() -> impl IntoView {
             return;
         }
 
-        let loaded = loaded_sig.with(|state|*state==LoadingNotFound::NotLoaded);
+        let loaded = loaded_sig.with(|state| *state == LoadingNotFound::NotLoaded);
         if !loaded {
             return;
         }
@@ -171,7 +171,7 @@ pub fn ProfileGallery() -> impl IntoView {
         let client_height = section.client_height();
         let client_width = section.client_width();
 
-        global_state.socket_state_used(connection_load_state_name);
+        //global_state.socket_state_used(connection_load_state_name);
 
         global_gallery_imgs.set(vec![]);
 

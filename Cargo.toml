@@ -167,6 +167,10 @@ bytecheck = { version = "0.6.11", features = ["simdutf8", "std"] }
 jsonwebtoken = "9.2.0"
 bcrypt = "0.15.0"
 base64 = "0.21.7"
+gloo-net = "0.5.0"
+ed25519 = "2.2.3"
+ed25519-dalek = { version = "2.1.0", features = ["signature", "rand_core"] }
+rand_core = "0.6.4"
 
 
 [features]

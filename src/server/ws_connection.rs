@@ -1,6 +1,7 @@
 use crate::database::models::acc::Acc;
+use crate::database::models::acc_session::SessionToken;
 use crate::server::client_msg::{ClientMsg, WsPath};
-use crate::server::create_server::ServerState;
+use crate::server::create_server::{ServerState, TOKEN_SIZE};
 use crate::server::registration_invalid::{RegistrationInvalidMsg, BCRYPT_COST};
 use crate::server::server_msg::ServerMsg;
 use crate::server::ws_route::ws_registration::ws_register;
@@ -8,6 +9,7 @@ use actix::{Actor, Addr, AsyncContext, Handler, Recipient, StreamHandler};
 use actix_web::web::Bytes;
 use actix_web_actors::ws::{self, CloseCode, CloseReason, ProtocolError};
 use chrono::Utc;
+use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use rand::Rng;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::LockResult;
@@ -73,6 +75,7 @@ impl Handler<ByteActor> for WsConnection {
         let db = self.server_state.db.clone();
         let pepper = self.server_state.pepper.clone();
         let throttle_time = self.server_state.throttle_time.clone();
+        let jwt_secret = self.server_state.jwt_secret.clone();
         let ip = self.ip.clone();
         let recipient: Recipient<_> = ctx.address().recipient();
         let fut = async move {
@@ -135,8 +138,22 @@ impl Handler<ByteActor> for WsConnection {
                     .or_else(|e| Err(ServerMsgCreationError::from(e))),
                 ClientMsg::Login { email, password } => {
                     println!("LOGIN '{}' '{}'", email, password);
+                    
+                    let user = db.acc_find_one(&email).await;
+                    
+                    
+                    let token: String = (0..TOKEN_SIZE)
+                        .map(|_| char::from(rand::thread_rng().gen_range(32..127)))
+                        .collect();
+                    let key = b"secret";
+                    let header = Header::new(Algorithm::HS512);
+                    let token = encode(&header, &token, &EncodingKey::from_secret(jwt_secret.as_bytes()))
+                        .expect("Failed to create token");
+                    // let acc = SessionToken {
+                    //     token,
+                    // };
 
-                    Ok(ServerMsg::None)
+                    Ok(ServerMsg::LoginComplete(token))
                 }
                 ClientMsg::Register { email, password } => {
                     ws_register(db, pepper, email, password).await

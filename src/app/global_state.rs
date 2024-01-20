@@ -55,6 +55,7 @@ impl GlobalState {
     }
 
     pub fn socket_send(&self, client_msg: ClientMsg) {
+        let name = client_msg.name();
         let bytes = rkyv::to_bytes::<ClientMsg, 256>(&client_msg);
         let Ok(bytes) = bytes else {
             println!(
@@ -65,6 +66,7 @@ impl GlobalState {
             return;
         };
         let bytes = bytes.into_vec();
+        self.socket_state_used(&name);
         self.socket_send.get_untracked()(bytes);
     }
 
@@ -91,7 +93,7 @@ impl GlobalState {
         });
     }
 
-    pub fn socket_state_used(&self, name: &'static str) {
+    fn socket_state_used(&self, name: &'static str) {
         self.socket_timestamps.update_untracked(move |state| {
             let Some(socket_state) = state.get_mut(name) else {
                 state.insert(name, Utc::now().timestamp_nanos_opt().unwrap());

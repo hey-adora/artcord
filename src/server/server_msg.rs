@@ -1,8 +1,8 @@
 use crate::database::models::user::User;
+use crate::server::registration_invalid::RegistrationInvalidMsg;
 use crate::server::server_msg_img::ServerMsgImg;
 use rkyv::{Archive, Deserialize, Serialize};
 use thiserror::Error;
-use crate::server::registration_invalid::RegistrationInvalidMsg;
 
 #[derive(Archive, Deserialize, Serialize, Debug, PartialEq)]
 #[archive(compare(PartialEq), check_bytes)]
@@ -13,6 +13,8 @@ pub enum ServerMsg {
     Profile(Option<User>),
     RegistrationInvalid(RegistrationInvalidMsg),
     RegistrationCompleted,
+    LoginInvalid(String),
+    LoginComplete(String),
     None,
     Reset,
 }
@@ -20,21 +22,23 @@ pub enum ServerMsg {
 pub const SERVER_MSG_IMGS_NAME: &str = "imgs";
 pub const SERVER_MSG_PROFILE_IMGS_NAME: &str = "profile_imgs";
 pub const SERVER_MSG_PROFILE: &str = "profile";
+pub const SERVER_MSG_REGISTRATION: &str = "registration";
+pub const SERVER_MSG_LOGIN: &str = "login";
 pub const SERVER_MSG_RESET_NAME: &str = "reset";
-pub const SERVER_MSG_REGISTRATION_COMPLETED: &str = "registration_completed";
-pub const SERVER_MSG_REGISTRATION_INVALID: &str = "registration_invalid";
 pub const SERVER_MSG_NONE_NAME: &str = "NONE";
 
 impl ServerMsg {
-    pub fn name(&self) -> String {
+    pub fn name(&self) -> &'static str {
         match self {
-            ServerMsg::Imgs(_a) => String::from(SERVER_MSG_IMGS_NAME),
-            ServerMsg::ProfileImgs(_a) => String::from(SERVER_MSG_PROFILE_IMGS_NAME),
-            ServerMsg::Profile(_) => String::from(SERVER_MSG_PROFILE),
-            ServerMsg::RegistrationInvalid(_) => String::from(SERVER_MSG_REGISTRATION_INVALID),
-            ServerMsg::RegistrationCompleted => String::from(SERVER_MSG_REGISTRATION_COMPLETED),
-            ServerMsg::Reset => String::from(SERVER_MSG_RESET_NAME),
-            ServerMsg::None => String::from(SERVER_MSG_NONE_NAME),
+            ServerMsg::Imgs(_a) => SERVER_MSG_IMGS_NAME,
+            ServerMsg::ProfileImgs(_a) => SERVER_MSG_PROFILE_IMGS_NAME,
+            ServerMsg::Profile(_) => SERVER_MSG_PROFILE,
+            ServerMsg::RegistrationInvalid(_) => SERVER_MSG_REGISTRATION,
+            ServerMsg::RegistrationCompleted => SERVER_MSG_REGISTRATION,
+            ServerMsg::LoginInvalid(_) => SERVER_MSG_LOGIN,
+            ServerMsg::LoginComplete(_) => SERVER_MSG_LOGIN,
+            ServerMsg::Reset => SERVER_MSG_RESET_NAME,
+            ServerMsg::None => SERVER_MSG_NONE_NAME,
         }
     }
 }

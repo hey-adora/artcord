@@ -543,7 +543,15 @@ pub async fn create_database(mongo_url: String) -> DB {
     let collection_allowed_channel = database.collection::<AllowedChannel>("allowed_channel");
     let collection_allowed_role = database.collection::<AllowedRole>("allowed_role");
     let collection_allowed_guild = database.collection::<AllowedGuild>("allowed_guild");
+
+    let opts = IndexOptions::builder().unique(true).build();
+    let index = IndexModel::builder()
+        .keys(doc! { "email": -1 })
+        .options(opts)
+        .build();
+
     let collection_acc = database.collection::<Acc>("acc");
+    collection_acc.create_index(index, None).await.expect("Failed to create collection index.");
 
     let opts = IndexOptions::builder().unique(true).build();
     let index = IndexModel::builder()

@@ -1,5 +1,8 @@
 use crate::database::rkw::date_time::DT;
-use crate::server::server_msg::WebSerializeError;
+use crate::server::server_msg::{
+    WebSerializeError, SERVER_MSG_IMGS_NAME, SERVER_MSG_LOGIN, SERVER_MSG_PROFILE,
+    SERVER_MSG_PROFILE_IMGS_NAME, SERVER_MSG_REGISTRATION,
+};
 use bson::DateTime;
 use chrono::Utc;
 use rkyv::{Deserialize, Serialize};
@@ -40,6 +43,22 @@ pub enum ClientMsg {
     },
 }
 
+impl ClientMsg {
+    pub fn name(&self) -> &'static str {
+        match self {
+            ClientMsg::GalleryInit { amount, from } => SERVER_MSG_IMGS_NAME,
+            ClientMsg::UserGalleryInit {
+                from,
+                amount,
+                user_id,
+            } => SERVER_MSG_PROFILE_IMGS_NAME,
+            ClientMsg::User { user_id } => SERVER_MSG_PROFILE,
+            ClientMsg::Register { email, password } => SERVER_MSG_REGISTRATION,
+            ClientMsg::Login { email, password } => SERVER_MSG_LOGIN,
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum WsPath {
     Gallery,
@@ -62,9 +81,9 @@ impl WsPath {
 
     pub fn to_count(&self) -> u64 {
         match self {
-            WsPath::Gallery => 10,
-            WsPath::UserGallery => 10,
-            WsPath::User => 10,
+            WsPath::Gallery => 6000,
+            WsPath::UserGallery => 6000,
+            WsPath::User => 6000,
             WsPath::Login => 10,
             WsPath::Register => 10,
         }

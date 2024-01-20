@@ -5,6 +5,7 @@ use crate::app::utils::ServerMsgImgResized;
 use crate::app::utils::{resize_imgs, NEW_IMG_HEIGHT};
 use crate::server::server_msg::ServerMsg;
 use global_state::GlobalState;
+use gloo_net::http::Request;
 use leptos::logging::log;
 use leptos::*;
 use leptos_meta::*;
@@ -180,7 +181,32 @@ pub fn App() -> impl IntoView {
                                 .registration
                                 .loading_state
                                 .set(AuthLoadingState::Failed(invalid));
-                        } //  msg => global_state.socket_recv.set(msg),
+                        }
+                        ServerMsg::LoginInvalid(invalid) => {}
+                        ServerMsg::LoginComplete(token) => {
+                            //log!("TOKEN: {}", token);
+
+                            let res = create_local_resource(
+                                || {},
+                                move |_| {
+                                    let token = token.clone();
+                                    async move {
+                                        let resp = Request::post("/login_token").body(token);
+
+                                        let Ok(resp) = resp else {
+                                            return;
+                                        };
+
+                                        let resp = resp.send().await;
+                                        let Ok(resp) = resp else {
+                                            return;
+                                        };
+
+                                        log!("{:#?}", resp);
+                                    }
+                                },
+                            );
+                        }
                     };
                     global_state.socket_state_reset(&server_msg_name);
                 })

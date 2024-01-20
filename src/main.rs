@@ -6,13 +6,67 @@ use artcord::bot::create_bot;
 
 use artcord::bot::create_bot::create_bot;
 use artcord::database::create_database::create_database;
-use artcord::server::create_server::create_server;
+use artcord::server::create_server::{create_server, TOKEN_SIZE};
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use dotenv::dotenv;
 use futures::try_join;
+use jsonwebtoken::encode;
+use rand::Rng;
 use std::env;
+use std::fs::{File, OpenOptions};
+use std::io::prelude::*;
+use std::io::Write;
 use std::sync::Arc;
+
+pub fn get_env<F: Fn() -> String>(key: &str, base64: bool, default_val: Option<F>) -> String {
+    let secret = std::env::var(key);
+    if let Ok(secret) = secret {
+        if base64 {
+            let secret = BASE64_STANDARD.decode(secret).expect(&format!(
+                "{} in .env file is invalid, must be encoded in base64.",
+                key
+            ));
+            String::from_utf8(secret).expect(&format!(
+                "{} in .env file is invalid, must be UTF8 compatible.",
+                key
+            ))
+        } else {
+            secret
+        }
+    } else {
+        let Some(default_val) = default_val else {
+            panic!("{} in .env file was not provided.", key);
+        };
+
+        let val = default_val();
+
+        let val = if base64 {
+            let val = default_val();
+            BASE64_STANDARD.encode(val)
+        } else {
+            default_val()
+        };
+
+        let mut file = OpenOptions::new()
+            .write(true)
+            .append(true)
+            .create(true)
+            .open(".env")
+            .expect("Failed to open .evn file.");
+
+        println!("ENV: GENERATED {}.", key);
+
+        if base64 {
+            let val = BASE64_STANDARD.encode(&val);
+            writeln!(file, "\n{}={}", key, val).expect("Failed to write to .evn file.");
+        } else {
+            writeln!(file, "\n{}={}", key, &val).expect("Failed to write to .evn file.");
+        }
+
+        val
+    }
+}
 
 #[cfg(feature = "ssr")]
 #[actix_web::main]
@@ -25,6 +79,49 @@ async fn main() -> std::io::Result<()> {
     let discord_default_guild =
         std::env::var("DISCORD_DEFAULT_GUILD").expect("ENV MISSING: DISCORD_DEFAULT_GUILD");
     let pepper_base64 = std::env::var("PEPPER_BASE64").expect("ENV MISSING: PEPPER_BASE64");
+    //std::env::
+    let jwt_secret: String = get_env(
+        "JWT_SECRET_BASE64",
+        true,
+        Some(|| {
+            BASE64_STANDARD.encode(
+                (0..TOKEN_SIZE)
+                    .map(|_| char::from(rand::thread_rng().gen_range(32..127)))
+                    .collect::<String>(),
+            )
+        }),
+    );
+    let jwt_secret: Arc<String> = Arc::new(jwt_secret);
+    // let jwt_secret_base64: String = {
+    //     let secret = std::env::var("JWT_SECRET_BASE64");
+    //     if let Ok(secret) = secret {
+    //         let secret = BASE64_STANDARD.decode(secret);
+    //         if let Ok(secret) = secret {
+    //             let secret = String::from_utf8(secret);
+    //             if let Ok(secret) = secret {
+    //                 secret
+    //             } else {
+    //                 panic!("JWT_SECRET_BASE64 in .env file is invalid, must be UTF8 compatible.");
+    //             }
+    //         } else {
+    //             panic!("JWT_SECRET_BASE64 in .env file is invalid, must be encoded in base64.");
+    //         }
+    //     } else {
+    //         let token: String = (0..TOKEN_SIZE)
+    //             .map(|_| char::from(rand::thread_rng().gen_range(32..127)))
+    //             .collect();
+    //         let token_bse64 = BASE64_STANDARD.encode(&token);
+    //         println!("GENERATED: {}", &token_bse64);
+    //         let file = File::open("./.env");
+    //
+    //         std::env::set_var("JWT_SECRET_BASE64", token_bse64);
+    //
+    //         token
+    //     }
+    //     // let token: String = (0..TOKEN_SIZE)
+    //     //     .map(|_| char::from(rand::thread_rng().gen_range(32..127)))
+    //     //     .collect();
+    // };
 
     let assets_root_dir: Arc<String> = Arc::new(assets_root_dir);
     let gallery_root_dir: Arc<String> = Arc::new(gallery_root_dir);
@@ -41,7 +138,7 @@ async fn main() -> std::io::Result<()> {
         .unwrap();
 
     let mut bot_server = create_bot(db.clone(), token, gallery_root_dir.as_str()).await;
-    let web_server = create_server(db, gallery_root_dir, assets_root_dir, pepper).await;
+    let web_server = create_server(db, gallery_root_dir, assets_root_dir, pepper, jwt_secret).await;
 
     let r = try_join!(
         async { web_server.await.or_else(|e| Err(e.to_string())) },

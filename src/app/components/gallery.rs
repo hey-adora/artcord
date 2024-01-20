@@ -1,15 +1,18 @@
 use crate::app::components::navbar::shrink_nav;
+use crate::app::global_state::GlobalState;
 use bson::DateTime;
 use chrono::Utc;
 use leptos::ev::resize;
 use leptos::html::Section;
+use leptos::logging::log;
 use leptos::*;
 use leptos_router::use_location;
 use leptos_use::{use_event_listener, use_window};
 use web_sys::Event;
-use crate::app::global_state::GlobalState;
 
-use crate::app::utils::{calc_fit_count, LoadingNotFound, NEW_IMG_HEIGHT, resize_imgs, ServerMsgImgResized};
+use crate::app::utils::{
+    calc_fit_count, resize_imgs, LoadingNotFound, ServerMsgImgResized, NEW_IMG_HEIGHT,
+};
 
 //F: Fn(ServerMsgImgResized) -> IV + 'static, IV: IntoView
 #[component]
@@ -41,6 +44,7 @@ pub fn Gallery<
     // });
     let section_scroll = move |_: Event| {
         if !global_state.socket_state_is_ready(connection_load_state_name) {
+            log!("NOT READY YET");
             return;
         }
 
@@ -65,7 +69,7 @@ pub fn Gallery<
         let left = scroll_height - (client_height + scroll_top);
 
         if left < client_height {
-            global_state.socket_state_used(connection_load_state_name);
+            //global_state.socket_state_used(connection_load_state_name);
             on_fetch(
                 last,
                 calc_fit_count(client_width as u32, client_height as u32) * 2,
@@ -94,7 +98,7 @@ pub fn Gallery<
     });
 
     create_effect(move |_| {
-        let loaded = loaded_sig.with_untracked(|state|*state == LoadingNotFound::Loaded);
+        let loaded = loaded_sig.with_untracked(|state| *state == LoadingNotFound::Loaded);
         if !loaded {
             return;
         }
@@ -127,7 +131,7 @@ pub fn Gallery<
         let client_height = section.client_height();
         let client_width = section.client_width();
 
-        global_state.socket_state_used(connection_load_state_name);
+        //global_state.socket_state_used(connection_load_state_name);
 
         on_fetch(
             DateTime::from_millis(Utc::now().timestamp_millis()),
