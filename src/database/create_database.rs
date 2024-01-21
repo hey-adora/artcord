@@ -1,4 +1,5 @@
 use crate::database::models::acc::Acc;
+use crate::database::models::acc_session::AccSession;
 use crate::database::models::allowed_channel::AllowedChannel;
 use crate::database::models::allowed_guild::AllowedGuild;
 use crate::database::models::allowed_role::AllowedRole;
@@ -13,7 +14,7 @@ use chrono::Utc;
 use futures::TryStreamExt;
 use mongodb::options::{ClientOptions, IndexOptions};
 use mongodb::results::{DeleteResult, InsertOneResult};
-use mongodb::{Client, IndexModel};
+use mongodb::{Client, Cursor, IndexModel};
 use serenity::prelude::TypeMapKey;
 use std::sync::Arc;
 use thiserror::Error;
@@ -29,6 +30,7 @@ pub struct DB {
     collection_allowed_guild: mongodb::Collection<AllowedGuild>,
     collection_auto_reaction: mongodb::Collection<AutoReaction>,
     collection_acc: mongodb::Collection<Acc>,
+    collection_acc_session: mongodb::Collection<AccSession>,
 }
 
 impl TypeMapKey for DB {
@@ -38,6 +40,37 @@ impl TypeMapKey for DB {
 // Err(mongodb::error::Error::custom(Arc::new("invalid ReactionType type".to_string())) )
 
 impl DB {
+    pub async fn acc_session_find_one(
+        &self,
+        token: &str,
+    ) -> Result<Option<AccSession>, mongodb::error::Error> {
+        let acc = self
+            .collection_acc_session
+            .find_one(doc! { "token": token }, None)
+            .await?;
+
+        Ok(acc)
+    }
+    pub async fn acc_session_insert_one(
+        &self,
+        acc_session: AccSession,
+    ) -> Result<InsertOneResult, mongodb::error::Error> {
+        let acc = self
+            .collection_acc_session
+            .insert_one(acc_session, None)
+            .await?;
+
+        Ok(acc)
+    }
+
+    pub async fn acc_find_one_by_id(&self, _id: &ObjectId) -> Result<Option<Acc>, mongodb::error::Error> {
+        let acc = self
+            .collection_acc
+            .find_one(doc! { "_id": _id }, None)
+            .await?;
+
+        Ok(acc)
+    }
     pub async fn acc_find_one(&self, email: &str) -> Result<Option<Acc>, mongodb::error::Error> {
         let acc = self
             .collection_acc
@@ -46,7 +79,7 @@ impl DB {
 
         Ok(acc)
     }
-    pub async fn create_acc(&self, acc: Acc) -> Result<Bson, mongodb::error::Error> {
+    pub async fn acc_insert_one(&self, acc: Acc) -> Result<Bson, mongodb::error::Error> {
         // let acc = self
         //     .collection_acc
         //     .find_one(doc! { "email": email }, None)
@@ -238,13 +271,19 @@ impl DB {
         // println!("{:#?}", pipeline);
 
         let mut imgs = self.collection_img.aggregate(pipeline, None).await?;
+        let imgs = imgs.try_collect().await.unwrap_or_else(|_| vec![]);
 
         let mut send_this: Vec<ServerMsgImg> = Vec::new();
 
-        while let Some(result) = imgs.try_next().await? {
-            let doc: ServerMsgImg = mongodb::bson::from_document(result)?;
+        for img in imgs {
+            let doc: ServerMsgImg = mongodb::bson::from_document(img)?;
             send_this.push(doc);
         }
+
+        // while let Some(result) = imgs.try_next().await? {
+        //     let doc: ServerMsgImg = mongodb::bson::from_document(result)?;
+        //     send_this.push(doc);
+        // }
 
         //println!("Len: {}", send_this.len());
 
@@ -539,7 +578,18 @@ pub async fn create_database(mongo_url: String) -> DB {
 
     let database = client.database("artcord");
     let collection_img = database.collection::<Img>("img");
+
+    let opts = IndexOptions::builder().unique(true).build();
+    let index = IndexModel::builder()
+        .keys(doc! { "id": -1 })
+        .options(opts)
+        .build();
     let collection_user = database.collection::<User>("user");
+    collection_user
+        .create_index(index, None)
+        .await
+        .expect("Failed to create collection index.");
+
     let collection_allowed_channel = database.collection::<AllowedChannel>("allowed_channel");
     let collection_allowed_role = database.collection::<AllowedRole>("allowed_role");
     let collection_allowed_guild = database.collection::<AllowedGuild>("allowed_guild");
@@ -551,7 +601,12 @@ pub async fn create_database(mongo_url: String) -> DB {
         .build();
 
     let collection_acc = database.collection::<Acc>("acc");
-    collection_acc.create_index(index, None).await.expect("Failed to create collection index.");
+    collection_acc
+        .create_index(index, None)
+        .await
+        .expect("Failed to create collection index.");
+
+    let collection_acc_session = database.collection::<AccSession>("acc_session");
 
     let opts = IndexOptions::builder().unique(true).build();
     let index = IndexModel::builder()
@@ -578,6 +633,7 @@ pub async fn create_database(mongo_url: String) -> DB {
         collection_allowed_guild,
         collection_auto_reaction,
         collection_acc,
+        collection_acc_session,
     }
 }
 

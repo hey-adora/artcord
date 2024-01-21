@@ -1,4 +1,5 @@
 use crate::database::create_database::DB;
+use crate::database::models::acc::Acc;
 use crate::server::client_msg::WsPath;
 use crate::server::ws_connection::WsConnection;
 use actix::{Actor, Addr, AsyncContext, Handler, Recipient, StreamHandler};
@@ -36,12 +37,40 @@ async fn ws_route(
     };
 
     let cookie = req.cookie("token");
-    println!("COOKIE {:#?}", cookie);
+    let db = server_state.db.clone();
+    // if let Some(cookie) = cookie {
+    //     println!("COOKIE {}", cookie.value());
+    // };
+    let acc: Option<Acc> = {
+        let acc_session = if let Some(cookie) = cookie {
+            let acc = db.acc_session_find_one(cookie.value()).await;
+            if let Ok(acc) = acc {
+                acc
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        if let Some(acc_session) = acc_session {
+            let acc = db.acc_find_one_by_id(&acc_session.acc_id).await;
+            if let Ok(acc) = acc {
+                acc
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    };
+    println!("ACC {:#?}", acc);
 
     ws::start(
         WsConnection {
             id: uuid::Uuid::new_v4(),
             ip: peer.ip(),
+            acc,
             server_state: server_state.get_ref().to_owned().clone(),
         },
         &req,
@@ -96,7 +125,7 @@ pub struct ServerState {
     pub gallery_root_dir: Arc<String>,
     pub db: Arc<DB>,
     pub pepper: Arc<String>,
-    pub jwt_secret: Arc<String>
+    pub jwt_secret: Arc<Vec<u8>>,
 }
 
 async fn overview(
@@ -117,7 +146,7 @@ pub async fn create_server(
     galley_root_dir: Arc<String>,
     assets_root_dir: Arc<String>,
     pepper: Arc<String>,
-    jwt_secret: Arc<String>
+    jwt_secret: Arc<Vec<u8>>,
 ) -> Server {
     let conf = get_configuration(None).await.unwrap();
     println!("CONFIG: {:#?}", &conf);
@@ -143,7 +172,7 @@ pub async fn create_server(
                 gallery_root_dir: galley_root_dir.clone(),
                 db: db.clone(),
                 pepper: pepper.clone(),
-                jwt_secret: jwt_secret.clone()
+                jwt_secret: jwt_secret.clone(),
             }))
             .route("/overview", web::get().to(overview))
             .route("/login_token", web::post().to(login_token_route))
@@ -159,7 +188,7 @@ pub async fn create_server(
                 crate::app::App,
             )
     })
-    .workers(2)
+    .workers(1)
     .bind(&addr)
     .unwrap()
     .run()

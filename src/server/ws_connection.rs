@@ -1,10 +1,10 @@
 use crate::database::models::acc::Acc;
-use crate::database::models::acc_session::SessionToken;
 use crate::server::client_msg::{ClientMsg, WsPath};
 use crate::server::create_server::{ServerState, TOKEN_SIZE};
 use crate::server::registration_invalid::{RegistrationInvalidMsg, BCRYPT_COST};
 use crate::server::server_msg::ServerMsg;
-use crate::server::ws_route::ws_registration::ws_register;
+use crate::server::ws_connection::ws_login::ws_login;
+use crate::server::ws_connection::ws_registration::ws_register;
 use actix::{Actor, Addr, AsyncContext, Handler, Recipient, StreamHandler};
 use actix_web::web::Bytes;
 use actix_web_actors::ws::{self, CloseCode, CloseReason, ProtocolError};
@@ -15,9 +15,13 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::LockResult;
 use thiserror::Error;
 
+pub mod ws_login;
+pub mod ws_registration;
+
 pub struct WsConnection {
     pub id: uuid::Uuid,
     pub ip: IpAddr,
+    pub acc: Option<Acc>,
     pub server_state: ServerState,
 }
 
@@ -137,23 +141,7 @@ impl Handler<ByteActor> for WsConnection {
                     .and_then(|user| Ok(ServerMsg::Profile(user)))
                     .or_else(|e| Err(ServerMsgCreationError::from(e))),
                 ClientMsg::Login { email, password } => {
-                    println!("LOGIN '{}' '{}'", email, password);
-                    
-                    let user = db.acc_find_one(&email).await;
-                    
-                    
-                    let token: String = (0..TOKEN_SIZE)
-                        .map(|_| char::from(rand::thread_rng().gen_range(32..127)))
-                        .collect();
-                    let key = b"secret";
-                    let header = Header::new(Algorithm::HS512);
-                    let token = encode(&header, &token, &EncodingKey::from_secret(jwt_secret.as_bytes()))
-                        .expect("Failed to create token");
-                    // let acc = SessionToken {
-                    //     token,
-                    // };
-
-                    Ok(ServerMsg::LoginComplete(token))
+                    ws_login(db, email, password, pepper, jwt_secret).await
                 }
                 ClientMsg::Register { email, password } => {
                     ws_register(db, pepper, email, password).await
@@ -166,7 +154,7 @@ impl Handler<ByteActor> for WsConnection {
                 return;
             };
 
-            //println!("222222222 {:?}", server_msg);
+            println!("222222222 {:?}", server_msg);
 
             let bytes = rkyv::to_bytes::<_, 256>(&server_msg);
             let Ok(bytes) = bytes else {
@@ -199,7 +187,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsConnection {
         }
     }
 }
-
+// jsonwebtoken::errors::Error
 #[derive(Error, Debug)]
 pub enum ServerMsgCreationError {
     #[error("Mongodb error: {0}")]
@@ -207,4 +195,7 @@ pub enum ServerMsgCreationError {
 
     #[error("Bcrypt error: {0}")]
     Bcrypt(#[from] bcrypt::BcryptError),
+
+    #[error("JWT error: {0}")]
+    JWT(#[from] jsonwebtoken::errors::Error),
 }

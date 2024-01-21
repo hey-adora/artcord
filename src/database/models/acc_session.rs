@@ -24,11 +24,14 @@ pub struct AccSession {
     pub _id: ObjectId,
 
     #[with(OBJ)]
-    pub user_id: ObjectId,
+    pub acc_id: ObjectId,
 
     pub ip: String,
     pub agent: String,
     pub token: String,
+
+    #[with(DT)]
+    pub last_used: DateTime,
 
     #[with(DT)]
     pub modified_at: DateTime,
@@ -37,19 +40,34 @@ pub struct AccSession {
     pub created_at: DateTime,
 }
 
-
-#[derive(
-rkyv::Archive,
-rkyv::Deserialize,
-rkyv::Serialize,
-Debug,
-Serialize,
-Deserialize,
-Clone,
-PartialEq,
-)]
-#[archive(compare(PartialEq), check_bytes)]
-#[archive_attr(derive(Debug))]
-pub struct SessionToken {
-    pub token: String,
+impl AccSession {
+    pub fn new(acc_id: ObjectId, ip: String, agent: String, token: String) -> Self {
+        Self {
+            _id: ObjectId::new(),
+            acc_id,
+            ip,
+            agent,
+            token,
+            last_used: DateTime::from_millis(Utc::now().timestamp_millis()),
+            modified_at: DateTime::from_millis(Utc::now().timestamp_millis()),
+            created_at: DateTime::from_millis(Utc::now().timestamp_millis()),
+        }
+    }
 }
+
+//
+// #[derive(
+// rkyv::Archive,
+// rkyv::Deserialize,
+// rkyv::Serialize,
+// Debug,
+// Serialize,
+// Deserialize,
+// Clone,
+// PartialEq,
+// )]
+// #[archive(compare(PartialEq), check_bytes)]
+// #[archive_attr(derive(Debug))]
+// pub struct SessionToken {
+//     pub token: String,
+// }

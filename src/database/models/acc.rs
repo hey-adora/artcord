@@ -54,10 +54,9 @@ pub struct Acc {
 #[archive_attr(derive(Debug))]
 pub struct AccDiscord {
     pub user_id: String,
+
     pub token: String,
 }
-
-
 
 #[derive(
     rkyv::Archive,

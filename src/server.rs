@@ -6,5 +6,3 @@ pub mod server_msg;
 pub mod server_msg_img;
 #[cfg(feature = "ssr")]
 pub mod ws_connection;
-#[cfg(feature = "ssr")]
-pub mod ws_route;

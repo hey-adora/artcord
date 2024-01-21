@@ -54,7 +54,7 @@ pub async fn ws_register(
     let acc = Acc::new(&email, &password_hash, &email_code);
 
     let result = db
-        .create_acc(acc)
+        .acc_insert_one(acc)
         .await
         .and_then(|e| Ok(ServerMsg::RegistrationCompleted))
         .or_else(|e| Err(ServerMsgCreationError::from(e)))?;

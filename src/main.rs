@@ -19,6 +19,48 @@ use std::io::prelude::*;
 use std::io::Write;
 use std::sync::Arc;
 
+pub fn get_env_bytes<F: Fn() -> String>(
+    key: &str,
+    base64: bool,
+    default_val: Option<F>,
+) -> Vec<u8> {
+    let secret = std::env::var(key);
+    if let Ok(secret) = secret {
+        if base64 {
+            BASE64_STANDARD.decode(secret).expect(&format!(
+                "{} in .env file is invalid, must be encoded in base64.",
+                key
+            ))
+        } else {
+            secret.as_bytes().to_vec()
+        }
+    } else {
+        let Some(default_val) = default_val else {
+            panic!("{} in .env file was not provided.", key);
+        };
+
+        let val = default_val();
+
+        let mut file = OpenOptions::new()
+            .write(true)
+            .append(true)
+            .create(true)
+            .open(".env")
+            .expect("Failed to open .evn file.");
+
+        println!("ENV: GENERATED {}.", key);
+
+        if base64 {
+            let val = BASE64_STANDARD.encode(&val);
+            writeln!(file, "\n{}={}", key, val).expect("Failed to write to .evn file.");
+        } else {
+            writeln!(file, "\n{}={}", key, &val).expect("Failed to write to .evn file.");
+        }
+
+        val.as_bytes().to_vec()
+    }
+}
+
 pub fn get_env<F: Fn() -> String>(key: &str, base64: bool, default_val: Option<F>) -> String {
     let secret = std::env::var(key);
     if let Ok(secret) = secret {
@@ -40,13 +82,6 @@ pub fn get_env<F: Fn() -> String>(key: &str, base64: bool, default_val: Option<F
         };
 
         let val = default_val();
-
-        let val = if base64 {
-            let val = default_val();
-            BASE64_STANDARD.encode(val)
-        } else {
-            default_val()
-        };
 
         let mut file = OpenOptions::new()
             .write(true)
@@ -80,7 +115,7 @@ async fn main() -> std::io::Result<()> {
         std::env::var("DISCORD_DEFAULT_GUILD").expect("ENV MISSING: DISCORD_DEFAULT_GUILD");
     let pepper_base64 = std::env::var("PEPPER_BASE64").expect("ENV MISSING: PEPPER_BASE64");
     //std::env::
-    let jwt_secret: String = get_env(
+    let jwt_secret: Vec<u8> = get_env_bytes(
         "JWT_SECRET_BASE64",
         true,
         Some(|| {
@@ -91,7 +126,7 @@ async fn main() -> std::io::Result<()> {
             )
         }),
     );
-    let jwt_secret: Arc<String> = Arc::new(jwt_secret);
+    let jwt_secret: Arc<Vec<u8>> = Arc::new(jwt_secret);
     // let jwt_secret_base64: String = {
     //     let secret = std::env::var("JWT_SECRET_BASE64");
     //     if let Ok(secret) = secret {
