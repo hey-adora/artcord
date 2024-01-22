@@ -76,6 +76,7 @@ impl Handler<ByteActor> for WsConnection {
     type Result = ();
 
     fn handle(&mut self, msg: ByteActor, ctx: &mut Self::Context) -> () {
+        //self.acc
         let db = self.server_state.db.clone();
         let pepper = self.server_state.pepper.clone();
         let throttle_time = self.server_state.throttle_time.clone();

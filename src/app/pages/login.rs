@@ -35,6 +35,7 @@ pub fn validate_login(email: &str, password: &str) -> (bool, Option<String>, Opt
 pub fn Login() -> impl IntoView {
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
     let loading_state = global_state.pages.login.loading_state;
+    let suspended_loading_state = RwSignal::new(loading_state.get_untracked());
 
     let input_email: NodeRef<Input> = create_node_ref();
     let input_password: NodeRef<Input> = create_node_ref();
@@ -76,6 +77,18 @@ pub fn Login() -> impl IntoView {
 
         loading_state.set(AuthLoadingState::Processing);
     };
+
+    create_effect(move |_| {
+        let connected = global_state.socket_connected.get();
+        let current_loading_state = loading_state.get_untracked();
+
+        if !connected && current_loading_state != AuthLoadingState::Connecting {
+            suspended_loading_state.set(current_loading_state);
+            loading_state.set(AuthLoadingState::Connecting);
+        } else if connected && current_loading_state == AuthLoadingState::Connecting {
+            loading_state.set(suspended_loading_state.get_untracked());
+        }
+    });
 
     view! {
         <main class=move||format!("grid grid-rows-[1fr] place-items-center min-h-[100dvh] transition-all duration-300 pt-[4rem]")>
