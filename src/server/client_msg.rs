@@ -37,6 +37,7 @@ pub enum ClientMsg {
         email: String,
         password: String,
     },
+    Logout,
     Register {
         email: String,
         password: String,
@@ -55,6 +56,7 @@ impl ClientMsg {
             ClientMsg::User { user_id } => SERVER_MSG_PROFILE,
             ClientMsg::Register { email, password } => SERVER_MSG_REGISTRATION,
             ClientMsg::Login { email, password } => SERVER_MSG_LOGIN,
+            ClientMsg::Logout => SERVER_MSG_LOGIN,
         }
     }
 }
@@ -66,6 +68,7 @@ pub enum WsPath {
     User,
     Login,
     Register,
+    Logout,
 }
 
 impl WsPath {
@@ -76,6 +79,7 @@ impl WsPath {
             WsPath::User => 60 * 1000,
             WsPath::Login => 60 * 1000,
             WsPath::Register => 60 * 1000,
+            WsPath::Logout => 60 * 1000,
         }
     }
 
@@ -86,6 +90,7 @@ impl WsPath {
             WsPath::User => 6000,
             WsPath::Login => 10,
             WsPath::Register => 10,
+            WsPath::Logout => 10,
         }
     }
 }
@@ -116,6 +121,7 @@ impl From<&ClientMsg> for WsPath {
             ClientMsg::User { user_id } => WsPath::User,
             ClientMsg::Login { email, password } => WsPath::Login,
             ClientMsg::Register { email, password } => WsPath::Register,
+            ClientMsg::Logout => WsPath::Logout,
         }
     }
 }

@@ -4,6 +4,7 @@ use crate::server::create_server::{ServerState, TOKEN_SIZE};
 use crate::server::registration_invalid::{RegistrationInvalidMsg, BCRYPT_COST};
 use crate::server::server_msg::ServerMsg;
 use crate::server::ws_connection::ws_login::ws_login;
+use crate::server::ws_connection::ws_logout::ws_logout;
 use crate::server::ws_connection::ws_registration::ws_register;
 use actix::{Actor, Addr, AsyncContext, Handler, Recipient, StreamHandler};
 use actix_web::web::Bytes;
@@ -12,16 +13,17 @@ use chrono::Utc;
 use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use rand::Rng;
 use std::net::{IpAddr, SocketAddr};
-use std::sync::LockResult;
+use std::sync::{Arc, LockResult, PoisonError, RwLock};
 use thiserror::Error;
 
 pub mod ws_login;
+mod ws_logout;
 pub mod ws_registration;
 
 pub struct WsConnection {
     pub id: uuid::Uuid,
     pub ip: IpAddr,
-    pub acc: Option<Acc>,
+    pub acc: Arc<RwLock<Option<Acc>>>,
     pub server_state: ServerState,
 }
 
@@ -42,12 +44,33 @@ impl Actor for WsConnection {
 
     fn started(&mut self, ctx: &mut Self::Context) {
         let sessions = self.server_state.sessions.write();
+        let acc = self.acc.read();
+        let recipient: Recipient<VecActor> = ctx.address().recipient();
+
+        let Ok(mut acc) = acc else {
+            let error = sessions.err().unwrap();
+            println!("Locking WS ACC error: {}", error);
+            ctx.close(Some(CloseReason::from(CloseCode::Error)));
+            return;
+        };
+
         let Ok(mut sessions) = sessions else {
             let error = sessions.err().unwrap();
             println!("Locking WS sessions error: {}", error);
             ctx.close(Some(CloseReason::from(CloseCode::Error)));
             return;
         };
+
+        if acc.is_some() {
+            let msg = ServerMsg::LoginFromTokenComplete;
+            let bytes = msg.as_bytes();
+            let Ok(bytes) = bytes else {
+                println!("Failed to serialize server msg: {}", bytes.err().unwrap());
+                ctx.close(Some(CloseReason::from(CloseCode::Error)));
+                return;
+            };
+            recipient.do_send(VecActor(bytes.into_vec()));
+        }
 
         sessions.insert(self.id, ctx.address());
     }
@@ -81,6 +104,7 @@ impl Handler<ByteActor> for WsConnection {
         let pepper = self.server_state.pepper.clone();
         let throttle_time = self.server_state.throttle_time.clone();
         let jwt_secret = self.server_state.jwt_secret.clone();
+        let acc = self.acc.clone();
         let ip = self.ip.clone();
         let recipient: Recipient<_> = ctx.address().recipient();
         let fut = async move {
@@ -147,6 +171,7 @@ impl Handler<ByteActor> for WsConnection {
                 ClientMsg::Register { email, password } => {
                     ws_register(db, pepper, email, password).await
                 }
+                ClientMsg::Logout => ws_logout(acc).await,
             };
             //println!("8");
 
@@ -199,4 +224,7 @@ pub enum ServerMsgCreationError {
 
     #[error("JWT error: {0}")]
     JWT(#[from] jsonwebtoken::errors::Error),
+
+    #[error("RwLock error: {0}")]
+    RwLock(String),
 }

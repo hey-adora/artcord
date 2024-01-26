@@ -1,9 +1,13 @@
+use crate::app::global_state::GlobalState;
+use crate::app::pages::register::AuthLoadingState;
+use gloo_net::http::Request;
+use leptos::leptos_dom::log;
 use leptos::*;
 use leptos_router::use_location;
 use web_sys::MouseEvent;
-use crate::app::global_state::GlobalState;
 
 use crate::app::utils::{LoadingNotFound, ScrollSection};
+use crate::server::client_msg::ClientMsg;
 
 pub fn shrink_nav(nav_tran: RwSignal<bool>, y: u32) {
     if y > 100 {
@@ -71,6 +75,36 @@ pub fn Navbar() -> impl IntoView {
         }
     };
 
+    let logout = move |_: MouseEvent| {
+        let res = create_local_resource(
+            || {},
+            move |_| async move {
+                let resp = Request::post("/login_delete_token").build();
+                let Ok(resp) = resp else {
+                    log!("Logout build error: {}", resp.err().unwrap());
+                    return;
+                };
+
+                let resp = resp.send().await;
+                let Ok(resp) = resp else {
+                    log!("Login response error: {}", resp.err().unwrap());
+                    return;
+                };
+
+                log!("{:#?}", resp);
+            },
+        );
+
+        global_state.logged_in.set(false);
+        global_state
+            .pages
+            .login
+            .loading_state
+            .set(AuthLoadingState::Ready);
+
+        global_state.socket_send(ClientMsg::Logout);
+    };
+
     view! {
         <nav  id="thenav" class=move || { format!("fixed backdrop-blur text-low-purple w-full top-0 z-[100] px-6 2xl:px-[6rem] desktop:px-[16rem]  flex   gap-2  duration-500  bg-gradient-to-r from-dark-night2/75 to-light-flower/10 supports-backdrop-blur:from-dark-night2/95 supports-backdrop-blur:to-light-flower/95 {} {}", if nav_tran() == true && global_state.nav_open.get() != true { " py-2 "  } else { "" }, if global_state.nav_open.get() == true { "w-[100vw] h-[100vh]" } else { "items-center justify-between transition-all" } ) }>
             <div class=move || format!("flex gap-6 items-center {}", if global_state.nav_open.get() == true { " flex-col w-full " } else { " " })>
@@ -109,12 +143,22 @@ pub fn Navbar() -> impl IntoView {
                                     <img class="h-8" src="/assets/discord.svg"/>
                                     "Join"
                                 </a>
-                                <a href="/login" class="hidden h-12 sm:flex gap-2 items-center text-[1rem] font-black bg-gradient-to-br from-first-one to-second-one hover:to-dark-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] transition-colors duration-300 " >
-                                    "Login"
-                                </a>
-                                <a href="/register" class="hidden h-12 sm:flex gap-2 items-center text-[1rem] font-black bg-gradient-to-br from-first-one to-second-one hover:to-dark-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] transition-colors duration-300 " >
-                                    "Register"
-                                </a>
+                                <Show when=move|| global_state.logged_in.get() fallback=||view! {
+                                    <a href="/login" class="hidden h-12 sm:flex gap-2 items-center text-[1rem] font-black bg-gradient-to-br from-first-one to-second-one hover:to-dark-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] transition-colors duration-300 " >
+                                        "Login"
+                                    </a>
+                                    <a href="/register" class="hidden h-12 sm:flex gap-2 items-center text-[1rem] font-black bg-gradient-to-br from-first-one to-second-one hover:to-dark-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] transition-colors duration-300 " >
+                                        "Register"
+                                    </a>
+                                }>
+                                    <a href="/profile" class="hidden h-12 sm:flex gap-2 items-center text-[1rem] font-black bg-gradient-to-br from-first-one to-second-one hover:to-dark-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] transition-colors duration-300 " >
+                                        "Profile"
+                                    </a>
+                                    <button href="/profile" on:click=logout class="hidden h-12 sm:flex gap-2 items-center text-[1rem] font-black bg-gradient-to-br from-first-one to-second-one hover:to-dark-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] transition-colors duration-300 " >
+                                        "Logout"
+                                    </button>
+                                </Show>
+
                                 <button class="block sm:hidden h-[48px]" on:click=on_nav_click >
                                     <img class="    " src="/assets/burger.svg" alt=""/>
                                 </button>

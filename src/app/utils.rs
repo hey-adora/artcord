@@ -3,7 +3,7 @@ use bson::DateTime;
 use chrono::Utc;
 
 use leptos::*;
-use leptos::{create_rw_signal, RwSignal, SignalGetUntracked, window};
+use leptos::{create_rw_signal, window, RwSignal, SignalGetUntracked};
 use rand::Rng;
 use std::fmt::Debug;
 use wasm_bindgen::JsValue;
@@ -53,6 +53,8 @@ pub struct ServerMsgImgResized {
     pub modified_at: DateTime,
     pub created_at: DateTime,
 }
+
+// Hi
 
 impl Default for ServerMsgImgResized {
     fn default() -> Self {
@@ -173,7 +175,6 @@ impl PageGalleryState {
         }
     }
 }
-
 
 pub fn get_window_path() -> String {
     let location: Location = window().location();

@@ -4,6 +4,7 @@ use crate::server::client_msg::WsPath;
 use crate::server::ws_connection::WsConnection;
 use actix::{Actor, Addr, AsyncContext, Handler, Recipient, StreamHandler};
 use actix_files::Files;
+use actix_web::cookie::time::OffsetDateTime;
 use actix_web::cookie::{Cookie, SameSite};
 use actix_web::dev::Server;
 use actix_web::web::Bytes;
@@ -70,7 +71,7 @@ async fn ws_route(
         WsConnection {
             id: uuid::Uuid::new_v4(),
             ip: peer.ip(),
-            acc,
+            acc: Arc::new(RwLock::new(acc)),
             server_state: server_state.get_ref().to_owned().clone(),
         },
         &req,
@@ -105,6 +106,29 @@ async fn login_token_route(
     //println!("{:#?}", body);
     let cookie = Cookie::build("token", token)
         .domain("localhost")
+        .path("/ws")
+        .http_only(true)
+        .same_site(SameSite::Strict)
+        .secure(true)
+        .finish();
+
+    HttpResponse::Ok().cookie(cookie).finish()
+}
+
+async fn login_delete_token_route(
+    req: HttpRequest,
+    mut stream: web::Payload,
+    server_state: actix_web::web::Data<ServerState>,
+) -> impl Responder {
+    let time = OffsetDateTime::from_unix_timestamp(0);
+    let Ok(time) = time else {
+        return HttpResponse::InternalServerError().body("Failed to create time.");
+    };
+
+    //println!("{:#?}", body);
+    let cookie = Cookie::build("token", "deleted")
+        .domain("localhost")
+        .expires(time)
         .path("/ws")
         .http_only(true)
         .same_site(SameSite::Strict)
@@ -176,6 +200,10 @@ pub async fn create_server(
             }))
             .route("/overview", web::get().to(overview))
             .route("/login_token", web::post().to(login_token_route))
+            .route(
+                "/login_delete_token",
+                web::post().to(login_delete_token_route),
+            )
             .route("/favicon.ico", web::get().to(favicon))
             .route("/ws/", web::get().to(ws_route))
             .route("/api/{tail:.*}", leptos_actix::handle_server_fns())

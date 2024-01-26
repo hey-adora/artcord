@@ -1,7 +1,10 @@
 use crate::database::models::user::User;
 use crate::server::registration_invalid::RegistrationInvalidMsg;
 use crate::server::server_msg_img::ServerMsgImg;
-use rkyv::{Archive, Deserialize, Serialize};
+use rkyv::ser::serializers::{
+    AllocScratchError, CompositeSerializerError, SharedSerializeMapError,
+};
+use rkyv::{AlignedVec, Archive, Deserialize, Infallible, Serialize};
 use thiserror::Error;
 
 #[derive(Archive, Deserialize, Serialize, Debug, PartialEq)]
@@ -15,6 +18,8 @@ pub enum ServerMsg {
     RegistrationCompleted,
     LoginInvalid(String),
     LoginComplete(String),
+    LoginFromTokenComplete,
+    LoggedOut,
     None,
     Reset,
 }
@@ -37,6 +42,8 @@ impl ServerMsg {
             ServerMsg::RegistrationCompleted => SERVER_MSG_REGISTRATION,
             ServerMsg::LoginInvalid(_) => SERVER_MSG_LOGIN,
             ServerMsg::LoginComplete(_) => SERVER_MSG_LOGIN,
+            ServerMsg::LoginFromTokenComplete => SERVER_MSG_LOGIN,
+            ServerMsg::LoggedOut => SERVER_MSG_LOGIN,
             ServerMsg::Reset => SERVER_MSG_RESET_NAME,
             ServerMsg::None => SERVER_MSG_NONE_NAME,
         }
@@ -67,5 +74,18 @@ impl ServerMsg {
             })?;
 
         Ok(server_msg)
+    }
+
+    pub fn as_bytes(
+        &self,
+    ) -> Result<
+        AlignedVec,
+        CompositeSerializerError<
+            std::convert::Infallible,
+            AllocScratchError,
+            SharedSerializeMapError,
+        >,
+    > {
+        rkyv::to_bytes::<_, 256>(self)
     }
 }

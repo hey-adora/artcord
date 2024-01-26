@@ -11,6 +11,7 @@ use std::rc::Rc;
 
 #[derive(Copy, Clone, Debug)]
 pub struct GlobalState {
+    pub logged_in: RwSignal<bool>,
     pub section: RwSignal<ScrollSection>,
     pub nav_open: RwSignal<bool>,
     pub nav_tran: RwSignal<bool>,
@@ -41,6 +42,7 @@ impl Pages {
 impl GlobalState {
     pub fn new() -> Self {
         Self {
+            logged_in: create_rw_signal(false),
             section: create_rw_signal(ScrollSection::Home),
             nav_open: create_rw_signal(false),
             nav_tran: create_rw_signal(true),

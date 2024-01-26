@@ -194,11 +194,13 @@ pub fn App() -> impl IntoView {
                                         let resp = Request::post("/login_token").body(token);
 
                                         let Ok(resp) = resp else {
+                                            log!("Login build error: {}", resp.err().unwrap());
                                             return;
                                         };
 
                                         let resp = resp.send().await;
                                         let Ok(resp) = resp else {
+                                            log!("Login response error: {}", resp.err().unwrap());
                                             return;
                                         };
 
@@ -206,6 +208,24 @@ pub fn App() -> impl IntoView {
                                     }
                                 },
                             );
+
+                            global_state.logged_in.set(true);
+                            global_state
+                                .pages
+                                .login
+                                .loading_state
+                                .set(AuthLoadingState::Completed);
+                        }
+                        ServerMsg::LoginFromTokenComplete => {
+                            global_state.logged_in.set(true);
+                            global_state
+                                .pages
+                                .login
+                                .loading_state
+                                .set(AuthLoadingState::Completed);
+                        }
+                        ServerMsg::LoggedOut => {
+                            log!("LOGGEDOUT");
                         }
                     };
                     global_state.socket_state_reset(&server_msg_name);
@@ -297,10 +317,10 @@ pub fn App() -> impl IntoView {
                 <Routes>
                     <Route path="" view=HomePage/>
                     <Route path="/gallery" view=GalleryPage/>
-                    <Route path="/login" view=Login/>
-                    <Route path="/register" view=Register/>
                     <Route path="/user/:id" view=Profile/>
                     <Route path="/*any" view=NotFound/>
+                    <ProtectedRoute condition=move || !global_state.logged_in.get() redirect_path="/" path="/login" view=Login/>
+                    <ProtectedRoute condition=move || !global_state.logged_in.get() redirect_path="/"  path="/register" view=Register/>
                 </Routes>
         </Router>
     }

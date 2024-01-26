@@ -6,6 +6,7 @@ use crate::server::registration_invalid::MINIMUM_PASSWORD_LENGTH;
 use leptos::html::Input;
 use leptos::leptos_dom::log;
 use leptos::*;
+use leptos_router::{use_navigate, NavigateOptions};
 use web_sys::SubmitEvent;
 
 pub fn validate_login(email: &str, password: &str) -> (bool, Option<String>, Option<String>) {
@@ -90,11 +91,19 @@ pub fn Login() -> impl IntoView {
         }
     });
 
+    create_effect(move |_| {
+        let navigation = use_navigate();
+
+        if global_state.logged_in.get() {
+            navigation("/", NavigateOptions::default());
+        }
+    });
+
     view! {
         <main class=move||format!("grid grid-rows-[1fr] place-items-center min-h-[100dvh] transition-all duration-300 pt-[4rem]")>
             <Navbar/>
             <section class="text-center text-black flex flex-col justify-center max-w-[20rem] w-full min-h-[20rem] bg-white rounded-3xl p-5" style:display=move || if loading_state.get() == AuthLoadingState::Completed { "flex" } else {"none"} >
-                    "Login Completed\nVerify Email."
+                    "Login Completed\n."
             </section>
             <section class="text-center text-black flex flex-col justify-center max-w-[20rem] w-full min-h-[20rem] bg-white rounded-3xl p-5" style:display=move || if loading_state.get() == AuthLoadingState::Processing { "flex" } else {"none"} >
                     "Processing..."
