@@ -61,8 +61,10 @@ impl Actor for WsConnection {
             return;
         };
 
-        if acc.is_some() {
-            let msg = ServerMsg::LoginFromTokenComplete;
+        if let Some(acc) = &*acc {
+            let msg = ServerMsg::LoginFromTokenComplete {
+                user_id: acc.email.clone(),
+            };
             let bytes = msg.as_bytes();
             let Ok(bytes) = bytes else {
                 println!("Failed to serialize server msg: {}", bytes.err().unwrap());

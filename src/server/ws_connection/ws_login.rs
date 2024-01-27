@@ -45,5 +45,8 @@ pub async fn ws_login(
     );
     db.acc_session_insert_one(acc_session).await?;
 
-    Ok(ServerMsg::LoginComplete(token))
+    Ok(ServerMsg::LoginComplete {
+        token,
+        user_id: acc.email,
+    })
 }

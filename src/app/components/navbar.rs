@@ -1,4 +1,4 @@
-use crate::app::global_state::GlobalState;
+use crate::app::global_state::{AuthState, GlobalState};
 use crate::app::pages::register::AuthLoadingState;
 use gloo_net::http::Request;
 use leptos::leptos_dom::log;
@@ -95,7 +95,7 @@ pub fn Navbar() -> impl IntoView {
             },
         );
 
-        global_state.logged_in.set(false);
+        global_state.auth.set(AuthState::LoggedOut);
         global_state
             .pages
             .login
@@ -143,7 +143,7 @@ pub fn Navbar() -> impl IntoView {
                                     <img class="h-8" src="/assets/discord.svg"/>
                                     "Join"
                                 </a>
-                                <Show when=move|| global_state.logged_in.get() fallback=||view! {
+                                <Show when=move|| global_state.auth_is_logged_out() fallback=||view! {
                                     <a href="/login" class="hidden h-12 sm:flex gap-2 items-center text-[1rem] font-black bg-gradient-to-br from-first-one to-second-one hover:to-dark-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] transition-colors duration-300 " >
                                         "Login"
                                     </a>
@@ -151,7 +151,7 @@ pub fn Navbar() -> impl IntoView {
                                         "Register"
                                     </a>
                                 }>
-                                    <a href="/profile" class="hidden h-12 sm:flex gap-2 items-center text-[1rem] font-black bg-gradient-to-br from-first-one to-second-one hover:to-dark-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] transition-colors duration-300 " >
+                                    <a href=move || format!("/user/{}", global_state.page_profile.user.get().and_then(|u|Some(u.id)).unwrap_or_default()) class="hidden h-12 sm:flex gap-2 items-center text-[1rem] font-black bg-gradient-to-br from-first-one to-second-one hover:to-dark-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] transition-colors duration-300 " >
                                         "Profile"
                                     </a>
                                     <button href="/profile" on:click=logout class="hidden h-12 sm:flex gap-2 items-center text-[1rem] font-black bg-gradient-to-br from-first-one to-second-one hover:to-dark-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] transition-colors duration-300 " >

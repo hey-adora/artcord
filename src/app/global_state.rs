@@ -4,14 +4,15 @@ use crate::server::client_msg::ClientMsg;
 use crate::server::server_msg::ServerMsg;
 use chrono::Utc;
 use leptos::{
-    create_rw_signal, RwSignal, SignalGetUntracked, SignalUpdateUntracked, SignalWithUntracked,
+    create_rw_signal, RwSignal, SignalGetUntracked, SignalUpdateUntracked, SignalWith,
+    SignalWithUntracked,
 };
 use std::collections::HashMap;
 use std::rc::Rc;
 
 #[derive(Copy, Clone, Debug)]
 pub struct GlobalState {
-    pub logged_in: RwSignal<bool>,
+    pub auth: RwSignal<AuthState>,
     pub section: RwSignal<ScrollSection>,
     pub nav_open: RwSignal<bool>,
     pub nav_tran: RwSignal<bool>,
@@ -22,6 +23,18 @@ pub struct GlobalState {
     pub page_galley: PageGalleryState,
     pub page_profile: PageProfileState,
     pub pages: Pages,
+}
+
+// #[derive(Clone, Debug)]
+// pub struct Auth {
+//     user_id: String,
+// }
+
+#[derive(Clone, Debug)]
+pub enum AuthState {
+    Processing,
+    LoggedIn { user_id: String },
+    LoggedOut,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -42,7 +55,7 @@ impl Pages {
 impl GlobalState {
     pub fn new() -> Self {
         Self {
-            logged_in: create_rw_signal(false),
+            auth: create_rw_signal(AuthState::Processing),
             section: create_rw_signal(ScrollSection::Home),
             nav_open: create_rw_signal(false),
             nav_tran: create_rw_signal(true),
@@ -54,6 +67,27 @@ impl GlobalState {
             page_profile: PageProfileState::new(),
             pages: Pages::new(),
         }
+    }
+
+    pub fn auth_is_processing(&self) -> bool {
+        self.auth.with(|a| match a {
+            AuthState::Processing => true,
+            _ => false,
+        })
+    }
+
+    pub fn auth_is_logged_in(&self) -> bool {
+        self.auth.with(|a| match a {
+            AuthState::LoggedIn { user_id } => true,
+            _ => false,
+        })
+    }
+
+    pub fn auth_is_logged_out(&self) -> bool {
+        self.auth.with(|a| match a {
+            AuthState::LoggedOut => true,
+            _ => false,
+        })
     }
 
     pub fn socket_send(&self, client_msg: ClientMsg) {

@@ -1,3 +1,5 @@
+pub mod account;
+pub mod admin;
 pub mod gallery;
 pub mod home;
 pub mod login;

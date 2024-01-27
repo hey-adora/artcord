@@ -94,7 +94,7 @@ pub fn Login() -> impl IntoView {
     create_effect(move |_| {
         let navigation = use_navigate();
 
-        if global_state.logged_in.get() {
+        if global_state.auth_is_logged_in() {
             navigation("/", NavigateOptions::default());
         }
     });

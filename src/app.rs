@@ -1,3 +1,5 @@
+use crate::app::global_state::AuthState;
+use crate::app::pages::admin::Admin;
 use crate::app::pages::login::Login;
 use crate::app::pages::register::{AuthLoadingState, Register};
 use crate::app::utils::LoadingNotFound;
@@ -15,6 +17,7 @@ use leptos_use::utils::Pausable;
 use leptos_use::{
     use_interval_fn, use_websocket_with_options, UseWebSocketOptions, UseWebsocketReturn,
 };
+use pages::account::Account;
 use pages::gallery::GalleryPage;
 use pages::home::HomePage;
 use pages::not_found::NotFound;
@@ -183,7 +186,7 @@ pub fn App() -> impl IntoView {
                                 .set(AuthLoadingState::Failed(invalid));
                         }
                         ServerMsg::LoginInvalid(invalid) => {}
-                        ServerMsg::LoginComplete(token) => {
+                        ServerMsg::LoginComplete { user_id, token } => {
                             //log!("TOKEN: {}", token);
 
                             let res = create_local_resource(
@@ -209,15 +212,15 @@ pub fn App() -> impl IntoView {
                                 },
                             );
 
-                            global_state.logged_in.set(true);
+                            global_state.auth.set(AuthState::LoggedIn { user_id });
                             global_state
                                 .pages
                                 .login
                                 .loading_state
                                 .set(AuthLoadingState::Completed);
                         }
-                        ServerMsg::LoginFromTokenComplete => {
-                            global_state.logged_in.set(true);
+                        ServerMsg::LoginFromTokenComplete { user_id } => {
+                            global_state.auth.set(AuthState::LoggedIn { user_id });
                             global_state
                                 .pages
                                 .login
@@ -318,9 +321,11 @@ pub fn App() -> impl IntoView {
                     <Route path="" view=HomePage/>
                     <Route path="/gallery" view=GalleryPage/>
                     <Route path="/user/:id" view=Profile/>
+                    <Route path="/account" view=Account/>
+                    <Route path="/admin" view=Admin/>
                     <Route path="/*any" view=NotFound/>
-                    <ProtectedRoute condition=move || !global_state.logged_in.get() redirect_path="/" path="/login" view=Login/>
-                    <ProtectedRoute condition=move || !global_state.logged_in.get() redirect_path="/"  path="/register" view=Register/>
+                    <ProtectedRoute condition=move || !global_state.auth_is_logged_out() redirect_path="/" path="/login" view=Login/>
+                    <ProtectedRoute condition=move || !global_state.auth_is_logged_out() redirect_path="/"  path="/register" view=Register/>
                 </Routes>
         </Router>
     }
