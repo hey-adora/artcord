@@ -6,17 +6,26 @@ use crate::server::server_msg::ServerMsg;
 use crate::server::ws_connection::ws_login::ws_login;
 use crate::server::ws_connection::ws_logout::ws_logout;
 use crate::server::ws_connection::ws_registration::ws_register;
-use actix::{Actor, Addr, AsyncContext, Handler, Recipient, StreamHandler};
+use actix::{
+    Actor, ActorContext, Addr, AsyncContext, ContextFutureSpawner, Handler, Recipient,
+    StreamHandler,
+};
 use actix_web::web::Bytes;
 use actix_web_actors::ws::{self, CloseCode, CloseReason, ProtocolError};
 use chrono::Utc;
+use image::EncodableLayout;
 use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use rand::Rng;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use thiserror::Error;
 use tokio::sync::RwLock;
+use tokio::task::spawn_local;
 use uuid::Uuid;
+
+const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
+const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub mod ws_login;
 mod ws_logout;
@@ -27,6 +36,61 @@ pub struct WsConnection {
     pub ip: IpAddr,
     pub acc: Arc<RwLock<Option<Acc>>>,
     pub server_state: ServerState,
+    pub hb: Instant,
+}
+
+//const PING_MSG_BYTES: &[u8] = ServerMsg::Ping.as_bytes().unwrap().as_bytes();
+
+impl WsConnection {
+    fn hb(&self, ctx: &mut <Self as Actor>::Context) {
+        let sessions = self.server_state.sessions.clone();
+        let id = self.id;
+
+        ctx.run_interval(HEARTBEAT_INTERVAL, {
+            move |act, ctx| {
+                let close_actor: Recipient<CloseActor> = ctx.address().recipient();
+                let sessions = sessions.clone();
+                let id = id.clone();
+                if Instant::now().duration_since(act.hb) > CLIENT_TIMEOUT {
+                    ctx.stop();
+
+                    spawn_local(async move {
+                        //println!("STOPPED");
+                        let mut sessions = sessions.write().await;
+                        // let Ok(mut sessions) = sessions else {
+                        //     let error = sessions.err().unwrap();
+                        //     println!("Locking WS sessions error: {}", error);
+                        //     ctx.close(Some(CloseReason::from(CloseCode::Error)));
+                        //     return;
+                        // };
+                        //println!("REMOVED");
+                        sessions.remove(&id);
+                        //  println!("hello");
+                    });
+
+                    // let fut = async move {
+                    //     println!("STOPPED");
+                    //     let mut sessions = sessions.write().await;
+                    //     // let Ok(mut sessions) = sessions else {
+                    //     //     let error = sessions.err().unwrap();
+                    //     //     println!("Locking WS sessions error: {}", error);
+                    //     //     ctx.close(Some(CloseReason::from(CloseCode::Error)));
+                    //     //     return;
+                    //     // };
+                    //     println!("REMOVED");
+                    //     sessions.remove(&id);
+                    //     close_actor.do_send(CloseActor);
+                    // };
+                    // let fut = actix::fut::wrap_future::<_, Self>(fut);
+                    // let _a = ctx.spawn(fut);
+
+                    return;
+                }
+                ctx.ping(b"");
+                //ctx.binary(PING_MSG_BYTES);
+            }
+        });
+    }
 }
 
 // pub struct AcceptActor(Uuid, Addr<WsConnection>);
@@ -41,6 +105,22 @@ pub struct WsConnection {
 //         sessions.insert(self.id, addr);
 //     }
 // }
+
+pub struct HbActor;
+impl actix::Message for crate::server::ws_connection::HbActor {
+    type Result = ();
+}
+impl Handler<crate::server::ws_connection::HbActor> for WsConnection {
+    type Result = ();
+
+    fn handle(
+        &mut self,
+        msg: crate::server::ws_connection::HbActor,
+        ctx: &mut Self::Context,
+    ) -> Self::Result {
+        self.hb(ctx)
+    }
+}
 
 pub struct CloseActor;
 impl actix::Message for CloseActor {
@@ -81,6 +161,7 @@ impl Actor for WsConnection {
     fn started(&mut self, ctx: &mut Self::Context) {
         let vec_actor: Recipient<VecActor> = ctx.address().recipient();
         let close_actor: Recipient<CloseActor> = ctx.address().recipient();
+        let hb_actor: Recipient<HbActor> = ctx.address().recipient();
         let addr = ctx.address();
         let id = self.id;
         let sessions = self.server_state.sessions.clone();
@@ -123,16 +204,21 @@ impl Actor for WsConnection {
 
             //let addr = ctx.address();
             sessions.insert(id, addr);
+            hb_actor.do_send(HbActor);
         };
         let fut = actix::fut::wrap_future::<_, Self>(fut);
         let _a = ctx.spawn(fut);
     }
 
     fn stopped(&mut self, ctx: &mut Self::Context) {
+        ctx.stop();
+
         let sessions = self.server_state.sessions.clone();
         let id = self.id;
 
-        let fut = async move {
+        //ctx.spawn_local(async move { 0 }).wait();
+        spawn_local(async move {
+            //println!("STOPPED");
             let mut sessions = sessions.write().await;
             // let Ok(mut sessions) = sessions else {
             //     let error = sessions.err().unwrap();
@@ -140,10 +226,25 @@ impl Actor for WsConnection {
             //     ctx.close(Some(CloseReason::from(CloseCode::Error)));
             //     return;
             // };
+            //println!("REMOVED");
             sessions.remove(&id);
-        };
-        let fut = actix::fut::wrap_future::<_, Self>(fut);
-        let _a = ctx.spawn(fut);
+            //  println!("hello");
+        });
+
+        // let fut = async move {
+        //     println!("STOPPED");
+        //     let mut sessions = sessions.write().await;
+        //     // let Ok(mut sessions) = sessions else {
+        //     //     let error = sessions.err().unwrap();
+        //     //     println!("Locking WS sessions error: {}", error);
+        //     //     ctx.close(Some(CloseReason::from(CloseCode::Error)));
+        //     //     return;
+        //     // };
+        //     println!("REMOVED");
+        //     sessions.remove(&id);
+        // };
+        //   let fut = actix::fut::wrap_future::<_, Self>(fut);
+        //   let _a = ctx.spawn(fut);
     }
 }
 
@@ -160,7 +261,16 @@ impl Actor for WsConnection {
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsConnection {
     fn handle(&mut self, msg: Result<ws::Message, ProtocolError>, ctx: &mut Self::Context) {
         match msg {
-            Ok(ws::Message::Ping(msg)) => ctx.pong(&msg),
+            Ok(ws::Message::Ping(msg)) => {
+                self.hb = Instant::now();
+                ctx.pong(&msg);
+                //ctx.binary(PING_MSG_BYTES);
+            }
+            Ok(ws::Message::Pong(msg)) => {
+                self.hb = Instant::now();
+                //   println!("PONG");
+                //ctx.binary(PING_MSG_BYTES);
+            }
             Ok(ws::Message::Text(_text)) => {}
             Ok(ws::Message::Binary(bytes)) => {
                 //let ctx = Arc::new(ctx);
@@ -257,14 +367,15 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsConnection {
                     recipient.do_send(VecActor(bytes.into_vec()));
                 };
                 let fut = actix::fut::wrap_future::<_, Self>(fut);
-                let _a = ctx.spawn(fut);
+                let a = ctx.spawn(fut);
+                //a.
             }
             Ok(ws::Message::Close(reason)) => ctx.close(reason),
             Err(e) => {
                 println!("ERROR: {:?}", e);
             }
-            _ => {
-                println!("BOOOM");
+            something => {
+                println!("BOOOM {:?}", something);
             }
         }
     }

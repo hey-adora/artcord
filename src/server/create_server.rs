@@ -20,6 +20,7 @@ use mongodb::bson::doc;
 use serenity::prelude::*;
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
+use std::time::Instant;
 use std::{num::ParseIntError, sync::Arc};
 use thiserror::Error;
 use tokio::sync::RwLock;
@@ -70,16 +71,19 @@ async fn ws_route(
     };
     println!("ACC {:#?}", acc);
 
-    ws::start(
+    let a = ws::start(
         WsConnection {
             id: uuid::Uuid::new_v4(),
             ip: peer.ip(),
             acc: Arc::new(RwLock::new(acc)),
             server_state: server_state.get_ref().to_owned().clone(),
+            hb: Instant::now(),
         },
         &req,
         stream,
-    )
+    );
+
+    a
 }
 
 async fn login_token_route(

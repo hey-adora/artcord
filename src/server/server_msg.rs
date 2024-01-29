@@ -19,6 +19,7 @@ pub enum ServerMsg {
     LoginInvalid(String),
     LoginComplete { user_id: String, token: String },
     LoginFromTokenComplete { user_id: String },
+    Ping,
     LoggedOut,
     None,
     Reset,
@@ -29,6 +30,7 @@ pub const SERVER_MSG_PROFILE_IMGS_NAME: &str = "profile_imgs";
 pub const SERVER_MSG_PROFILE: &str = "profile";
 pub const SERVER_MSG_REGISTRATION: &str = "registration";
 pub const SERVER_MSG_LOGIN: &str = "login";
+pub const SERVER_MSG_PING: &str = "ping";
 pub const SERVER_MSG_RESET_NAME: &str = "reset";
 pub const SERVER_MSG_NONE_NAME: &str = "NONE";
 
@@ -44,6 +46,7 @@ impl ServerMsg {
             ServerMsg::LoginComplete { token, user_id } => SERVER_MSG_LOGIN,
             ServerMsg::LoginFromTokenComplete { user_id } => SERVER_MSG_LOGIN,
             ServerMsg::LoggedOut => SERVER_MSG_LOGIN,
+            ServerMsg::Ping => SERVER_MSG_PING,
             ServerMsg::Reset => SERVER_MSG_RESET_NAME,
             ServerMsg::None => SERVER_MSG_NONE_NAME,
         }

@@ -36,6 +36,10 @@ pub fn App() -> impl IntoView {
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
     let (_connected, _set_connected) = create_signal(String::new());
 
+    create_effect(move |_| {
+        log!("AUTH_STATE: {:?}", global_state.auth_is_logged_out());
+    });
+
     if cfg!(feature = "hydrate") {
         let UseWebsocketReturn {
             ready_state,
@@ -47,7 +51,11 @@ pub fn App() -> impl IntoView {
         } = use_websocket_with_options(
             "/ws/",
             UseWebSocketOptions::default()
+                .on_message(move |msg| {
+                    log!("RECEIVED SOMETHING2: {:?}", &msg);
+                })
                 .on_message_bytes(move |bytes| {
+                    log!("RECEIVED SOMETHING: {:?}", &bytes);
                     if bytes.is_empty() {
                         log!("Empty byte msg received.");
                         return;
@@ -58,6 +66,8 @@ pub fn App() -> impl IntoView {
                         log!("Error decoding msg: {}", server_msg.err().unwrap());
                         return;
                     };
+
+                    log!("{:#?}", &server_msg);
 
                     let server_msg_name = server_msg.name();
 
@@ -229,6 +239,9 @@ pub fn App() -> impl IntoView {
                         }
                         ServerMsg::LoggedOut => {
                             log!("LOGGEDOUT");
+                        }
+                        ServerMsg::Ping => {
+                            log!("PING");
                         }
                     };
                     global_state.socket_state_reset(&server_msg_name);
