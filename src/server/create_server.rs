@@ -11,15 +11,18 @@ use actix_web::web::Bytes;
 use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer, Responder};
 use actix_web_actors::ws::{self, CloseCode, CloseReason, ProtocolError};
 use futures::{StreamExt, TryStreamExt};
-use leptos::get_configuration;
+use leptos::leptos_config::ConfFile;
+use leptos::leptos_config::Env::DEV;
+use leptos::leptos_config::ReloadWSProtocol::WS;
+use leptos::{get_configuration, LeptosOptions};
 use leptos_actix::{generate_route_list, LeptosRoutes};
 use mongodb::bson::doc;
 use serenity::prelude::*;
 use std::collections::HashMap;
-use std::net::{IpAddr, SocketAddr};
-use std::sync::RwLock;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::{num::ParseIntError, sync::Arc};
 use thiserror::Error;
+use tokio::sync::RwLock;
 
 pub const TOKEN_SIZE: usize = 257;
 
@@ -157,11 +160,7 @@ async fn overview(
     _stream: web::Payload,
     server_state: actix_web::web::Data<ServerState>,
 ) -> impl Responder {
-    let sessions = server_state.sessions.read();
-    let Ok(sessions) = sessions else {
-        let error = sessions.err().unwrap();
-        return HttpResponse::InternalServerError().body(format!("Error: {}", error));
-    };
+    let sessions = server_state.sessions.read().await;
     HttpResponse::Ok().body(format!("Live connection: {}", sessions.len()))
 }
 
@@ -172,7 +171,20 @@ pub async fn create_server(
     pepper: Arc<String>,
     jwt_secret: Arc<Vec<u8>>,
 ) -> Server {
-    let conf = get_configuration(None).await.unwrap();
+    //let conf = get_configuration(None).await.unwrap();
+    let conf: ConfFile = ConfFile {
+        leptos_options: LeptosOptions {
+            output_name: "leptos_start5".to_string(),
+            site_root: "target/site".to_string(),
+            site_pkg_dir: "pkg".to_string(),
+            env: DEV,
+            site_addr: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 3000)),
+            reload_port: 3001,
+            reload_external_port: None,
+            reload_ws_protocol: WS,
+            not_found_path: "/404".to_string(),
+        },
+    };
     println!("CONFIG: {:#?}", &conf);
     let addr = conf.leptos_options.site_addr;
     let routes = generate_route_list(crate::app::App);
