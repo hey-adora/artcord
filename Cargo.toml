@@ -9,7 +9,8 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 #[build]
-
+#linker = "clang"
+#rustflags = ["-C", "link-arg=-fuse-ld=/usr/bin/mold"]
 
 #[target.wasm32-unknown-unknown]
 #linker = "clang"
@@ -20,6 +21,16 @@ crate-type = ["cdylib", "rlib"]
 #rustflags = ["-C", "link-arg=-fuse-ld=/usr/bin/mold", "-Zcodegen-backend=cranelift"]
 #codegen-backend = "cranelift"
 #
+
+#[target.x86_64-unknown-linux-gnu]
+#linker = "clang"
+#rustflags = ["-C", "link-arg=-fuse-ld=/usr/bin/mold"]
+
+
+[workspace]
+members = [
+  "benchmark",
+]
 
 [profile.dev]
 opt-level = 0

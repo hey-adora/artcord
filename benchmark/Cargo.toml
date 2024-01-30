@@ -1,0 +1,20 @@
+[package]
+name = "artcord_benchmark"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+artcord = { path = "..", version = "0.1.0" }
+eframe = "0.25.0"
+egui = {version = "0.25.0"}
+egui_extras = "0.25.0"
+env_logger = "0.11.0"
+tokio = { version = "1.35.1", features = ["full"] }
+tokio-tungstenite = "0.21.0"
+futures-util = "0.3.30"
+url = "2.5.0"
+futures-channel = "0.3.30"
+bson = "2.9.0"
+egui_plot = "0.25.0"

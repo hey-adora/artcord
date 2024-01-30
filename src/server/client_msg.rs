@@ -5,8 +5,12 @@ use crate::server::server_msg::{
 };
 use bson::DateTime;
 use chrono::Utc;
+use rkyv::ser::serializers::{
+    AllocScratchError, CompositeSerializerError, SharedSerializeMapError,
+};
 use rkyv::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::convert::Infallible;
 use std::net::IpAddr;
 
 #[derive(rkyv::Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
@@ -58,6 +62,17 @@ impl ClientMsg {
             ClientMsg::Login { email, password } => SERVER_MSG_LOGIN,
             ClientMsg::Logout => SERVER_MSG_LOGIN,
         }
+    }
+
+    pub fn as_vec(
+        &self,
+    ) -> Result<
+        Vec<u8>,
+        CompositeSerializerError<Infallible, AllocScratchError, SharedSerializeMapError>,
+    > {
+        let bytes = rkyv::to_bytes::<ClientMsg, 256>(&self)?;
+        let bytes = bytes.into_vec();
+        Ok(bytes)
     }
 }
 
