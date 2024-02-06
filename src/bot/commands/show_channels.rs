@@ -27,11 +27,11 @@ pub async fn run(
 
     for channel in channels {
         let Some(feature) = unique_features.get_mut(&channel.feature) else {
-            unique_features.insert(channel.feature, format!("-<#{}>", channel.id));
+            unique_features.insert(channel.feature, format!("-<#{}>", channel.channel_id));
             continue;
         };
 
-        feature.push_str(&format!("\n-<#{}>", channel.id));
+        feature.push_str(&format!("\n-<#{}>", channel.channel_id));
     }
 
     for (feature, channels) in unique_features {

@@ -4,6 +4,7 @@
 pub mod app;
 pub mod bot;
 pub mod database;
+pub mod message;
 pub mod server;
 
 use crate::app::App;

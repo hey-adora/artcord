@@ -1,6 +1,7 @@
 use crate::database::create_database::DB;
 use crate::database::models::allowed_guild::AllowedGuild;
 use bson::doc;
+use chrono::Utc;
 use serenity::{
     builder::CreateApplicationCommand,
     model::prelude::{
@@ -20,11 +21,10 @@ pub async fn run(
     let guild = ctx.http.get_guild(guild_option.parse::<u64>()?).await?;
 
     let allowed_guild = AllowedGuild {
-        _id: mongodb::bson::oid::ObjectId::new(),
-        id: guild_option.to_owned(),
+        guild_id: guild_option.to_owned(),
         name: guild.name,
-        created_at: mongodb::bson::DateTime::now(),
-        modified_at: mongodb::bson::DateTime::now(),
+        created_at: Utc::now().timestamp_millis(),
+        modified_at: Utc::now().timestamp_millis(),
     };
 
     let result = db.allowed_guild_insert(allowed_guild).await?;

@@ -4,6 +4,7 @@ use bson::DateTime;
 use chrono::Utc;
 use leptos::ev::resize;
 use leptos::html::Section;
+use leptos::logging::log;
 use leptos::*;
 use leptos_router::{use_location, use_params_map};
 use leptos_use::{use_event_listener, use_window};
@@ -12,8 +13,8 @@ use web_sys::Event;
 use crate::app::utils::{
     calc_fit_count, resize_imgs, LoadingNotFound, SelectedImg, ServerMsgImgResized, NEW_IMG_HEIGHT,
 };
+use crate::message::server_msg::{SERVER_MSG_PROFILE, SERVER_MSG_PROFILE_IMGS_NAME};
 use crate::server::client_msg::ClientMsg;
-use crate::server::server_msg::{SERVER_MSG_PROFILE, SERVER_MSG_PROFILE_IMGS_NAME};
 
 //F: Fn(ServerMsgImgResized) -> IV + 'static, IV: IntoView
 #[component]
@@ -39,7 +40,7 @@ pub fn ProfileGallery() -> impl IntoView {
         }))
     };
 
-    let on_fetch = move |from: DateTime, amount: u32| {
+    let on_fetch = move |from: i64, amount: u32| {
         let Some(new_user) = params.with(|p| p.get("id").cloned()) else {
             return;
         };
@@ -49,7 +50,8 @@ pub fn ProfileGallery() -> impl IntoView {
             from,
             user_id: String::from(new_user),
         };
-        global_state.socket_send(msg);
+        log!("USER GALLERY FETCH: {:#?}", &msg);
+        //global_state.socket_send(&msg);
     };
 
     create_effect(move |_| {
@@ -71,9 +73,9 @@ pub fn ProfileGallery() -> impl IntoView {
     });
 
     let section_scroll = move |_: Event| {
-        if !global_state.socket_state_is_ready(connection_load_state_name) {
-            return;
-        }
+        // if !global_state.socket_state_is_ready(connection_load_state_name) {
+        //     return;
+        // }
 
         let Some(last) = global_gallery_imgs.with_untracked(|imgs| match imgs.last() {
             Some(l) => Some(l.created_at),
@@ -131,38 +133,41 @@ pub fn ProfileGallery() -> impl IntoView {
         } else {
             false
         };
-
-        if !global_state.socket_state_is_ready(SERVER_MSG_PROFILE) {
-            return;
-        }
+        log!("ONE {} {:?}", same_user, user);
+        // if !global_state.socket_state_is_ready(SERVER_MSG_PROFILE) {
+        //     return;
+        // }
 
         if !same_user {
             let msg = ClientMsg::User {
                 user_id: String::from(new_user),
             };
-            global_state.socket_send(msg);
+            //global_state.socket_send(&msg);
         }
     });
 
     create_effect(move |_| {
         let connected = global_state.socket_connected.get();
+        log!("TWO CONNECTED {}", connected);
         if !connected {
             return;
         }
 
-        let loaded = loaded_sig.with(|state| *state == LoadingNotFound::NotLoaded);
-        if !loaded {
+        let not_loaded = loaded_sig.with(|state| *state == LoadingNotFound::NotLoaded);
+        log!("TWO LOADED {}", not_loaded);
+        if !not_loaded {
             return;
         }
 
         let user = global_state.page_profile.user.get();
+        log!("TWO {:?}", user);
         let Some(user) = user else {
             return;
         };
 
-        if !global_state.socket_state_is_ready(SERVER_MSG_PROFILE_IMGS_NAME) {
-            return;
-        }
+        // if !global_state.socket_state_is_ready(SERVER_MSG_PROFILE_IMGS_NAME) {
+        //     return;
+        // }
 
         let Some(section) = gallery_section.get_untracked() else {
             return;
@@ -176,7 +181,7 @@ pub fn ProfileGallery() -> impl IntoView {
         global_gallery_imgs.set(vec![]);
 
         on_fetch(
-            DateTime::from_millis(Utc::now().timestamp_millis()),
+            Utc::now().timestamp_millis(),
             calc_fit_count(client_width as u32, client_height as u32) * 2,
         );
 
@@ -206,13 +211,16 @@ pub fn ProfileGallery() -> impl IntoView {
             }
         }
         <section id="profile_gallery_section" on:scroll=section_scroll _ref=gallery_section class="relative content-start overflow-x-hidden overflow-y-scroll h-full" >
-            <Show when=move||loaded_sig.with(|state| *state == LoadingNotFound::NotLoaded || *state == LoadingNotFound::Loading)>
-              <div>"LOADING..."</div>
+            <Show when=move|| global_state.socket_connected.get() fallback=move || { "Connecting..." }>
+                <Show when=move||loaded_sig.with(|state| *state == LoadingNotFound::NotLoaded || *state == LoadingNotFound::Loading) >
+                  <div>"LOADING..."</div>
+                </Show>
+                <Show when=move||loaded_sig.with(|state| *state == LoadingNotFound::NotFound) >
+                  <div>"No Images Found."</div>
+                </Show>
             </Show>
-            <Show when=move||loaded_sig.with(|state| *state == LoadingNotFound::NotFound) >
-              <div>"No Images Found."</div>
-            </Show>
-            <For each=move || global_gallery_imgs.get().into_iter().enumerate()  key=|state| state.1._id let:data > {
+
+            <For each=move || global_gallery_imgs.get().into_iter().enumerate()  key=|state| state.1.id.clone() let:data > {
                     let img = data.1;
                     let i = data.0;
                     let height = img.new_height;

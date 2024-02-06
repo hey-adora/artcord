@@ -1,16 +1,16 @@
-use bson::DateTime;
-use bson::oid::ObjectId;
-use serde::{Deserialize, Serialize};
 use crate::bot::img_quality::ImgQuality;
+use bson::oid::ObjectId;
+use bson::DateTime;
+use field_types::FieldName;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, FieldName)]
 pub struct Img {
-    pub _id: ObjectId,
+    pub id: String,
     pub show: bool,
     pub guild_id: String,
     pub user_id: String,
     pub channel_id: String,
-    pub id: String,
     pub org_url: String,
     pub org_hash: String,
     pub format: String,
@@ -19,8 +19,8 @@ pub struct Img {
     pub has_high: bool,
     pub has_medium: bool,
     pub has_low: bool,
-    pub modified_at: DateTime,
-    pub created_at: DateTime,
+    pub modified_at: i64,
+    pub created_at: i64,
 }
 
 impl Img {

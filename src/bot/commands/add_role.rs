@@ -1,6 +1,7 @@
 use crate::database::create_database::DB;
 use crate::database::models::allowed_role::AllowedRole;
 use bson::doc;
+use chrono::Utc;
 use serenity::{
     builder::CreateApplicationCommand,
     model::prelude::{
@@ -38,13 +39,12 @@ pub async fn run(
     is_valid_role_feature(feature_option)?;
 
     let allowed_role = AllowedRole {
-        _id: mongodb::bson::oid::ObjectId::new(),
-        id: role_option.id.to_string(),
+        role_id: role_option.id.to_string(),
         guild_id: guild_id.to_string(),
         name: role_option.name.clone(),
         feature: (*feature_option).clone(),
-        created_at: mongodb::bson::DateTime::now(),
-        modified_at: mongodb::bson::DateTime::now(),
+        created_at: Utc::now().timestamp_millis(),
+        modified_at: Utc::now().timestamp_millis(),
     };
 
     db.allowed_role_insert_one(allowed_role).await?;

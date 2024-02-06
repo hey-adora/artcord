@@ -18,6 +18,7 @@ dist
 .env
 assets/gallery
 gallery
-mongo
+#mongo
 target2
 test2
+.vscode

@@ -100,7 +100,7 @@ pub async fn resolve_command(
             member
                 .roles
                 .iter()
-                .position(|m| m.0.to_string() == r.id)
+                .position(|m| m.0.to_string() == r.role_id)
                 .is_some()
         })
         .is_some();
@@ -112,7 +112,7 @@ pub async fn resolve_command(
             member
                 .roles
                 .iter()
-                .position(|m| m.0.to_string() == r.id)
+                .position(|m| m.0.to_string() == r.role_id)
                 .is_some()
         })
         .is_some();

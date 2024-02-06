@@ -1,5 +1,6 @@
 use crate::database::create_database::DB;
 use crate::database::models::allowed_channel::AllowedChannel;
+use chrono::Utc;
 use serenity::{
     builder::CreateApplicationCommand,
     model::prelude::{
@@ -22,15 +23,14 @@ pub async fn run(
     is_valid_channel_feature(feature_option)?;
 
     let allowed_channel = AllowedChannel {
-        _id: mongodb::bson::oid::ObjectId::new(),
+        channel_id: channel_option.id.to_string(),
         guild_id: guild_id.to_string(),
-        id: channel_option.id.to_string(),
         name: channel_option.name.clone().unwrap_or(String::from("none")),
         feature: (*feature_option).clone(),
-        created_at: mongodb::bson::DateTime::now(),
-        modified_at: mongodb::bson::DateTime::now(),
+        created_at: Utc::now().timestamp_millis(),
+        modified_at: Utc::now().timestamp_millis(),
     };
-    
+
     db.allowed_channel_insert_one(allowed_channel).await?;
 
     crate::bot::commands::show_channels::run(ctx, command, db, guild_id).await?;

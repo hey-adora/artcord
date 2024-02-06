@@ -102,7 +102,7 @@ pub fn Navbar() -> impl IntoView {
             .loading_state
             .set(AuthLoadingState::Ready);
 
-        global_state.socket_send(ClientMsg::Logout);
+        //global_state.socket_send(&ClientMsg::Logout);
     };
 
     view! {

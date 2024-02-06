@@ -1,26 +1,11 @@
 use crate::bot::img_quality::ImgQuality;
 use crate::database::models::user::User;
-use crate::database::rkw::date_time::DT;
-use crate::database::rkw::object_id::OBJ;
-use bson::oid::ObjectId;
-use bson::DateTime;
 use chrono::Utc;
+use field_types::FieldName;
+use serde::{Deserialize, Serialize};
 
-#[derive(
-    rkyv::Archive,
-    rkyv::Deserialize,
-    rkyv::Serialize,
-    Debug,
-    PartialEq,
-    Clone,
-    serde::Serialize,
-    serde::Deserialize,
-)]
-#[archive(compare(PartialEq), check_bytes)]
-#[archive_attr(derive(Debug))]
-pub struct ServerMsgImg {
-    #[with(OBJ)]
-    pub _id: ObjectId,
+#[derive(Debug, PartialEq, Clone, serde::Serialize, serde::Deserialize, FieldName)]
+pub struct AggImg {
     pub id: String,
     pub user: User,
     pub user_id: String,
@@ -32,27 +17,20 @@ pub struct ServerMsgImg {
     pub has_high: bool,
     pub has_medium: bool,
     pub has_low: bool,
-
-    #[with(DT)]
-    pub modified_at: bson::datetime::DateTime,
-
-    #[with(DT)]
-    pub created_at: bson::datetime::DateTime,
+    pub modified_at: i64,
+    pub created_at: i64,
 }
 
-impl Default for ServerMsgImg {
+impl Default for AggImg {
     fn default() -> Self {
         Self {
-            _id: ObjectId::new(),
             user: User {
-                _id: ObjectId::new(),
-                guild_id: String::from("1159766826620817419"),
                 id: String::from("id"),
+                guild_id: String::from("1159766826620817419"),
                 name: String::from("name"),
-                //  acc: None,
                 pfp_hash: Some(String::from("pfp_hash")),
-                modified_at: DateTime::from_millis(Utc::now().timestamp_millis()),
-                created_at: DateTime::from_millis(Utc::now().timestamp_millis()),
+                modified_at: Utc::now().timestamp_millis(),
+                created_at: Utc::now().timestamp_millis(),
             },
             org_url: String::from("wow"),
             user_id: String::from("1159037321283375174"),
@@ -64,13 +42,13 @@ impl Default for ServerMsgImg {
             has_high: false,
             has_medium: false,
             has_low: false,
-            modified_at: DateTime::from_millis(Utc::now().timestamp_millis()),
-            created_at: DateTime::from_millis(Utc::now().timestamp_millis()),
+            modified_at: Utc::now().timestamp_millis(),
+            created_at: Utc::now().timestamp_millis(),
         }
     }
 }
 
-impl ServerMsgImg {
+impl AggImg {
     pub fn pick_quality(&self) -> ImgQuality {
         if self.has_high {
             ImgQuality::High

@@ -1,34 +1,28 @@
-use crate::database::rkw::date_time::DT;
-use crate::server::server_msg::{
-    WebSerializeError, SERVER_MSG_IMGS_NAME, SERVER_MSG_LOGIN, SERVER_MSG_PROFILE,
-    SERVER_MSG_PROFILE_IMGS_NAME, SERVER_MSG_REGISTRATION,
+//use crate::database::rkw::date_time::DT;
+use crate::message::server_msg::{
+    SERVER_MSG_IMGS_NAME, SERVER_MSG_LOGIN, SERVER_MSG_PROFILE, SERVER_MSG_PROFILE_IMGS_NAME,
+    SERVER_MSG_REGISTRATION,
 };
 use bson::DateTime;
 use chrono::Utc;
-use rkyv::ser::serializers::{
-    AllocScratchError, CompositeSerializerError, SharedSerializeMapError,
-};
-use rkyv::{Deserialize, Serialize};
+use leptos::logging::log;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::net::IpAddr;
 
-#[derive(rkyv::Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
-#[archive(compare(PartialEq), check_bytes)]
-#[archive_attr(derive(Debug))]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub enum ClientMsg {
     GalleryInit {
         amount: u32,
 
-        #[with(DT)]
-        from: DateTime,
+        from: i64,
     },
 
     UserGalleryInit {
         amount: u32,
 
-        #[with(DT)]
-        from: DateTime,
+        from: i64,
 
         user_id: String,
     },
@@ -64,15 +58,58 @@ impl ClientMsg {
         }
     }
 
-    pub fn as_vec(
+    pub fn as_vec(&self, id: u128) -> Result<Vec<u8>, bincode::Error> {
+        let a = bincode::serialize::<(u128, ClientMsg)>(&(id, self.clone()));
+        //log!("SERIALIZE {:?} {:?}", self, a);
+        a
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<(u128, ClientMsg), bincode::Error> {
+        //log!("DESERIALIZE {:?}", bytes);
+        let a = bincode::deserialize::<(u128, ClientMsg)>(bytes);
+        a
+    }
+
+    pub fn throttle(
         &self,
-    ) -> Result<
-        Vec<u8>,
-        CompositeSerializerError<Infallible, AllocScratchError, SharedSerializeMapError>,
-    > {
-        let bytes = rkyv::to_bytes::<ClientMsg, 256>(&self)?;
-        let bytes = bytes.into_vec();
-        Ok(bytes)
+        throttle_time: &mut HashMap<WsPath, (u64, HashMap<IpAddr, u64>)>,
+        ip: &IpAddr,
+        path: WsPath,
+        current_time: i64,
+        duration: i64,
+        max_count: u64,
+    ) -> bool {
+        //println!("DEBUG: {:?}", &path);
+        //println!("HASHMAP: {:?}", &throttle_time);
+
+        //println!("ONE ONE");
+        let Some((ref mut ms, ref mut clients)) = throttle_time.get_mut(&path) else {
+            //println!("TWO TWO");
+            let mut clients: HashMap<IpAddr, u64> = HashMap::new();
+            clients.insert(ip.clone(), 1);
+            throttle_time.insert(path, (current_time as u64, clients));
+            //println!("TWO TWO HASHMAP: {:?}", &throttle_time);
+            return false;
+        };
+
+        let Some(count) = clients.get_mut(ip) else {
+            clients.insert(ip.clone(), 1);
+            return false;
+        };
+
+        if *ms + (duration as u64) <= current_time as u64 {
+            *ms = current_time as u64;
+            *count = 1;
+            return false;
+        }
+
+        if *count + 1 > max_count {
+            return true;
+        }
+
+        *count += 1;
+
+        false
     }
 }
 
@@ -141,69 +178,6 @@ impl From<&ClientMsg> for WsPath {
     }
 }
 
-impl ClientMsg {
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, WebSerializeError> {
-        let server_msg: Self = rkyv::check_archived_root::<Self>(bytes)
-            .or_else(|e| {
-                Err(WebSerializeError::InvalidBytes(format!(
-                    "check_archived_root failed: {}",
-                    e
-                )))
-            })?
-            .deserialize(&mut rkyv::Infallible)
-            .or_else(|e| {
-                Err(WebSerializeError::InvalidBytes(format!(
-                    "deserialize failed: {:?}",
-                    e
-                )))
-            })?;
-
-        Ok(server_msg)
-    }
-
-    pub fn throttle(
-        &self,
-        throttle_time: &mut HashMap<WsPath, (u64, HashMap<IpAddr, u64>)>,
-        ip: &IpAddr,
-        path: WsPath,
-        current_time: i64,
-        duration: i64,
-        max_count: u64,
-    ) -> bool {
-        //println!("DEBUG: {:?}", &path);
-        //println!("HASHMAP: {:?}", &throttle_time);
-
-        //println!("ONE ONE");
-        let Some((ref mut ms, ref mut clients)) = throttle_time.get_mut(&path) else {
-            //println!("TWO TWO");
-            let mut clients: HashMap<IpAddr, u64> = HashMap::new();
-            clients.insert(ip.clone(), 1);
-            throttle_time.insert(path, (current_time as u64, clients));
-            //println!("TWO TWO HASHMAP: {:?}", &throttle_time);
-            return false;
-        };
-
-        let Some(count) = clients.get_mut(ip) else {
-            clients.insert(ip.clone(), 1);
-            return false;
-        };
-
-        if *ms + (duration as u64) <= current_time as u64 {
-            *ms = current_time as u64;
-            *count = 1;
-            return false;
-        }
-
-        if *count + 1 > max_count {
-            return true;
-        }
-
-        *count += 1;
-
-        false
-    }
-}
-
 #[cfg(test)]
 mod ClientMsgTests {
     use crate::server::client_msg::{ClientMsg, WsPath};
@@ -220,7 +194,7 @@ mod ClientMsgTests {
         let duration = 60 * 1000;
         let msg = Rc::new(RefCell::new(ClientMsg::GalleryInit {
             amount: 10,
-            from: DateTime::from_millis(*current_time.borrow()),
+            from: *current_time.borrow(),
         }));
 
         let max_count = 10;

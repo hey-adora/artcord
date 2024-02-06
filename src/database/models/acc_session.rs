@@ -1,73 +1,33 @@
-use crate::database::rkw::date_time::DT;
-use crate::database::rkw::object_id::OBJ;
-use crate::server::server_msg::ServerMsg;
+use crate::message::server_msg::ServerMsg;
 use bson::oid::ObjectId;
-use bson::DateTime;
 use chrono::Utc;
+use field_types::FieldName;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display, Formatter};
 
-#[derive(
-    rkyv::Archive,
-    rkyv::Deserialize,
-    rkyv::Serialize,
-    Debug,
-    Serialize,
-    Deserialize,
-    Clone,
-    PartialEq,
-)]
-#[archive(compare(PartialEq), check_bytes)]
-#[archive_attr(derive(Debug))]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, FieldName)]
 pub struct AccSession {
-    #[with(OBJ)]
-    pub _id: ObjectId,
-
-    #[with(OBJ)]
-    pub acc_id: ObjectId,
-
+    pub id: String,
+    pub acc_id: String,
     pub ip: String,
     pub agent: String,
     pub token: String,
-
-    #[with(DT)]
-    pub last_used: DateTime,
-
-    #[with(DT)]
-    pub modified_at: DateTime,
-
-    #[with(DT)]
-    pub created_at: DateTime,
+    pub last_used: i64,
+    pub modified_at: i64,
+    pub created_at: i64,
 }
 
 impl AccSession {
-    pub fn new(acc_id: ObjectId, ip: String, agent: String, token: String) -> Self {
+    pub fn new(acc_id: String, ip: String, agent: String, token: String) -> Self {
         Self {
-            _id: ObjectId::new(),
+            id: ObjectId::new().to_hex(),
             acc_id,
             ip,
             agent,
             token,
-            last_used: DateTime::from_millis(Utc::now().timestamp_millis()),
-            modified_at: DateTime::from_millis(Utc::now().timestamp_millis()),
-            created_at: DateTime::from_millis(Utc::now().timestamp_millis()),
+            last_used: Utc::now().timestamp_millis(),
+            modified_at: Utc::now().timestamp_millis(),
+            created_at: Utc::now().timestamp_millis(),
         }
     }
 }
-
-//
-// #[derive(
-// rkyv::Archive,
-// rkyv::Deserialize,
-// rkyv::Serialize,
-// Debug,
-// Serialize,
-// Deserialize,
-// Clone,
-// PartialEq,
-// )]
-// #[archive(compare(PartialEq), check_bytes)]
-// #[archive_attr(derive(Debug))]
-// pub struct SessionToken {
-//     pub token: String,
-// }

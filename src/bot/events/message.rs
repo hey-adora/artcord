@@ -54,7 +54,7 @@ pub async fn message(ctx: Context, msg: serenity::model::channel::Message) {
     .await;
 
     if let Err(err) = result {
-        println!("{:?}", err);
+        println!("Save attachments error: {:?}", err);
         return;
     }
 

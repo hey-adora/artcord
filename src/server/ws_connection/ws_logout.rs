@@ -1,6 +1,6 @@
 use crate::database::create_database::DB;
 use crate::database::models::acc::Acc;
-use crate::server::server_msg::ServerMsg;
+use crate::message::server_msg::ServerMsg;
 use crate::server::ws_connection::ServerMsgCreationError;
 use std::sync::{Arc, Mutex};
 use tokio::sync::RwLock;

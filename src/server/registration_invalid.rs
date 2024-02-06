@@ -1,11 +1,12 @@
-use rkyv::{Archive, Deserialize, Serialize};
+//use rkyv::{Archive, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 pub const MINIMUM_PASSWORD_LENGTH: usize = 10;
 pub const BCRYPT_COST: u32 = 12;
 
-#[derive(Archive, Deserialize, Serialize, Debug, Clone, PartialEq)]
-#[archive(compare(PartialEq), check_bytes)]
-#[archive_attr(derive(Debug))]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+// #[archive(compare(PartialEq), check_bytes)]
+// #[archive_attr(derive(Debug))]
 pub struct RegistrationInvalidMsg {
     pub general_error: Option<String>,
     pub email_error: Option<String>,

@@ -1,7 +1,8 @@
 use crate::bot::commands::FEATURE_GALLERY;
 use crate::database::create_database::DB;
-use crate::database::models::img::Img;
-use crate::database::models::user::User;
+use crate::database::models::img::{Img, ImgFieldName};
+use crate::database::models::user::{User, UserFieldName};
+use chrono::Utc;
 use image::EncodableLayout;
 use mongodb::bson::doc;
 use serenity::model::channel::Attachment;
@@ -259,41 +260,44 @@ pub async fn save_user(
             Some(bin) => match user.pfp_hash {
                 Some(org_bin) => {
                     if bin != org_bin {
-                        update.insert("pfp_hash", bin);
+                        update.insert(UserFieldName::PfpHash.name(), bin);
                     }
                 }
                 None => {
-                    update.insert("pfp_hash", bin);
+                    update.insert(UserFieldName::PfpHash.name(), bin);
                 }
             },
             None => match user.pfp_hash {
                 Some(_) => {
-                    update.insert("pfp_hash", None::<String>);
+                    update.insert(UserFieldName::PfpHash.name(), None::<String>);
                 }
                 None => {}
             },
         }
 
         if name != user.name {
-            update.insert("name", name);
+            update.insert(UserFieldName::Name.name(), name);
         }
 
         if update.len() > 0 {
-            update.insert("modified_at", mongodb::bson::DateTime::now());
-            db.user_update_one_raw(&user_id.to_string(), update.clone()).await?;
+            update.insert(
+                UserFieldName::ModifiedAt.name(),
+                Utc::now().timestamp_millis(),
+            );
+            db.user_update_one_raw(&user_id.to_string(), update.clone())
+                .await?;
             Ok(SaveUserResult::Updated(format!("{}", update)))
         } else {
             Ok(SaveUserResult::None)
         }
     } else {
         let user = User {
-            _id: mongodb::bson::oid::ObjectId::new(),
-            guild_id: guild_id.to_string(),
             id: format!("{}", user_id),
+            guild_id: guild_id.to_string(),
             name,
             pfp_hash,
-            modified_at: mongodb::bson::DateTime::now(),
-            created_at: mongodb::bson::DateTime::now(),
+            modified_at: Utc::now().timestamp_millis(),
+            created_at: Utc::now().timestamp_millis(),
         };
 
         db.user_insert_one(user).await?;
@@ -320,6 +324,7 @@ pub async fn save_attachment(
     let _ = match content_type.as_str() {
         "image/png" => Ok("png"),
         "image/jpeg" => Ok("jpeg"),
+        "image/webp" => Ok("webp"),
         t => Err(SaveAttachmentError::ImgTypeUnsupported(t.to_string())),
     }?;
 
@@ -371,15 +376,6 @@ pub async fn save_attachment(
     }
 
     let found_img = db.img_find_one(guild_id, file_hash_hex.as_str()).await?;
-    // let found_img = db
-    //     .collection_img
-    //     .find_one(
-    //         doc! {
-    //             "org_hash": file_hash_hex.clone()
-    //         },
-    //         None,
-    //     )
-    //     .await?;
 
     if let Some(found_img) = found_img {
         let db_img_names = ["has_low", "has_medium", "has_high"];
@@ -387,24 +383,21 @@ pub async fn save_attachment(
 
         let mut update = doc! {};
 
-        if found_img.created_at.timestamp_millis() != timestamp {
-            update.insert(
-                "created_at",
-                mongodb::bson::DateTime::from_millis(timestamp),
-            );
+        if found_img.created_at != timestamp {
+            update.insert(ImgFieldName::CreatedAt.name(), timestamp);
         }
 
         let msg_id = msg_id.to_string();
         if found_img.id != msg_id {
-            update.insert("id", msg_id);
+            update.insert(ImgFieldName::Id.name(), msg_id);
         }
 
-        if !found_img.show {
-            update.insert("show", true);
-        }
+        // if !found_img.show {
+        //     update.insert(ImgFieldName::Show.name(), true);
+        // }
 
         if found_img.org_url != attachment.url {
-            update.insert("org_url", attachment.url.clone());
+            update.insert(ImgFieldName::OrgUrl.name(), attachment.url.clone());
         }
 
         for (i, path_state) in paths_state.into_iter().enumerate() {
@@ -414,20 +407,13 @@ pub async fn save_attachment(
         }
 
         if update.len() > 0 {
-            update.insert("modified_at", mongodb::bson::DateTime::now());
+            update.insert(
+                ImgFieldName::ModifiedAt.name(),
+                Utc::now().timestamp_millis(),
+            );
             let update_msg = format!("{}: {:#?}", file_hash_hex, &update);
             db.img_update_one_by_hash(guild_id, file_hash_hex.as_str(), update)
                 .await?;
-            // let _update_status = db
-            //     .collection_img
-            //     .update_one(
-            //         doc! { "org_hash": file_hash_hex.clone() },
-            //         doc! {
-            //             "$set": update
-            //         },
-            //         None,
-            //     )
-            //     .await?;
             Ok(SaveAttachmentResult::Updated(update_msg))
         } else {
             Ok(SaveAttachmentResult::None(file_hash_hex))
@@ -438,12 +424,11 @@ pub async fn save_attachment(
             .decode()?;
 
         let img = Img {
-            _id: mongodb::bson::oid::ObjectId::new(),
+            id: format!("{}", msg_id),
             show: true,
             guild_id: guild_id.to_string(),
             channel_id: channel_id.to_string(),
             user_id: format!("{}", user_id),
-            id: format!("{}", msg_id),
             org_url: attachment.url.clone(),
             org_hash: file_hash_hex.clone(),
             format: file_ext.to_string(),
@@ -452,8 +437,8 @@ pub async fn save_attachment(
             has_high: paths_state[2],
             has_medium: paths_state[1],
             has_low: paths_state[0],
-            modified_at: mongodb::bson::DateTime::now(),
-            created_at: mongodb::bson::DateTime::from_millis(timestamp),
+            modified_at: Utc::now().timestamp_millis(),
+            created_at: timestamp,
         };
 
         db.img_insert(&img).await?;

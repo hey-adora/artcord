@@ -132,7 +132,6 @@ async fn login_delete_token_route(
         return HttpResponse::InternalServerError().body("Failed to create time.");
     };
 
-    //println!("{:#?}", body);
     let cookie = Cookie::build("token", "deleted")
         .domain("localhost")
         .expires(time)

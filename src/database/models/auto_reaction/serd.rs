@@ -3,6 +3,7 @@ use crate::database::models::auto_reaction::{
 };
 use bson::oid::ObjectId;
 use bson::DateTime;
+use chrono::Utc;
 use serenity::model::channel::ReactionType;
 use serenity::model::id::EmojiId;
 
@@ -12,12 +13,12 @@ impl AutoReaction {
             ReactionType::Unicode(unicode)
         } else {
             let id = self
-                .id
-                .ok_or(ToReactionTypeError::Id(format!("{:?}", &self._id)))?
+                .emoji_id
+                .ok_or(ToReactionTypeError::Id(format!("{}", "FIX LATER")))?
                 .parse::<u64>()?;
             let name = self
                 .name
-                .ok_or(ToReactionTypeError::Name(format!("{:#?}", &self._id)))?;
+                .ok_or(ToReactionTypeError::Name(format!("{}", "FIX LATER")))?;
 
             ReactionType::Custom {
                 animated: self.animated,
@@ -36,28 +37,26 @@ impl AutoReaction {
         let auto_reaction = match reaction_type {
             serenity::model::prelude::ReactionType::Unicode(s) => {
                 let auto_reaction = Self {
-                    _id: ObjectId::new(),
                     guild_id: guild_id.to_string(),
                     unicode: Some(s),
-                    id: None,
+                    emoji_id: None,
                     name: None,
                     animated: false,
-                    modified_at: DateTime::now(),
-                    created_at: DateTime::now(),
+                    modified_at: Utc::now().timestamp_millis(),
+                    created_at: Utc::now().timestamp_millis(),
                 };
 
                 Ok(auto_reaction)
             }
             serenity::model::prelude::ReactionType::Custom { animated, id, name } => {
                 let auto_reaction = Self {
-                    _id: ObjectId::new(),
                     guild_id: guild_id.to_string(),
                     unicode: None,
-                    id: Some(id.0.to_string()),
+                    emoji_id: Some(id.0.to_string()),
                     name,
                     animated,
-                    modified_at: DateTime::now(),
-                    created_at: DateTime::now(),
+                    modified_at: Utc::now().timestamp_millis(),
+                    created_at: Utc::now().timestamp_millis(),
                 };
 
                 Ok(auto_reaction)
@@ -76,28 +75,26 @@ impl AutoReaction {
             let auto_reaction = match reaction {
                 serenity::model::prelude::ReactionType::Unicode(s) => {
                     let auto_reaction = Self {
-                        _id: ObjectId::new(),
                         guild_id: guild_id.to_string(),
                         unicode: Some(s),
-                        id: None,
+                        emoji_id: None,
                         name: None,
                         animated: false,
-                        modified_at: DateTime::now(),
-                        created_at: DateTime::now(),
+                        modified_at: Utc::now().timestamp_millis(),
+                        created_at: Utc::now().timestamp_millis(),
                     };
 
                     Ok(auto_reaction)
                 }
                 serenity::model::prelude::ReactionType::Custom { animated, id, name } => {
                     let auto_reaction = Self {
-                        _id: ObjectId::new(),
                         guild_id: guild_id.to_string(),
                         unicode: None,
-                        id: Some(id.0.to_string()),
+                        emoji_id: Some(id.0.to_string()),
                         name,
                         animated,
-                        modified_at: DateTime::now(),
-                        created_at: DateTime::now(),
+                        modified_at: Utc::now().timestamp_millis(),
+                        created_at: Utc::now().timestamp_millis(),
                     };
 
                     Ok(auto_reaction)

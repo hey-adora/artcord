@@ -1,8 +1,8 @@
 use crate::database::models::acc::Acc;
+use crate::message::server_msg::ServerMsg;
 use crate::server::client_msg::{ClientMsg, WsPath};
 use crate::server::create_server::{ServerState, TOKEN_SIZE};
 use crate::server::registration_invalid::{RegistrationInvalidMsg, BCRYPT_COST};
-use crate::server::server_msg::ServerMsg;
 use crate::server::ws_connection::ws_login::ws_login;
 use crate::server::ws_connection::ws_logout::ws_logout;
 use crate::server::ws_connection::ws_registration::ws_register;
@@ -39,8 +39,6 @@ pub struct WsConnection {
     pub hb: Instant,
 }
 
-//const PING_MSG_BYTES: &[u8] = ServerMsg::Ping.as_bytes().unwrap().as_bytes();
-
 impl WsConnection {
     fn hb(&self, ctx: &mut <Self as Actor>::Context) {
         let sessions = self.server_state.sessions.clone();
@@ -55,35 +53,9 @@ impl WsConnection {
                     ctx.stop();
 
                     spawn_local(async move {
-                        //println!("STOPPED");
                         let mut sessions = sessions.write().await;
-                        // let Ok(mut sessions) = sessions else {
-                        //     let error = sessions.err().unwrap();
-                        //     println!("Locking WS sessions error: {}", error);
-                        //     ctx.close(Some(CloseReason::from(CloseCode::Error)));
-                        //     return;
-                        // };
-                        //println!("REMOVED");
                         sessions.remove(&id);
-                        //  println!("hello");
                     });
-
-                    // let fut = async move {
-                    //     println!("STOPPED");
-                    //     let mut sessions = sessions.write().await;
-                    //     // let Ok(mut sessions) = sessions else {
-                    //     //     let error = sessions.err().unwrap();
-                    //     //     println!("Locking WS sessions error: {}", error);
-                    //     //     ctx.close(Some(CloseReason::from(CloseCode::Error)));
-                    //     //     return;
-                    //     // };
-                    //     println!("REMOVED");
-                    //     sessions.remove(&id);
-                    //     close_actor.do_send(CloseActor);
-                    // };
-                    // let fut = actix::fut::wrap_future::<_, Self>(fut);
-                    // let _a = ctx.spawn(fut);
-
                     return;
                 }
                 ctx.ping(b"");
@@ -92,19 +64,6 @@ impl WsConnection {
         });
     }
 }
-
-// pub struct AcceptActor(Uuid, Addr<WsConnection>);
-// impl actix::Message for AcceptActor {
-//     type Result = ();
-// }
-// impl Handler<AcceptActor> for WsConnection {
-//     type Result = ();
-//
-//     fn handle(&mut self, msg: AcceptActor, ctx: &mut Self::Context) -> Self::Result {
-//         ctx.close(Some(CloseReason::from(CloseCode::Error)));
-//         sessions.insert(self.id, addr);
-//     }
-// }
 
 pub struct HbActor;
 impl actix::Message for crate::server::ws_connection::HbActor {
@@ -170,39 +129,19 @@ impl Actor for WsConnection {
         let fut = async move {
             let acc = acc.read().await;
 
-            // let Ok(mut acc) = acc else {
-            //     let error = sessions.err().unwrap();
-            //     println!("Locking WS ACC error: {}", error);
-            //     close_actor.do_send(CloseActor);
-            //     //ctx.close(Some(CloseReason::from(CloseCode::Error)));
-            //     return;
-            // };
-            //
-            // let Ok(mut sessions) = sessions else {
-            //     let error = sessions.err().unwrap();
-            //     println!("Locking WS sessions error: {}", error);
-            //     close_actor.do_send(CloseActor);
-            //     //ctx.close(Some(CloseReason::from(CloseCode::Error)));
-            //     return;
-            // };
-
             if let Some(acc) = &*acc {
                 let msg = ServerMsg::LoginFromTokenComplete {
                     user_id: acc.email.clone(),
                 };
-                let bytes = msg.as_bytes();
+                let bytes = msg.as_bytes(0);
                 let Ok(bytes) = bytes else {
                     println!("Failed to serialize server msg: {}", bytes.err().unwrap());
                     close_actor.do_send(CloseActor);
-                    //ctx.close(Some(CloseReason::from(CloseCode::Error)));
                     return;
                 };
-                //ctx.binary(bytes.into_vec());
-                vec_actor.do_send(VecActor(bytes.into_vec()));
+                vec_actor.do_send(VecActor(bytes));
             }
             let mut sessions = sessions.write().await;
-
-            //let addr = ctx.address();
             sessions.insert(id, addr);
             hb_actor.do_send(HbActor);
         };
@@ -216,47 +155,12 @@ impl Actor for WsConnection {
         let sessions = self.server_state.sessions.clone();
         let id = self.id;
 
-        //ctx.spawn_local(async move { 0 }).wait();
         spawn_local(async move {
-            //println!("STOPPED");
             let mut sessions = sessions.write().await;
-            // let Ok(mut sessions) = sessions else {
-            //     let error = sessions.err().unwrap();
-            //     println!("Locking WS sessions error: {}", error);
-            //     ctx.close(Some(CloseReason::from(CloseCode::Error)));
-            //     return;
-            // };
-            //println!("REMOVED");
             sessions.remove(&id);
-            //  println!("hello");
         });
-
-        // let fut = async move {
-        //     println!("STOPPED");
-        //     let mut sessions = sessions.write().await;
-        //     // let Ok(mut sessions) = sessions else {
-        //     //     let error = sessions.err().unwrap();
-        //     //     println!("Locking WS sessions error: {}", error);
-        //     //     ctx.close(Some(CloseReason::from(CloseCode::Error)));
-        //     //     return;
-        //     // };
-        //     println!("REMOVED");
-        //     sessions.remove(&id);
-        // };
-        //   let fut = actix::fut::wrap_future::<_, Self>(fut);
-        //   let _a = ctx.spawn(fut);
     }
 }
-
-//
-// impl Handler<ByteActor> for WsConnection {
-//     type Result = ();
-//
-//     fn handle(&mut self, msg: ByteActor, ctx: &mut Self::Context) -> () {
-//         //self.acc
-//
-//     }
-// }
 
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsConnection {
     fn handle(&mut self, msg: Result<ws::Message, ProtocolError>, ctx: &mut Self::Context) {
@@ -283,18 +187,19 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsConnection {
                 let recipient: Recipient<VecActor> = ctx.address().recipient();
                 let fut = async move {
                     let client_msg = ClientMsg::from_bytes(&bytes.to_vec());
-                    let Ok(client_msg) = client_msg else {
+                    let Ok((id, client_msg)) = client_msg else {
                         println!(
                             "Failed to convert bytes to client msg: {}",
                             client_msg.err().unwrap()
                         );
-                        let bytes = rkyv::to_bytes::<_, 256>(&ServerMsg::Reset);
+                        //let bytes = rkyv::to_bytes::<_, 256>(&ServerMsg::Reset);
+                        let bytes = ServerMsg::Reset.as_bytes(0);
                         let Ok(bytes) = bytes else {
                             println!("Failed to serialize server msg: {}", bytes.err().unwrap());
                             return;
                         };
                         //ctx.binary(bytes.into_vec());
-                        recipient.do_send(VecActor(bytes.into_vec()));
+                        recipient.do_send(VecActor(bytes));
                         return;
                     };
 
@@ -355,16 +260,17 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsConnection {
                         return;
                     };
 
-                    println!("222222222 {:?}", server_msg);
+                    //println!("222222222 {:?}", server_msg);
 
-                    let bytes = rkyv::to_bytes::<_, 256>(&server_msg);
+                    let bytes = server_msg.as_bytes(id);
+                    //let bytes = rkyv::to_bytes::<_, 256>(&server_msg);
                     let Ok(bytes) = bytes else {
                         println!("Failed to serialize server msg: {}", bytes.err().unwrap());
                         return;
                     };
 
                     //ctx.binary(bytes.into_vec());
-                    recipient.do_send(VecActor(bytes.into_vec()));
+                    recipient.do_send(VecActor(bytes));
                 };
                 let fut = actix::fut::wrap_future::<_, Self>(fut);
                 let a = ctx.spawn(fut);
@@ -380,6 +286,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsConnection {
         }
     }
 }
+
 // jsonwebtoken::errors::Error
 #[derive(Error, Debug)]
 pub enum ServerMsgCreationError {

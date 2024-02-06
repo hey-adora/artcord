@@ -11,7 +11,9 @@ use web_sys::Location;
 
 use crate::bot::img_quality::ImgQuality;
 use crate::database::models::user::User;
-use crate::server::server_msg_img::ServerMsgImg;
+use crate::message::server_msg_img::AggImg;
+
+pub mod sender;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum LoadingNotFound {
@@ -31,14 +33,13 @@ pub enum ScrollSection {
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct ServerMsgImgResized {
-    pub _id: ObjectId,
+    pub id: String,
     // pub id: u128,
     pub quality: ImgQuality,
     pub display_high: String,
     pub display_preview: String,
     pub user: User,
     pub user_id: String,
-    pub msg_id: String,
     pub org_hash: String,
     pub format: String,
     pub width: u32,
@@ -50,8 +51,8 @@ pub struct ServerMsgImgResized {
     pub has_high: bool,
     pub has_medium: bool,
     pub has_low: bool,
-    pub modified_at: DateTime,
-    pub created_at: DateTime,
+    pub modified_at: i64,
+    pub created_at: i64,
 }
 
 // Hi
@@ -59,23 +60,21 @@ pub struct ServerMsgImgResized {
 impl Default for ServerMsgImgResized {
     fn default() -> Self {
         Self {
-            _id: ObjectId::new(),
+            id: String::from("1177244237021073450"),
             quality: ImgQuality::Org,
             display_preview: String::from(
                 "/assets/gallery/org_2552bd2db66978a9b3675721e95d1cbd.png",
             ),
             display_high: String::from("/assets/gallery/org_2552bd2db66978a9b3675721e95d1cbd.png"),
             user: User {
-                _id: ObjectId::new(),
-                guild_id: String::from("1159766826620817419"),
                 id: String::from("id"),
+                guild_id: String::from("1159766826620817419"),
                 name: String::from("name"),
                 pfp_hash: Some(String::from("pfp_hash")),
-                modified_at: DateTime::from_millis(Utc::now().timestamp_millis()),
-                created_at: DateTime::from_millis(Utc::now().timestamp_millis()),
+                modified_at: Utc::now().timestamp_millis(),
+                created_at: Utc::now().timestamp_millis(),
             },
             user_id: String::from("1159037321283375174"),
-            msg_id: String::from("1177244237021073450"),
             org_hash: String::from("2552bd2db66978a9b3675721e95d1cbd"),
             format: String::from("png"),
             width: 233,
@@ -87,8 +86,8 @@ impl Default for ServerMsgImgResized {
             has_high: false,
             has_medium: false,
             has_low: false,
-            modified_at: DateTime::from_millis(Utc::now().timestamp_millis()),
-            created_at: DateTime::from_millis(Utc::now().timestamp_millis()),
+            modified_at: Utc::now().timestamp_millis(),
+            created_at: Utc::now().timestamp_millis(),
         }
     }
 }
@@ -112,12 +111,12 @@ impl GalleryImg for ServerMsgImgResized {
     }
 }
 
-impl From<ServerMsgImg> for ServerMsgImgResized {
-    fn from(value: ServerMsgImg) -> Self {
+impl From<AggImg> for ServerMsgImgResized {
+    fn from(value: AggImg) -> Self {
         let quality = value.pick_quality();
         let display_preview = quality.gen_link_preview(&value.org_hash, &value.format);
         Self {
-            _id: value._id,
+            id: value.id,
             quality,
             display_preview,
             // id: rand::thread_rng().gen::<u128>(),
@@ -128,7 +127,6 @@ impl From<ServerMsgImg> for ServerMsgImgResized {
             top: RwSignal::new(0.0),
             left: RwSignal::new(0.0),
             user_id: value.user_id,
-            msg_id: value.id,
             org_hash: value.org_hash,
             format: value.format,
             width: value.width,
@@ -161,20 +159,20 @@ impl PageProfileState {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
-pub struct PageGalleryState {
-    pub gallery_imgs: RwSignal<Vec<ServerMsgImgResized>>,
-    pub gallery_loaded: RwSignal<LoadingNotFound>,
-}
+// #[derive(Copy, Clone, Debug)]
+// pub struct PageGalleryState {
+//     pub gallery_imgs: RwSignal<Vec<ServerMsgImgResized>>,
+//     pub gallery_loaded: RwSignal<LoadingNotFound>,
+// }
 
-impl PageGalleryState {
-    pub fn new() -> Self {
-        Self {
-            gallery_imgs: create_rw_signal(Vec::new()),
-            gallery_loaded: create_rw_signal(LoadingNotFound::NotLoaded),
-        }
-    }
-}
+// impl PageGalleryState {
+//     pub fn new() -> Self {
+//         Self {
+//             gallery_imgs: create_rw_signal(Vec::new()),
+//             gallery_loaded: create_rw_signal(LoadingNotFound::NotLoaded),
+//         }
+//     }
+// }
 
 pub fn get_window_path() -> String {
     let location: Location = window().location();

@@ -1,18 +1,19 @@
-use crate::database::models::user::User;
+use crate::{database::models::user::User, server::client_msg::ClientMsg};
+use crate::message::server_msg_img::AggImg;
 use crate::server::registration_invalid::RegistrationInvalidMsg;
-use crate::server::server_msg_img::ServerMsgImg;
-use rkyv::ser::serializers::{
-    AllocScratchError, CompositeSerializerError, SharedSerializeMapError,
-};
-use rkyv::{AlignedVec, Archive, Deserialize, Infallible, Serialize};
+use serde::{Deserialize, Serialize};
+// use rkyv::ser::serializers::{
+//     AllocScratchError, CompositeSerializerError, SharedSerializeMapError,
+// };
+// use rkyv::{AlignedVec, Archive, Deserialize, Infallible, Serialize};
 use thiserror::Error;
 
-#[derive(Archive, Deserialize, Serialize, Debug, PartialEq)]
-#[archive(compare(PartialEq), check_bytes)]
-#[archive_attr(derive(Debug))]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
+// #[archive(compare(PartialEq), check_bytes)]
+// #[archive_attr(derive(Debug))]
 pub enum ServerMsg {
-    Imgs(Vec<ServerMsgImg>),
-    ProfileImgs(Option<Vec<ServerMsgImg>>),
+    Imgs(Vec<AggImg>),
+    ProfileImgs(Option<Vec<AggImg>>),
     Profile(Option<User>),
     RegistrationInvalid(RegistrationInvalidMsg),
     RegistrationCompleted,
@@ -53,42 +54,12 @@ impl ServerMsg {
     }
 }
 
-#[derive(Error, Debug)]
-pub enum WebSerializeError {
-    #[error("Invalid bytes, error: {0}")]
-    InvalidBytes(String),
-}
-
 impl ServerMsg {
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, WebSerializeError> {
-        let server_msg: Self = rkyv::check_archived_root::<Self>(bytes)
-            .or_else(|e| {
-                Err(WebSerializeError::InvalidBytes(format!(
-                    "Received invalid binary msg: {}",
-                    e
-                )))
-            })?
-            .deserialize(&mut rkyv::Infallible)
-            .or_else(|e| {
-                Err(WebSerializeError::InvalidBytes(format!(
-                    "Received invalid binary msg: {:?}",
-                    e
-                )))
-            })?;
-
-        Ok(server_msg)
+    pub fn from_bytes(bytes: &[u8]) -> Result<(u128, Self), bincode::Error> {
+        bincode::deserialize::<(u128, ServerMsg)>(bytes)
     }
 
-    pub fn as_bytes(
-        &self,
-    ) -> Result<
-        AlignedVec,
-        CompositeSerializerError<
-            std::convert::Infallible,
-            AllocScratchError,
-            SharedSerializeMapError,
-        >,
-    > {
-        rkyv::to_bytes::<_, 256>(self)
+    pub fn as_bytes(&self, id: u128) -> Result<Vec<u8>, bincode::Error> {
+        bincode::serialize::<(u128, ServerMsg)>(&(id, self.clone()))
     }
 }

@@ -23,7 +23,7 @@ pub async fn run(
     }
 
     for guild in guilds {
-        output.push_str(&format!("\n-{}:{}", guild.id, guild.name));
+        output.push_str(&format!("\n-{}:{}", guild.guild_id, guild.name));
     }
 
     command

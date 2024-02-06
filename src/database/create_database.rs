@@ -1,21 +1,24 @@
-use crate::database::models::acc::Acc;
-use crate::database::models::acc_session::AccSession;
-use crate::database::models::allowed_channel::AllowedChannel;
-use crate::database::models::allowed_guild::AllowedGuild;
-use crate::database::models::allowed_role::AllowedRole;
-use crate::database::models::auto_reaction::AutoReaction;
-use crate::database::models::img::Img;
-use crate::database::models::user::User;
-use crate::server::server_msg::ServerMsg;
-use crate::server::server_msg_img::ServerMsgImg;
+use crate::database::models::acc::{Acc, AccFieldName};
+use crate::database::models::acc_session::{AccSession, AccSessionFieldName};
+use crate::database::models::allowed_channel::{AllowedChannel, AllowedChannelFieldName};
+use crate::database::models::allowed_guild::{AllowedGuild, AllowedGuildFieldName};
+use crate::database::models::allowed_role::{AllowedRole, AllowedRoleFieldName};
+use crate::database::models::auto_reaction::{AutoReaction, AutoReactionFieldName};
+use crate::database::models::img::{Img, ImgFieldName};
+use crate::database::models::user::{User, UserFieldName};
+use crate::message::server_msg::ServerMsg;
+use crate::message::server_msg_img::{AggImg, AggImgFieldName};
 use bson::oid::ObjectId;
 use bson::{doc, Bson, DateTime, Document};
 use chrono::Utc;
 use futures::TryStreamExt;
+use leptos::server_fn::const_format::concatcp;
 use mongodb::options::{ClientOptions, IndexOptions};
 use mongodb::results::{DeleteResult, InsertOneResult};
 use mongodb::{Client, Cursor, IndexModel};
+use rusqlite::Connection;
 use serenity::prelude::TypeMapKey;
+use std::str::FromStr;
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -46,7 +49,7 @@ impl DB {
     ) -> Result<Option<AccSession>, mongodb::error::Error> {
         let acc = self
             .collection_acc_session
-            .find_one(doc! { "token": token }, None)
+            .find_one(doc! { AccSessionFieldName::Token.name(): token }, None)
             .await?;
 
         Ok(acc)
@@ -63,10 +66,10 @@ impl DB {
         Ok(acc)
     }
 
-    pub async fn acc_find_one_by_id(&self, _id: &ObjectId) -> Result<Option<Acc>, mongodb::error::Error> {
+    pub async fn acc_find_one_by_id(&self, id: &str) -> Result<Option<Acc>, mongodb::error::Error> {
         let acc = self
             .collection_acc
-            .find_one(doc! { "_id": _id }, None)
+            .find_one(doc! { AccFieldName::Id.name(): id }, None)
             .await?;
 
         Ok(acc)
@@ -74,7 +77,7 @@ impl DB {
     pub async fn acc_find_one(&self, email: &str) -> Result<Option<Acc>, mongodb::error::Error> {
         let acc = self
             .collection_acc
-            .find_one(doc! { "email": email }, None)
+            .find_one(doc! { AccFieldName::Email.name(): email }, None)
             .await?;
 
         Ok(acc)
@@ -107,7 +110,7 @@ impl DB {
         let role = self
             .collection_allowed_role
             .find_one(
-                doc! { "guild_id": guild_id, "id": role_id, "feature": feature_option },
+                doc! { AllowedRoleFieldName::GuildId.name(): guild_id, AllowedRoleFieldName::RoleId.name(): role_id, AllowedRoleFieldName::Feature.name(): feature_option },
                 None,
             )
             .await?;
@@ -124,7 +127,7 @@ impl DB {
         let result = self
             .collection_allowed_role
             .delete_one(
-                doc! { "guild_id": guild_id, "id": role_id, "feature": feature_option },
+                doc! { AllowedRoleFieldName::GuildId.name(): guild_id, AllowedRoleFieldName::RoleId.name(): role_id, AllowedRoleFieldName::Feature.name(): feature_option },
                 None,
             )
             .await?;
@@ -174,7 +177,10 @@ impl DB {
     ) -> Result<Vec<AllowedRole>, mongodb::error::Error> {
         let result = self
             .collection_allowed_role
-            .find(doc! { "guild_id": guild_id }, None)
+            .find(
+                doc! { AllowedRoleFieldName::GuildId.name(): guild_id },
+                None,
+            )
             .await?;
         let result = result.try_collect().await.unwrap_or_else(|_| vec![]);
 
@@ -187,7 +193,10 @@ impl DB {
     ) -> Result<Vec<AllowedChannel>, mongodb::error::Error> {
         let result = self
             .collection_allowed_channel
-            .find(doc! { "guild_id": guild_id }, None)
+            .find(
+                doc! { AllowedChannelFieldName::GuildId.name(): guild_id },
+                None,
+            )
             .await?;
         let result = result.try_collect().await.unwrap_or_else(|_| vec![]);
 
@@ -196,12 +205,12 @@ impl DB {
 
     pub async fn remove_channel(
         &self,
-        id: &str,
+        channel_id: &str,
         feature: &str,
     ) -> Result<DeleteResult, mongodb::error::Error> {
         let result = self
             .collection_allowed_channel
-            .delete_one(doc! { "id": id, "feature": feature }, None)
+            .delete_one(doc! { AllowedChannelFieldName::ChannelId.name(): channel_id, AllowedChannelFieldName::Feature.name(): feature }, None)
             .await?;
 
         Ok(result)
@@ -223,7 +232,7 @@ impl DB {
     ) -> Result<(), mongodb::error::Error> {
         self.collection_user
             .update_one(
-                doc! { "id": user_id },
+                doc! { UserFieldName::Id.name(): user_id },
                 doc! {
                     "$set": update.clone()
                 },
@@ -240,7 +249,7 @@ impl DB {
     ) -> Result<Option<User>, mongodb::error::Error> {
         let result = self
             .collection_user
-            .find_one(doc! {"id": user_id}, None)
+            .find_one(doc! {UserFieldName::Id.name(): user_id}, None)
             .await?;
         //println!("wtf{:?}", user);
         // Ok(ServerMsg::Profile(user))
@@ -250,33 +259,33 @@ impl DB {
     pub async fn img_aggregate_user_gallery(
         &self,
         amount: u32,
-        from: DateTime,
+        from: i64,
         user_id: &str,
     ) -> Result<ServerMsg, mongodb::error::Error> {
         let user = self
             .collection_user
-            .find_one(doc! {"id": user_id}, None)
+            .find_one(doc! {UserFieldName::Id.name(): user_id}, None)
             .await?;
         if let None = user {
             return Ok(ServerMsg::ProfileImgs(None));
         }
 
         let pipeline = vec![
-            doc! { "$sort": doc! { "created_at": -1 } },
-            doc! { "$match": doc! { "created_at": { "$lt": from }, "show": true, "user_id": user_id } },
+            doc! { "$sort": doc! { ImgFieldName::CreatedAt.name(): -1 } },
+            doc! { "$match": doc! { ImgFieldName::CreatedAt.name(): { "$lt": from }, ImgFieldName::Show.name(): true, ImgFieldName::UserId.name(): user_id } },
             doc! { "$limit": Some( amount.clamp(25, 10000) as i64) },
-            doc! { "$lookup": doc! { "from": "user", "localField": "user_id", "foreignField": "id", "as": "user"} },
-            doc! { "$unwind": "$user" },
+            doc! { "$lookup": doc! { "from": COLLECTION_USER_NAME, "localField": ImgFieldName::UserId.name(), "foreignField": UserFieldName::Id.name(), "as": AggImgFieldName::User.name()} },
+            doc! { "$unwind": format!("${}", AggImgFieldName::User.name()) },
         ];
         // println!("{:#?}", pipeline);
 
         let mut imgs = self.collection_img.aggregate(pipeline, None).await?;
         let imgs = imgs.try_collect().await.unwrap_or_else(|_| vec![]);
 
-        let mut send_this: Vec<ServerMsgImg> = Vec::new();
+        let mut send_this: Vec<AggImg> = Vec::new();
 
         for img in imgs {
-            let doc: ServerMsgImg = mongodb::bson::from_document(img)?;
+            let doc: AggImg = mongodb::bson::from_document(img)?;
             send_this.push(doc);
         }
 
@@ -293,24 +302,26 @@ impl DB {
     pub async fn img_aggregate_gallery(
         &self,
         amount: u32,
-        from: DateTime,
+        from: i64,
     ) -> Result<ServerMsg, mongodb::error::Error> {
         let pipeline = vec![
-            doc! { "$sort": doc! { "created_at": -1 } },
-            doc! { "$match": doc! { "created_at": { "$lt": from }, "show": true } },
+            doc! { "$sort": doc! { ImgFieldName::CreatedAt.name(): -1 } },
+            doc! { "$match": doc! { ImgFieldName::CreatedAt.name(): { "$lt": from }, ImgFieldName::Show.name(): true } },
             doc! { "$limit": Some( amount.clamp(25, 10000) as i64) },
-            doc! { "$lookup": doc! { "from": "user", "localField": "user_id", "foreignField": "id", "as": "user"} },
-            doc! { "$unwind": "$user" },
+            doc! { "$lookup": doc! { "from": COLLECTION_USER_NAME, "localField": ImgFieldName::UserId.name(), "foreignField": UserFieldName::Id.name(), "as": AggImgFieldName::User.name()} },
+            doc! { "$unwind": format!("${}", AggImgFieldName::User.name()) },
         ];
         // println!("{:#?}", pipeline);
 
         let mut imgs = self.collection_img.aggregate(pipeline, None).await?;
 
-        let mut send_this: Vec<ServerMsgImg> = Vec::new();
+        let mut send_this: Vec<AggImg> = Vec::new();
 
         while let Some(result) = imgs.try_next().await? {
-            let doc: ServerMsgImg = mongodb::bson::from_document(result)?;
+            let doc: AggImg = mongodb::bson::from_document(result)?;
+            //let a = doc.f
             send_this.push(doc);
+            // println!("hh");
         }
 
         Ok(ServerMsg::Imgs(send_this))
@@ -325,8 +336,8 @@ impl DB {
             .collection_img
             .find_one(
                 doc! {
-                    "guild_id": guild_id.to_string(),
-                    "org_hash": file_hash.clone()
+                    ImgFieldName::GuildId.name(): guild_id.to_string(),
+                    ImgFieldName::OrgHash.name(): file_hash.clone()
                 },
                 None,
             )
@@ -342,8 +353,8 @@ impl DB {
         let result = self
             .collection_img
             .update_one(
-                doc! { "guild_id": guild_id.to_string(), "id": msg_id.to_string() },
-                doc! { "$set": { "show": false } },
+                doc! { ImgFieldName::GuildId.name(): guild_id.to_string(), ImgFieldName::Id.name(): msg_id.to_string() },
+                doc! { "$set": { ImgFieldName::Show.name(): false } },
                 None,
             )
             .await?;
@@ -359,7 +370,7 @@ impl DB {
     ) -> Result<(), mongodb::error::Error> {
         self.collection_img
             .update_one(
-                doc! { "guild_id": guild_id.to_string(), "org_hash": file_hash },
+                doc! { ImgFieldName::GuildId.name(): guild_id.to_string(), ImgFieldName::OrgHash.name(): file_hash },
                 doc! {
                     "$set": update
                 },
@@ -371,66 +382,23 @@ impl DB {
     }
 
     pub async fn img_insert(&self, img: &Img) -> Result<(), mongodb::error::Error> {
-        let is_ms = img.created_at.timestamp_millis() < 9999999999999;
+        let is_ms = img.created_at < 9999999999999;
         if !is_ms {
             return Err(mongodb::error::Error::custom(Arc::new(format!(
-                "created_at: {}",
+                "{}: {}",
+                ImgFieldName::CreatedAt.name(),
                 is_ms
             ))));
         }
-        let is_ms = img.modified_at.timestamp_millis() < 9999999999999;
+        let is_ms = img.modified_at < 9999999999999;
         if !is_ms {
             return Err(mongodb::error::Error::custom(Arc::new(format!(
-                "modified_at: {}",
+                "{}: {}",
+                ImgFieldName::ModifiedAt.name(),
                 is_ms
             ))));
         }
         self.collection_img.insert_one(img, None).await?;
-        Ok(())
-    }
-
-    pub async fn reset_img_time(&self, guild_id: u64) -> Result<(), mongodb::error::Error> {
-        let ops = mongodb::options::FindOptions::builder()
-            .sort(doc! {"created_at": 1})
-            .build();
-        let mut cursor = self.collection_img.find(None, ops).await?;
-        let mut modified_count = 0;
-        let mut count = 0;
-
-        while let Some(img) = cursor.try_next().await? {
-            if count % 1000 == 0 {
-                println!("{}, {}", count, modified_count);
-            }
-
-            let mut update_doc = Document::new();
-
-            let ms = img.created_at.timestamp_millis();
-            let is_ms = ms < 9999999999999;
-            if !is_ms {
-                let to_ms = if is_ms { ms } else { ms / 1000000 };
-                let created_at = DateTime::from_millis(to_ms);
-                update_doc.insert("created_at", created_at);
-            }
-
-            let ms = img.modified_at.timestamp_millis();
-            let is_ms = ms < 9999999999999;
-            if !is_ms {
-                let to_ms = if is_ms { ms } else { ms / 1000000 };
-                let modified_at = DateTime::from_millis(to_ms);
-                update_doc.insert("modified_at", modified_at);
-            }
-
-            if update_doc.len() > 0 {
-                self.collection_img
-                    .update_one(doc! { "_id": img._id }, doc! {"$set": update_doc}, None)
-                    .await?;
-                modified_count += 1;
-            }
-
-            count += 1;
-        }
-        println!("{}, {}", count, modified_count);
-
         Ok(())
     }
 
@@ -443,7 +411,7 @@ impl DB {
         let channel = self
             .collection_allowed_channel
             .find_one(
-                doc! { "guild_id": guild_id.to_string(), "id": channel_id.to_string(), "feature": feature.to_string() },
+                doc! { AllowedChannelFieldName::GuildId.name(): guild_id.to_string(), AllowedChannelFieldName::ChannelId.name(): channel_id.to_string(), AllowedChannelFieldName::Feature.name(): feature.to_string() },
                 None,
             )
             .await?;
@@ -454,7 +422,7 @@ impl DB {
         &self,
         auto_reaction: &AutoReaction,
     ) -> Result<bool, mongodb::error::Error> {
-        let result = self.collection_auto_reaction.delete_one(doc!{ "id": &auto_reaction.id, "guild_id": auto_reaction.guild_id.as_str(), "name": &auto_reaction.name, "animated": auto_reaction.animated, "unicode": &auto_reaction.unicode }, None).await?;
+        let result = self.collection_auto_reaction.delete_one(doc!{ AutoReactionFieldName::EmojiId.name(): &auto_reaction.emoji_id, AutoReactionFieldName::GuildId.name(): auto_reaction.guild_id.as_str(), AutoReactionFieldName::Name.name(): &auto_reaction.name, AutoReactionFieldName::Animated.name(): auto_reaction.animated, AutoReactionFieldName::Unicode.name(): &auto_reaction.unicode }, None).await?;
         Ok(result.deleted_count > 0)
     }
 
@@ -462,7 +430,7 @@ impl DB {
         &self,
         auto_reaction: &AutoReaction,
     ) -> Result<bool, mongodb::error::Error> {
-        let result = self.collection_auto_reaction.find_one(doc! { "id": &auto_reaction.id, "guild_id": auto_reaction.guild_id.as_str(), "name": &auto_reaction.name, "animated": auto_reaction.animated, "unicode": &auto_reaction.unicode }, None).await?;
+        let result = self.collection_auto_reaction.find_one(doc! { AutoReactionFieldName::EmojiId.name(): &auto_reaction.emoji_id, AutoReactionFieldName::GuildId.name(): auto_reaction.guild_id.as_str(), AutoReactionFieldName::Name.name(): &auto_reaction.name, AutoReactionFieldName::Animated.name(): auto_reaction.animated, AutoReactionFieldName::Unicode.name(): &auto_reaction.unicode }, None).await?;
         Ok(result.is_some())
     }
 
@@ -470,7 +438,7 @@ impl DB {
         &self,
         auto_reactions: Vec<AutoReaction>,
     ) -> Result<(), mongodb::error::Error> {
-        let filter = doc! { "$or": auto_reactions.into_iter().map(|auto_reaction| doc! { "id": &auto_reaction.id, "guild_id": auto_reaction.guild_id.as_str(), "name": &auto_reaction.name, "animated": auto_reaction.animated, "unicode": &auto_reaction.unicode }).collect::<Vec<Document>>() };
+        let filter = doc! { "$or": auto_reactions.into_iter().map(|auto_reaction| doc! { AutoReactionFieldName::EmojiId.name(): &auto_reaction.emoji_id, AutoReactionFieldName::GuildId.name(): auto_reaction.guild_id.as_str(), AutoReactionFieldName::Name.name(): &auto_reaction.name, AutoReactionFieldName::Animated.name(): auto_reaction.animated, AutoReactionFieldName::Unicode.name(): &auto_reaction.unicode }).collect::<Vec<Document>>() };
         // println!("{:#?}", &filter);
         self.collection_auto_reaction
             .delete_many(filter, None)
@@ -494,7 +462,10 @@ impl DB {
     ) -> Result<Vec<AutoReaction>, mongodb::error::Error> {
         let result = self
             .collection_auto_reaction
-            .find(doc! {"guild_id": guild_id.to_string()}, None)
+            .find(
+                doc! {AutoReactionFieldName::GuildId.name(): guild_id.to_string()},
+                None,
+            )
             .await?;
         let result = result.try_collect().await.unwrap_or_else(|_| vec![]);
         Ok(result)
@@ -507,7 +478,7 @@ impl DB {
         let name = String::from("DEFAULT");
         let allowed_guild = self
             .collection_allowed_guild
-            .find_one(doc! {"id": &guild_id, "name": &name}, None)
+            .find_one(doc! { AllowedGuildFieldName::GuildId.name(): &guild_id, AllowedGuildFieldName::Name.name(): &name}, None)
             .await?;
         if allowed_guild.is_none() {
             let allowed_guild = self
@@ -525,7 +496,10 @@ impl DB {
     ) -> Result<Option<String>, mongodb::error::Error> {
         let allowed_guild = self
             .collection_allowed_guild
-            .find_one(doc! {"id": &new_guild.id}, None)
+            .find_one(
+                doc! {AllowedGuildFieldName::GuildId.name(): &new_guild.guild_id},
+                None,
+            )
             .await?;
         if allowed_guild.is_none() {
             let allowed_guild = self
@@ -543,7 +517,10 @@ impl DB {
     ) -> Result<bool, mongodb::error::Error> {
         let result = self
             .collection_allowed_guild
-            .delete_one(doc! { "id": guild_id }, None)
+            .delete_one(
+                doc! { AllowedGuildFieldName::GuildId.name(): guild_id },
+                None,
+            )
             .await?;
         Ok(result.deleted_count > 0)
     }
@@ -563,58 +540,73 @@ impl DB {
     ) -> Result<bool, mongodb::error::Error> {
         let result = self
             .collection_allowed_guild
-            .count_documents(doc! {"id": guild_id}, None)
+            .count_documents(doc! {AllowedGuildFieldName::GuildId.name(): guild_id}, None)
             .await?;
         Ok(result > 0)
     }
 }
 
+const DATABASE_NAME: &'static str = "artcord";
+const COLLECTION_ALLOWED_CHANNEL_NAME: &'static str = "allowed_channel";
+const COLLECTION_ALLOWED_ROLE_NAME: &'static str = "allowed_role";
+const COLLECTION_ALLOWED_GUILD_NAME: &'static str = "allowed_guild";
+const COLLECTION_IMG_NAME: &'static str = "img";
+const COLLECTION_USER_NAME: &'static str = "user";
+const COLLECTION_ACC_NAME: &'static str = "acc";
+const COLLECTION_ACC_SESSION_NAME: &'static str = "acc_session";
+const COLLECTION_AUTO_REACTION_NAME: &'static str = "auto_reaction";
+
 pub async fn create_database(mongo_url: String) -> DB {
+    // let a = ImgFieldName::GuildId.name();
     println!("Connecting to database...");
 
     let mut client_options = ClientOptions::parse(mongo_url).await.unwrap();
     client_options.app_name = Some("My App".to_string());
     let client = Client::with_options(client_options).unwrap();
 
-    let database = client.database("artcord");
-    let collection_img = database.collection::<Img>("img");
+    let database = client.database(DATABASE_NAME);
+    let collection_img = database.collection::<Img>(COLLECTION_IMG_NAME);
 
     let opts = IndexOptions::builder().unique(true).build();
     let index = IndexModel::builder()
-        .keys(doc! { "id": -1 })
+        .keys(doc! { UserFieldName::Id.name(): -1 })
         .options(opts)
         .build();
-    let collection_user = database.collection::<User>("user");
+    let collection_user = database.collection::<User>(COLLECTION_USER_NAME);
     collection_user
         .create_index(index, None)
         .await
         .expect("Failed to create collection index.");
 
-    let collection_allowed_channel = database.collection::<AllowedChannel>("allowed_channel");
-    let collection_allowed_role = database.collection::<AllowedRole>("allowed_role");
-    let collection_allowed_guild = database.collection::<AllowedGuild>("allowed_guild");
+    let collection_allowed_channel =
+        database.collection::<AllowedChannel>(COLLECTION_ALLOWED_CHANNEL_NAME);
+    let collection_allowed_role = database.collection::<AllowedRole>(COLLECTION_ALLOWED_ROLE_NAME);
+    let collection_allowed_guild =
+        database.collection::<AllowedGuild>(COLLECTION_ALLOWED_GUILD_NAME);
 
     let opts = IndexOptions::builder().unique(true).build();
     let index = IndexModel::builder()
-        .keys(doc! { "email": -1 })
+        .keys(doc! { AccFieldName::Email.name(): -1 })
         .options(opts)
         .build();
 
-    let collection_acc = database.collection::<Acc>("acc");
+    let collection_acc = database.collection::<Acc>(COLLECTION_ACC_NAME);
     collection_acc
         .create_index(index, None)
         .await
         .expect("Failed to create collection index.");
 
-    let collection_acc_session = database.collection::<AccSession>("acc_session");
+    let collection_acc_session = database.collection::<AccSession>(COLLECTION_ACC_SESSION_NAME);
 
     let opts = IndexOptions::builder().unique(true).build();
+
     let index = IndexModel::builder()
-        .keys(doc! {"guild_id": -1,  "unicode": -1, "id": -1, "name": -1, "animated": -1 })
+        .keys(doc! {AutoReactionFieldName::GuildId.name(): -1,  AutoReactionFieldName::Unicode.name(): -1, AutoReactionFieldName::EmojiId.name(): -1, AutoReactionFieldName::Name.name(): -1, AutoReactionFieldName::Animated.name(): -1 })
         .options(opts)
         .build();
 
-    let collection_auto_reaction = database.collection::<AutoReaction>("auto_reaction");
+    let collection_auto_reaction =
+        database.collection::<AutoReaction>(COLLECTION_AUTO_REACTION_NAME);
     collection_auto_reaction
         .create_index(index, None)
         .await
@@ -622,6 +614,8 @@ pub async fn create_database(mongo_url: String) -> DB {
 
     let db_list = client.list_database_names(doc! {}, None).await.unwrap();
     println!("Databases: {:?}", db_list);
+
+    //let conn = Connection::open_in_memory().expect("Failed to create sqlite db");
 
     DB {
         database,

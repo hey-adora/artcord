@@ -12,22 +12,6 @@ pub async fn run(
     guild_id: u64,
 ) -> Result<(), crate::bot::commands::CommandError> {
     println!("wtf");
-    db.reset_img_time(guild_id).await?;
-    // let guilds = ctx.http.get_guilds(None, Some(100)).await?;
-    //
-    // let mut output = String::new();
-    // for guild in guilds {
-    //     output.push_str(&format!("\n{}:{}", guild.id, guild.name));
-    // }
-    //
-    // command
-    //     .create_interaction_response(&ctx.http, |response| {
-    //         response
-    //             .kind(InteractionResponseType::ChannelMessageWithSource)
-    //             .interaction_response_data(|message| message.content(output))
-    //     })
-    //     .await?;
-
     Ok(())
 }
 

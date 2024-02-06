@@ -1,3 +1,4 @@
+use crate::app::components::gallery::SocketBs;
 use crate::app::global_state::AuthState;
 use crate::app::pages::admin::Admin;
 use crate::app::pages::login::Login;
@@ -5,7 +6,7 @@ use crate::app::pages::register::{AuthLoadingState, Register};
 use crate::app::utils::LoadingNotFound;
 use crate::app::utils::ServerMsgImgResized;
 use crate::app::utils::{resize_imgs, NEW_IMG_HEIGHT};
-use crate::server::server_msg::ServerMsg;
+use crate::message::server_msg::ServerMsg;
 use global_state::GlobalState;
 use gloo_net::http::Request;
 use leptos::logging::log;
@@ -33,6 +34,7 @@ pub mod utils;
 pub fn App() -> impl IntoView {
     provide_meta_context();
     provide_context(GlobalState::new());
+    provide_context(SocketBs::new());
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
     let (_connected, _set_connected) = create_signal(String::new());
 
@@ -52,205 +54,212 @@ pub fn App() -> impl IntoView {
             "/ws/",
             UseWebSocketOptions::default()
                 .on_message(move |msg| {
-                    log!("RECEIVED SOMETHING2: {:?}", &msg);
+                    //log!("RECEIVED SOMETHING2: {:?}", &msg);
                 })
                 .on_message_bytes(move |bytes| {
-                    log!("RECEIVED SOMETHING: {:?}", &bytes);
+                    //log!("RECEIVED SOMETHING: {:?}", &bytes);
                     if bytes.is_empty() {
                         log!("Empty byte msg received.");
                         return;
                     };
 
                     let server_msg = ServerMsg::from_bytes(&bytes);
-                    let Ok(server_msg) = server_msg else {
+                    let Ok((id, server_msg)) = server_msg else {
                         log!("Error decoding msg: {}", server_msg.err().unwrap());
                         return;
                     };
 
-                    log!("{:#?}", &server_msg);
+                    //log!("{:#?}", &server_msg);
 
-                    let server_msg_name = server_msg.name();
+                    if id != 0 {
+                        global_state.execute(id, server_msg);
+                    } else {
+                        log!("IDDDDDDDD 0");
+                    }
 
-                    match server_msg {
-                        ServerMsg::Reset => {
-                            log!("RESETING");
-                            document().location().unwrap().reload().unwrap();
-                        }
-                        ServerMsg::None => {}
-                        ServerMsg::Imgs(new_imgs) => {
-                            if new_imgs.is_empty()
-                                && global_state.page_galley.gallery_loaded.get_untracked()
-                                    == LoadingNotFound::Loading
-                            {
-                                global_state
-                                    .page_galley
-                                    .gallery_loaded
-                                    .set(LoadingNotFound::NotFound);
-                            } else {
-                                let new_imgs = new_imgs
-                                    .iter()
-                                    .map(|img| ServerMsgImgResized::from(img.to_owned()))
-                                    .collect::<Vec<ServerMsgImgResized>>();
+                    //let server_msg_name = server_msg.name();
 
-                                // if !global_state.page_galley.gallery_loaded.get_untracked() {
-                                //     global_state.page_galley.gallery_loaded.set(true);
-                                // }
+                    // match server_msg {
+                    //     ServerMsg::Reset => {
+                    //         log!("RESETING");
+                    //         //document().location().unwrap().replace("google.com")
+                    //         //document().location().unwrap().reload().unwrap();
+                    //     }
+                    //     ServerMsg::None => {}
+                    //     ServerMsg::Imgs(new_imgs) => {
+                    //         if new_imgs.is_empty()
+                    //             && global_state.page_galley.gallery_loaded.get_untracked()
+                    //                 == LoadingNotFound::Loading
+                    //         {
+                    //             global_state
+                    //                 .page_galley
+                    //                 .gallery_loaded
+                    //                 .set(LoadingNotFound::NotFound);
+                    //         } else {
+                    //             let new_imgs = new_imgs
+                    //                 .iter()
+                    //                 .map(|img| ServerMsgImgResized::from(img.to_owned()))
+                    //                 .collect::<Vec<ServerMsgImgResized>>();
 
-                                global_state.page_galley.gallery_imgs.update(|imgs| {
-                                    imgs.extend(new_imgs);
-                                    let document = document();
-                                    let gallery_section =
-                                        document.get_element_by_id("gallery_section");
-                                    let Some(gallery_section) = gallery_section else {
-                                        return;
-                                    };
-                                    let width = gallery_section.client_width() as u32;
-                                    resize_imgs(NEW_IMG_HEIGHT, width, imgs);
-                                });
-                                global_state
-                                    .page_galley
-                                    .gallery_loaded
-                                    .set(LoadingNotFound::Loaded);
-                            }
-                        }
-                        ServerMsg::ProfileImgs(new_imgs) => {
-                            let Some(new_imgs) = new_imgs else {
-                                //global_state.page_profile.gallery_loaded.set(true);
-                                global_state
-                                    .page_profile
-                                    .gallery_loaded
-                                    .set(LoadingNotFound::NotFound);
-                                //global_state.socket_state_reset(&server_msg_name);
-                                return;
-                            };
+                    //             // if !global_state.page_galley.gallery_loaded.get_untracked() {
+                    //             //     global_state.page_galley.gallery_loaded.set(true);
+                    //             // }
 
-                            if new_imgs.is_empty()
-                                && global_state.page_profile.gallery_loaded.get_untracked()
-                                    == LoadingNotFound::Loading
-                            {
-                                global_state
-                                    .page_profile
-                                    .gallery_loaded
-                                    .set(LoadingNotFound::NotFound);
-                            } else {
-                                //log!("PROFILE IMGS RECEIVED: {:?}", new_imgs.len());
+                    //             global_state.page_galley.gallery_imgs.update(|imgs| {
+                    //                 imgs.extend(new_imgs);
+                    //                 let document = document();
+                    //                 let gallery_section =
+                    //                     document.get_element_by_id("gallery_section");
+                    //                 let Some(gallery_section) = gallery_section else {
+                    //                     return;
+                    //                 };
+                    //                 let width = gallery_section.client_width() as u32;
+                    //                 resize_imgs(NEW_IMG_HEIGHT, width, imgs);
+                    //             });
+                    //             global_state
+                    //                 .page_galley
+                    //                 .gallery_loaded
+                    //                 .set(LoadingNotFound::Loaded);
+                    //         }
+                    //     }
+                    //     ServerMsg::ProfileImgs(new_imgs) => {
+                    //         let Some(new_imgs) = new_imgs else {
+                    //             //global_state.page_profile.gallery_loaded.set(true);
+                    //             global_state
+                    //                 .page_profile
+                    //                 .gallery_loaded
+                    //                 .set(LoadingNotFound::NotFound);
+                    //             //global_state.socket_state_reset(&server_msg_name);
+                    //             return;
+                    //         };
 
-                                let new_imgs = new_imgs
-                                    .iter()
-                                    .map(|img| ServerMsgImgResized::from(img.to_owned()))
-                                    .collect::<Vec<ServerMsgImgResized>>();
+                    //         if new_imgs.is_empty()
+                    //             && global_state.page_profile.gallery_loaded.get_untracked()
+                    //                 == LoadingNotFound::Loading
+                    //         {
+                    //             global_state
+                    //                 .page_profile
+                    //                 .gallery_loaded
+                    //                 .set(LoadingNotFound::NotFound);
+                    //         } else {
+                    //             log!("PROFILE IMGS RECEIVED: {:?}", new_imgs.len());
 
-                                global_state.page_profile.gallery_imgs.update(|imgs| {
-                                    imgs.extend(new_imgs);
-                                    let document = document();
-                                    let gallery_section =
-                                        document.get_element_by_id("profile_gallery_section");
-                                    let Some(gallery_section) = gallery_section else {
-                                        return;
-                                    };
-                                    let width = gallery_section.client_width() as u32;
-                                    resize_imgs(NEW_IMG_HEIGHT, width, imgs);
-                                });
-                                global_state
-                                    .page_profile
-                                    .gallery_loaded
-                                    .set(LoadingNotFound::Loaded);
+                    //             let new_imgs = new_imgs
+                    //                 .iter()
+                    //                 .map(|img| ServerMsgImgResized::from(img.to_owned()))
+                    //                 .collect::<Vec<ServerMsgImgResized>>();
 
-                                // if !global_state.page_profile.gallery_loaded.get_untracked() {
-                                //     global_state.page_profile.gallery_loaded.set(true);
-                                // }
-                            }
-                        }
-                        ServerMsg::Profile(new_user) => {
-                            if let Some(new_user) = new_user {
-                                //log!("USER RECEIVED: {:?}", &new_user.id);
-                                global_state.page_profile.gallery_imgs.set(vec![]);
-                                global_state
-                                    .page_profile
-                                    .gallery_loaded
-                                    .set(LoadingNotFound::NotLoaded);
-                                global_state.page_profile.user.update(move |user| {
-                                    *user = Some(new_user);
-                                });
-                            } else {
-                                global_state.page_profile.gallery_imgs.set(vec![]);
-                                global_state
-                                    .page_profile
-                                    .gallery_loaded
-                                    .set(LoadingNotFound::NotFound);
-                                // log!("where is it????");
-                            }
-                        }
-                        ServerMsg::RegistrationCompleted => {
-                            global_state
-                                .pages
-                                .registration
-                                .loading_state
-                                .set(AuthLoadingState::Completed);
-                        }
-                        ServerMsg::RegistrationInvalid(invalid) => {
-                            global_state
-                                .pages
-                                .registration
-                                .loading_state
-                                .set(AuthLoadingState::Failed(invalid));
-                        }
-                        ServerMsg::LoginInvalid(invalid) => {}
-                        ServerMsg::LoginComplete { user_id, token } => {
-                            //log!("TOKEN: {}", token);
+                    //             global_state.page_profile.gallery_imgs.update(|imgs| {
+                    //                 imgs.extend(new_imgs);
+                    //                 let document = document();
+                    //                 let gallery_section =
+                    //                     document.get_element_by_id("profile_gallery_section");
+                    //                 let Some(gallery_section) = gallery_section else {
+                    //                     return;
+                    //                 };
+                    //                 let width = gallery_section.client_width() as u32;
+                    //                 resize_imgs(NEW_IMG_HEIGHT, width, imgs);
+                    //             });
+                    //             global_state
+                    //                 .page_profile
+                    //                 .gallery_loaded
+                    //                 .set(LoadingNotFound::Loaded);
 
-                            let res = create_local_resource(
-                                || {},
-                                move |_| {
-                                    let token = token.clone();
-                                    async move {
-                                        let resp = Request::post("/login_token").body(token);
+                    //             // if !global_state.page_profile.gallery_loaded.get_untracked() {
+                    //             //     global_state.page_profile.gallery_loaded.set(true);
+                    //             // }
+                    //         }
+                    //     }
+                    //     ServerMsg::Profile(new_user) => {
+                    //         if let Some(new_user) = new_user {
+                    //             //log!("USER RECEIVED: {:?}", &new_user.id);
+                    //             global_state.page_profile.gallery_imgs.set(vec![]);
+                    //             global_state
+                    //                 .page_profile
+                    //                 .gallery_loaded
+                    //                 .set(LoadingNotFound::NotLoaded);
+                    //             global_state.page_profile.user.update(move |user| {
+                    //                 *user = Some(new_user);
+                    //             });
+                    //         } else {
+                    //             global_state.page_profile.gallery_imgs.set(vec![]);
+                    //             global_state
+                    //                 .page_profile
+                    //                 .gallery_loaded
+                    //                 .set(LoadingNotFound::NotFound);
+                    //             // log!("where is it????");
+                    //         }
+                    //     }
+                    //     ServerMsg::RegistrationCompleted => {
+                    //         global_state
+                    //             .pages
+                    //             .registration
+                    //             .loading_state
+                    //             .set(AuthLoadingState::Completed);
+                    //     }
+                    //     ServerMsg::RegistrationInvalid(invalid) => {
+                    //         global_state
+                    //             .pages
+                    //             .registration
+                    //             .loading_state
+                    //             .set(AuthLoadingState::Failed(invalid));
+                    //     }
+                    //     ServerMsg::LoginInvalid(invalid) => {}
+                    //     ServerMsg::LoginComplete { user_id, token } => {
+                    //         //log!("TOKEN: {}", token);
 
-                                        let Ok(resp) = resp else {
-                                            log!("Login build error: {}", resp.err().unwrap());
-                                            return;
-                                        };
+                    //         let res = create_local_resource(
+                    //             || {},
+                    //             move |_| {
+                    //                 let token = token.clone();
+                    //                 async move {
+                    //                     let resp = Request::post("/login_token").body(token);
 
-                                        let resp = resp.send().await;
-                                        let Ok(resp) = resp else {
-                                            log!("Login response error: {}", resp.err().unwrap());
-                                            return;
-                                        };
+                    //                     let Ok(resp) = resp else {
+                    //                         log!("Login build error: {}", resp.err().unwrap());
+                    //                         return;
+                    //                     };
 
-                                        log!("{:#?}", resp);
-                                    }
-                                },
-                            );
+                    //                     let resp = resp.send().await;
+                    //                     let Ok(resp) = resp else {
+                    //                         log!("Login response error: {}", resp.err().unwrap());
+                    //                         return;
+                    //                     };
 
-                            global_state.auth.set(AuthState::LoggedIn { user_id });
-                            global_state
-                                .pages
-                                .login
-                                .loading_state
-                                .set(AuthLoadingState::Completed);
-                        }
-                        ServerMsg::LoginFromTokenComplete { user_id } => {
-                            global_state.auth.set(AuthState::LoggedIn { user_id });
-                            global_state
-                                .pages
-                                .login
-                                .loading_state
-                                .set(AuthLoadingState::Completed);
-                        }
-                        ServerMsg::LoggedOut => {
-                            log!("LOGGEDOUT");
-                        }
-                        ServerMsg::Ping => {
-                            log!("PING");
-                        }
-                    };
-                    global_state.socket_state_reset(&server_msg_name);
+                    //                     log!("{:#?}", resp);
+                    //                 }
+                    //             },
+                    //         );
+
+                    //         global_state.auth.set(AuthState::LoggedIn { user_id });
+                    //         global_state
+                    //             .pages
+                    //             .login
+                    //             .loading_state
+                    //             .set(AuthLoadingState::Completed);
+                    //     }
+                    //     ServerMsg::LoginFromTokenComplete { user_id } => {
+                    //         global_state.auth.set(AuthState::LoggedIn { user_id });
+                    //         global_state
+                    //             .pages
+                    //             .login
+                    //             .loading_state
+                    //             .set(AuthLoadingState::Completed);
+                    //     }
+                    //     ServerMsg::LoggedOut => {
+                    //         log!("LOGGEDOUT");
+                    //     }
+                    //     ServerMsg::Ping => {
+                    //         log!("PING");
+                    //     }
+                    // };
+                    // global_state.socket_state_reset(&server_msg_name);
                 })
                 .immediate(true)
                 .reconnect_limit(0)
                 .reconnect_interval(10000),
         );
-        global_state.socket_send.set(Rc::new(send_bytes.clone()));
+        global_state.socket_send_fn.set(Rc::new(send_bytes.clone()));
 
         let Pausable { pause, resume, .. } = use_interval_fn(
             move || {
