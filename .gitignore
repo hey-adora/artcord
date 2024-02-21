@@ -18,7 +18,7 @@ dist
 .env
 assets/gallery
 gallery
-mongo
+
 
 benchmark
 test2
