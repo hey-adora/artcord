@@ -163,6 +163,9 @@ pub async fn resolve_command(
         "sync" if user_gallery_authorized || no_roles_set => {
             commands::sync::run(gallery_root_dir, &ctx, &command, &db, guild_id.0).await
         }
+        "verify" if user_gallery_authorized || no_roles_set => {
+            commands::verify::run(&ctx, &command, &db).await
+        }
         name => Err(crate::bot::commands::CommandError::NotImplemented(
             name.to_string(),
         )),

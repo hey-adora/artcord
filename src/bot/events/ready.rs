@@ -22,6 +22,7 @@ pub async fn ready(ctx: Context, ready: serenity::model::gateway::Ready) {
         let _commands = GuildId::set_application_commands(&guild, &ctx.http, |commands| {
             commands
                 .create_application_command(|command| commands::who::register(command))
+                .create_application_command(|command| commands::verify::register(command))
                 .create_application_command(|command| commands::test::register(command))
                 .create_application_command(|command| commands::guilds::register(command))
                 .create_application_command(|command| commands::leave::register(command))

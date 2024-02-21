@@ -28,6 +28,7 @@ pub mod show_roles;
 pub mod sync;
 pub mod test;
 pub mod who;
+pub mod verify;
 
 pub const FEATURE_GALLERY: &str = "gallery";
 pub const FEATURE_COMMANDER: &str = "commander";
@@ -105,6 +106,9 @@ pub enum CommandError {
     // Mongo(#[from] mongodb::error::Error),
     #[error("Command not implemented: {0}")]
     NotImplemented(String),
+
+    #[error("Failed to make http request {0}.")]
+    Request(#[from] reqwest::Error),
 }
 
 macro_rules! get_option {
