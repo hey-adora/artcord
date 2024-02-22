@@ -1,13 +1,13 @@
+use crate::bot::commands;
+use crate::bot::commands::FEATURE_COMMANDER;
+use crate::bot::create_bot::ArcStr;
+use crate::database::DB;
 use bson::doc;
 use futures::TryStreamExt;
 use serenity::client::Context;
-use serenity::model::prelude::{Interaction, InteractionResponseType};
 use serenity::model::prelude::application_command::ApplicationCommandInteraction;
-use crate::bot::{commands};
-use crate::bot::commands::FEATURE_COMMANDER;
-use crate::database::DB;
+use serenity::model::prelude::{Interaction, InteractionResponseType};
 use thiserror::Error;
-use crate::bot::create_bot::ArcStr;
 
 pub async fn interaction_create(ctx: Context, interaction: Interaction) {
     if let Interaction::ApplicationCommand(command) = interaction {
@@ -27,7 +27,9 @@ pub async fn interaction_create(ctx: Context, interaction: Interaction) {
                 .clone();
             (db, gallery_root_dir)
         };
-        let allowed_guild = db.allowed_guild_exists(guild_id.0.to_string().as_str()).await;
+        let allowed_guild = db
+            .allowed_guild_exists(guild_id.0.to_string().as_str())
+            .await;
         let Ok(allowed_guild) = allowed_guild else {
             println!("Mongodb error: {}", allowed_guild.err().unwrap());
             return;
@@ -68,7 +70,7 @@ pub async fn resolve_command(
     gallery_root_dir: &str,
     ctx: &Context,
     command: &ApplicationCommandInteraction,
-    db: &DB
+    db: &DB,
 ) -> Result<(), ResolveCommandError> {
     let command_name = command.data.name.as_str();
     let guild_id = command
@@ -113,9 +115,9 @@ pub async fn resolve_command(
         })
         .is_some();
 
-    if !no_roles_set && !user_commander_authorized && !user_gallery_authorized {
-        return Err(ResolveCommandError::Unauthorized);
-    }
+    // if !no_roles_set && !user_commander_authorized && !user_gallery_authorized {
+    //     return Err(ResolveCommandError::Unauthorized);
+    // }
 
     match command_name {
         "add_role" if user_commander_authorized || no_roles_set => {
@@ -163,9 +165,7 @@ pub async fn resolve_command(
         "sync" if user_gallery_authorized || no_roles_set => {
             commands::sync::run(gallery_root_dir, &ctx, &command, &db, guild_id.0).await
         }
-        "verify" if user_gallery_authorized || no_roles_set => {
-            commands::verify::run(&ctx, &command, &db).await
-        }
+        "verify" => commands::verify::run(&ctx, &command, &db).await,
         name => Err(crate::bot::commands::CommandError::NotImplemented(
             name.to_string(),
         )),
