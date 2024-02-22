@@ -17,8 +17,6 @@ use pages::home::HomePage;
 use pages::not_found::NotFound;
 use pages::profile::Profile;
 use std::rc::Rc;
-use std::thread::sleep;
-use std::time::Duration;
 
 pub mod components;
 pub mod pages;
@@ -30,15 +28,6 @@ pub fn App() -> impl IntoView {
     provide_context(GlobalState::new());
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
     let (_connected, _set_connected) = create_signal(String::new());
-
-    if cfg!(feature = "hydrate") {
-        spawn_local(async move {
-            sleep(Duration::from_secs(10));
-            log!("one");
-        });
-        log!("TWOOOOOOOOOOOOOOOOOOO")
-    }
- 
 
     if cfg!(feature = "hydrate") {
         let UseWebsocketReturn {
