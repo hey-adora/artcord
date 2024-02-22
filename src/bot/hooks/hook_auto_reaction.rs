@@ -123,16 +123,21 @@ pub async fn hook_auto_react(
 
         match result {
             Ok(_) => Ok(()),
-            Err(serenity::Error::Http(box serenity::http::HttpError::UnsuccessfulRequest(res)))
-                if res.status_code == 400
-                    && res.error.code == 10014
-                    && res.error.message.as_str() == "Unknown Emoji" =>
-            {
-                println!("Error, emoji doesnt exist: {:#?}", reaction);
-                db.auto_reaction_delete_one(reaction).await?;
-                Ok(())
-            }
-            Err(err) => Err(err),
+            Err(err) => match err {
+                serenity::Error::Http(res) => match *res {
+                    serenity::http::HttpError::UnsuccessfulRequest(e)
+                    if e.status_code == 400
+                        && e.error.code == 10014
+                        && e.error.message.as_str() == "Unknown Emoji" =>
+                        {
+                            println!("Error, emoji doesnt exist: {:#?}", reaction);
+                            db.auto_reaction_delete_one(reaction).await?;
+                            Ok(())
+                        }
+                    e => Err(serenity::Error::Http(Box::new(e))),
+                },
+                e => Err(e),
+            },
         }?;
 
         // if let Err(serenity::Error::Http(box serenity::http::HttpError::UnsuccessfulRequest(res))) = result {

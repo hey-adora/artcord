@@ -298,7 +298,7 @@ pub fn GalleryPage() -> impl IntoView {
             }
         }
         // <button on:click=add_imgs>"add more"</button>
-        <main class=move||format!("grid grid-rows-[1fr] min-h-[100dvh] transition-all duration-300 {}", if nav_tran() {"pt-[4rem]"} else {"pt-[0rem]"})>
+        <main class=move||format!("grid grid-rows-[1fr] min-h-[100dvh] transition-all duration-300 {}", if nav_tran.get() {"pt-[4rem]"} else {"pt-[0rem]"})>
                <Navbar/>
                 // <div class="backdrop-blur text-low-purple w-full px-6 py-2 2xl:px-[6rem] desktop:px-[16rem]  flex   gap-2   duration-500  bg-gradient-to-r from-dark-night2/75 to-light-flower/10 supports-backdrop-blur:from-dark-night2/95 supports-backdrop-blur:to-light-flower/95">"WOW CAT"</div>
             //    <Gallery global_gallery_imgs=imgs on_click=select_click_img on_fetch=on_fetch loaded_sig=global_state.page_galley.gallery_loaded connection_load_state_name=SERVER_MSG_IMGS_NAME  />
