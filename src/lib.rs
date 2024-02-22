@@ -1,4 +1,3 @@
-#![feature(box_patterns)]
 #![allow(unused_variables, unused_imports)]
 
 pub mod app;

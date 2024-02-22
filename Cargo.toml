@@ -1,4 +1,5 @@
-cargo-features = ["codegen-backend", "profile-rustflags"]
+#cargo-features = ["codegen-backend", "profile-rustflags"]
+#cargo-features = ["profile-rustflags"]
 
 [package]
 name = "artcord"
@@ -23,7 +24,7 @@ crate-type = ["cdylib", "rlib"]
 
 [profile.dev]
 opt-level = 0
-rustflags = ["-Z", "threads=24"]
+#rustflags = ["-Z", "threads=24"]
 incremental = true
 codegen-units = 256
 #linker = "clang"
@@ -42,12 +43,12 @@ actix-web = { version = "4.4.0", optional = true, features = ["macros"] }
 console_error_panic_hook = "0.1.7"
 cfg-if = "1"
 http = { version = "1.0.0", optional = true }
-leptos = { version = "0.5.3", features = ["nightly"] }
-leptos_meta = { version = "0.5.4", features = ["nightly"] }
-leptos_actix = { version = "0.5.4", optional = true }
-leptos_router = { version = "0.5.4", features = ["nightly"] }
-wasm-bindgen = { version = "=0.2.89", features = [] }
-leptos-use = { version = "0.8.2", features = [] }
+leptos = { version = "0.6.6", features = ["default"] }
+leptos_meta = { version = "0.6.6", features = ["default"] }
+leptos_actix = { version = "0.6.6", optional = true }
+leptos_router = { version = "0.6.6", features = ["default"] }
+wasm-bindgen = { version = "0.2.91", features = [] }
+leptos-use = { version = "0.10.2", features = [] }
 web-sys = { version = "0.3.66", features = [] }
 js-sys = { version = "0.3.66", features = [] }
 rand = { version = "0.8.5", features = [] }
@@ -55,110 +56,110 @@ actix-web-actors = { version = "4.2.0", features = [], optional = true }
 actix = { version = "0.13.1", features = [], optional = true }
 uuid = { version = "1.4.1", features = ["v4", "serde"], optional = true }
 futures = { version = "0.3.28", features = [
-  "alloc",
-  "async-await",
-  "executor",
-  "std",
-  "futures-executor",
+    "alloc",
+    "async-await",
+    "executor",
+    "std",
+    "futures-executor",
 ], optional = true }
 serenity = { version = "0.11.7", features = [
-  "base64",
-  "tokio",
-  "builder",
-  "bytes",
-  "cache",
-  "chrono",
-  "client",
-  "command_attr",
-  "dashmap",
-  "default_no_backend",
-  "flate2",
-  "framework",
-  "gateway",
-  "http",
-  "levenshtein",
-  "model",
-  "parking_lot",
-  "rustls_backend",
-  "standard_framework",
-  "static_assertions",
-  "typemap_rev",
-  "utils",
-  "uwl",
+    "base64",
+    "tokio",
+    "builder",
+    "bytes",
+    "cache",
+    "chrono",
+    "client",
+    "command_attr",
+    "dashmap",
+    "default_no_backend",
+    "flate2",
+    "framework",
+    "gateway",
+    "http",
+    "levenshtein",
+    "model",
+    "parking_lot",
+    "rustls_backend",
+    "standard_framework",
+    "static_assertions",
+    "typemap_rev",
+    "utils",
+    "uwl",
 ], optional = true }
 async-std = { version = "1.12.0", features = [
-  "alloc",
-  "async-channel",
-  "async-global-executor",
-  "async-io",
-  "async-lock",
-  "crossbeam-utils",
-  "futures-channel",
-  "futures-io",
-  "futures-lite",
-  "gloo-timers",
-  "kv-log-macro",
-  "log",
-  "memchr",
-  "once_cell",
-  "pin-project-lite",
-  "pin-utils",
-  "slab",
-  "slab",
-  "std",
-  "wasm-bindgen-futures",
+    "alloc",
+    "async-channel",
+    "async-global-executor",
+    "async-io",
+    "async-lock",
+    "crossbeam-utils",
+    "futures-channel",
+    "futures-io",
+    "futures-lite",
+    "gloo-timers",
+    "kv-log-macro",
+    "log",
+    "memchr",
+    "once_cell",
+    "pin-project-lite",
+    "pin-utils",
+    "slab",
+    "slab",
+    "std",
+    "wasm-bindgen-futures",
 ], optional = true }
 dotenv = { version = "0.15.0", optional = true }
 reqwest = { version = "0.11.22", optional = true, features = [
-  "__tls",
-  "default-tls",
-  "hyper-tls",
-  "native-tls-crate",
-  "tokio-native-tls",
+    "__tls",
+    "default-tls",
+    "hyper-tls",
+    "native-tls-crate",
+    "tokio-native-tls",
 ] }
 png = { version = "0.17.10", optional = true }
 png_pong = { version = "0.8.2", optional = true }
 image = { version = "0.24.7", optional = true, features = [
-  "bmp",
-  "dds",
-  "dxt",
-  "exr",
-  "farbfeld",
-  "gif",
-  "hdr",
-  "ico",
-  "jpeg",
-  "jpeg_rayon",
-  "openexr",
-  "png",
-  "pnm",
-  "qoi",
-  "tga",
-  "tiff",
-  "webp",
+    "bmp",
+    "dds",
+    "dxt",
+    "exr",
+    "farbfeld",
+    "gif",
+    "hdr",
+    "ico",
+    "jpeg",
+    "jpeg_rayon",
+    "openexr",
+    "png",
+    "pnm",
+    "qoi",
+    "tga",
+    "tiff",
+    "webp",
 ] }
 webp = { version = "0.2.6", optional = true, features = ["image", "img"] }
 anyhow = { version = "1.0.75", optional = true, features = ["std"] }
 sha256 = { version = "1.4.0", optional = true, features = ["async", "tokio"] }
 mongodb = { version = "2.7.0", optional = true, features = [
-  "serde_bytes",
-  "tokio-runtime",
+    "serde_bytes",
+    "tokio-runtime",
 ] }
 serde = { version = "1.0.189", features = ["std"] }
 rkyv = { version = "0.7.9", features = ["validation"] }
 md-5 = { version = "0.10.6", optional = true, features = ["std"] }
 hashes = { version = "0.1.9", optional = true }
 chrono = { version = "0.4.31", features = [
-  "android-tzdata",
-  "clock",
-  "iana-time-zone",
-  "js-sys",
-  "oldtime",
-  "std",
-  "wasm-bindgen",
-  "wasmbind",
-  "winapi",
-  "windows-targets",
+    "android-tzdata",
+    "clock",
+    "iana-time-zone",
+    "js-sys",
+    "oldtime",
+    "std",
+    "wasm-bindgen",
+    "wasmbind",
+    "winapi",
+    "windows-targets",
 ] }
 thiserror = "1.0.50"
 tokio = { version = "1.33.0", optional = true }
@@ -171,30 +172,30 @@ default = ["ssr"]
 csr = ["leptos/csr", "leptos_meta/csr", "leptos_router/csr"]
 hydrate = ["leptos/hydrate", "leptos_meta/hydrate", "leptos_router/hydrate"]
 ssr = [
-  "dep:actix-files",
-  "dep:actix-web",
-  "dep:leptos_actix",
-  "dep:actix-web-actors",
-  "dep:actix",
-  "dep:uuid",
-  "dep:futures",
-  "dep:serenity",
-  "dep:async-std",
-  "dep:dotenv",
-  "dep:reqwest",
-  "dep:png",
-  "dep:png_pong",
-  "dep:webp",
-  "dep:image",
-  "dep:anyhow",
-  "dep:sha256",
-  "dep:mongodb",
-  "dep:md-5",
-  "dep:hashes",
-  "dep:tokio",
-  "leptos/ssr",
-  "leptos_meta/ssr",
-  "leptos_router/ssr",
+    "dep:actix-files",
+    "dep:actix-web",
+    "dep:leptos_actix",
+    "dep:actix-web-actors",
+    "dep:actix",
+    "dep:uuid",
+    "dep:futures",
+    "dep:serenity",
+    "dep:async-std",
+    "dep:dotenv",
+    "dep:reqwest",
+    "dep:png",
+    "dep:png_pong",
+    "dep:webp",
+    "dep:image",
+    "dep:anyhow",
+    "dep:sha256",
+    "dep:mongodb",
+    "dep:md-5",
+    "dep:hashes",
+    "dep:tokio",
+    "leptos/ssr",
+    "leptos_meta/ssr",
+    "leptos_router/ssr",
 ]
 
 # Defines a size-optimized profile for the WASM bundle in release mode
