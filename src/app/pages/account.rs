@@ -16,7 +16,7 @@ pub fn Account() -> impl IntoView {
     });
 
     view! {
-        <main class=move||format!("grid grid-rows-[1fr] min-h-[100dvh] transition-all duration-300 {}", if nav_tran() {"pt-[4rem]"} else {"pt-[0rem]"})>
+        <main class=move||format!("grid grid-rows-[1fr] min-h-[100dvh] transition-all duration-300 {}", if nav_tran.get() {"pt-[4rem]"} else {"pt-[0rem]"})>
             <Navbar/>
             <div>"ACCOUNT"</div>
         </main>
