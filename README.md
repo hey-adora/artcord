@@ -5,6 +5,7 @@
 > Currently under heavy refactoring/cleanup. Contributions are welcome, my discord handle `hey__adora`
 
 Roadmap:
+
 - [x] Homepage
 - [x] Pull art from discord server.
 - [x] Display art in website gallery.
@@ -20,9 +21,7 @@ Roadmap:
 
 ## Build the project
 
-
-
-1. `rustup toolchain install nightly` - make sure you have Rust nightly
+1. `rustup toolchain install stable` - make sure you have Rust stable
 2. `rustup target add wasm32-unknown-unknown` - add the ability to compile Rust to WebAssembly
 3. `cargo leptos serve` - install `cargo-generate` binary (should be installed automatically in future)
 4. `npm install -g sass` - install `dart-sass` (should be optional in future)
@@ -30,5 +29,6 @@ Roadmap:
 You will also need to create `.env`
 
 ## Updating css
+
 1. `npm -g i tailwindcss`
 1. `tailwindcss -i input.css -o style/output.css -c tailwind.config.js -w`
