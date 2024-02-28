@@ -8,6 +8,7 @@ use leptos::*;
 use crate::app::global_state::GlobalState;
 use crate::message::server_msg::ServerMsg;
 use crate::server::client_msg::{self, ClientMsg};
+use web_sys::WebSocket;
 
 // const WS_TIMEOUT_MS: i64 = 30000;
 // const WS_TIMEOUT_MS_MARGIN: i64 = 100;
@@ -15,24 +16,25 @@ use crate::server::client_msg::{self, ClientMsg};
 // This exists just to prevent it sending multiple duplicate requests at once and make ws easier.
 #[derive(Copy, Clone, Debug)]
 pub struct WsSender {
-    socket_closures: RwSignal<HashMap<u128, Rc<dyn Fn(ServerMsg)->() >>>,
-    socket_send_fn: RwSignal<Rc<dyn Fn(Vec<u8>)>>,
+    socket_closures: StoredValue<HashMap<u128, Rc<dyn Fn(ServerMsg)->() >>>,
+    //socket_send_fn: StoredValue<Rc<dyn Fn(Vec<u8>)>>,
+    ws: StoredValue<Option<WebSocket>>,
     uuid: u128
 }
 
 impl WsSender {
-    pub fn new(socket_closures: RwSignal<HashMap<u128, Rc<dyn Fn(ServerMsg)->() >>>, socket_send_fn: RwSignal<Rc<dyn Fn(Vec<u8>)>>) -> Self {
-        let uuid = uuid::Uuid::new_v4().to_u128_le();
+    pub fn new(socket_closures: StoredValue<HashMap<u128, Rc<dyn Fn(ServerMsg)->() >>>, ws: StoredValue<Option<WebSocket>>) -> Self {
+        let uuid: u128 = uuid::Uuid::new_v4().to_u128_le();
 
         Self {
             socket_closures,
-            socket_send_fn,
+            ws,
             uuid
         }
     }
 
     pub fn send(&self, client_msg: &ClientMsg, on_receive: impl Fn(ServerMsg) -> () + 'static) {
-        self.socket_closures.update_untracked({
+        self.socket_closures.update_value({
             let socket_closures = self.socket_closures.clone();
             move |socket_closures| {
                 let a = Rc::new(move |server_msg| {
@@ -47,7 +49,7 @@ impl WsSender {
     }
 
     pub fn is_loading(&self) -> bool {
-        self.socket_closures.with(|closures|{
+        self.socket_closures.with_value(|closures|{
             closures.contains_key(&self.uuid)
         })
     }
@@ -67,16 +69,24 @@ impl WsSender {
     // }
 
     fn send_with(&self, id: u128, client_msg: &ClientMsg) {
-         let bytes = client_msg.as_vec(id);
-         let Ok(bytes) = bytes else {
-             println!(
-                 "Failed to serialize client msg: {:?}, error: {}",
-                 &client_msg,
-                 bytes.err().unwrap()
-             );
-             return;
-         };
-         self.socket_send_fn.get_untracked()(bytes);
+        self.ws.with_value(|ws| {
+            let Some(ws) = ws else {
+                log!("WS is not initialized");
+                return;
+             };
+    
+             let bytes = client_msg.as_vec(id);
+             let Ok(bytes) = bytes else {
+                 println!(
+                     "Failed to serialize client msg: {:?}, error: {}",
+                     &client_msg,
+                     bytes.err().unwrap()
+                 );
+                 return;
+             };
+             log!("SENT SOME MSG");
+             ws.send_with_u8_array(&bytes);
+        });
      }
 }
 

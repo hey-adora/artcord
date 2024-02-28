@@ -8,14 +8,20 @@ use artcord::server::create_server::{create_server, TOKEN_SIZE};
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use dotenv::dotenv;
-use futures::try_join;
+use futures::{try_join, StreamExt, TryStreamExt};
 use jsonwebtoken::encode;
+use tokio::task;
 use rand::Rng;
-use std::env;
+use tokio::net::TcpListener;
+use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::prelude::*;
 use std::io::Write;
 use std::sync::Arc;
+use std::{env, future};
+use tokio::net::TcpStream;
+use tokio::sync::RwLock;
+use artcord::web_sockets::create_websockets::create_websockets;
 
 pub fn get_env_bytes<F: Fn() -> String>(
     key: &str,
@@ -101,9 +107,17 @@ pub fn get_env<F: Fn() -> String>(key: &str, base64: bool, default_val: Option<F
     }
 }
 
+
+
+#[derive(Clone, Debug)]
+pub struct GlobalBackEndState {
+    ws: Arc<RwLock<HashMap<u128, String>>>
+}
+
 #[cfg(feature = "ssr")]
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+
     dotenv().ok();
     let assets_root_dir = env::var("ASSETS_ROOT_DIR").expect("ENV MISSING: ASSETS_ROOT_DIR");
     let gallery_root_dir = env::var("GALLERY_ROOT_DIR").expect("ENV MISSING: GALLERY_ROOT_DIR");
@@ -170,10 +184,13 @@ async fn main() -> std::io::Result<()> {
         .await
         .unwrap();
 
+    //let ws_stream = async_tungstenite::accept_async(listener);
+
     let mut bot_server = create_bot(db.clone(), token, gallery_root_dir.as_str()).await;
     let web_server = create_server(db, gallery_root_dir, assets_root_dir, pepper, jwt_secret).await;
 
     let r = try_join!(
+        async { create_websockets().await },
         async { web_server.await.or_else(|e| Err(e.to_string())) },
         async { bot_server.start().await.or_else(|e| Err(e.to_string())) }
     );

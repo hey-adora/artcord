@@ -1,6 +1,6 @@
+use crate::app::global_state::GlobalState;
 use crate::server::client_msg::ClientMsg;
 use crate::{app::components::navbar::shrink_nav, message::server_msg::ServerMsg};
-use crate::app::global_state::GlobalState;
 use bson::DateTime;
 use chrono::Utc;
 use leptos::ev::resize;
@@ -17,26 +17,26 @@ use crate::app::utils::{
     calc_fit_count, resize_imgs, LoadingNotFound, ServerMsgImgResized, NEW_IMG_HEIGHT,
 };
 
-//F: Fn(ServerMsgImgResized) -> IV + 'static, IV: IntoView
-#[derive(Copy, Clone, Debug)]
-pub struct SocketBs {
-    pub msgs: RwSignal<HashMap<u128, Rc<dyn Fn() -> ()>>>,
-}
+// //F: Fn(ServerMsgImgResized) -> IV + 'static, IV: IntoView
+// #[derive(Copy, Clone, Debug)]
+// pub struct SocketBs {
+//     pub msgs: RwSignal<HashMap<u128, Rc<dyn Fn() -> ()>>>,
+//     pub pending: RwSignal<Vec<u8>>,
+// }
 
-impl SocketBs {
-    pub fn new() -> Self {
-        Self {
-            msgs: RwSignal::new(HashMap::new()),
-        }
-    }
-}
+// impl SocketBs {
+//     pub fn new() -> Self {
+//         Self {
+//             msgs: RwSignal::new(HashMap::new()),
+//             pending: RwSignal::new(Vec::new()),
+//         }
+//     }
+// }
 
-enum MsgPkg<S, R> {
-    Send(S),
-    Recv(R)
-}
-
-
+// enum MsgPkg<S, R> {
+//     Send(S),
+//     Recv(R),
+// }
 
 // struct Sender {
 
@@ -88,16 +88,13 @@ enum MsgPkg<S, R> {
 //             state.set(SenderState::Connecting);
 //         }
 //     });
-    
-    
+
 //     on_cleanup(move || {
 //         msgs.update(move |msgs| {
 //             msgs.remove(&uuid);
 //         });
 //         log!("DETACHING: {:?}", msgs.with_untracked(|msgs|msgs.len()));
 //     });
-
-
 
 //     Rc::new(send_msg)
 // }
@@ -111,7 +108,7 @@ enum MsgPkg<S, R> {
 //             log!("Fn not found for {}", id);
 //             return;
 //         };
-        
+
 //         f(server_msg);
 //     });
 // }
@@ -128,7 +125,7 @@ pub fn Gallery<
     connection_load_state_name: &'static str,
 ) -> impl IntoView {
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
-   
+
     let nav_tran = global_state.nav_tran;
     let location = use_location();
 
@@ -144,11 +141,7 @@ pub fn Gallery<
     //     });
     // });
 
-  
     //execute(id);
 
-
-    view! {
-        
-    }
+    view! {}
 }

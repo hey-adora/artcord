@@ -65,6 +65,19 @@ pub fn GalleryPage() -> impl IntoView {
 
     create_effect(move |_| {
         nav_tran.set(true);
+
+        let _ = use_event_listener(use_window(), resize, move |_| {
+            // log!("TRYING TO RESIZE");
+            imgs.update(|imgs| {
+                let section = gallery_section.get_untracked();
+                if let Some(section) = section {
+                    let width = section.client_width() as u32;
+
+                    // log!("RESIZING!!!!!!!!!!!!");
+                    resize_imgs(NEW_IMG_HEIGHT, width, imgs);
+                };
+            });
+        });
     });
 
     let select_click_img = move |img: ServerMsgImgResized| {
@@ -206,21 +219,6 @@ pub fn GalleryPage() -> impl IntoView {
     };
 
     create_effect(move |_| {
-        let _ = use_event_listener(use_window(), resize, move |_| {
-            // log!("TRYING TO RESIZE");
-            imgs.update(|imgs| {
-                let section = gallery_section.get_untracked();
-                if let Some(section) = section {
-                    let width = section.client_width() as u32;
-
-                    // log!("RESIZING!!!!!!!!!!!!");
-                    resize_imgs(NEW_IMG_HEIGHT, width, imgs);
-                };
-            });
-        });
-    });
-
-    create_effect(move |_| {
         let loaded = loaded_sig.with_untracked(|state| *state == LoadingNotFound::Loaded);
         if !loaded {
             return;
@@ -238,16 +236,16 @@ pub fn GalleryPage() -> impl IntoView {
         });
     });
 
+    // let lll = watch(move || global_state.socket_connected.get(), move |num, prev_num, aaa| {
+    //     aaa.stop();
+    // }, false);
+
     create_effect(move |_| {
         let connected = global_state.socket_connected.get();
-        let loaded = loaded_sig.with(|state| *state == LoadingNotFound::NotLoaded);
-        if !loaded || !connected {
+        let not_loaded = loaded_sig.with(|state| *state == LoadingNotFound::NotLoaded);
+        if !not_loaded || !connected {
             return;
         }
-        // let connected = global_state.socket_connected.get();
-        // if !connected {
-        //     return;
-        // }
 
         let Some(section) = gallery_section.get() else {
             return;
@@ -260,18 +258,15 @@ pub fn GalleryPage() -> impl IntoView {
             amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
             from: Utc::now().timestamp_millis(),
         };
+
+        loaded_sig.set_untracked(LoadingNotFound::Loading);
+
         sender.send(&msg, move |server_msg| {
+            // on receive
             if let ServerMsg::Imgs(imgs) = server_msg {
                 on_fetch(imgs);
             }
         });
-        // on_fetch(
-        //     Utc::now().timestamp_millis(),
-        //     calc_fit_count(client_width as u32, client_height as u32) * 2,
-        // );
-
-        
-        loaded_sig.set(LoadingNotFound::Loading);
     });
 
     view! {

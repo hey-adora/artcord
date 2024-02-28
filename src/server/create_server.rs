@@ -192,7 +192,6 @@ pub async fn create_server(
     let addr = conf.leptos_options.site_addr;
     let routes = generate_route_list(crate::app::App);
     println!("listening on http://{}", &addr);
-
     let sessions = Arc::new(RwLock::new(HashMap::<uuid::Uuid, Addr<WsConnection>>::new()));
 
     //let galley_root_dir = galley_root_dir.to_string();

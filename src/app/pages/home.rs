@@ -1,6 +1,9 @@
 use crate::app::components::navbar::shrink_nav;
 use crate::app::components::navbar::Navbar;
+use crate::server::client_msg::ClientMsg;
+use chrono::Utc;
 use leptos::html::Main;
+use leptos::logging::log;
 use leptos::*;
 use web_sys::Event;
 use crate::app::global_state::GlobalState;
@@ -10,7 +13,7 @@ pub fn HomePage() -> impl IntoView {
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
     let scroll_el = create_node_ref::<Main>();
     let nav_tran = global_state.nav_tran;
-
+    let sender = global_state.create_sender();
     // create_effect(move |_| {
     //     // let scrollinator = use_scroll(scroll_el);
     //     let (_, y) = use_window_scroll();
@@ -33,11 +36,20 @@ pub fn HomePage() -> impl IntoView {
         // log!("nooooooooo");
     };
 
+    let test_click = move |e| {
+        let client_msg = ClientMsg::GalleryInit { amount: 50, from: Utc::now().timestamp_millis() };
+        sender.send(&client_msg, |server_msg| {
+            log!("RECEIVED FFING SERVER MSG: {:?}", server_msg);
+        })
+    };
+
     view! {
         <main  on:scroll=on_scroll _ref=scroll_el class="flex flex-col ">
+           
             <Navbar/>
             <section id="home" class=" px-6 py-6 2xl:px-[6rem] desktop:px-[16rem]  grid grid-rows-[auto_auto_1fr] grid-cols-[1fr]  min-h-[100svh] " >
                 <div class="h-[4rem] md:h-[6rem]"></div>
+                <button on:click=test_click>"CLICK ME"</button>
                 <div class="flex flex-col gap-[2rem] md:gap-[4rem]  max-w-min ">
                     <div class="text-left flex flex-col justify-start">
                         <h2 class="text-[2rem] font-bold whitespace-nowrap ">"Discord Art Server"</h2>

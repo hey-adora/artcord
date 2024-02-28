@@ -5,6 +5,7 @@ pub mod bot;
 pub mod database;
 pub mod message;
 pub mod server;
+pub mod web_sockets;
 
 use crate::app::App;
 use cfg_if::cfg_if;

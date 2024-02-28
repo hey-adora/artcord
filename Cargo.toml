@@ -30,7 +30,7 @@ crate-type = ["cdylib", "rlib"]
 
 [workspace]
 members = [
-  "benchmark",
+    "benchmark",
 ]
 
 [profile.dev]
@@ -49,8 +49,8 @@ opt-level = 3
 #codegen-backend = true
 
 [dependencies]
-actix-files = { version = "0.6.2", optional = true }
-actix-web = { version = "4.4.0", optional = true, features = ["macros"] }
+actix-files = { version = "0.6.5", optional = true }
+actix-web = { version = "4.5.1", optional = true, features = ["macros"] }
 console_error_panic_hook = "0.1.7"
 cfg-if = "1"
 http = { version = "1.0.0", optional = true }
@@ -59,14 +59,14 @@ leptos_meta = { version = "0.6.6", features = ["default"] }
 leptos_actix = { version = "0.6.6", optional = true }
 leptos_router = { version = "0.6.6", features = ["default"] }
 wasm-bindgen = { version = "0.2.91", features = [] }
-leptos-use = { version = "0.10.2", features = [] }
-web-sys = { version = "0.3.66", features = [] }
-js-sys = { version = "0.3.66", features = [] }
-rand = { version = "0.8.5", features = [] }
-actix-web-actors = { version = "4.2.0", features = [], optional = true }
-actix = { version = "0.13.1", features = [], optional = true }
-uuid = { version = "1.4.1", features = ["v4", "serde"] }
-futures = { version = "0.3.28", features = [
+leptos-use = { version = "0.10.3", features = [] }
+web-sys = { version = "0.3.68", features = ["WebSocket"] }
+js-sys = { version = "0.3.68", features = [] }
+rand = { version = "0.9.0-alpha.0", features = [] }
+actix-web-actors = { version = "4.3.0", features = [], optional = true }
+actix = { version = "0.13.3", features = [], optional = true }
+uuid = { version = "1.7.0", features = ["v4", "serde"] }
+futures = { version = "0.3.30", features = [
     "alloc",
     "async-await",
     "executor",
@@ -121,16 +121,16 @@ async-std = { version = "1.12.0", features = [
     "wasm-bindgen-futures",
 ], optional = true }
 dotenv = { version = "0.15.0", optional = true }
-reqwest = { version = "0.11.22", optional = true, features = [
+reqwest = { version = "0.11.24", optional = true, features = [
     "__tls",
     "default-tls",
     "hyper-tls",
     "native-tls-crate",
     "tokio-native-tls",
 ] }
-png = { version = "0.17.10", optional = true }
+png = { version = "0.17.13", optional = true }
 png_pong = { version = "0.8.2", optional = true }
-image = { version = "0.24.7", optional = true, features = [
+image = { version = "0.24.9", optional = true, features = [
     "bmp",
     "dds",
     "dxt",
@@ -150,16 +150,16 @@ image = { version = "0.24.7", optional = true, features = [
     "webp",
 ] }
 webp = { version = "0.2.6", optional = true, features = ["image", "img"] }
-anyhow = { version = "1.0.75", optional = true, features = ["std"] }
-sha256 = { version = "1.4.0", optional = true, features = ["async", "tokio"] }
-mongodb = { version = "2.7.0", optional = true, features = [
+anyhow = { version = "1.0.80", optional = true, features = ["std"] }
+sha256 = { version = "1.5.0", optional = true, features = ["async", "tokio"] }
+mongodb = { version = "2.8.1", optional = true, features = [
     "serde_bytes",
     "tokio-runtime",
 ] }
-serde = { version = "1.0.189", features = ["std"] }
-md-5 = { version = "0.10.6", optional = true, features = ["std"] }
+serde = { version = "1.0.197", features = ["std"] }
+md-5 = { version = "0.11.0-pre.3", optional = true, features = ["std"] }
 hashes = { version = "0.1.9", optional = true }
-chrono = { version = "0.4.31", features = [
+chrono = { version = "0.4.34", features = [
     "android-tzdata",
     "clock",
     "iana-time-zone",
@@ -171,23 +171,24 @@ chrono = { version = "0.4.31", features = [
     "winapi",
     "windows-targets",
 ] }
-thiserror = "1.0.50"
-tokio = { version = "1.33.0", optional = true }
+thiserror = "1.0.57"
+tokio = { version = "1.36.0", features = ["full"], optional = true }
 bson = { version = "2.7.0", features = ["serde_with", "serde_with-3", "chrono"] }
-bytecheck = { version = "0.6.11", features = ["simdutf8", "std"] }
+bytecheck = { version = "0.8.0-pre6", features = ["simdutf8", "std"] }
 jsonwebtoken = "9.2.0"
 bcrypt = "0.15.0"
 base64 = "0.21.7"
 gloo-net = "0.5.0"
 ed25519 = "2.2.3"
-ed25519-dalek = { version = "2.1.0", features = ["signature", "rand_core"] }
-rand_core = "0.6.4"
+ed25519-dalek = { version = "2.1.1", features = ["signature", "rand_core"] }
+rand_core = "0.9.0-alpha.0"
 bincode = "1.3.3"
 rmp = "0.8.12"
 rmp-serde = "1.1.2"
-rusqlite = "0.30.0"
+rusqlite = "0.31.0"
 field_types = "1.1.0"
 const_format = "0.2.32"
+tokio-tungstenite = { version = "0.21.0", optional = true  }
 
 
 [features]
@@ -195,33 +196,30 @@ default = ["ssr"]
 csr = ["leptos/csr", "leptos_meta/csr", "leptos_router/csr"]
 hydrate = ["leptos/hydrate", "leptos_meta/hydrate", "leptos_router/hydrate"]
 ssr = [
-  "dep:actix-files",
-  "dep:actix-web",
-  "dep:leptos_actix",
-  "dep:actix-web-actors",
-  "dep:actix",
-  "dep:futures",
-  "dep:serenity",
-  "dep:async-std",
-  "dep:dotenv",
-  "dep:reqwest",
-  "dep:png",
-  "dep:png_pong",
-  "dep:webp",
-  "dep:image",
-  "dep:anyhow",
-  "dep:sha256",
-  "dep:mongodb",
-  "dep:md-5",
-  "dep:hashes",
-  "dep:tokio",
-
-
-
-
-  "leptos/ssr",
-  "leptos_meta/ssr",
-  "leptos_router/ssr",
+    "dep:actix-files",
+    "dep:actix-web",
+    "dep:leptos_actix",
+    "dep:actix-web-actors",
+    "dep:actix",
+    "dep:futures",
+    "dep:serenity",
+    "dep:async-std",
+    "dep:dotenv",
+    "dep:reqwest",
+    "dep:png",
+    "dep:png_pong",
+    "dep:webp",
+    "dep:image",
+    "dep:anyhow",
+    "dep:sha256",
+    "dep:mongodb",
+    "dep:md-5",
+    "dep:hashes",
+    "dep:tokio",
+    "dep:tokio-tungstenite",
+    "leptos/ssr",
+    "leptos_meta/ssr",
+    "leptos_router/ssr",
 ]
 
 # Defines a size-optimized profile for the WASM bundle in release mode

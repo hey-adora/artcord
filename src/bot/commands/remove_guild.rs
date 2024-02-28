@@ -6,7 +6,7 @@ use serenity::{
         application_command::ApplicationCommandInteraction, command::CommandOptionType,
     },
     prelude::Context,
-};
+}; 
 
 use super::{get_option_role, get_option_string, is_valid_role_feature, ROLE_FEATURES};
 
@@ -17,7 +17,7 @@ pub async fn run(
 ) -> Result<(), crate::bot::commands::CommandError> {
     let guild_option = get_option_string(command.data.options.get(0))?;
     let deleted = db.allowed_guild_remove_one(guild_option.as_str()).await?;
-
+ 
     if !deleted {
         return Err(crate::bot::commands::CommandError::NotFound(format!(
             "guild: {}",
