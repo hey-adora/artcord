@@ -61,7 +61,7 @@ pub fn GalleryPage() -> impl IntoView {
     let location = use_location();
     //let sender = global_state.pages.gallery.img_sender;
 
-    let sender = global_state.create_sender();
+    //let sender = global_state.create_sender();
 
     create_effect(move |_| {
         nav_tran.set(true);
@@ -170,10 +170,10 @@ pub fn GalleryPage() -> impl IntoView {
     // };
 
     let section_scroll = move |_: Event| {
-        if sender.is_loading() {
-            log!("NOT READY YET");
-            return;
-        }
+        // if sender.is_loading() {
+        //     log!("NOT READY YET");
+        //     return;
+        // }
 
         let Some(last) = imgs.with_untracked(|imgs| match imgs.last() {
             Some(l) => Some(l.created_at),
@@ -200,11 +200,11 @@ pub fn GalleryPage() -> impl IntoView {
                 amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
                 from: last,
             };
-            sender.send(&msg, move |server_msg| {
-                if let ServerMsg::Imgs(imgs) = server_msg {
-                    on_fetch(imgs);
-                }
-            });
+            // sender.send(&msg, move |server_msg| {
+            //     if let ServerMsg::Imgs(imgs) = server_msg {
+            //         on_fetch(imgs);
+            //     }
+            // });
             //global_state.socket_state_used(connection_load_state_name);
             // on_fetch(
             //     last,
@@ -261,12 +261,12 @@ pub fn GalleryPage() -> impl IntoView {
 
         loaded_sig.set_untracked(LoadingNotFound::Loading);
 
-        sender.send(&msg, move |server_msg| {
-            // on receive
-            if let ServerMsg::Imgs(imgs) = server_msg {
-                on_fetch(imgs);
-            }
-        });
+        // sender.send(&msg, move |server_msg| {
+        //     // on receive
+        //     if let ServerMsg::Imgs(imgs) = server_msg {
+        //         on_fetch(imgs);
+        //     }
+        // });
     });
 
     view! {

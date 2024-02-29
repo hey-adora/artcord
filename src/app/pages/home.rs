@@ -1,6 +1,11 @@
 use crate::app::components::navbar::shrink_nav;
 use crate::app::components::navbar::Navbar;
+use crate::app::WsRuntime;
+use crate::message::server_msg::ServerMsg;
 use crate::server::client_msg::ClientMsg;
+
+use artcord_leptos_web_sockets::Runtime;
+use cfg_if::cfg_if;
 use chrono::Utc;
 use leptos::html::Main;
 use leptos::logging::log;
@@ -8,12 +13,14 @@ use leptos::*;
 use web_sys::Event;
 use crate::app::global_state::GlobalState;
 
+
 #[component]
 pub fn HomePage() -> impl IntoView {
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
     let scroll_el = create_node_ref::<Main>();
     let nav_tran = global_state.nav_tran;
-    let sender = global_state.create_sender();
+    
+    //let sender = global_state.create_sender();
     // create_effect(move |_| {
     //     // let scrollinator = use_scroll(scroll_el);
     //     let (_, y) = use_window_scroll();
@@ -35,12 +42,15 @@ pub fn HomePage() -> impl IntoView {
         shrink_nav(nav_tran, y as u32);
         // log!("nooooooooo");
     };
-
+    let test_ws_group = WsRuntime::create_group();
     let test_click = move |e| {
         let client_msg = ClientMsg::GalleryInit { amount: 50, from: Utc::now().timestamp_millis() };
-        sender.send(&client_msg, |server_msg| {
+        // sender.send(&client_msg, |server_msg| {
+        //     log!("RECEIVED FFING SERVER MSG: {:?}", server_msg);
+        // })
+        test_ws_group.send(&client_msg, |server_msg| {
             log!("RECEIVED FFING SERVER MSG: {:?}", server_msg);
-        })
+        }).unwrap();
     };
 
     view! {

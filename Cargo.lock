@@ -542,6 +542,7 @@ dependencies = [
  "actix-web",
  "actix-web-actors",
  "anyhow",
+ "artcord-leptos-web-sockets",
  "async-std",
  "base64 0.21.7",
  "bcrypt",
@@ -588,6 +589,22 @@ dependencies = [
  "wasm-bindgen",
  "web-sys",
  "webp",
+]
+
+[[package]]
+name = "artcord-leptos-web-sockets"
+version = "0.1.0"
+dependencies = [
+ "cfg-if",
+ "chrono",
+ "const-random",
+ "js-sys",
+ "leptos",
+ "leptos-use",
+ "thiserror",
+ "uuid",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]
@@ -1511,6 +1528,26 @@ name = "const-oid"
 version = "0.10.0-pre.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7e3352a27098ba6b09546e5f13b15165e6a88b5c2723afecb3ea9576b27e3ea"
+
+[[package]]
+name = "const-random"
+version = "0.1.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5aaf16c9c2c612020bcfd042e170f6e32de9b9d75adb5277cdbbd2e2c8c8299a"
+dependencies = [
+ "const-random-macro",
+]
+
+[[package]]
+name = "const-random-macro"
+version = "0.1.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f9d839f2a20b0aee515dc581a6172f2321f96cab76c1a38a4c584a194955390e"
+dependencies = [
+ "getrandom",
+ "once_cell",
+ "tiny-keccak",
+]
 
 [[package]]
 name = "const_format"
@@ -5817,6 +5854,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ad70d68dba9e1f8aceda7aa6711965dfec1cac869f311a51bd08b3a2ccbce20"
 dependencies = [
  "time-core",
+]
+
+[[package]]
+name = "tiny-keccak"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2c9d3793400a45f954c52e73d068316d76b6f4e36977e3fcebb13a2721e80237"
+dependencies = [
+ "crunchy",
 ]
 
 [[package]]

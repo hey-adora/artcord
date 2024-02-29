@@ -143,5 +143,7 @@ pub fn Gallery<
 
     //execute(id);
 
-    view! {}
+    view! {
+        "hello"
+    }
 }

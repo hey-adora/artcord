@@ -7,6 +7,7 @@ use crate::app::utils::LoadingNotFound;
 use crate::app::utils::ServerMsgImgResized;
 use crate::app::utils::{resize_imgs, NEW_IMG_HEIGHT};
 use crate::message::server_msg::ServerMsg;
+use crate::server::client_msg::ClientMsg;
 use cfg_if::cfg_if;
 use global_state::GlobalState;
 use gloo_net::http::Request;
@@ -30,12 +31,35 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsCast;
 use web_sys::{ErrorEvent, MessageEvent, WebSocket};
+use artcord_leptos_web_sockets::Runtime;
 //use web_sys::features::gen_WebSocket::WebSocket;
 
 pub mod components;
 pub mod global_state;
 pub mod pages;
 pub mod utils;
+
+impl artcord_leptos_web_sockets::Receive<u128> for ServerMsg {
+    fn recv_from_vec(bytes: &[u8]) -> Result<(u128, Self), String> where Self: std::marker::Sized {
+        ServerMsg::from_bytes(&bytes).or_else(|e| Err(e.to_string()))
+    }
+}
+
+impl artcord_leptos_web_sockets::Send<u128> for ClientMsg {
+    fn send_as_vec(&self, id: &u128) -> Result<Vec<u8>, String> {
+        self.as_vec(*id).or_else(|e| Err(e.to_string()))
+    }
+}
+
+pub struct WsRuntime;
+
+impl artcord_leptos_web_sockets::Runtime<u128, ServerMsg, ClientMsg> for WsRuntime {
+    fn generate_key() -> u128 {
+        uuid::Uuid::new_v4().as_u128()
+    }
+}
+
+
 
 macro_rules! console_log {
     ($($t:tt)*) => (log(&format_args!($($t)*).to_string()))
@@ -86,134 +110,139 @@ pub fn get_ws_path() -> String {
 pub fn App() -> impl IntoView {
     provide_meta_context();
     provide_context(GlobalState::new());
+    WsRuntime::new();
     //provide_context(SocketBs::new());
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
-  
+    
+    
     // let ws_state_chaneg_closures: RwSignal<Vec<Rc<dyn Fn(bool) -> ()>>> = RwSignal::new(Vec::new());
     //
   
+
     
     //WebSocket::OP
     //let ws_state: RwSignal<>
     //let (_connected, _set_connected) = create_signal(String::new());
     
-    create_effect(move |_| {
-        let ws_on_msg = global_state.ws_on_msg;
-        let ws_on_err = global_state.ws_on_err;
-        let ws_on_open = global_state.ws_on_open;
-        let ws_on_close = global_state.ws_on_close;
-        let ws = global_state.ws;
+    // create_effect(move |_| {
+    //     let ws_on_msg = global_state.ws_on_msg;
+    //     let ws_on_err = global_state.ws_on_err;
+    //     let ws_on_open = global_state.ws_on_open;
+    //     let ws_on_close = global_state.ws_on_close;
+    //     let ws = global_state.ws;
         
-        log!("ONCE HOPEFULLY");
-        ws_on_msg.set_value(Some(Rc::new(Closure::<dyn FnMut(_)>::new(move |e: MessageEvent| {
-            let data = e.data().dyn_into::<js_sys::ArrayBuffer>();
-            let Ok(data) = data else {
-                return;
-            };
-            let array = js_sys::Uint8Array::new(&data);
-            let bytes = array.to_vec();
-            //log!("ONG MSG {:?}", vec);
-            if bytes.is_empty() {
-                log!("Empty byte msg received.");
-                return;
-            };
+    //     log!("ONCE HOPEFULLY");
+    //     ws_on_msg.set_value(Some(Rc::new(Closure::<dyn FnMut(_)>::new(move |e: MessageEvent| {
+    //         let data = e.data().dyn_into::<js_sys::ArrayBuffer>();
+    //         let Ok(data) = data else {
+    //             return;
+    //         };
+    //         let array = js_sys::Uint8Array::new(&data);
+    //         let bytes = array.to_vec();
+    //         //log!("ONG MSG {:?}", vec);
+    //         if bytes.is_empty() {
+    //             log!("Empty byte msg received.");
+    //             return;
+    //         };
 
-            let server_msg = ServerMsg::from_bytes(&bytes);
-            let Ok((id, server_msg)) = server_msg else {
-                log!("Error decoding msg: {}", server_msg.err().unwrap());
-                return;
-            };
+    //         let server_msg = ServerMsg::from_bytes(&bytes);
+    //         let Ok((id, server_msg)) = server_msg else {
+    //             log!("Error decoding msg: {}", server_msg.err().unwrap());
+    //             return;
+    //         };
 
-            //log!("{:#?}", &server_msg);
+    //         //log!("{:#?}", &server_msg);
 
-            if id != 0 {
-                global_state.execute(id, server_msg);
-            } else {
-                log!("IDDDDDDDD 0");
-            }
-        }))));
-        ws_on_err.set_value(Some(Rc::new(Closure::<dyn FnMut(_)>::new(
-            move |e: ErrorEvent| {
-                log!("WS ERROR: {:?}", e);
-            },
-        ))));
-        ws_on_open.set_value(Some(Rc::new(Closure::<dyn FnMut()>::new(move || {
-            // ws_state_chaneg_closures.with_untracked(|closures| {
-            //     for closure in closures {
-            //         closure(true);
-            //     }
-            // });
-            log!("CONNECTED");
-        }))));
-        ws_on_close.set_value(Some(Rc::new(Closure::<dyn FnMut()>::new(move || {
-            // ws_state_chaneg_closures.with_untracked(|closures| {
-            //     for closure in closures {
-            //         closure(false);
-            //     }
-            // });
-            log!("DISCONNECTED");
-        }))));
+    //         if id != 0 {
+    //             global_state.execute(id, server_msg);
+    //         } else {
+    //             log!("IDDDDDDDD 0");
+    //         }
+    //     }))));
+    //     ws_on_err.set_value(Some(Rc::new(Closure::<dyn FnMut(_)>::new(
+    //         move |e: ErrorEvent| {
+    //             log!("WS ERROR: {:?}", e);
+    //         },
+    //     ))));
+    //     ws_on_open.set_value(Some(Rc::new(Closure::<dyn FnMut()>::new(move || {
+    //         // ws_state_chaneg_closures.with_untracked(|closures| {
+    //         //     for closure in closures {
+    //         //         closure(true);
+    //         //     }
+    //         // });
+    //         log!("CONNECTED");
+    //     }))));
+    //     ws_on_close.set_value(Some(Rc::new(Closure::<dyn FnMut()>::new(move || {
+    //         // ws_state_chaneg_closures.with_untracked(|closures| {
+    //         //     for closure in closures {
+    //         //         closure(false);
+    //         //     }
+    //         // });
+    //         log!("DISCONNECTED");
+    //     }))));
 
-        let create_ws = move || -> WebSocket {
-            log!("CONNECTING");
-            let ws = WebSocket::new("ws://localhost:3420").unwrap();
-            ws.set_binary_type(web_sys::BinaryType::Arraybuffer);
+       
+
+    //     let create_ws = move || -> WebSocket {
+    //         log!("CONNECTING");
+    //         let ws = WebSocket::new("ws://localhost:3420").unwrap();
+    //         ws.set_binary_type(web_sys::BinaryType::Arraybuffer);
         
-            ws_on_msg.with_value(|ws_on_msg| {
-                if let Some(ws_on_msg) = ws_on_msg {
-                    ws.set_onmessage(Some((**ws_on_msg).as_ref().unchecked_ref()));
-                }
-            });
+    //         ws_on_msg.with_value(|ws_on_msg| {
+    //             if let Some(ws_on_msg) = ws_on_msg {
+    //                 ws.set_onmessage(Some((**ws_on_msg).as_ref().unchecked_ref()));
+    //             }
+    //         });
     
-            ws_on_err.with_value(|ws_on_err| {
-                if let Some(ws_on_err) = ws_on_err {
-                    ws.set_onerror(Some((**ws_on_err).as_ref().unchecked_ref()));
-                }
-            });
+    //         ws_on_err.with_value(|ws_on_err| {
+    //             if let Some(ws_on_err) = ws_on_err {
+    //                 ws.set_onerror(Some((**ws_on_err).as_ref().unchecked_ref()));
+    //             }
+    //         });
     
-            ws_on_open.with_value(|ws_on_open| {
-                if let Some(ws_on_open) = ws_on_open {
-                    ws.set_onopen(Some((**ws_on_open).as_ref().unchecked_ref()));
-                }
-            });
+    //         ws_on_open.with_value(|ws_on_open| {
+    //             if let Some(ws_on_open) = ws_on_open {
+    //                 ws.set_onopen(Some((**ws_on_open).as_ref().unchecked_ref()));
+    //             }
+    //         });
     
-            ws_on_close.with_value(|ws_on_close| {
-                if let Some(ws_on_close) = ws_on_close {
-                    ws.set_onclose(Some((**ws_on_close).as_ref().unchecked_ref()));
-                }
-            });
+    //         ws_on_close.with_value(|ws_on_close| {
+    //             if let Some(ws_on_close) = ws_on_close {
+    //                 ws.set_onclose(Some((**ws_on_close).as_ref().unchecked_ref()));
+    //             }
+    //         });
     
-            // ws.set_onmessage(Some((*ws_on_msg.get_untracked()).as_ref().unchecked_ref()));
-            // ws.set_onerror(Some((*ws_on_err.get_untracked()).as_ref().unchecked_ref()));
-            // ws.set_onopen(Some((*ws_on_open.get_untracked()).as_ref().unchecked_ref()));
-            // ws.set_onclose(Some(
-            //     (*ws_on_close.get_untracked()).as_ref().unchecked_ref(),
-            // ));
+    //         // ws.set_onmessage(Some((*ws_on_msg.get_untracked()).as_ref().unchecked_ref()));
+    //         // ws.set_onerror(Some((*ws_on_err.get_untracked()).as_ref().unchecked_ref()));
+    //         // ws.set_onopen(Some((*ws_on_open.get_untracked()).as_ref().unchecked_ref()));
+    //         // ws.set_onclose(Some(
+    //         //     (*ws_on_close.get_untracked()).as_ref().unchecked_ref(),
+    //         // ));
 
         
-            ws
-        };
+    //         ws
+    //     };
         
-        log!("AUTH_STATE: {:?}", global_state.auth_is_logged_out());
-        // (reconnect_interval.resume)();
+    //     log!("AUTH_STATE: {:?}", global_state.auth_is_logged_out());
+    //     // (reconnect_interval.resume)();
     
-        ws.set_value(Some(create_ws()));
-        let reconnect_interval = use_interval_fn(
-            move || {
-                let is_closed = ws.with_value(move |ws| {
-                    ws.as_ref()
-                        .and_then(|ws| Some(ws.ready_state() == WebSocket::CLOSED))
-                        .unwrap_or(false)
-                });
-                if is_closed {
-                    log!("RECONNECTING");
-                    //ws.with_untracked(|ws| {});
-                    ws.set_value(Some(create_ws()));
-                }
-            },
-            1000,
-        );
-    });
+    //     ws.set_value(Some(create_ws()));
+    //     let reconnect_interval = use_interval_fn(
+    //         move || {
+    //             let is_closed = ws.with_value(move |ws| {
+    //                 ws.as_ref()
+    //                     .and_then(|ws| Some(ws.ready_state() == WebSocket::CLOSED))
+    //                     .unwrap_or(false)
+    //             });
+    //             if is_closed {
+    //                 log!("RECONNECTING");
+    //                 //ws.with_untracked(|ws| {});
+    //                 ws.set_value(Some(create_ws()));
+    //             }
+    //         },
+    //         1000,
+    //     );
+    // });
     
 
     // cfg_if! {

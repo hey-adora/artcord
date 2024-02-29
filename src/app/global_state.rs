@@ -15,7 +15,7 @@ use wasm_bindgen::JsCast;
 use web_sys::{ErrorEvent, MessageEvent, WebSocket};
 
 use super::pages::gallery::GalleryPageState;
-use super::utils::sender::WsSender;
+//use super::utils::sender::WsSender;
 
 #[derive(Copy, Clone, Debug)]
 pub struct GlobalState {
@@ -134,9 +134,9 @@ impl GlobalState {
     //     self.socket_send_fn.get_value()(bytes);
     // }
 
-    pub fn create_sender(&self) -> WsSender {
-        WsSender::new(self.socket_closures, self.ws)
-    }
+    // pub fn create_sender(&self) -> WsSender {
+    //     WsSender::new(self.socket_closures, self.ws)
+    // }
 
     // pub fn create_sender(&self) -> (Rc<dyn Fn() -> bool + 'static>, Rc<dyn Fn(&ClientMsg, fn(ServerMsg) -> ()) -> () + 'static>) {
     //     let uuid = uuid::Uuid::new_v4().to_u128_le();
@@ -167,6 +167,7 @@ impl GlobalState {
     // }
 
     pub fn execute(&self, id: u128, server_msg: ServerMsg) {
+        let uuid = uuid::Uuid::new_v4().to_u128_le();
         //let global_state = use_context::<GlobalState>().expect("Failed to provide socket_bs state");
         //let msgs: RwSignal<HashMap<u128, Rc<dyn Fn(ServerMsg)>>> = global_state.socket_closures;
 
