@@ -31,7 +31,7 @@ pub struct LeptosWebSockets<
     ClientMsg: Clone + Send<IdType> + Debug + 'static,
 > {
     pub socket_closures: StoredValue<HashMap<IdType, Rc<dyn Fn(ServerMsg) -> ()>>>,
-    pub socket_pending_client_msgs: StoredValue<Vec<u8>>,
+    pub socket_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
     pub ws: StoredValue<Option<WebSocket>>,
     pub ws_on_msg: StoredValue<Option<Rc<Closure<dyn FnMut(MessageEvent)>>>>,
     pub ws_on_err: StoredValue<Option<Rc<Closure<dyn FnMut(ErrorEvent)>>>>,
@@ -100,6 +100,7 @@ pub trait Runtime<
                 let ws_on_open = global_state.ws_on_open;
                 let ws_on_close = global_state.ws_on_close;
                 let ws_closures = global_state.socket_closures;
+                let ws_pending = global_state.socket_pending_client_msgs;
                 let ws = global_state.ws;
 
                 ws_on_msg.set_value(Some(Rc::new(Closure::<dyn FnMut(_)>::new(
@@ -111,7 +112,7 @@ pub trait Runtime<
                 ))));
 
                 ws_on_open.set_value(Some(Rc::new(Closure::<dyn FnMut()>::new(
-                    move || Self::on_open()
+                    move || Self::on_open(ws_pending, ws)
                 ))));
 
                 ws_on_close.set_value(Some(Rc::new(Closure::<dyn FnMut()>::new(
@@ -185,14 +186,16 @@ pub trait Runtime<
         let global_state = use_context::<LeptosWebSockets<IdType, ServerMsg, ClientMsg>>().expect("Failed to provide global state");
         let ws_closures = global_state.socket_closures;
         let ws = global_state.ws;
-        WsGroup::<IdType, ServerMsg, ClientMsg>::new(Self::generate_key(), ws_closures, ws)
+        let socket_pending_client_msgs = global_state.socket_pending_client_msgs;
+        WsGroup::<IdType, ServerMsg, ClientMsg>::new(Self::generate_key(), ws_closures, ws, socket_pending_client_msgs)
     }
 
     fn generate_key() -> IdType;
 
 
-    fn on_open() {
+    fn on_open(socket_pending_client_msgs: StoredValue<Vec<Vec<u8>>>, ws: StoredValue<Option<WebSocket>>) {
         log!("CONNECTED");
+        Self::flush_pending_client_msgs(socket_pending_client_msgs, ws);
     }
 
     fn on_close() {
@@ -233,6 +236,33 @@ pub trait Runtime<
         // } else {
         //     log!("IDDDDDDDD 0");
         // }
+    }
+
+    
+    fn flush_pending_client_msgs(socket_pending_client_msgs: StoredValue<Vec<Vec<u8>>>, ws: StoredValue<Option<WebSocket>>) {
+        ws.with_value(|ws| {
+            if let Some(ws) = ws {
+                socket_pending_client_msgs.update_value(|msgs| {
+                    let mut index: usize = 0;
+                    for msg in msgs.iter() {
+                        let result = ws.send_with_u8_array(msg);
+                        if result.is_err()  {
+                            if ws.ready_state() == WebSocket::OPEN {
+                                //todo run error closure on failure to flush
+                            } 
+                            break;
+                        }  
+                        index += 1;
+                    }
+                    if index < msgs.len() {
+                        *msgs = (&msgs[index..]).to_vec();
+                    }
+                });
+            } else {
+                log!("WebSockets are not initialized.");
+            }
+       
+        });
     }
 
     fn execute(
@@ -319,10 +349,11 @@ pub struct WsGroup<
     ClientMsg: Clone + Send<IdType> + Debug + 'static,
 > {
     socket_closures: StoredValue<HashMap<IdType, Rc<dyn Fn(ServerMsg) -> ()>>>,
+    socket_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
     //socket_send_fn: StoredValue<Rc<dyn Fn(Vec<u8>)>>,
     ws: StoredValue<Option<WebSocket>>,
     key: IdType,
-    phantom: PhantomData<ClientMsg>
+    phantom: PhantomData<ClientMsg>,
 }
 
 impl <
@@ -334,18 +365,20 @@ impl <
         key: IdType,
         socket_closures: StoredValue<HashMap<IdType, Rc<dyn Fn(ServerMsg) -> ()>>>,
         ws: StoredValue<Option<WebSocket>>,
+        socket_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
     ) -> Self {
         //let uuid: u128 = uuid::Uuid::new_v4().to_u128_le();
 
         Self {
             socket_closures,
+            socket_pending_client_msgs,
             ws,
             key,
             phantom: PhantomData
         }
     }
 
-    pub fn send(&self, client_msg: &ClientMsg, on_receive: impl Fn(ServerMsg) -> () + 'static) -> Result<(), SendError> {
+    pub fn send_now(&self, client_msg: &ClientMsg, on_receive: impl Fn(ServerMsg) -> () + 'static) -> Result<(), SendError> {
         self.ws.with_value(|ws| -> Result<(), SendError> {
             let ws = ws.as_ref().ok_or_else(|| SendError::WsNotInitialized)?;
             let bytes = client_msg.send_as_vec(&self.key).or_else(|e| Err(SendError::SendError(e)))?;
@@ -357,15 +390,37 @@ impl <
                     socket_closures.insert(self.key.clone(), a);
                 }
             });
-            ws.send_with_u8_array(&bytes).or_else(|e| {
-                self.socket_closures.update_value({
-                    move |socket_closures| {
-                        socket_closures.remove(&self.key);
-                    }
+            let is_open = self.ws.with_value(move |ws| {
+                ws.as_ref()
+                    .and_then(|ws| Some(ws.ready_state() == WebSocket::OPEN))
+                    .unwrap_or(false)
+            });
+            if is_open {
+                ws.send_with_u8_array(&bytes).or_else(|e| {
+                    self.socket_closures.update_value({
+                        move |socket_closures| {
+                            socket_closures.remove(&self.key);
+                        }
+                    });
+                    Err(SendError::SendError(e.as_string().unwrap_or(String::from("Failed to send web-socket package"))))
+                })
+            } else {
+                self.socket_pending_client_msgs.update_value(|pending| {
+                    pending.push(bytes)
                 });
-                Err(SendError::SendError(e.as_string().unwrap_or(String::from("Failed to send web-socket package"))))
-            })
+                Ok(())
+            }
         })
+    }
+
+    pub fn send_once(&self, client_msg: &ClientMsg, on_receive: impl Fn(ServerMsg) -> () + 'static) -> Result<(), SendError> {
+        let exists = self.socket_closures.with_value(|socket_closures| {
+            socket_closures.contains_key(&self.key)
+        });
+        if exists {
+            return Ok(());
+        }
+        self.send_now(client_msg, on_receive)
     }
 }
 

@@ -48,7 +48,7 @@ pub fn HomePage() -> impl IntoView {
         // sender.send(&client_msg, |server_msg| {
         //     log!("RECEIVED FFING SERVER MSG: {:?}", server_msg);
         // })
-        test_ws_group.send(&client_msg, |server_msg| {
+        test_ws_group.send_now(&client_msg, |server_msg| {
             log!("RECEIVED FFING SERVER MSG: {:?}", server_msg);
         }).unwrap();
     };
