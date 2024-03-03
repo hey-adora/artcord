@@ -1,7 +1,7 @@
 use crate::bot::commands;
 use crate::bot::commands::FEATURE_COMMANDER;
 use crate::bot::create_bot::ArcStr;
-use crate::database::DB;
+use crate::database::create_database::DB;
 use bson::doc;
 use futures::TryStreamExt;
 use serenity::client::Context;
@@ -18,7 +18,7 @@ pub async fn interaction_create(ctx: Context, interaction: Interaction) {
             let data_read = ctx.data.read().await;
 
             let db = data_read
-                .get::<crate::database::DB>()
+                .get::<DB>()
                 .expect("Expected crate::database::DB in TypeMap")
                 .clone();
             let gallery_root_dir = data_read

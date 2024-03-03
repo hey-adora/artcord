@@ -8,12 +8,10 @@ use serenity::{
     prelude::Context,
 };
 
-use crate::{
-    bot::commands::FEATURE_REACT,
-    database::{AutoReaction, ToReactionTypeError, DB},
-};
-
 use super::save_attachments::SaveAttachmentsError;
+use crate::bot::commands::FEATURE_REACT;
+use crate::database::create_database::DB;
+use crate::database::models::auto_reaction::ToReactionTypeError;
 use serenity::model::channel::Reaction;
 
 pub async fn hook_auto_react(
@@ -127,14 +125,14 @@ pub async fn hook_auto_react(
             Err(err) => match err {
                 serenity::Error::Http(res) => match *res {
                     serenity::http::HttpError::UnsuccessfulRequest(e)
-                    if e.status_code == 400
-                        && e.error.code == 10014
-                        && e.error.message.as_str() == "Unknown Emoji" =>
-                        {
-                            println!("Error, emoji doesnt exist: {:#?}", reaction);
-                            db.auto_reaction_delete_one(reaction).await?;
-                            Ok(())
-                        }
+                        if e.status_code == 400
+                            && e.error.code == 10014
+                            && e.error.message.as_str() == "Unknown Emoji" =>
+                    {
+                        println!("Error, emoji doesnt exist: {:#?}", reaction);
+                        db.auto_reaction_delete_one(reaction).await?;
+                        Ok(())
+                    }
                     e => Err(serenity::Error::Http(Box::new(e))),
                 },
                 e => Err(e),

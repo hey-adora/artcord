@@ -5,23 +5,23 @@ use artcord::bot::create_bot;
 use artcord::bot::create_bot::create_bot;
 use artcord::database::create_database::create_database;
 use artcord::server::create_server::{create_server, TOKEN_SIZE};
+use artcord::web_sockets::create_websockets;
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use dotenv::dotenv;
 use futures::{try_join, StreamExt, TryStreamExt};
 use jsonwebtoken::encode;
-use tokio::task;
 use rand::Rng;
-use tokio::net::TcpListener;
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::prelude::*;
 use std::io::Write;
 use std::sync::Arc;
 use std::{env, future};
+use tokio::net::TcpListener;
 use tokio::net::TcpStream;
 use tokio::sync::RwLock;
-use artcord::web_sockets::create_websockets::create_websockets;
+use tokio::task;
 
 pub fn get_env_bytes<F: Fn() -> String>(
     key: &str,
@@ -107,17 +107,14 @@ pub fn get_env<F: Fn() -> String>(key: &str, base64: bool, default_val: Option<F
     }
 }
 
-
-
 #[derive(Clone, Debug)]
 pub struct GlobalBackEndState {
-    ws: Arc<RwLock<HashMap<u128, String>>>
+    ws: Arc<RwLock<HashMap<u128, String>>>,
 }
 
 #[cfg(feature = "ssr")]
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-
     dotenv().ok();
     let assets_root_dir = env::var("ASSETS_ROOT_DIR").expect("ENV MISSING: ASSETS_ROOT_DIR");
     let gallery_root_dir = env::var("GALLERY_ROOT_DIR").expect("ENV MISSING: GALLERY_ROOT_DIR");
@@ -190,7 +187,7 @@ async fn main() -> std::io::Result<()> {
     let web_server = create_server(db, gallery_root_dir, assets_root_dir, pepper, jwt_secret).await;
 
     let r = try_join!(
-        async { create_websockets().await },
+        //   async { create_websockets().await },
         async { web_server.await.or_else(|e| Err(e.to_string())) },
         async { bot_server.start().await.or_else(|e| Err(e.to_string())) }
     );
