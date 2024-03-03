@@ -30,7 +30,7 @@ crate-type = ["cdylib", "rlib"]
 
 [workspace]
 members = [ 
-    "artcord-leptos-web-sockets",
+    "artcord-leptos-web-sockets", "artcord-tungstenite",
     "benchmark",
 ]
 
