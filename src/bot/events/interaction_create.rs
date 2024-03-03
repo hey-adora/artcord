@@ -1,7 +1,7 @@
 use crate::bot::commands;
 use crate::bot::commands::FEATURE_COMMANDER;
 use crate::bot::create_bot::ArcStr;
-use crate::database::create_database::DB;
+use crate::database::DB;
 use bson::doc;
 use futures::TryStreamExt;
 use serenity::client::Context;
@@ -18,7 +18,7 @@ pub async fn interaction_create(ctx: Context, interaction: Interaction) {
             let data_read = ctx.data.read().await;
 
             let db = data_read
-                .get::<DB>()
+                .get::<crate::database::DB>()
                 .expect("Expected crate::database::DB in TypeMap")
                 .clone();
             let gallery_root_dir = data_read
@@ -117,9 +117,9 @@ pub async fn resolve_command(
         })
         .is_some();
 
-    if !no_roles_set && !user_commander_authorized && !user_gallery_authorized {
-        return Err(ResolveCommandError::Unauthorized);
-    }
+    // if !no_roles_set && !user_commander_authorized && !user_gallery_authorized {
+    //     return Err(ResolveCommandError::Unauthorized);
+    // }
 
     match command_name {
         "add_role" if user_commander_authorized || no_roles_set => {
@@ -167,6 +167,7 @@ pub async fn resolve_command(
         "sync" if user_gallery_authorized || no_roles_set => {
             commands::sync::run(gallery_root_dir, &ctx, &command, &db, guild_id.0).await
         }
+        "verify" => commands::verify::run(&ctx, &command, &db).await,
         name => Err(crate::bot::commands::CommandError::NotImplemented(
             name.to_string(),
         )),
