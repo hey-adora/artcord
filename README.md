@@ -1,20 +1,21 @@
 # ArtCord - A website for sharing art from discord.
 
+> Currently under heavy refactoring/cleanup. Contributions are welcome, my discord handle hey\_\_adora
+
 ## Getting Started
+
+Install `cargo-leptos`:
 
 ```sh
 cargo install cargo-leptos
-./style/install.sh
 cp .env.example .env # and fill in the values
 ```
 
 Serve the website:
 
 ```sh
-cargo leptos servd
+cargo leptos serve
 ```
-
-_Note: to update the CSS simply run `./style/update.sh`._
 
 ## Roadmap
 
@@ -30,5 +31,3 @@ _Note: to update the CSS simply run `./style/update.sh`._
 - [ ] Add fav button.
 - [ ] Add user profile with user settings and their favorited art.
 - [ ] Add comments.
-
-Made with ❤️ by [hey\_\_adora](https://discord.com/users/1159037321283375174) (add me on Discord).
