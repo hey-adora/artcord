@@ -610,6 +610,11 @@ dependencies = [
 [[package]]
 name = "artcord-tungstenite"
 version = "0.1.0"
+dependencies = [
+ "futures",
+ "tokio",
+ "tokio-tungstenite",
+]
 
 [[package]]
 name = "artcord_benchmark"
