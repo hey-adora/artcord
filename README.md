@@ -1,10 +1,22 @@
-# ArtCord
+# ArtCord - A website for sharing art from discord.
 
-#### This project is a art sharing website with many features to come.
+## Getting Started
 
-> Currently under heavy refactoring/cleanup. Contributions are welcome, my discord handle `hey__adora`
+```sh
+cargo install cargo-leptos
+./style/install.sh
+cp .env.example .env # and fill in the values
+```
 
-Roadmap:
+Serve the website:
+
+```sh
+cargo leptos servd
+```
+
+_Note: to update the CSS simply run `./style/update.sh`._
+
+## Roadmap
 
 - [x] Homepage
 - [x] Pull art from discord server.
@@ -19,16 +31,4 @@ Roadmap:
 - [ ] Add user profile with user settings and their favorited art.
 - [ ] Add comments.
 
-## Build the project
-
-1. `rustup toolchain install stable` - make sure you have Rust stable
-2. `rustup target add wasm32-unknown-unknown` - add the ability to compile Rust to WebAssembly
-3. `cargo leptos serve` - install `cargo-generate` binary (should be installed automatically in future)
-4. `npm install -g sass` - install `dart-sass` (should be optional in future)
-
-You will also need to create `.env`
-
-## Updating css
-
-1. `npm -g i tailwindcss`
-1. `tailwindcss -i input.css -o style/output.css -c tailwind.config.js -w`
+Made with ❤️ by [hey\_\_adora](https://discord.com/users/1159037321283375174) (add me on Discord).
