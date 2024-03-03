@@ -4,6 +4,8 @@ use crate::app::global_state::GlobalState;
 use crate::app::utils::{
     calc_fit_count, resize_imgs, LoadingNotFound, SelectedImg, NEW_IMG_HEIGHT,
 };
+use crate::app::WsRuntime;
+use artcord_leptos_web_sockets::Runtime;
 use bson::DateTime;
 use chrono::Utc;
 use leptos::ev::resize;
@@ -59,10 +61,11 @@ pub fn GalleryPage() -> impl IntoView {
     let gallery_section = create_node_ref::<Section>();
     let loaded_sig = global_state.pages.gallery.gallery_loaded;
     let location = use_location();
+    let ws_img_singleton = WsRuntime::new_singleton();
     //let sender = global_state.pages.gallery.img_sender;
 
     //let sender = global_state.create_sender();
-
+    //let test_ws_group = WsRuntime::new_singleton();
     create_effect(move |_| {
         nav_tran.set(true);
 
@@ -92,7 +95,7 @@ pub fn GalleryPage() -> impl IntoView {
     };
 
     let on_fetch = move |new_imgs: Vec<AggImg>| {
-        let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
+        //let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
         if new_imgs.is_empty() && loaded_sig.get_untracked() == LoadingNotFound::Loading {
             loaded_sig.set(LoadingNotFound::NotFound);
         } else {
@@ -241,11 +244,11 @@ pub fn GalleryPage() -> impl IntoView {
     // }, false);
 
     create_effect(move |_| {
-        let connected = global_state.socket_connected.get();
-        let not_loaded = loaded_sig.with(|state| *state == LoadingNotFound::NotLoaded);
-        if !not_loaded || !connected {
-            return;
-        }
+        // let connected = global_state.socket_connected.get();
+        // let not_loaded = loaded_sig.with(|state| *state == LoadingNotFound::NotLoaded);
+        // if !not_loaded || !connected {
+        //     return;
+        // }
 
         let Some(section) = gallery_section.get() else {
             return;
@@ -259,14 +262,15 @@ pub fn GalleryPage() -> impl IntoView {
             from: Utc::now().timestamp_millis(),
         };
 
-        loaded_sig.set_untracked(LoadingNotFound::Loading);
+        // loaded_sig.set_untracked(LoadingNotFound::Loading);
 
-        // sender.send(&msg, move |server_msg| {
-        //     // on receive
-        //     if let ServerMsg::Imgs(imgs) = server_msg {
-        //         on_fetch(imgs);
-        //     }
-        // });
+        let _ = ws_img_singleton.send_once(&msg, move |server_msg| {
+            // on receive
+            if let ServerMsg::Imgs(imgs) = server_msg {
+                log!("{:#?}", &imgs);
+                on_fetch(imgs);
+            }
+        });
     });
 
     view! {

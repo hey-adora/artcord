@@ -42,16 +42,16 @@ pub fn HomePage() -> impl IntoView {
         shrink_nav(nav_tran, y as u32);
         // log!("nooooooooo");
     };
-    let test_ws_group = WsRuntime::create_group();
-    let test_click = move |e| {
-        let client_msg = ClientMsg::GalleryInit { amount: 50, from: Utc::now().timestamp_millis() };
-        // sender.send(&client_msg, |server_msg| {
-        //     log!("RECEIVED FFING SERVER MSG: {:?}", server_msg);
-        // })
-        test_ws_group.send_now(&client_msg, |server_msg| {
-            log!("RECEIVED FFING SERVER MSG: {:?}", server_msg);
-        }).unwrap();
-    };
+    // let test_ws_group = WsRuntime::new_singleton();
+    // let test_click = move |e| {
+    //     let client_msg = ClientMsg::GalleryInit { amount: 50, from: Utc::now().timestamp_millis() };
+    //     // sender.send(&client_msg, |server_msg| {
+    //     //     log!("RECEIVED FFING SERVER MSG: {:?}", server_msg);
+    //     // })
+    //     test_ws_group.send_once(&client_msg, |server_msg| {
+    //         log!("RECEIVED FFING SERVER MSG: {:?}", server_msg);
+    //     }).unwrap();
+    // };
 
     view! {
         <main  on:scroll=on_scroll _ref=scroll_el class="flex flex-col ">
@@ -59,7 +59,7 @@ pub fn HomePage() -> impl IntoView {
             <Navbar/>
             <section id="home" class=" px-6 py-6 2xl:px-[6rem] desktop:px-[16rem]  grid grid-rows-[auto_auto_1fr] grid-cols-[1fr]  min-h-[100svh] " >
                 <div class="h-[4rem] md:h-[6rem]"></div>
-                <button on:click=test_click>"CLICK ME"</button>
+                // <button on:click=test_click>"CLICK ME"</button>
                 <div class="flex flex-col gap-[2rem] md:gap-[4rem]  max-w-min ">
                     <div class="text-left flex flex-col justify-start">
                         <h2 class="text-[2rem] font-bold whitespace-nowrap ">"Discord Art Server"</h2>

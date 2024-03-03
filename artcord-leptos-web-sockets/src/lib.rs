@@ -30,8 +30,8 @@ pub struct LeptosWebSockets<
     ServerMsg: Clone + 'static,
     ClientMsg: Clone + Send<IdType> + Debug + 'static,
 > {
-    pub socket_closures: StoredValue<HashMap<IdType, Rc<dyn Fn(ServerMsg) -> ()>>>,
-    pub socket_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
+    pub global_msgs_closures: StoredValue<HashMap<IdType, Rc<dyn Fn(ServerMsg) -> ()>>>,
+    pub global_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
     pub ws: StoredValue<Option<WebSocket>>,
     pub ws_on_msg: StoredValue<Option<Rc<Closure<dyn FnMut(MessageEvent)>>>>,
     pub ws_on_err: StoredValue<Option<Rc<Closure<dyn FnMut(ErrorEvent)>>>>,
@@ -48,8 +48,8 @@ impl<
 {
     pub fn new() -> Self {
         Self {
-            socket_closures: StoredValue::new(HashMap::new()),
-            socket_pending_client_msgs: StoredValue::new(Vec::new()),
+            global_msgs_closures: StoredValue::new(HashMap::new()),
+            global_pending_client_msgs: StoredValue::new(Vec::new()),
             ws: StoredValue::new(None),
             ws_on_msg: StoredValue::new(None),
             ws_on_err: StoredValue::new(None),
@@ -99,8 +99,8 @@ pub trait Runtime<
                 let ws_on_err = global_state.ws_on_err;
                 let ws_on_open = global_state.ws_on_open;
                 let ws_on_close = global_state.ws_on_close;
-                let ws_closures = global_state.socket_closures;
-                let ws_pending = global_state.socket_pending_client_msgs;
+                let ws_closures = global_state.global_msgs_closures;
+                let ws_pending = global_state.global_pending_client_msgs;
                 let ws = global_state.ws;
 
                 ws_on_msg.set_value(Some(Rc::new(Closure::<dyn FnMut(_)>::new(
@@ -182,12 +182,12 @@ pub trait Runtime<
         }
     }
 
-    fn create_group() -> WsGroup<IdType, ServerMsg, ClientMsg> {
+    fn new_singleton() -> WsSingleton<IdType, ServerMsg, ClientMsg> {
         let global_state = use_context::<LeptosWebSockets<IdType, ServerMsg, ClientMsg>>().expect("Failed to provide global state");
-        let ws_closures = global_state.socket_closures;
+        let ws_closures = global_state.global_msgs_closures;
         let ws = global_state.ws;
-        let socket_pending_client_msgs = global_state.socket_pending_client_msgs;
-        WsGroup::<IdType, ServerMsg, ClientMsg>::new(Self::generate_key(), ws_closures, ws, socket_pending_client_msgs)
+        let socket_pending_client_msgs = global_state.global_pending_client_msgs;
+        WsSingleton::<IdType, ServerMsg, ClientMsg>::new(Self::generate_key(), ws_closures, ws, socket_pending_client_msgs)
     }
 
     fn generate_key() -> IdType;
@@ -343,13 +343,13 @@ pub trait Runtime<
 // }
 
 #[derive(Clone, Debug)]
-pub struct WsGroup<
+pub struct WsSingleton<
     IdType: Clone + std::cmp::Eq + std::hash::Hash + std::fmt::Debug + 'static,
     ServerMsg: Clone + Receive<IdType> + 'static,
     ClientMsg: Clone + Send<IdType> + Debug + 'static,
 > {
-    socket_closures: StoredValue<HashMap<IdType, Rc<dyn Fn(ServerMsg) -> ()>>>,
-    socket_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
+    global_msgs_closures: StoredValue<HashMap<IdType, Rc<dyn Fn(ServerMsg) -> ()>>>,
+    global_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
     //socket_send_fn: StoredValue<Rc<dyn Fn(Vec<u8>)>>,
     ws: StoredValue<Option<WebSocket>>,
     key: IdType,
@@ -360,44 +360,65 @@ impl <
     IdType: Clone + std::cmp::Eq + std::hash::Hash + std::fmt::Debug + 'static,
     ServerMsg: Clone + Receive<IdType> + 'static,
     ClientMsg: Clone + Send<IdType> + Debug + 'static,
-> WsGroup<IdType, ServerMsg, ClientMsg> {
+> WsSingleton<IdType, ServerMsg, ClientMsg> {
     pub fn new(
         key: IdType,
-        socket_closures: StoredValue<HashMap<IdType, Rc<dyn Fn(ServerMsg) -> ()>>>,
+        global_msgs_closures: StoredValue<HashMap<IdType, Rc<dyn Fn(ServerMsg) -> ()>>>,
         ws: StoredValue<Option<WebSocket>>,
-        socket_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
+        global_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
     ) -> Self {
         //let uuid: u128 = uuid::Uuid::new_v4().to_u128_le();
 
+        on_cleanup({
+            let key = key.clone();
+            move || {
+                global_msgs_closures.update_value({
+                    move |socket_closures| {
+                        socket_closures.remove(&key);
+                    }
+                });
+            }
+        });
+
         Self {
-            socket_closures,
-            socket_pending_client_msgs,
+            global_msgs_closures,
+            global_pending_client_msgs,
             ws,
             key,
             phantom: PhantomData
         }
     }
 
-    pub fn send_now(&self, client_msg: &ClientMsg, on_receive: impl Fn(ServerMsg) -> () + 'static) -> Result<(), SendError> {
-        self.ws.with_value(|ws| -> Result<(), SendError> {
+    pub fn send_once(&self, client_msg: &ClientMsg, on_receive: impl Fn(ServerMsg) -> () + 'static) -> Result<SendResult, SendError> {
+        self.ws.with_value(|ws| -> Result<SendResult, SendError> {
             let ws = ws.as_ref().ok_or_else(|| SendError::WsNotInitialized)?;
             let bytes = client_msg.send_as_vec(&self.key).or_else(|e| Err(SendError::SendError(e)))?;
-            self.socket_closures.update_value({
-                move |socket_closures| {
-                    let a = Rc::new(move |server_msg| {
+            
+            let exists = self.global_msgs_closures.with_value(|socket_closures| {
+                socket_closures.contains_key(&self.key)
+            });
+            if exists {
+                return Ok(SendResult::Skipped);
+            }
+
+            self.global_msgs_closures.update_value({
+                move |global_msgs_closures| {
+                    let new_msg_closure = Rc::new(move |server_msg| {
                         on_receive(server_msg);
                     });
-                    socket_closures.insert(self.key.clone(), a);
+                    global_msgs_closures.insert(self.key.clone(), new_msg_closure);
                 }
             });
+
             let is_open = self.ws.with_value(move |ws| {
                 ws.as_ref()
                     .and_then(|ws| Some(ws.ready_state() == WebSocket::OPEN))
                     .unwrap_or(false)
             });
+
             if is_open {
-                ws.send_with_u8_array(&bytes).or_else(|e| {
-                    self.socket_closures.update_value({
+                ws.send_with_u8_array(&bytes).and_then(|_|Ok(SendResult::Sent)).or_else(|e| {
+                    self.global_msgs_closures.update_value({
                         move |socket_closures| {
                             socket_closures.remove(&self.key);
                         }
@@ -405,25 +426,21 @@ impl <
                     Err(SendError::SendError(e.as_string().unwrap_or(String::from("Failed to send web-socket package"))))
                 })
             } else {
-                self.socket_pending_client_msgs.update_value(|pending| {
+                self.global_pending_client_msgs.update_value(|pending| {
                     pending.push(bytes)
                 });
-                Ok(())
+                Ok(SendResult::Queued)
             }
         })
     }
-
-    pub fn send_once(&self, client_msg: &ClientMsg, on_receive: impl Fn(ServerMsg) -> () + 'static) -> Result<(), SendError> {
-        let exists = self.socket_closures.with_value(|socket_closures| {
-            socket_closures.contains_key(&self.key)
-        });
-        if exists {
-            return Ok(());
-        }
-        self.send_now(client_msg, on_receive)
-    }
 }
 
+#[derive(Debug, Clone)]
+pub enum SendResult {
+    Sent,
+    Skipped,
+    Queued
+}
 
 #[derive(Error, Debug)]
 pub enum SendError {
