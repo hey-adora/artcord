@@ -2,18 +2,10 @@ use std::marker::PhantomData;
 use std::{collections::HashMap, fmt::Debug};
 use std::rc::Rc;
 
-// use crate::app::global_state::GlobalState;
-// use crate::message::server_msg::ServerMsg;
-// use crate::server::client_msg::{self, ClientMsg};
 use cfg_if::cfg_if;
-use chrono::Utc;
 use leptos::logging::log;
-use leptos::RwSignal;
 use leptos::*;
-use leptos_use::{
-    use_interval_fn, use_websocket_with_options, use_window, UseWebSocketOptions,
-    UseWebsocketReturn,
-};
+use leptos_use::{use_interval_fn, use_window};
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use web_sys::{ErrorEvent, MessageEvent, WebSocket};
@@ -21,8 +13,6 @@ use thiserror::Error;
 
 // const WS_TIMEOUT_MS: i64 = 30000;
 // const WS_TIMEOUT_MS_MARGIN: i64 = 100;
-
-// This exists just to prevent it sending multiple duplicate requests at once and make ws easier.
 
 #[derive(Clone, Debug)]
 pub struct LeptosWebSockets<
@@ -59,18 +49,6 @@ impl<
         }
     }
 }
-
-// impl From<TestMsg> for Vec<u8> {
-//     fn from(value: TestMsg) -> Self {
-//         Vec::new()
-//     }
-// }
-
-// impl From<Vec<u8>> for TestMsg {
-//     fn from(value: Vec<u8>) -> Self {
-//         Self{}
-//     }
-// }
 
 pub trait Send<IdType: Clone + std::cmp::Eq + std::hash::Hash + std::fmt::Debug + 'static> {
     fn send_as_vec(&self, id: &IdType) -> Result<Vec<u8>, String>;
@@ -121,7 +99,7 @@ pub trait Runtime<
 
                 let create_ws = move || -> WebSocket {
                     log!("CONNECTING");
-                    let ws = WebSocket::new("ws://localhost:3420").unwrap();
+                    let ws = WebSocket::new(&get_ws_path()).unwrap();
                     ws.set_binary_type(web_sys::BinaryType::Arraybuffer);
 
                     ws_on_msg.with_value(|ws_on_msg| {
@@ -148,19 +126,9 @@ pub trait Runtime<
                         }
                     });
 
-                    // ws.set_onmessage(Some((*ws_on_msg.get_untracked()).as_ref().unchecked_ref()));
-                    // ws.set_onerror(Some((*ws_on_err.get_untracked()).as_ref().unchecked_ref()));
-                    // ws.set_onopen(Some((*ws_on_open.get_untracked()).as_ref().unchecked_ref()));
-                    // ws.set_onclose(Some(
-                    //     (*ws_on_close.get_untracked()).as_ref().unchecked_ref(),
-                    // ));
-
 
                     ws
                 };
-
-                //log!("AUTH_STATE: {:?}", global_state.auth_is_logged_out());
-                // (reconnect_interval.resume)();
 
                 ws.set_value(Some(create_ws()));
                 let reconnect_interval = use_interval_fn(
@@ -172,7 +140,6 @@ pub trait Runtime<
                         });
                         if is_closed {
                             log!("RECONNECTING");
-                            //ws.with_untracked(|ws| {});
                             ws.set_value(Some(create_ws()));
                         }
                     },
@@ -216,7 +183,7 @@ pub trait Runtime<
         };
         let array = js_sys::Uint8Array::new(&data);
         let bytes: Vec<u8> = array.to_vec();
-        //log!("ONG MSG {:?}", vec);
+
         if bytes.is_empty() {
             log!("Empty byte msg received.");
             return;
@@ -228,14 +195,7 @@ pub trait Runtime<
             return;
         };
 
-        //log!("{:#?}", &server_msg);
-
         Self::execute(closures, &id, server_msg);
-        // if id != 0 {
-        //     global_state.execute(id, server_msg);
-        // } else {
-        //     log!("IDDDDDDDD 0");
-        // }
     }
 
     
@@ -247,14 +207,11 @@ pub trait Runtime<
                     for msg in msgs.iter() {
                         let result = ws.send_with_u8_array(msg);
                         if result.is_err()  {
-                            if ws.ready_state() == WebSocket::OPEN {
-                                //todo run error closure on failure to flush
-                            } 
                             break;
                         }  
                         index += 1;
                     }
-                    if index < msgs.len() {
+                    if index < msgs.len() && index > 0 {
                         *msgs = (&msgs[index..]).to_vec();
                     }
                 });
@@ -285,62 +242,36 @@ pub trait Runtime<
 
 }
 
-// enum TestMsg {
+pub fn get_ws_path() -> String {
+    let default = String::from("wss://artcord.uk.to:3420");
+    let mut output = String::new();
+    let window = &*use_window();
+    let Some(window) = window else {
+        log!("Failed to get window for get_ws_path, using default ws path: {}", default);
+        return default;
+    };
+    //let location = use_location();
+    let protocol = window.location().protocol();
+    let Ok(protocol) = protocol else {
+        log!("Failed to get window for protocol, using default ws path: {}", default);
+        return default;
+    };
+    if protocol == "http:" {
+        output.push_str("ws://");
+    } else {
+        output.push_str("wss://");
+    }
+    let hostname = window.location().hostname();
+    let Ok(hostname) = hostname else {
+        log!("Failed to get window for hostname, using default ws path: {}", default);
+        return default;
+    };
+    output.push_str(&format!("{}:3420", hostname));
 
-// }
+    output
+}
 
-// pub trait LWSSend {
-//     fn to_vec(&self, id: &str) -> Result<Vec<u8>, String>;
-// }
 
-// pub trait LeptosWebSocketsReceive {
-//     fn from_vec(bytes: &[u8]) -> Result<Self, String> where Self: std::marker::Sized;
-// }
-
-// pub trait LWSExecute {
-//     fn from_vec(bytes: &[u8]) -> Result<Self, String> where Self: std::marker::Sized;
-// }
-
-// impl LeptosWebSockets {
-//     pub fn send<ClientMsg: LWSSend, ServerMsg: TryFrom<Vec<u8>>>(client_msg: &ClientMsg, on_receive: impl Fn(ServerMsg) -> () + 'static) {
-//         let leptos_web_sockets = use_context::<LeptosWebSockets>();
-//         let Ok(leptos_web_sockets) = leptos_web_sockets else {
-//             log!("LeptosWebSockets are not initialized.");
-//             return;
-//         };
-//         let uuid: u128 = uuid::Uuid::new_v4().to_u128_le();
-
-//         leptos_web_sockets.ws.with_value(|ws| {
-//             let Some(ws) = ws else {
-//                 log!("WS is not initialized");
-//                 return;
-//             };
-
-//             let bytes = client_msg.to_vec(uuid);
-//             let Ok(bytes) = bytes else {
-//                 println!(
-//                     "Failed to serialize client msg: {:?}, error: {}",
-//                     &client_msg,
-//                     bytes.err().unwrap()
-//                 );
-//                 return;
-//             };
-
-//             leptos_web_sockets.socket_closures.update_value({
-//                 let socket_closures = leptos_web_sockets.socket_closures.clone();
-//                 move |socket_closures| {
-//                     let f = Rc::new(move |server_msg| {
-//                         on_receive(server_msg);
-//                     });
-//                     socket_closures.insert(leptos_web_sockets.uuid, f);
-//                 }
-//             });
-
-//             log!("SENT SOME MSG");
-//             ws.send_with_u8_array(&bytes);
-//         });
-//     }
-// }
 
 #[derive(Clone, Debug)]
 pub struct WsSingleton<
@@ -367,8 +298,6 @@ impl <
         ws: StoredValue<Option<WebSocket>>,
         global_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
     ) -> Self {
-        //let uuid: u128 = uuid::Uuid::new_v4().to_u128_le();
-
         on_cleanup({
             let key = key.clone();
             move || {

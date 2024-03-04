@@ -1,0 +1,26 @@
+[package]
+name = "artcord-leptos"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+leptos = { version = "0.6.6", features = ["default"] }
+leptos_meta = { version = "0.6.6", features = ["default"] }
+leptos_router = { version = "0.6.6", features = ["default"] }
+wasm-bindgen = { version = "0.2.91", features = [] }
+leptos-use = { version = "0.10.3", features = [] }
+web-sys = { version = "0.3.68", features = ["WebSocket"] }
+js-sys = { version = "0.3.68", features = [] }
+cfg-if = "1"
+artcord-leptos-web-sockets = { path = "../artcord-leptos-web-sockets" }
+artcord-state = { path = "../artcord-state" }
+uuid = { version = "1.7.0", features = ["v4", "serde"] }
+chrono = "0.4.34"
+gloo-net = "0.5.0"
+
+
