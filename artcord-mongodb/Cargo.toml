@@ -6,6 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+bson = "2.9.0"
+chrono = "0.4.34"
+futures = "0.3.30"
+mongodb = "2.8.1"
+thiserror = "1.0.57"
+artcord-state = { path = "../artcord-state" }
 
 [features]
 default = ["ssr"]
