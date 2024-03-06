@@ -1,0 +1,11 @@
+[package]
+name = "artcord-builder"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+futures = "0.3.30"
+notify = "6.1.1"
+tokio = { version = "1.36.0", features = ["full"] }

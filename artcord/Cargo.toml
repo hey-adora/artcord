@@ -8,6 +8,12 @@ edition = "2021"
 
 
 [dependencies]
+artcord-actix = { path = "../artcord-actix" }
+tokio = { version = "1.36.0", features = ["full"] }
+dotenv = { version = "0.15.0" }
+actix-web = { version = "4.5.1", features = ["macros"] }
+futures = "0.3.30"
+#artcord-leptos = { path = "../artcord-actix" }
 # actix-files = { version = "0.6.5", optional = true }
 # actix-web = { version = "4.5.1", optional = true, features = ["macros"] }
 # console_error_panic_hook = "0.1.7"

@@ -22,5 +22,12 @@ artcord-state = { path = "../artcord-state" }
 uuid = { version = "1.7.0", features = ["v4", "serde"] }
 chrono = "0.4.34"
 gloo-net = "0.5.0"
+console_error_panic_hook = "0.1.7"
+console_log = { version = "1.0.0" }
+log = "0.4.21"
 
-
+[features]
+default = []
+hydrate = ["leptos/hydrate", "leptos_meta/hydrate", "leptos_router/hydrate"]
+ssr = ["leptos/ssr", "leptos_meta/ssr", "leptos_router/ssr"]
+csr = ["leptos/csr", "leptos_meta/csr", "leptos_router/csr"]

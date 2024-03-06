@@ -2,7 +2,7 @@
 resolver = "2"
 members = [
     "artcord",
-    "artcord-actix",
+    "artcord-actix", "artcord-builder",
     "artcord-leptos",
     "artcord-leptos-web-sockets",
     "artcord-mongodb",
@@ -35,21 +35,20 @@ panic = "abort"
 name = "artcord"
 bin-package = "artcord"
 lib-package = "artcord-leptos"
-# name = "artcord"
-# output-name = "leptos_start5"
-# site-root = "target/site"
-# site-pkg-dir = "pkg"
-# style-file = "style/output.css"
-# assets-dir = "assets"
-# site-addr = "0.0.0.0:3000"
-# reload-port = 3001
-# end2end-cmd = "npx playwright test"
-# end2end-dir = "end2end"
-# browserquery = "defaults"
-# watch = false
-# env = "DEV"
-# bin-features = ["ssr"]
-# bin-default-features = false
-# lib-features = ["hydrate"]
-# lib-default-features = false
-# lib-profile-release = "wasm-release"
+output-name = "leptos_start5"
+site-root = "target/site"
+site-pkg-dir = "pkg"
+style-file = "style/output.css"
+assets-dir = "assets"
+site-addr = "0.0.0.0:3000"
+reload-port = 3001
+end2end-cmd = "npx playwright test"
+end2end-dir = "end2end"
+browserquery = "defaults"
+watch = false
+env = "DEV"
+lib-profile-release = "wasm-release"
+bin-features = []
+lib-features = [ "hydrate" ]
+bin-default-features = false
+lib-default-features = false
