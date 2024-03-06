@@ -12,7 +12,7 @@ crate-type = ["cdylib", "rlib"]
 leptos = { version = "0.6.6", features = ["default"] }
 leptos_meta = { version = "0.6.6", features = ["default"] }
 leptos_router = { version = "0.6.6", features = ["default"] }
-wasm-bindgen = { version = "0.2.91", features = [] }
+wasm-bindgen = { version = "0.2.92", features = [] }
 leptos-use = { version = "0.10.3", features = [] }
 web-sys = { version = "0.3.68", features = ["WebSocket"] }
 js-sys = { version = "0.3.68", features = [] }

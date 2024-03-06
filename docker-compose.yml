@@ -1,0 +1,23 @@
+version: '3.1'
+services:
+  mongo:
+      image: mongo
+      volumes:
+        - "./mongo/db:/data/db"
+      ports:
+        - 27017:27017
+  web:
+    depends_on:
+      - mongo
+    build: .
+    working_dir: /app
+    ports:
+      - 3000:3000
+    volumes:
+      - ".:/app"
+    command:
+      - /bin/bash
+      - -c
+      - |
+          source /usr/share/nvm/init-nvm.sh
+          cargo leptos watch

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ArtCord</title>
+    <link
+      id="leptos"
+      href="/pkg/leptos_start5.css"
+      rel="stylesheet"
+      data-hk="0-0-0-13"
+    />
+    <link rel="modulepreload" href="/pkg/leptos_start5.js" />
+    <link
+      rel="preload"
+      href="/pkg/leptos_start5.wasm"
+      as="fetch"
+      type="application/wasm"
+      crossorigin=""
+    />
+    <script type="module">
+      function idle(c) {
+        if ("requestIdleCallback" in window) {
+          window.requestIdleCallback(c);
+        } else {
+          c();
+        }
+      }
+      idle(() => {
+        import("/pkg/leptos_start5.js").then((mod) => {
+          mod.default("/pkg/leptos_start5.wasm").then(() => mod.hydrate());
+        });
+      });
+    </script>
+    <script defer>
+      __LEPTOS_PENDING_RESOURCES = [];
+      __LEPTOS_RESOLVED_RESOURCES = new Map();
+      __LEPTOS_RESOURCE_RESOLVERS = new Map();
+      __LEPTOS_LOCAL_ONLY = [];
+    </script>
+  </head>
+
+  <body></body>
+
+</html>
