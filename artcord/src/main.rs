@@ -10,8 +10,8 @@ async fn main() {
     let path = env::current_dir().unwrap();
     println!("The current directory is {}", path.display());
 
-    let assets_root_dir = env::var("ASSETS_ROOT_DIR").expect("ENV MISSING: ASSETS_ROOT_DIR");
-    let gallery_root_dir = env::var("GALLERY_ROOT_DIR").expect("ENV MISSING: GALLERY_ROOT_DIR");
+    let assets_root_dir = env::var("ASSETS_ROOT_DIR").unwrap_or("./target/site".to_string());
+    let gallery_root_dir = env::var("GALLERY_ROOT_DIR").unwrap_or("./gallery/".to_string());
 
     let assets_root_dir = Arc::new(assets_root_dir);
     let gallery_root_dir = Arc::new(gallery_root_dir);

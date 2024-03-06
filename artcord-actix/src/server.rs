@@ -452,7 +452,12 @@ pub async fn create_server(
             .service(Files::new("/assets/gallery", &*galley_root_dir))
             .service(Files::new("/assets", &*assets_root_dir))
             .service(Files::new("/pkg", pkg_url))
-            .route("/{filename:.*}", web::get().to(hello))
+            .leptos_routes(
+                leptos_options.to_owned(),
+                routes.to_owned(),
+                artcord_leptos::app::App,
+            )
+            //.route("/{filename:.*}", web::get().to(hello))
             // .leptos_routes(
             //     leptos_options.to_owned(),
             //     routes.to_owned(),

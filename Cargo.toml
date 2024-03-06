@@ -49,6 +49,6 @@ watch = true
 env = "DEV"
 lib-profile-release = "wasm-release"
 bin-features = []
-lib-features = [ "csr" ]
+lib-features = [ "hydrate" ]
 bin-default-features = false
 lib-default-features = false
