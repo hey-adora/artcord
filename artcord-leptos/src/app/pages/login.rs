@@ -75,7 +75,7 @@ pub fn Login() -> impl IntoView {
 
         let msg = ClientMsgWrap(ClientMsg::Login { password, email });
 
-        //global_state.socket_send(&msg);
+        //global_state.socket_send(&msg); a
 
         loading_state.set(AuthLoadingState::Processing);
     };

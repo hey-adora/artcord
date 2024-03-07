@@ -13,6 +13,7 @@ async fn main() {
     let assets_root_dir = env::var("ASSETS_ROOT_DIR").unwrap_or("./target/site".to_string());
     let gallery_root_dir = env::var("GALLERY_ROOT_DIR").unwrap_or("./gallery/".to_string());
 
+    
     let assets_root_dir = Arc::new(assets_root_dir);
     let gallery_root_dir = Arc::new(gallery_root_dir);
 
@@ -22,6 +23,8 @@ async fn main() {
         async { web_server.await.or_else(|e| Err(e.to_string())) },
      //   async { bot_server.start().await.or_else(|e| Err(e.to_string())) }
     );
+
+    r.unwrap();
 
     println!("hello");
 }
