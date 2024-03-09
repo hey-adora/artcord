@@ -21,22 +21,27 @@
 // use futures::TryFutureExt;
 
 use std::borrow::BorrowMut;
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::Arc;
 
-
+use chrono::Utc;
+use futures::Future;
 use notify::event::{AccessKind, AccessMode};
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use tokio::join;
 use tokio::process::Child;
 use tokio::process::Command;
-use tokio::join;
 use tokio::select;
 use tokio::sync::mpsc;
+use tokio::sync::oneshot;
+use tokio::sync::RwLock;
+use tokio::sync::{broadcast, Mutex};
 use tokio::time::sleep;
 use tokio::time::timeout;
 use tokio::time::Duration;
-use tokio::sync::oneshot;
-use tokio::sync::broadcast;
 
-async fn compile(mut recv: broadcast::Receiver::<()>) -> () {
+async fn compile_full() -> ([Command; 9], [&'static str; 9]) {
     let mut c1 = Command::new("cargo");
     c1.arg("build").arg("--package").arg("artcord-leptos");
 
@@ -53,386 +58,272 @@ async fn compile(mut recv: broadcast::Receiver::<()>) -> () {
     c5.arg("-r").arg("./assets/.").arg("./target/site/");
 
     let mut c6 = Command::new("cp");
-    c6.arg("./style/output.css").arg("./target/site/pkg/leptos_start5.css");
+    c6.arg("./style/output.css")
+        .arg("./target/site/pkg/leptos_start5.css");
 
     let mut c7 = Command::new("wasm-bindgen");
-    c7.arg("./target/wasm32-unknown-unknown/debug/artcord_leptos.wasm").arg("--no-typescript").arg("--target").arg("web").arg("--out-dir").arg("./target/site/pkg").arg("--out-name").arg("leptos_start5");
+    c7.arg("./target/wasm32-unknown-unknown/debug/artcord_leptos.wasm")
+        .arg("--no-typescript")
+        .arg("--target")
+        .arg("web")
+        .arg("--out-dir")
+        .arg("./target/site/pkg")
+        .arg("--out-name")
+        .arg("leptos_start5");
 
     let mut c8 = Command::new("cargo");
     c8.arg("build").arg("--package").arg("artcord");
 
     let mut c9 = Command::new("./target/debug/artcord");
 
-    let mut commands = [c1,c2,c3,c4,c5,c6,c7,c8,c9,];
+    let mut commands = [c1, c2, c3, c4, c5, c6, c7, c8, c9];
+    let command_names = [
+        "Built wasm",
+        "Deleted folder target/site",
+        "Created folder target/site",
+        "Created folder target/site/pkg",
+        "Coppied assets to target/site",
+        "Copied style to target/site/pkg/leptos_start5.css",
+        "Generated target/site/pkg/leptos_start5.js",
+        "Built artcord x86",
+        "Launched artcord",
+    ];
 
-
-    loop {
-        for command in commands.iter_mut() {
-            let mut command = command.spawn().unwrap();
-            let recv = recv.recv();
-            select! {
-                _ = command.wait() => {
-                    println!("Finished");
-                },
-                _ = recv => {
-                    command.kill().await.unwrap();
-                    println!("Killed");
-                    break;
-                }
-            };
-        }
-    }
-   
+    (commands, command_names)
 }
 
+async fn compile_front() -> ([Command; 7], [&'static str; 7]) {
+    let mut c1 = Command::new("cargo");
+    c1.arg("build").arg("--package").arg("artcord-leptos");
 
-// async fn compile() -> tokio::process::Child {
-//     let c = Command::new("cargo").arg("build").arg("--package").arg("artcord-leptos").status().await.unwrap();
-//     println!("EXIT 1 CODE: {}", c);
-//     let c = Command::new("rm").arg("-r").arg("./target/site").status().await.unwrap();
-//     println!("EXIT 2 CODE: {}", c);
-//     let c = Command::new("mkdir").arg("./target/site").status().await.unwrap();
-//     println!("EXIT 3 CODE: {}", c);
-//     let c = Command::new("mkdir").arg("./target/site/pkg").status().await.unwrap();
-//     println!("EXIT 4 CODE: {}", c);
-//     let c = Command::new("cp").arg("-r").arg("./assets/.").arg("./target/site/").status().await.unwrap();
-//     println!("EXIT 5 CODE: {}", c);
-//     let c = Command::new("cp").arg("./style/output.css").arg("./target/site/pkg/leptos_start5.css").status().await.unwrap();
-//     println!("EXIT 6 CODE: {}", c);
-//     let c = Command::new("wasm-bindgen").arg("./target/wasm32-unknown-unknown/debug/artcord_leptos.wasm").arg("--no-typescript").arg("--target").arg("web").arg("--out-dir").arg("./target/site/pkg").arg("--out-name").arg("leptos_start5").status().await.unwrap();
-//     println!("EXIT 7 CODE: {}", c);
-//     let c = Command::new("cargo").arg("build").arg("--package").arg("artcord").status().await.unwrap();
-//     println!("EXIT 8 CODE: {}", c);
-//     let c: tokio::process::Child = Command::new("./target/debug/artcord").spawn().unwrap();
-//     //println!("EXIT 9 CODE: {}", c);
-//     c
+    let mut c2 = Command::new("rm");
+    c2.arg("-r").arg("./target/site");
+
+    let mut c3 = Command::new("mkdir");
+    c3.arg("./target/site");
+
+    let mut c4 = Command::new("mkdir");
+    c4.arg("./target/site/pkg");
+
+    let mut c5 = Command::new("cp");
+    c5.arg("-r").arg("./assets/.").arg("./target/site/");
+
+    let mut c6 = Command::new("cp");
+    c6.arg("./style/output.css")
+        .arg("./target/site/pkg/leptos_start5.css");
+
+    let mut c7 = Command::new("wasm-bindgen");
+    c7.arg("./target/wasm32-unknown-unknown/debug/artcord_leptos.wasm")
+        .arg("--no-typescript")
+        .arg("--target")
+        .arg("web")
+        .arg("--out-dir")
+        .arg("./target/site/pkg")
+        .arg("--out-name")
+        .arg("leptos_start5");
+
+    let mut commands = [c1, c2, c3, c4, c5, c6, c7];
+    let command_names = [
+        "Built wasm",
+        "Deleted folder target/site",
+        "Created folder target/site",
+        "Created folder target/site/pkg",
+        "Coppied assets to target/site",
+        "Copied style to target/site/pkg/leptos_start5.css",
+        "Generated target/site/pkg/leptos_start5.js",
+    ];
+
+    (commands, command_names)
+}
+
+//a a a
+
+const SMOOTHING_TOLERENCE: i64 = 100;
+
+// #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+// enum CompType {
+//     Front(i64),
+//     Back(i64),
+//    // Assets(i64)
 // }
-
-
 
 #[tokio::main]
 async fn main() {
-  
+    let path_be = "artcord";
+    let path_be_actix = "artcord-actix";
+    let path_be_mongodb = "artcord-mongodb";
+    let path_be_serenity = "artcord-serenity";
+    let path_be_state = "artcord-state";
+    let path_be_tungstenite = "artcord-tungstenite";
+    let path_fe = "artcord-leptos";
+    let path_assets = "assets";
 
-    // let b = async move {
-    //     sleep(Duration::from_secs(5)).await;
-    //     tx.send(()).unwrap();
-    // };
+    let compiling_backend: Arc<RwLock<Option<i64>>> = Arc::new(RwLock::new(None));
 
-    // join!(a, b);
+    let (send_front, mut recv_front) = broadcast::channel::<()>(1);
+    let (send_back, mut recv_back) = broadcast::channel::<()>(1);
 
+    // let (send_start, mut recv_start) = mpsc::channel::<()>(1000);
+
+    let front_comp = {
+        let compiling_backend = compiling_backend.clone();
+        async move {
+            //compile_front(recv_cancel).await;
     
-    // rx;
-
-    // let (send, recv) = oneshot::channel::<()>();
-    // let mut command: Child = Command::new("sh").spawn().unwrap();
-
-    // select! {
-    //     _ = command.wait() => {
-    //         println!("Finished");
-    //     },
-    //     _ = recv => {
-    //         command.kill().await.unwrap();
-    //         println!("Killed");
-    //     }
-    // }
-
-    // let run_stuff = async {
-    //     timeout(Duration::from_secs(5), async {
-    //         command.wait().await.unwrap();
-    //     })
-    // };
-
-    // let cancel_run = async {
-    //     sleep(Duration::from_secs(5)).await;
-    //     command.kill();
-    // };
-
-//    / join!(run_stuff, cancel_run);
-   
-//     let holder: Arc<Mutex<Option<tokio::process::Child>>> = Arc::new(Mutex::new(None));
-   
-//     // let one_is_canceled = Arc::new(Mutex::new(false));
-//     // let (send_cancel, receive_cancel) = oneshot::channel::<()>();
-//    // println!("AAAAAAAAAAAAAAAAAAA");
+            let (mut commands, command_names) = compile_front().await;
+            loop {
+                recv_front.recv().await.unwrap();
     
-//     // let one: tokio::task::JoinHandle<()> = tokio::spawn({
-//     // //    let one_is_canceled = one_is_canceled.clone();
-//     //     async move {
-//     //         // let c = Command::new("cargo").arg("build").arg("--package").arg("artcord-leptos").stdout(Stdio::piped()).spawn().unwrap().wait_with_output().await.unwrap().status.code().unwrap();
-//     //         // println!("EXIT 1 CODE: {}", c);
-//     //         // let c = Command::new("rm").arg("-r").arg("./target/site").stdout(Stdio::piped()).spawn().unwrap().wait_with_output().await.unwrap().status.code().unwrap();
-//     //         // println!("EXIT 2 CODE: {}", c);
-//     //         // let c = Command::new("mkdir").arg("./target/site").stdout(Stdio::piped()).spawn().unwrap().wait_with_output().await.unwrap().status.code().unwrap();
-//     //         // println!("EXIT 3 CODE: {}", c);
-//     //         // let c = Command::new("mkdir").arg("./target/site/pkg").stdout(Stdio::piped()).spawn().unwrap().wait_with_output().await.unwrap().status.code().unwrap();
-//     //         // println!("EXIT 4 CODE: {}", c);
-//     //         // let c = Command::new("cp").arg("-r").arg("./assets/.").arg("./target/site/").stdout(Stdio::piped()).spawn().unwrap().wait_with_output().await.unwrap().status.code().unwrap();
-//     //         // println!("EXIT 5 CODE: {}", c);
-//     //         // let c = Command::new("cp").arg("./style/output.css").arg("./target/site/pkg/leptos_start5.css").stdout(Stdio::piped()).spawn().unwrap().wait_with_output().await.unwrap().status.code().unwrap();
-//     //         // println!("EXIT 6 CODE: {}", c);
-//     //         // let c = Command::new("wasm-bindgen").arg("./target/wasm32-unknown-unknown/debug/artcord_leptos.wasm").arg("--no-typescript").arg("--target").arg("web").arg("--out-dir").arg("./target/site/pkg").arg("--out-name").arg("leptos_start5").stdout(Stdio::piped()).spawn().unwrap().wait_with_output().await.unwrap().status.code().unwrap();
-//     //         // println!("EXIT 7 CODE: {}", c);
-//     //         // let c = Command::new("cargo").arg("build").arg("--package").arg("artcord").stdout(Stdio::piped()).spawn().unwrap().wait_with_output().await.unwrap().status.code().unwrap();
-//     //         // println!("EXIT 8 CODE: {}", c);
-//     //         // let c = Command::new("./target/debug/artcord").stdout(Stdio::piped()).spawn().unwrap().wait_with_output().await.unwrap().status.code().unwrap();
-//     //         // println!("EXIT 9 CODE: {}", c);
-
-//     //         let c = Command::new("cargo").arg("build").arg("--package").arg("artcord-leptos").status().await.unwrap();
-//     //         println!("EXIT 1 CODE: {}", c);
-//     //         let c = Command::new("rm").arg("-r").arg("./target/site").status().await.unwrap();
-//     //         println!("EXIT 2 CODE: {}", c);
-//     //         let c = Command::new("mkdir").arg("./target/site").status().await.unwrap();
-//     //         println!("EXIT 3 CODE: {}", c);
-//     //         let c = Command::new("mkdir").arg("./target/site/pkg").status().await.unwrap();
-//     //         println!("EXIT 4 CODE: {}", c);
-//     //         let c = Command::new("cp").arg("-r").arg("./assets/.").arg("./target/site/").status().await.unwrap();
-//     //         println!("EXIT 5 CODE: {}", c);
-//     //         let c = Command::new("cp").arg("./style/output.css").arg("./target/site/pkg/leptos_start5.css").status().await.unwrap();
-//     //         println!("EXIT 6 CODE: {}", c);
-//     //         let c = Command::new("wasm-bindgen").arg("./target/wasm32-unknown-unknown/debug/artcord_leptos.wasm").arg("--no-typescript").arg("--target").arg("web").arg("--out-dir").arg("./target/site/pkg").arg("--out-name").arg("leptos_start5").status().await.unwrap();
-//     //         println!("EXIT 7 CODE: {}", c);
-//     //         let c = Command::new("cargo").arg("build").arg("--package").arg("artcord").status().await.unwrap();
-//     //         println!("EXIT 8 CODE: {}", c);
-//     //         let c = Command::new("./target/debug/artcord").status().await.unwrap();
-//     //         println!("EXIT 9 CODE: {}", c);
-//     //         // let c = Command::new("./target/debug/artcord").stdout(Stdio::piped()).spawn().unwrap().wait_with_output().await.unwrap().status.code().unwrap();
-//     //         // println!("EXIT 9 CODE: {}", c);
-//     //         // let c = Command::new("cargo").arg("build").arg("--package").arg("artcord-leptos").spawn().unwrap();
-//     //         // tokio::spawn(async move {
-//     //         //     let a = c.stdout;
-//     //         // });
-//     //         // c.wait_with_output();
-//     //         // let c = String::from_utf8(c).unwrap();
-//     //         // println!("{}", c);
-        
-//     //         // let mut index: usize = 0;
-//     //         // loop {
-//     //         //     println!("one: {}", index);
-//     //         //     let one_is_canceled = { *one_is_canceled.lock().await.deref() };
-//     //         //     if one_is_canceled {
-//     //         //         println!("cancel sent");
-                    
-//     //         //         break;
-//     //         //     }
-//     //         //     sleep(Duration::from_secs(1)).await;
-//     //         //     index += 1;
-//     //         // }
-
-//     //         //send_cancel.send(()).unwrap();
-//     //     }
-//     // });
-
-//    // let one = Arc::new(one);
-
-//     // let two: tokio::task::JoinHandle<()> = tokio::spawn(
-//     //     async move {
-
-//     //         sleep(Duration::from_secs(5)).await;
-//     //         one.abort();
-//     //         // let mut index: usize = 0;
-//     //         // loop {
-//     //         //     println!("two: {}", index);
-//     //         //     sleep(Duration::from_secs(1)).await;
-//     //         //     index += 1;
-//     //         // }
-//     //     }
-//     // );
-
-//     // let three: tokio::task::JoinHandle<()> = tokio::spawn({
-//     //     let one_is_canceled = one_is_canceled.clone();
-//     //     async move {
-//     //         let mut index: usize = 0;
-//     //         loop {
-//     //             println!("CANCELING ONE STARTED: {}", index);
-//     //             sleep(Duration::from_secs(5)).await;
-//     //             index += 1;
-//     //             {
-//     //                 let mut one_is_canceled = one_is_canceled.lock().await;
-//     //                 *one_is_canceled = true;
-//     //             }
-//     //             let r = receive_cancel.await;
-//     //             if let Ok(_) = r {
-//     //                 println!("ONE WAS CANCELD.");
-//     //             } else {
-//     //                 println!("reveve error {} ONE WAS CANCELD.", r.err().unwrap());
-//     //             }
-//     //             break;
-//     //         }
-//     //     }
-//     // });
-
-//     // let bb = aa.await; a
- 
-//     // let front = watch_dir(path); a a a a a a a a
+                // if (*compiling_backend.read().await).is_some_and(|time| Utc::now().timestamp_millis() - time <= SMOOTHING_TOLERENCE) {
+                //     continue; a
+                // }
     
-
+                if (*compiling_backend.read().await).is_some() {
+                    println!("FE: SKIPPING.");
+                    continue;
+                }
     
-//     let mut c: tokio::process::Child = Command::new("./target/debug/artcord").spawn().unwrap();
-//     let mut c = Arc::new(RefCell::new(c));
-//     // c.wait_with_output().
-//     // //let aaa = c.wait();
-//     // let c = Arc::new(RwLock::new(c));
-//     // let c2 = c.clone();
-
-//     // let c = {
-//     //     let mut c = c.write().await;
-//     //     let mut c = &mut *c;
-//     //     //Command::kill_on_drop(&mut self, kill_on_drop);
-//     //     c.wait()
-//     // };
-//     //c.await;
-//    // let mut c = *c;
-   
-//     //let c = c.read().await.wait_with_output();
-
-//     let h: Rc<Option<std::pin::Pin<Box<dyn Future<Output = Result<std::process::ExitStatus, std::io::Error>> + Send>>>> = Arc::new(None);
-//    // let h: Arc<Option<Box<dyn Future<Output = ()>>>> = Arc::new(Box::new(None));
-//     let a = vec![Option::Some((async move {}))];
-
-
+                for (i, command) in commands.iter_mut().enumerate() {
+                    let mut command = command.spawn().unwrap();
     
-
-//     let a = async {
-//         println!("STARTED");
-//         let  c = &*c;
-//         // let c = {
-           
-
-
-//         // };
-//         let mut c = c.borrow_mut();
-//         let mut c = &mut *c;
-//         let a: std::pin::Pin<Box<dyn Future<Output = Result<std::process::ExitStatus, std::io::Error>> + Send>> = c.wait().boxed();
-//         let a = &*a;
-//         //let a = a.into_future();
-//         //c.await.unwrap();
-//         // let cc = c.wait();
-//         // tokio::spawn(async {
-//         //     c.kill().await;
-//         // });
-//         // cc.await.unwrap();
-//         println!("ENDED");
-//         Ok::<(), ()>(())
-//     };
-
-//     let b = async {
-//         sleep(Duration::from_secs(5)).await;
-//         println!("KILLING");
-//         let c = &*c;
-//         let c = &mut *c.borrow_mut();
-//         c.kill().await.unwrap();
-//         println!("KILLED");
-//         // let cc = c.wait();
-//         // tokio::spawn(async {
-//         //     c.kill().await;
-//         // });
-//         // cc.await.unwrap();
-//        // println!("ENDED");
-//         Ok::<(), ()>(())
-//     };
-
-
-//     try_join!(
-//         a,
-//         b
-//         // async {
-//         //     sleep(Duration::from_secs(5)).await;
-//         //     println!("KILLING");
-//         //     c.kill().await;
-//         //     println!("KILLED");
-//         //     Ok::<(), ()>(())
-//         // } a 
-//     ); a a a a a
-
-
-    let path = "artcord-builder";
-
-    let (send_cancel, mut recv_cancel) = broadcast::channel::<()>(2);
-    let mut a = async move {
-        compile(recv_cancel).await;
+                    let recv = recv_front.recv();
+    
+    
+                    select! {
+                        c = command.wait() => {
+                            let success = c.and_then(|v| Ok(v.success())).unwrap_or(false);
+                            if !success {
+                                println!("FE Error: {}", command_names[i]);
+                                break;
+                            } else {
+                                println!("FE Finished: {}", command_names[i]);
+                            }
+                        },
+                        _ = recv => {
+                            command.kill().await.unwrap();
+                            println!("FE Killed: {}", command_names[i]);
+                            break;
+                        }
+                    };
+                }
+            }
+        }
     };
 
-    let h = tokio::spawn(a);
+    let back_comp = async move {
+        //compile_front(recv_cancel).awaita aaa a a 
+        let (mut commands, command_names) = compile_full().await;
+        let len = commands.len();
+        loop {
+            recv_back.recv().await.unwrap();
+            {
+                let mut compiling_backend = compiling_backend.write().await;
+                *compiling_backend = Some(Utc::now().timestamp_millis());
+            }
+            for (i, command) in commands.iter_mut().enumerate() {
+                if i.checked_sub(1).unwrap_or(0) == len {
+                    let mut compiling_backend = compiling_backend.write().await;
+                    *compiling_backend = None;
+                }
+                let mut command = command.spawn().unwrap();
+                let recv = recv_back.recv();
 
-    let r = join!(
-       h,
-       async { 
-            println!("watching {}", path);
-
-            let (mut tx, mut rx) = mpsc::channel(1000);
-
-            let mut watcher = RecommendedWatcher::new(
-                move |res| {
-                    futures::executor::block_on(async {
-                        tx.send(res).await.unwrap();
-                    })
-                },
-                Config::default(),
-            )
-            .unwrap();
-
-            watcher.watch(path.as_ref(), RecursiveMode::Recursive).unwrap();
-
-
-
-            while let Some(res) = rx.recv().await {
-                match res {
-                    Ok(event) => {
-                        if let EventKind::Access(kind) = event.kind {
-                            if let AccessKind::Close(kind) = kind {
-                                if let AccessMode::Write = kind {
-                                    
-                                    println!("RECOMPILING");
-                                    send_cancel.send(()).unwrap();
-                                    // let mut holder = holder.lock().await;
-                                    // if let Some(e) = &mut *holder {
-                                    //     e.kill().await.unwrap();
-                                    //     //try_join!(a);
-                                    // }
-                                    // // let t = tokio::spawn(async move {
-                                    // //     ;
-                                    // // });
-                                    // let t = compile().await;
-                                    // *holder = Some(t);
-                                }
-                            }
+                select! {
+                    c = command.wait() => {
+                        
+                        let success = c.and_then(|v| Ok(v.success())).unwrap_or(false);
+                        if !success {
+                            println!("BE Error: {}", command_names[i]);
+                            break;
+                        } else {
+                            println!("BE Finished: {}", command_names[i]);
                         }
                     },
-                    Err(e) => println!("watch error: {:?}", e),
-                }
-            };
+                    _ = recv => {
+                        command.kill().await.unwrap();
+                        println!("BE Killed: {}", command_names[i]);
+                        break;
+                    }
+                };
+            }
+        }
+    };
 
-            Ok::<(), ()>(())
-        },
+    //let a = Utc::now().timestamp_millis();
+    
+    // send_front.send(()).unwrap(); 333
+    send_back.send(()).unwrap();
+    
 
+    let back_comp = tokio::spawn(back_comp);
+    let front_comp = tokio::spawn(front_comp);
+
+    let watch_fe = watch_dir(path_fe, send_front.clone());
+    let watch_assets = watch_dir(path_assets, send_front);
+
+    let watch_be = watch_dir(path_be, send_back.clone());
+    let watch_be_actix = watch_dir(path_be_actix, send_back.clone());
+    let watch_be_mongodb = watch_dir(path_be_mongodb, send_back.clone());
+    let watch_be_serenity = watch_dir(path_be_serenity, send_back.clone());
+    let watch_be_state = watch_dir(path_be_state, send_back.clone());
+    let watch_be_tungstenite = watch_dir(path_be_tungstenite, send_back);
+
+    let r = join!(
+        watch_fe,
+        watch_assets,
+        back_comp, 
+        watch_be, 
+        watch_be_actix, 
+        watch_be_mongodb, 
+        watch_be_serenity, 
+        watch_be_state, 
+        watch_be_tungstenite
     );
-       
-//     //     // async {
-//     //     //     one.await;
-//     //     //     Ok::<(), ()>(())
-//     //     // },
-//     //     // async {
-//     //     //     two.await;
-//     //     //     Ok::<(), ()>(())
-//     //     // },
-//     //     // async { aa  aa
-//     //     //     three.await;
-//     //     //     Ok::<(), ()>(())
-//     //     // }, a a a 
-//     // );
-
-//     //r.unwrap();
 }
 
+// async fn watch_dir<Fu: Future<Output = ()> + 'static>(path: &str, callback: impl Fn() -> Fu + Copy)
+async fn watch_dir(path: &str, send_signal: broadcast::Sender<()>) {
+    println!("watching {}", path);
 
+    // let callback_wrap = RefCell::new(|| callback);
+    // let aaa = || async {};
 
-// async fn watch_dir(path: &str) -> Result<(), ()> {
-//     println!("watching {}", path);
+    let (mut tx, mut rx) = mpsc::channel(1000);
 
-   
+    let mut watcher = RecommendedWatcher::new(
+        move |res| {
+            futures::executor::block_on(async {
+                tx.send(res).await.unwrap();
+            })
+        },
+        Config::default(),
+    )
+    .unwrap();
 
-   
+    watcher
+        .watch(path.as_ref(), RecursiveMode::Recursive)
+        .unwrap();
 
-//     Ok(())
-// }
+    while let Some(res) = rx.recv().await {
+        match res {
+            Ok(event) => {
+                if let EventKind::Access(kind) = event.kind {
+                    if let AccessKind::Close(kind) = kind {
+                        if let AccessMode::Write = kind {
+                            println!("RECOMPILING");
+                            send_signal.send(()).unwrap();
+                            //callback().await;
+                            // let callback_wrap = &*callback_wrap.borrow();
+                            // let a = callback_wrap();
+                            //.await;
+                            
+                        }
+                    }
+                }
+            }
+            Err(e) => println!("watch error: {:?}", e),
+        }
+    }
+
+    //Ok::<(), ()>(())
+}

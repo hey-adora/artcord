@@ -7,6 +7,9 @@ use futures::try_join;
 async fn main() {
     dotenv().ok();
 
+    println!("TESTING MEEEEEEEEEEE 5 3");
+
+
     let path = env::current_dir().unwrap();
     println!("The current directory is {}", path.display());
 
@@ -21,7 +24,7 @@ async fn main() {
 
     let r = try_join!(
         async { web_server.await.or_else(|e| Err(e.to_string())) },
-     //   async { bot_server.start().await.or_else(|e| Err(e.to_string())) }
+     //   async { bot_server.start().await.or_else(|e| Err(e.to_string())) } a
     );
 
     r.unwrap();

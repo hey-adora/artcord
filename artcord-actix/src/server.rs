@@ -416,6 +416,7 @@ pub async fn create_server(
     galley_root_dir: Arc<String>,
     assets_root_dir: Arc<String>,
 ) -> Server {
+    println!("Teeeeeeeeeeeeeeeeeeeeeeee 3 3");
     //let conf = get_configuration(None).await.unwrap();
     let conf: ConfFile = ConfFile {
         leptos_options: LeptosOptions {
