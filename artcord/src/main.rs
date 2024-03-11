@@ -24,7 +24,7 @@ async fn main() {
 
     let r = try_join!(
         async { web_server.await.or_else(|e| Err(e.to_string())) },
-     //   async { bot_server.start().await.or_else(|e| Err(e.to_string())) } a
+     //   async { bot_server.start().await.or_else(|e| Err(e.to_string())) } a a aa a a a
     );
 
     r.unwrap();

@@ -1,32 +1,15 @@
-// use futures::{try_join, Future, FutureExt};
-// use futures::{
-//     channel::mpsc::{channel, Receiver},
-//     SinkExt, StreamExt,
-// };
-// use notify::event::{AccessKind, AccessMode};
-// use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-// use tokio::sync::RwLock;
-// use tokio::task::JoinHandle;
-// use std::borrow::BorrowMut;
-// use std::cell::RefCell;
-// use std::ops::DerefMut;
-// use std::process::Stdio;
-// use std::rc::Rc;
-// use std::{ops::Deref, path::Path, sync::Arc, time::Duration};
-// use tokio::{
-//     process::Command,
-//     sync::{oneshot, Mutex},
-//     time::sleep,
-// };
-// use futures::TryFutureExt;
-
 use std::borrow::BorrowMut;
 use std::cell::RefCell;
+use std::ffi::{OsStr, OsString};
+use std::path;
+use std::pin::Pin;
+use std::process::ExitStatus;
 use std::rc::Rc;
 use std::sync::Arc;
 
 use chrono::Utc;
-use futures::Future;
+use futures::future::join_all;
+use futures::{Future, FutureExt};
 use notify::event::{AccessKind, AccessMode};
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use tokio::join;
@@ -41,254 +24,237 @@ use tokio::time::sleep;
 use tokio::time::timeout;
 use tokio::time::Duration;
 
-async fn compile_full() -> ([Command; 9], [&'static str; 9]) {
-    let mut c1 = Command::new("cargo");
-    c1.arg("build").arg("--package").arg("artcord-leptos");
 
-    let mut c2 = Command::new("rm");
-    c2.arg("-r").arg("./target/site");
-
-    let mut c3 = Command::new("mkdir");
-    c3.arg("./target/site");
-
-    let mut c4 = Command::new("mkdir");
-    c4.arg("./target/site/pkg");
-
-    let mut c5 = Command::new("cp");
-    c5.arg("-r").arg("./assets/.").arg("./target/site/");
-
-    let mut c6 = Command::new("cp");
-    c6.arg("./style/output.css")
-        .arg("./target/site/pkg/leptos_start5.css");
-
-    let mut c7 = Command::new("wasm-bindgen");
-    c7.arg("./target/wasm32-unknown-unknown/debug/artcord_leptos.wasm")
-        .arg("--no-typescript")
-        .arg("--target")
-        .arg("web")
-        .arg("--out-dir")
-        .arg("./target/site/pkg")
-        .arg("--out-name")
-        .arg("leptos_start5");
-
-    let mut c8 = Command::new("cargo");
-    c8.arg("build").arg("--package").arg("artcord");
-
-    let mut c9 = Command::new("./target/debug/artcord");
-
-    let mut commands = [c1, c2, c3, c4, c5, c6, c7, c8, c9];
-    let command_names = [
-        "Built wasm",
-        "Deleted folder target/site",
-        "Created folder target/site",
-        "Created folder target/site/pkg",
-        "Coppied assets to target/site",
-        "Copied style to target/site/pkg/leptos_start5.css",
-        "Generated target/site/pkg/leptos_start5.js",
-        "Built artcord x86",
-        "Launched artcord",
-    ];
-
-    (commands, command_names)
-}
-
-async fn compile_front() -> ([Command; 7], [&'static str; 7]) {
-    let mut c1 = Command::new("cargo");
-    c1.arg("build").arg("--package").arg("artcord-leptos");
-
-    let mut c2 = Command::new("rm");
-    c2.arg("-r").arg("./target/site");
-
-    let mut c3 = Command::new("mkdir");
-    c3.arg("./target/site");
-
-    let mut c4 = Command::new("mkdir");
-    c4.arg("./target/site/pkg");
-
-    let mut c5 = Command::new("cp");
-    c5.arg("-r").arg("./assets/.").arg("./target/site/");
-
-    let mut c6 = Command::new("cp");
-    c6.arg("./style/output.css")
-        .arg("./target/site/pkg/leptos_start5.css");
-
-    let mut c7 = Command::new("wasm-bindgen");
-    c7.arg("./target/wasm32-unknown-unknown/debug/artcord_leptos.wasm")
-        .arg("--no-typescript")
-        .arg("--target")
-        .arg("web")
-        .arg("--out-dir")
-        .arg("./target/site/pkg")
-        .arg("--out-name")
-        .arg("leptos_start5");
-
-    let mut commands = [c1, c2, c3, c4, c5, c6, c7];
-    let command_names = [
-        "Built wasm",
-        "Deleted folder target/site",
-        "Created folder target/site",
-        "Created folder target/site/pkg",
-        "Coppied assets to target/site",
-        "Copied style to target/site/pkg/leptos_start5.css",
-        "Generated target/site/pkg/leptos_start5.js",
-    ];
-
-    (commands, command_names)
-}
-
-//a a a
 
 const SMOOTHING_TOLERENCE: i64 = 100;
 
-// #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-// enum CompType {
-//     Front(i64),
-//     Back(i64),
-//    // Assets(i64)
-// }
+#[derive(Clone, Debug)]
+enum SignalKind {
+    Trigger,
+    TriggerTwice,
+    TriggerAndCompileOther(broadcast::Sender<(CompilationKind, SignalKind)>)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum CompilationKind {
+    Front,
+    Back,
+    BackPlusFront
+}
 
 #[tokio::main]
 async fn main() {
-    let path_be = "artcord";
-    let path_be_actix = "artcord-actix";
-    let path_be_mongodb = "artcord-mongodb";
-    let path_be_serenity = "artcord-serenity";
-    let path_be_state = "artcord-state";
-    let path_be_tungstenite = "artcord-tungstenite";
-    let path_fe = "artcord-leptos";
-    let path_assets = "assets";
+    let compiling_state: Arc<RwLock<Option<(i64, CompilationKind)>>> = Arc::new(RwLock::new(None));
+    let (send_front, mut recv_front) = broadcast::channel::<(CompilationKind, SignalKind)>(1);
+    let (send_back, mut recv_back) = broadcast::channel::<(CompilationKind, SignalKind)>(1);
 
-    let compiling_backend: Arc<RwLock<Option<i64>>> = Arc::new(RwLock::new(None));
+    let mut commands_backend = build_commands([
+        vec!["cargo","build","--package","artcord-leptos",],
+        vec!["rm","-r","./target/site",],
+        vec!["mkdir","./target/site",],
+        vec!["mkdir","./target/site/pkg",],
+        vec!["cp","-r","./assets/.","./target/site/",],
+        vec!["cp","./style/output.css","./target/site/pkg/leptos_start5.css",],
+        vec!["wasm-bindgen","./target/wasm32-unknown-unknown/debug/artcord_leptos.wasm","--no-typescript","--target","web","--out-dir","./target/site/pkg","--out-name","leptos_start5",],
+        vec!["cargo","build","--package","artcord",],
+        vec!["./target/debug/artcord",],
+        ]).await;
 
-    let (send_front, mut recv_front) = broadcast::channel::<()>(1);
-    let (send_back, mut recv_back) = broadcast::channel::<()>(1);
+    let mut commands_frontend = build_commands([
+        vec!["cargo","build","--package","artcord-leptos",],
+        vec!["rm","-r","./target/site",],
+        vec!["mkdir","./target/site",],
+        vec!["mkdir","./target/site/pkg",],
+        vec!["cp","-r","./assets/.","./target/site/"],
+        vec!["cp","./style/output.css","./target/site/pkg/leptos_start5.css",],
+        vec!["wasm-bindgen","./target/wasm32-unknown-unknown/debug/artcord_leptos.wasm","--no-typescript","--target","web","--out-dir","./target/site/pkg","--out-name","leptos_start5",],
+        ]).await;
 
-    // let (send_start, mut recv_start) = mpsc::channel::<()>(1000);
+    let mut futs: Vec<Pin<Box<dyn Future<Output = ()>>>> = Vec::new();
 
-    let front_comp = {
-        let compiling_backend = compiling_backend.clone();
-        async move {
-            //compile_front(recv_cancel).await;
-    
-            let (mut commands, command_names) = compile_front().await;
-            loop {
-                recv_front.recv().await.unwrap();
-    
-                // if (*compiling_backend.read().await).is_some_and(|time| Utc::now().timestamp_millis() - time <= SMOOTHING_TOLERENCE) {
-                //     continue; a
-                // }
-    
-                if (*compiling_backend.read().await).is_some() {
-                    println!("FE: SKIPPING.");
-                    continue;
-                }
-    
-                for (i, command) in commands.iter_mut().enumerate() {
-                    let mut command = command.spawn().unwrap();
-    
-                    let recv = recv_front.recv();
-    
-    
-                    select! {
-                        c = command.wait() => {
-                            let success = c.and_then(|v| Ok(v.success())).unwrap_or(false);
-                            if !success {
-                                println!("FE Error: {}", command_names[i]);
-                                break;
-                            } else {
-                                println!("FE Finished: {}", command_names[i]);
-                            }
-                        },
-                        _ = recv => {
-                            command.kill().await.unwrap();
-                            println!("FE Killed: {}", command_names[i]);
-                            break;
-                        }
-                    };
-                }
-            }
+    let paths_backend = ["artcord", "artcord-actix", "artcord-mongodb", "artcord-serenity", "artcord-state", "artcord-tungstenite"];
+        let paths_frontend = ["artcord-leptos", "assets"];
+
+        for path in paths_backend {
+            let fut = watch_dir(path, watch_dir_back_callback, send_back.clone(), send_front.clone(), compiling_state.clone());
+            futs.push(fut.boxed());
         }
-    };
 
-    let back_comp = async move {
-        //compile_front(recv_cancel).awaita aaa a a 
-        let (mut commands, command_names) = compile_full().await;
-        let len = commands.len();
-        loop {
-            recv_back.recv().await.unwrap();
-            {
-                let mut compiling_backend = compiling_backend.write().await;
-                *compiling_backend = Some(Utc::now().timestamp_millis());
-            }
-            for (i, command) in commands.iter_mut().enumerate() {
-                if i.checked_sub(1).unwrap_or(0) == len {
-                    let mut compiling_backend = compiling_backend.write().await;
-                    *compiling_backend = None;
-                }
-                let mut command = command.spawn().unwrap();
-                let recv = recv_back.recv();
-
-                select! {
-                    c = command.wait() => {
-                        
-                        let success = c.and_then(|v| Ok(v.success())).unwrap_or(false);
-                        if !success {
-                            println!("BE Error: {}", command_names[i]);
-                            break;
-                        } else {
-                            println!("BE Finished: {}", command_names[i]);
-                        }
-                    },
-                    _ = recv => {
-                        command.kill().await.unwrap();
-                        println!("BE Killed: {}", command_names[i]);
-                        break;
-                    }
-                };
-            }
+        for path in paths_frontend {
+            let fut = watch_dir(path, watch_dir_front_callback, send_back.clone(), send_front.clone(), compiling_state.clone());
+            futs.push(fut.boxed());
         }
-    };
 
-    //let a = Utc::now().timestamp_millis();
-    
-    // send_front.send(()).unwrap(); 333
-    send_back.send(()).unwrap();
-    
+    let handler_frontend = proccess((send_front.clone(), recv_front), compiling_state.clone(), false, "FE", &mut commands_frontend).boxed();
+    futs.push(handler_frontend);
 
-    let back_comp = tokio::spawn(back_comp);
-    let front_comp = tokio::spawn(front_comp);
+    let handler_backend = proccess((send_back.clone(), recv_back), compiling_state.clone(), false, "BE", &mut commands_backend).boxed();
+    futs.push(handler_backend);
 
-    let watch_fe = watch_dir(path_fe, send_front.clone());
-    let watch_assets = watch_dir(path_assets, send_front);
-
-    let watch_be = watch_dir(path_be, send_back.clone());
-    let watch_be_actix = watch_dir(path_be_actix, send_back.clone());
-    let watch_be_mongodb = watch_dir(path_be_mongodb, send_back.clone());
-    let watch_be_serenity = watch_dir(path_be_serenity, send_back.clone());
-    let watch_be_state = watch_dir(path_be_state, send_back.clone());
-    let watch_be_tungstenite = watch_dir(path_be_tungstenite, send_back);
-
-    let r = join!(
-        watch_fe,
-        watch_assets,
-        back_comp, 
-        watch_be, 
-        watch_be_actix, 
-        watch_be_mongodb, 
-        watch_be_serenity, 
-        watch_be_state, 
-        watch_be_tungstenite
-    );
+    join_all(futs).await;
 }
 
-// async fn watch_dir<Fu: Future<Output = ()> + 'static>(path: &str, callback: impl Fn() -> Fu + Copy)
-async fn watch_dir(path: &str, send_signal: broadcast::Sender<()>) {
+async fn build_commands<I>(commands_parts: I) -> Vec<(Command, String)> where
+    I: IntoIterator,
+    I::Item: IntoIterator,
+    <I::Item as IntoIterator>::Item: AsRef<OsStr> + AsRef<str>,
+{
+    let mut commands: Vec<(Command, String)> = Vec::new();
+
+    for command_parts in commands_parts {
+        let mut command: Option<Command> = None;
+        let mut command_str: String = String::new();
+        for part in command_parts {
+            command_str.push_str(part.as_ref());
+            match command.as_mut() {
+                Some(command) => {
+                    command.arg(part);
+                },
+                None => {
+                    command = Some(Command::new(part));
+                }
+            }
+        }
+        if let Some(command) = command {
+            commands.push((command, command_str));
+        }
+    }
+
+    commands
+}
+
+async fn proccess(channel: (broadcast::Sender<(CompilationKind, SignalKind)>, broadcast::Receiver<(CompilationKind, SignalKind)>), compiling_state: Arc<RwLock<Option<(i64, CompilationKind)>>>, inifite: bool, name: &str, commands: &mut [(Command, String)]) {
+     let (send, mut recv) = channel;
+     let command_count = commands.len();
+
+     loop {
+         let (compilation_kind, signal_kind) = recv.recv().await.unwrap();
+         ( *(compiling_state.clone().write().await) )= Some((Utc::now().timestamp_millis(), compilation_kind));
+         if let CompilationKind::BackPlusFront = compilation_kind  {
+             continue;
+         }
+
+         'command_loop: for (i, ( command, command_name)) in commands.iter_mut().enumerate() {
+             let mut command = command.spawn().unwrap();
+
+             select! {
+                command_return = command.wait() => {
+                    let good = proccess_on_finish(i, command_return, command, command_name, inifite, command_count, compiling_state.clone(), name).await;
+
+                    if !good {
+                        break;
+                    }
+                 },
+                 received_value = recv.recv() => {
+                    proccess_on_trigger(i, received_value, command, send.clone(), command_name, name).await;
+                    break 'command_loop;
+                 }
+             };
+         }
+     }
+}
+
+async fn proccess_on_trigger(i: usize, received_signal: Result<(CompilationKind, SignalKind), broadcast::error::RecvError>, mut command: Child, send: broadcast::Sender<(CompilationKind, SignalKind)>, command_name: &str, name: &str) {
+    println!("{} Killed: {}", name, command_name);
+
+    command.kill().await.unwrap();
+
+    let Ok((compilation_kind, signal_kind)) = received_signal else {
+        println!("{} recv error: {}", name, received_signal.err().and_then(|e|Some(e.to_string())).unwrap_or_else(|| "uwknown error".to_string()));
+        return;
+    };
+    
+    match signal_kind {
+        SignalKind::TriggerAndCompileOther(send) => {
+            send.send((compilation_kind, SignalKind::TriggerTwice)).unwrap();
+        }
+        SignalKind::TriggerTwice => {
+            send.send((compilation_kind, SignalKind::Trigger)).unwrap();
+        }
+        SignalKind::Trigger => {
+            
+        }
+    }
+}
+
+async fn proccess_on_finish(i: usize, command_return: Result<ExitStatus, std::io::Error>, mut command: Child, command_name: &str, infinite: bool, command_count: usize, compiling_state: Arc<RwLock<Option<(i64, CompilationKind)>>>, name: &str) -> bool {
+    if i == command_count.checked_sub(if infinite { 2 } else { 1 }).unwrap_or(0) {
+        (*compiling_state.write().await) = None;
+    }
+   
+
+    let Ok(command_return) = command_return else {
+        println!("{} recv error: {}", name, command_return.err().and_then(|e|Some(e.to_string())).unwrap_or_else(|| "uwknown error".to_string()));
+        return false;
+    };
+    
+    let good = command_return.success();
+        if good {
+            println!("{} Finished: {}", name, command_name);
+            true
+        } else {
+            println!("{} Error[{}]: {}, ", name, command_return.code().unwrap_or(0), command_name);
+            false
+        }
+}
+
+async fn watch_dir_back_callback(compiling_state: Arc<RwLock<Option<(i64, CompilationKind)>>>, send_back: broadcast::Sender<(CompilationKind, SignalKind)>, send_front: broadcast::Sender<(CompilationKind, SignalKind)>) {
+    let compiling_state_ref = &*compiling_state.read().await;
+    let Some(compiling_state_copy) = compiling_state_ref else {
+        send_back.send((CompilationKind::Back, SignalKind::Trigger));
+        return;
+    };
+
+    let current_time = Utc::now().timestamp_millis();
+    let (past_time, compilation_kind) = compiling_state_copy;
+
+    let time_passed = current_time - past_time;
+    if time_passed > SMOOTHING_TOLERENCE {
+        match compilation_kind {
+            CompilationKind::Back => {
+                send_back.send((CompilationKind::Back, SignalKind::TriggerTwice));
+            },
+            CompilationKind::Front => {
+                send_front.send((CompilationKind::Back,SignalKind::TriggerAndCompileOther(send_back.clone())));
+            },
+            CompilationKind::BackPlusFront => {
+                send_back.send((CompilationKind::Back, SignalKind::TriggerTwice));
+            }
+        }
+    }
+}
+
+async fn watch_dir_front_callback(compiling_state: Arc<RwLock<Option<(i64, CompilationKind)>>>, send_back: broadcast::Sender<(CompilationKind, SignalKind)>, send_front: broadcast::Sender<(CompilationKind, SignalKind)>) {
+    let compiling_state_ref = &*compiling_state.read().await;
+    let Some(compiling_state_copy) = compiling_state_ref else {
+        send_front.send((CompilationKind::Front, SignalKind::Trigger));
+        return;
+    };
+
+    let current_time = Utc::now().timestamp_millis();
+    let (past_time, compilation_kind) = compiling_state_copy;
+
+    let time_passed = current_time - past_time;
+    if time_passed > SMOOTHING_TOLERENCE {
+        match compilation_kind {
+            CompilationKind::Back => {
+                send_front.send((CompilationKind::BackPlusFront, SignalKind::Trigger));
+            },
+            CompilationKind::Front => {
+                send_front.send((CompilationKind::Front, SignalKind::TriggerTwice));
+            },
+            CompilationKind::BackPlusFront => {
+                send_front.send((CompilationKind::BackPlusFront, SignalKind::Trigger));
+            }
+        }
+    }
+}
+
+
+async fn watch_dir<Fu: Future<Output = ()> + 'static>(path: &str, callback: impl Fn(Arc<RwLock<Option<(i64, CompilationKind)>>>, broadcast::Sender<(CompilationKind, SignalKind)>, broadcast::Sender<(CompilationKind, SignalKind)>) -> Fu + Copy, send_back: broadcast::Sender<(CompilationKind, SignalKind)>, send_front: broadcast::Sender<(CompilationKind, SignalKind)>, compiling_state: Arc<RwLock<Option<(i64, CompilationKind)>>>) {
     println!("watching {}", path);
 
-    // let callback_wrap = RefCell::new(|| callback);
-    // let aaa = || async {};
-
-    let (mut tx, mut rx) = mpsc::channel(1000);
+    let (tx, mut rx) = mpsc::channel(1);
 
     let mut watcher = RecommendedWatcher::new(
         move |res| {
@@ -311,12 +277,7 @@ async fn watch_dir(path: &str, send_signal: broadcast::Sender<()>) {
                     if let AccessKind::Close(kind) = kind {
                         if let AccessMode::Write = kind {
                             println!("RECOMPILING");
-                            send_signal.send(()).unwrap();
-                            //callback().await;
-                            // let callback_wrap = &*callback_wrap.borrow();
-                            // let a = callback_wrap();
-                            //.await;
-                            
+                            callback(compiling_state.clone(), send_back.clone(), send_front.clone()).await;
                         }
                     }
                 }
@@ -324,6 +285,4 @@ async fn watch_dir(path: &str, send_signal: broadcast::Sender<()>) {
             Err(e) => println!("watch error: {:?}", e),
         }
     }
-
-    //Ok::<(), ()>(())
 }
