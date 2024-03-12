@@ -1,52 +1,111 @@
-use std::ffi::OsStr;
+use std::{ffi::OsStr, pin::Pin, process::ExitStatus, time::Duration};
 
-use std::pin::Pin;
-use std::process::ExitStatus;
-
-use std::sync::Arc;
-
-use chrono::Utc;
-use futures::future::join_all;
-use futures::{Future, FutureExt};
-use notify::event::{AccessKind, AccessMode};
-use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-
-use tokio::process::Child;
+use futures::{future::join_all, Future, FutureExt};
+use notify::{event::{AccessKind, AccessMode}, Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use tokio::{sync::{broadcast, mpsc}, time::sleep};
+use tokio::sync::oneshot;
+use tracing::{debug, debug_span, info, error, Level};
+use cfg_if::cfg_if;
 use tokio::process::Command;
 use tokio::select;
-use tokio::sync::mpsc;
 
-use tokio::sync::broadcast;
-use tokio::sync::RwLock;
-
-const SMOOTHING_TOLERENCE: i64 = 100;
-
-#[derive(Clone, Debug)]
-enum SignalKind {
-    Trigger,
-    TriggerTwice,
-    TriggerAndCompileOther,
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum ProjectKind {
+    Front,
+    Back
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-enum CompKind {
-    Front,
-    Back,
+enum ManagerEventKind {
+    File(ProjectKind),
+    CompilerStarted(ProjectKind),
+    CompilerEnded(ProjectKind),
+    CompilerKilled(ProjectKind),
 }
 
-#[derive(Clone, Debug)]
-enum CompilationKind {
-    Front,
-    Back,
-    BackPlusFront(broadcast::Sender<(CompilationKind, SignalKind)>),
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum CompilerState {
+    Starting(ProjectKind),
+    Compiling(ProjectKind),
+    Killing(ProjectKind),
+    Ready
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum CompilerEventKind {
+    Start(ProjectKind),
+    Kill,
+}
+
+// async fn do_stuff_async() {
+//     loop {
+//         debug!("boop");
+//         sleep(Duration::from_secs(1)).await;
+        
+//     }
+// }
+
+// async fn more_async_work() {
+//     debug!("beep");
+//     sleep(Duration::from_secs(3)).await;
+// }
+
 
 #[tokio::main]
 async fn main() {
-    let compiling_state: Arc<RwLock<Option<(i64, CompilationKind)>>> = Arc::new(RwLock::new(None));
-    let (send_front, recv_front) = broadcast::channel::<(CompilationKind, SignalKind)>(1);
-    let (send_back, recv_back) = broadcast::channel::<(CompilationKind, SignalKind)>(1);
+   
+    cfg_if! {
+        if #[cfg(debug_assertions)] {
+            tracing_subscriber::fmt().with_max_level(Level::DEBUG).try_init().unwrap();
+        } else {
+            tracing_subscriber::fmt().with_max_level(Level::INFO).try_init().unwrap();
+        }
+    }
 
+    debug!("Started");
+
+    let (send_compiler_event, recv_compiler_event) = broadcast::channel::<CompilerEventKind>(1);
+    let (send_manager_event, recv_manager_event) = mpsc::channel::<ManagerEventKind>(1000);
+    let mut futs: Vec<Pin<Box<dyn Future<Output = ()>>>> = Vec::new();
+
+    let paths_backend = [
+        "artcord",
+        "artcord-actix",
+        "artcord-mongodb",
+        "artcord-serenity",
+        "artcord-state",
+        "artcord-tungstenite",
+    ];
+
+    for path in paths_backend {
+        let fut = watch_dir(
+            path,
+            send_manager_event.clone(),
+            ProjectKind::Back
+        );
+        futs.push(fut.boxed());
+    }
+
+    let manager_fut = manager(recv_manager_event, send_compiler_event);
+    futs.push(manager_fut.boxed());
+
+    let compiler_fut = compiler(send_manager_event.clone(), recv_compiler_event);
+    futs.push(compiler_fut.boxed());
+
+    // tokio::select! {
+    //     _ = do_stuff_async() => {
+    //         debug!("do_stuff_async() completed first")
+    //     }
+    //     _ = more_async_work() => {
+    //         debug!("more_async_work() completed first")
+    //     }
+    // };
+
+    
+    join_all(futs).await;
+}
+
+async fn compiler(send_manager_event: mpsc::Sender<ManagerEventKind>, mut recv_compiler_event: broadcast::Receiver<CompilerEventKind>) {
     let mut commands_backend = build_commands([
         vec!["cargo", "build", "--package", "artcord-leptos"],
         vec!["rm", "-r", "./target/site"],
@@ -70,7 +129,6 @@ async fn main() {
             "leptos_start5",
         ],
         vec!["cargo", "build", "--package", "artcord"],
-        vec!["./target/debug/artcord"],
     ])
     .await;
 
@@ -99,477 +157,297 @@ async fn main() {
     ])
     .await;
 
-    let mut futs: Vec<Pin<Box<dyn Future<Output = ()>>>> = Vec::new();
-
-    let paths_backend = [
-        "artcord",
-        "artcord-actix",
-        "artcord-mongodb",
-        "artcord-serenity",
-        "artcord-state",
-        "artcord-tungstenite",
-    ];
-    let paths_frontend = ["artcord-leptos", "assets"];
-
-    for path in paths_backend {
-        let fut = watch_dir(
-            path,
-            watch_dir_back_callback,
-            send_back.clone(),
-            send_front.clone(),
-            compiling_state.clone(),
-        );
-        futs.push(fut.boxed());
-    }
-
-    for path in paths_frontend {
-        let fut = watch_dir(
-            path,
-            watch_dir_front_callback,
-            send_back.clone(),
-            send_front.clone(),
-            compiling_state.clone(),
-        );
-        futs.push(fut.boxed());
-    }
-
-    let handler_frontend = proccess(
-        (send_front.clone(), recv_front),
-        compiling_state.clone(),
-        false,
-        "FE",
-        &mut commands_frontend,
-    )
-    .boxed();
-    futs.push(handler_frontend);
-
-    let handler_backend = proccess(
-        (send_back.clone(), recv_back),
-        compiling_state.clone(),
-        true,
-        "BE",
-        &mut commands_backend,
-    )
-    .boxed();
-    futs.push(handler_backend);
-
-    join_all(futs).await;
-}
-
-async fn build_commands<I>(commands_parts: I) -> Vec<(Command, String)>
-where
-    I: IntoIterator,
-    I::Item: IntoIterator,
-    <I::Item as IntoIterator>::Item: AsRef<OsStr> + AsRef<str>,
-{
-    let mut commands: Vec<(Command, String)> = Vec::new();
-
-    for command_parts in commands_parts {
-        let mut command: Option<Command> = None;
-        let mut command_str: String = String::new();
-        for part in command_parts {
-            command_str.push_str(part.as_ref());
-            match command.as_mut() {
-                Some(command) => {
-                    command.arg(part);
-                }
-                None => {
-                    command = Some(Command::new(part));
-                }
-            }
-        }
-        if let Some(command) = command {
-            commands.push((command, command_str));
-        }
-    }
-
-    commands
-}
-
-// async fn compile(mut recv_comps: broadcast::Receiver<CompKind>) {
-//     let mut comps: [Option<CompKind>; 2] = [None; 2];
-//     loop {
-//         for comp in comps.iter_mut() {
-//             *comp = None;
-//         }
-//         let mut received_comp = recv_comps.recv().await;
-//         match received_comp {
-//             Ok(received_comp) => {
-//                 let kill: bool = match received_comp {
-//                     CompKind::Back => {
-//                         match &comps[..] {
-//                             &[None, None] | 
-//                             &[Some(CompKind::Front), None] => {
-//                                 comps[0] = Some(CompKind::Back);
-//                             }
-//                             &[None, Some(_)] => {
-//                                 comps[0] = Some(CompKind::Back);
-//                                 comps[1] = None;
-//                             }
-//                             &[Some(CompKind::Back), Some(_)] => {
-//                                 comps[1] = None;
-//                             }
-//                             &[Some(CompKind::Back), None] => {
-//                                 // do nothing
-//                             }
-//                             _ => {
-//                                 comps[0] = Some(CompKind::Back);
-//                                 comps[1] = None;
-//                                 println!("Missed pattern for backend: {:?}", &comps);
-//                             }
-//                         };
-//                         true
-//                     }
-//                     CompKind::Front => {
-//                         match &comps[..] {
-//                             &[None, None] => {
-//                                 comps[0] = Some(CompKind::Front);
-//                                 true
-//                             }
-//                             &[None, Some(_)] => {
-//                                 comps[1] = None;
-//                                 true
-//                             }
-//                             &[Some(CompKind::Back), Some(CompKind::Front)] => {
-//                                 false
-//                             }
-//                             &[Some(CompKind::Front), Some(_)] => {
-//                                 comps[1] = None;
-//                                 true
-//                             }
-//                             _ => {
-//                                 comps[0] = Some(CompKind::Front);
-//                                 comps[1] = None;
-//                                 println!("Missed pattern for frontend: {:?}", &comps);
-//                                 true
-//                             }
-//                         }
-//                     }
-//                 }
-//             }
-//             Err(e) => {
-//                 println!("Recv error: {}", e);
-//             }
-//         }
-//     }
-// }
-
-async fn proccess(
-    channel: (
-        broadcast::Sender<(CompilationKind, SignalKind)>,
-        broadcast::Receiver<(CompilationKind, SignalKind)>,
-    ),
-    compiling_state: Arc<RwLock<Option<(i64, CompilationKind)>>>,
-    inifite: bool,
-    name: &str,
-    commands: &mut [(Command, String)],
-) {
-    let (send, mut recv) = channel;
-    let command_count = commands.len();
-
+    
     loop {
-        let result = recv.recv().await;
-        let Ok((compilation_kind, signal_kind)) = result else {
-            println!(
-                "{} recv error: {}",
-                name,
-                result
-                    .err()
-                    .and_then(|e| Some(e.to_string()))
-                    .unwrap_or_else(|| "uwknown error".to_string())
-            );
-            return;
+        let result = recv_compiler_event.recv().await;
+        let Ok(compiler_event_kind) = result else {
+            let err = result
+            .err()
+            .and_then(|e| Some(e.to_string()))
+            .unwrap_or_else(|| "uwknown error".to_string());
+            error!("Compiler: recv: error: {}", err);
+            continue;
         };
-        println!(
-            "received:, CURRENT STATE: {:?}",
-            (*compiling_state.read().await)
-        );
-        println!(
-            "{} received: {:?} {:?}",
-            name, &compilation_kind, &signal_kind
-        );
-        {
-            let compiling_state = &mut *compiling_state.write().await;
-            *compiling_state = Some((Utc::now().timestamp_millis(), compilation_kind));
-            if let Some((_, CompilationKind::BackPlusFront(_))) = compiling_state {
-                println!("{} skipping", name);
-                continue;
-            }
+        let  CompilerEventKind::Start(project_kind) = compiler_event_kind else {
+            error!("Compiler: recv: error: received: {:?} before compiler even started.", compiler_event_kind);
+            continue;
+        };
+        debug!("Compiler: recv: compiler_event_kind: {:?}", compiler_event_kind);
+
+        // match compiler_event_kind {
+        //     CompilerEventKind::Kill => {
+
+        //     }
+        //     CompilerEventKind::Start(project_kind) => {
+               
+        //     }
+        // };
+
+        debug!("Compiler: sent: file: CompilerStarted({:?})", project_kind);
+        let send_result = send_manager_event.send(ManagerEventKind::CompilerStarted(project_kind)).await;
+        if let Err(e) = send_result {
+            error!("Compiler: sent: error: {}", e);
+            continue;
         }
 
-        'command_loop: for (i, (command, command_name)) in commands.iter_mut().enumerate() {
+        // sleep(Duration::from_secs(5)).await;
+
+       
+
+        
+        let commands: &mut [(Command, String)] = match project_kind {
+            ProjectKind::Back => {
+                commands_backend.as_mut()
+            }
+            ProjectKind::Front => {
+                commands_backend.as_mut()
+            }
+        };
+
+        let commands_count = commands.len();
+
+        for (i, (command, command_name)) in commands.iter_mut().enumerate() {
             let mut command = command.spawn().unwrap();
 
+
             select! {
-               command_return = command.wait() => {
-                   let good = proccess_on_finish(i, command_return, command, command_name, inifite, command_count, compiling_state.clone(), name, signal_kind.clone()).await;
-
-                   if !good {
-                       break 'command_loop;
-                   }
-                },
-                received_value = recv.recv() => {
-                   proccess_on_trigger(i, received_value, command, send.clone(), command_name, compiling_state.clone(), name).await;
-                   break 'command_loop;
-                }
-            };
+                command_return = command.wait() => {
+                    let good = compiler_on_finish(i == commands_count - 1,project_kind, command_return, command_name, send_manager_event.clone()).await;
+ 
+                    if !good {
+                        break;
+                    }
+                 },
+                _ = compiler_on_run(&mut recv_compiler_event, project_kind, send_manager_event.clone()) => {
+                    break;
+                 }
+             };
         }
-        // println!(
-        //     "END LOOP:, CURRENT STATE: {:?}",
-        //     (*compiling_state.read().await)
-        // );
-        // (*compiling_state.write().await) = None;
-        // println!(
-        //     "END LOOP SET STATE:, CURRENT STATE: {:?}",
-        //     (*compiling_state.read().await)
-        // );
+
+        
     }
 }
 
-async fn proccess_on_trigger(
-    _i: usize,
-    received_signal: Result<(CompilationKind, SignalKind), broadcast::error::RecvError>,
-    mut command: Child,
-    send: broadcast::Sender<(CompilationKind, SignalKind)>,
-    command_name: &str,
-    compiling_state: Arc<RwLock<Option<(i64, CompilationKind)>>>,
-    name: &str,
-) {
-    println!("{} Killed: {}", name, command_name);
-
-    command.kill().await.unwrap();
-
-    let prev_compilation_state = {
-        let compilation_state = &mut *compiling_state.write().await;
-        let output = compilation_state.clone();
-        *compilation_state = None;
-        output
-    };
-
-    
-
-    let Ok((compilation_kind, signal_kind)) = received_signal else {
-        println!(
-            "{} recv error: {}",
-            name,
-            received_signal
-                .err()
-                .and_then(|e| Some(e.to_string()))
-                .unwrap_or_else(|| "uwknown error".to_string())
-        );
-        return;
-    };
-
-    match signal_kind {
-        SignalKind::TriggerAndCompileOther => {
-            if let Some((_, CompilationKind::BackPlusFront(send))) = prev_compilation_state {
-                send.send((compilation_kind, SignalKind::TriggerTwice))
-                .unwrap();
-            }
-        }
-        SignalKind::TriggerTwice => {
-            send.send((compilation_kind, SignalKind::Trigger)).unwrap();
-        }
-        SignalKind::Trigger => {}
-    }
-}
-
-async fn proccess_on_finish(
-    i: usize,
-    command_return: Result<ExitStatus, std::io::Error>,
-    _command: Child,
-    command_name: &str,
-    infinite: bool,
-    command_count: usize,
-    compiling_state: Arc<RwLock<Option<(i64, CompilationKind)>>>,
-    name: &str,
-    signal_kind: SignalKind,
-) -> bool {
-    {
-        if i == command_count
-            .checked_sub(if infinite { 2 } else { 1 })
-            .unwrap_or(0)
-        {
-            // let send = {
-            //     let mut compiling_state = &mut *compiling_state.write().await;
-            //     let send: Option<(broadcast::Sender<(CompilationKind, SignalKind)>, SignalKind)> =
-            //         if let Some((i, compilation_kind)) = compiling_state {
-            //             if let CompilationKind::BackPlusFront(send) = compilation_kind {
-            //                 if let SignalKind::TriggerAndCompileOther = signal_kind.clone() {
-            //                     Some((send.clone(), signal_kind))
-            //                 } else {
-            //                     println!(
-            //                         "{} Error, bad state, signal kind should be BackAndFront, is: {:?}",
-            //                         name, signal_kind.clone()
-            //                     );
-            //                     None
-            //                 }
-            //             } else {
-            //                 None
-            //             }
-            //         } else {
-            //             None
-            //         };
-
-            //     println!("{} state nulled", name);
-
-            //     *compiling_state = None;
-
-            //     send
-            // };
-
-            let send = {
-                let mut compiling_state = &mut *compiling_state.write().await;
-                let send: Option<broadcast::Sender<(CompilationKind, SignalKind)>> =
-                    if let Some((i, compilation_kind)) = compiling_state {
-                        if let CompilationKind::BackPlusFront(send) = compilation_kind {
-                            Some(send.clone())
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    };
-
-                println!("{} state nulled", name);
-
-                *compiling_state = None;
-
-                send
-            };
-
-            if let Some(send) = send {
-                println!("{} FrontAndBackend signal sent", name);
-                let r = send.send((CompilationKind::Front, SignalKind::Trigger));
-                if let Err(e) = r {
-                    println!("{} Error sending: {}", name, e);
-                }
-            }
-        }
-    }
-
+async fn compiler_on_finish(last: bool, project_kind: ProjectKind, command_return: Result<ExitStatus, std::io::Error>, command_name: &str, send_manager_event: mpsc::Sender<ManagerEventKind>) -> bool {
     let Ok(command_return) = command_return else {
-        println!(
-            "{} recv error: {}",
-            name,
-            command_return
-                .err()
-                .and_then(|e| Some(e.to_string()))
-                .unwrap_or_else(|| "uwknown error".to_string())
-        );
+        let err = command_return
+        .err()
+        .and_then(|e| Some(e.to_string()))
+        .unwrap_or_else(|| "uwknown error".to_string());
+        error!("Compiler(COMMAND-{:?}): error: compiler_event_kind: {:?}", project_kind, err);
         return false;
     };
 
     let good = command_return.success();
     if good {
-        println!("{} Finished: {}", name, command_name);
+        debug!("Compiler(COMMAND-{:?}): finished: {}", project_kind, command_name);
+        if last {
+            debug!("Compiler(COMMAND-{:?}): sent: CompilerEnded({:?})", project_kind, project_kind);
+            let send_result = send_manager_event.send(ManagerEventKind::CompilerEnded(project_kind)).await;
+            if let Err(e) = send_result {
+                error!("Compiler(RUNNING-{:?}): sent: error: {}", project_kind, e);
+            }
+        }
         true
     } else {
-        println!(
-            "{} Error[{}]: {}, ",
-            name,
-            command_return.code().unwrap_or(0),
-            command_name
-        );
+        error!("Compiler(COMMAND-{:?}): failed: {}", project_kind, command_name);
         false
     }
 }
 
-async fn watch_dir_back_callback(
-    compiling_state: Arc<RwLock<Option<(i64, CompilationKind)>>>,
-    send_back: broadcast::Sender<(CompilationKind, SignalKind)>,
-    send_front: broadcast::Sender<(CompilationKind, SignalKind)>,
-) {
-    let compiling_state_ref = &*compiling_state.read().await;
-    let Some(compiling_state_copy) = compiling_state_ref else {
-        send_back
-            .send((CompilationKind::Back, SignalKind::Trigger))
-            .unwrap();
-        return;
-    };
-
-    let current_time = Utc::now().timestamp_millis();
-    let (past_time, compilation_kind) = compiling_state_copy;
-
-    let time_passed = current_time - past_time;
-    if time_passed > SMOOTHING_TOLERENCE {
-        match compilation_kind {
-            CompilationKind::Back => {
-                send_back
-                    .send((CompilationKind::Back, SignalKind::TriggerTwice))
-                    .unwrap();
+async fn compiler_on_run(recv_compiler_event: &mut broadcast::Receiver<CompilerEventKind>, project_kind: ProjectKind, send_manager_event: mpsc::Sender<ManagerEventKind>) {
+    while let Ok(compiler_event_kind) = recv_compiler_event.recv().await {
+        match compiler_event_kind {
+            CompilerEventKind::Kill => {
+                debug!("Compiler(RUNNING-{:?}): sent: CompilerKilled({:?})", project_kind, project_kind);
+                let send_result = send_manager_event.send(ManagerEventKind::CompilerKilled(project_kind)).await;
+                if let Err(e) = send_result {
+                    error!("Compiler(RUNNING-{:?}): sent: error: {}", project_kind, e);
+                }
+                break;
             }
-            CompilationKind::Front => {
-                send_front
-                    .send((
-                        CompilationKind::Back,
-                        SignalKind::TriggerAndCompileOther,
-                    ))
-                    .unwrap();
-            }
-            CompilationKind::BackPlusFront(_) => {
-                send_back
-                    .send((CompilationKind::Back, SignalKind::TriggerTwice))
-                    .unwrap();
+            CompilerEventKind::Start(_project_kind) => {
+                error!("Compiler(RUNNING-{:?}): recv: error: received: {:?} while the compiller is already running.", project_kind, compiler_event_kind);
             }
         }
     }
 }
 
-async fn watch_dir_front_callback(
-    compiling_state: Arc<RwLock<Option<(i64, CompilationKind)>>>,
-    send_back: broadcast::Sender<(CompilationKind, SignalKind)>,
-    send_front: broadcast::Sender<(CompilationKind, SignalKind)>,
-) {
-    let compiling_state_ref = &*compiling_state.read().await;
-    let Some(compiling_state_copy) = compiling_state_ref else {
-        send_front
-            .send((CompilationKind::Front, SignalKind::Trigger))
-            .unwrap();
-        return;
-    };
+async fn manager(mut recv_manager_event: mpsc::Receiver<ManagerEventKind>, send_compiler_event: broadcast::Sender<CompilerEventKind>) {
+    // let mut back_is_compiling = false;
+    // let mut back_is_starting = false;
+    // let mut back_is_being_killed = false;
+    let mut compiler_state = CompilerState::Ready;
+    let mut compile_next: Option<ProjectKind> = None;
 
-    let current_time = Utc::now().timestamp_millis();
-    let (past_time, compilation_kind) = compiling_state_copy;
+    let mut back_is_running = false;
 
-    let time_passed = current_time - past_time;
-    if time_passed > SMOOTHING_TOLERENCE {
-        match compilation_kind {
-            CompilationKind::Back => {
-                send_front
-                    .send((
-                        CompilationKind::BackPlusFront(send_front.clone()),
-                        SignalKind::TriggerAndCompileOther,
-                    ))
-                    .unwrap();
+    while let Some(event_kind) = recv_manager_event.recv().await {
+        match event_kind {
+            ManagerEventKind::File(project_kind) => {
+                debug!("Manager: recv: file: {:?}, current compiler state: {:?}", project_kind, compiler_state);
+                match project_kind {
+                    ProjectKind::Back => {
+                        match compiler_state {
+                            CompilerState::Compiling(project_kind) => {
+                                //debug!("Manager: skipped: compiler is busy compiling");
+                                debug!("Manager: sent: compile: {:?}", CompilerEventKind::Kill);
+                                let send_result = send_compiler_event.send(CompilerEventKind::Kill);
+                                if let Err(e) = send_result {
+                                    error!("Manager: sent: error: {}", e);
+                                    continue;
+                                } else {
+                                    debug!("Manager: set: compiling state: Killing({:?})", project_kind);
+                                    compiler_state = CompilerState::Killing(project_kind);
+                                    debug!("Manager: set: compiling next: Some({:?})", project_kind);
+                                    compile_next = Some(project_kind);
+                                }
+                            },
+                            CompilerState::Killing(project_kind) => {
+                                debug!("Manager: skipped: compiler is busy killing");
+                            },
+                            CompilerState::Starting(project_kind) => {
+                                debug!("Manager: skipped: compiler is busy starting up");
+                            },
+                            CompilerState::Ready => {
+                                debug!("Manager: sent: compile: {:?}", CompilerEventKind::Start(ProjectKind::Back));
+                                let send_result = send_compiler_event.send(CompilerEventKind::Start(ProjectKind::Back));
+                                if let Err(e) = send_result {
+                                    error!("Manager: sent: error: {}", e);
+                                    continue;
+                                } else {
+                                    debug!("Manager: set: compiling state: Starting({:?})", project_kind);
+                                    compiler_state = CompilerState::Starting(project_kind);
+                                }
+                            }
+                        }
+                        // if back_is_compiling {
+                        //     debug!("Manager: skipped: backend is already compiling");
+                        // } else {
+                            
+                        // }
+                    }
+                    ProjectKind::Front => {
+
+                    }
+                }
+                
+            },
+            ManagerEventKind::CompilerStarted(project_kind) => {
+                debug!("Manager: recv: compilation_started: {:?}, current compiler state: {:?}", project_kind, compiler_state);
+                match project_kind {
+                    ProjectKind::Back => {
+                        match compiler_state {
+                            CompilerState::Compiling(current_project_kind) => {
+                                error!("Manager: sync: error: compiler state suppose to be Starting, not Compiling({:?})", current_project_kind);
+                            }
+                            CompilerState::Killing(current_project_kind) => {
+                                error!("Manager: sync: error: compiler state suppose to be Starting, not Killing({:?})", current_project_kind);
+                            }
+                            CompilerState::Starting(current_project_kind) => {
+                                if current_project_kind == project_kind {
+                                    debug!("Manager: set: compiler state to Compiling({:?})", project_kind);
+                                    compiler_state = CompilerState::Compiling(project_kind);
+                                } else {
+                                    error!("Manager: sync: error: compiler state Starting project kind do not match, recv {:?}, current: {:?}", project_kind, current_project_kind);
+                                }
+                            }
+                            CompilerState::Ready => {
+                                error!("Manager: sync: error: compiler state suppose to be Starting, not ready");
+                            }
+                        }
+                    },
+                    ProjectKind::Front => {
+                        // if !back_is_ {
+                        //     error!("Manager: recv: error: back_is_compiling suppose to be true");
+                        // }
+                    }
+                }
+            },
+            ManagerEventKind::CompilerEnded(project_kind) => {
+                debug!("Manager: recv: compilation_ended: {:?}", project_kind);
+                match project_kind {
+                    ProjectKind::Back => {
+                        match compiler_state {
+                            CompilerState::Compiling(current_project_kind) => {
+                                if current_project_kind == project_kind {
+                                    debug!("Manager: set: compiler state to Ready");
+                                    compiler_state = CompilerState::Ready;
+                                } else {
+                                    error!("Manager: sync: error: compiler state Compiling project kind do not match, recv {:?}, current: {:?}", project_kind, current_project_kind);
+                                }
+                            }
+                            CompilerState::Killing(current_project_kind) => {
+                                error!("Manager: sync: error: compiler state suppose to be Compiling, not Killing({:?})", current_project_kind);
+                            }
+                            CompilerState::Starting(current_project_kind) => {
+                                error!("Manager: sync: error: compiler state suppose to be Compiling, not Starting({:?})", current_project_kind);
+                            }
+                            CompilerState::Ready => {
+                                error!("Manager: sync: error: compiler state suppose to be Compiling, not ready");
+                            }
+                        }
+                    },
+                    ProjectKind::Front => {
+                        // if !back_is_ {
+                        //     error!("Manager: recv: error: back_is_compiling suppose to be true");
+                        // }
+                    }
+                }
             }
-            CompilationKind::Front => {
-                send_front
-                    .send((CompilationKind::Front, SignalKind::TriggerTwice))
-                    .unwrap();
-            }
-            CompilationKind::BackPlusFront(_) => {
-                // send_front
-                //     .send((CompilationKind::BackPlusFront, SignalKind::Trigger))
-                //     .unwrap();
+            ManagerEventKind::CompilerKilled(project_kind) => {
+                debug!("Manager: recv: compilation_ended: {:?}", project_kind);
+                match project_kind {
+                    ProjectKind::Back => {
+                        match compiler_state {
+                            CompilerState::Compiling(current_project_kind) => {
+                                error!("Manager: sync: error: compiler state suppose to be Killing({:?}), not Compiling({:?})", project_kind, current_project_kind);
+                            }
+                            CompilerState::Killing(current_project_kind) => {
+                                if current_project_kind == project_kind {
+                                    
+                                    if let Some(next_project_knd) = compile_next {
+                                        debug!("Manager: sent: compile next: {:?}", CompilerEventKind::Start(next_project_knd));
+                                        let send_result = send_compiler_event.send(CompilerEventKind::Start(next_project_knd));
+                                        if let Err(e) = send_result {
+                                            error!("Manager: sent: error: {}", e);
+                                            continue;
+                                        } else {
+                                            debug!("Manager: set: compiling state: Starting({:?})", project_kind);
+                                            compiler_state = CompilerState::Starting(project_kind);
+                                            debug!("Manager: set: compiling next: None");
+                                            compile_next = None;
+                                        }
+                                    } else {
+                                        debug!("Manager: set: compiler state to Ready");
+                                        compiler_state = CompilerState::Ready;
+                                    }
+                                    
+                                } else {
+                                    error!("Manager: sync: error: compiler state Killing project kind do not match, recv {:?}, current: {:?}", project_kind, current_project_kind);
+                                }
+                            }
+                            CompilerState::Starting(current_project_kind) => {
+                                error!("Manager: sync: error: compiler state suppose to be Killing({:?}), not Starting({:?})", project_kind, current_project_kind);
+                            }
+                            CompilerState::Ready => {
+                                error!("Manager: sync: error: compiler state suppose to be Killing({:?}), not ready", project_kind);
+                            }
+                        }
+                    },
+                    ProjectKind::Front => {
+                        // if !back_is_ {
+                        //     error!("Manager: recv: error: back_is_compiling suppose to be true");
+                        // }
+                    }
+                }
             }
         }
     }
 }
 
-async fn watch_dir<Fu: Future<Output = ()> + 'static>(
-    path: &str,
-    callback: impl Fn(
-            Arc<RwLock<Option<(i64, CompilationKind)>>>,
-            broadcast::Sender<(CompilationKind, SignalKind)>,
-            broadcast::Sender<(CompilationKind, SignalKind)>,
-        ) -> Fu
-        + Copy,
-    send_back: broadcast::Sender<(CompilationKind, SignalKind)>,
-    send_front: broadcast::Sender<(CompilationKind, SignalKind)>,
-    compiling_state: Arc<RwLock<Option<(i64, CompilationKind)>>>,
-) {
-    println!("watching {}", path);
+async fn watch_dir(path: &str, send_manager_event: mpsc::Sender<ManagerEventKind>, event_kind: ProjectKind) {
+    debug!("Watcher: watching: {}", path);
 
     let (tx, mut rx) = mpsc::channel(1);
 
@@ -593,16 +471,11 @@ async fn watch_dir<Fu: Future<Output = ()> + 'static>(
                 if let EventKind::Access(kind) = event.kind {
                     if let AccessKind::Close(kind) = kind {
                         if let AccessMode::Write = kind {
-                            println!(
-                                "RECOMPILING, CURRENT STATE: {:?}",
-                                (*compiling_state.read().await)
-                            );
-                            callback(
-                                compiling_state.clone(),
-                                send_back.clone(),
-                                send_front.clone(),
-                            )
-                            .await;
+                            debug!("Wachter({}): sent: {:?}",path, event_kind);
+                            let send_result = send_manager_event.send(ManagerEventKind::File(event_kind)).await;
+                            if let Err(e) = send_result {
+                                error!("Watcher: sent: error: {}", e);
+                            }
                         }
                     }
                 }
@@ -610,4 +483,38 @@ async fn watch_dir<Fu: Future<Output = ()> + 'static>(
             Err(e) => println!("watch error: {:?}", e),
         }
     }
+}
+
+
+async fn build_commands<I>(commands_parts: I) -> Vec<(Command, String)>
+where
+    I: IntoIterator,
+    I::Item: IntoIterator,
+    <I::Item as IntoIterator>::Item: AsRef<OsStr> + AsRef<str>,
+{
+    let mut commands: Vec<(Command, String)> = Vec::new();
+
+    for command_parts in commands_parts {
+        let mut command: Option<Command> = None;
+        let mut command_str: String = String::new();
+        for part in command_parts {
+            
+            match command.as_mut() {
+                Some(command) => {
+                    command_str.push_str(part.as_ref());
+                    command.arg(part);
+                }
+                None => {
+                    command_str.push_str(part.as_ref());
+                    command_str.push(' ');
+                    command = Some(Command::new(part));
+                }
+            }
+        }
+        if let Some(command) = command {
+            commands.push((command, command_str));
+        }
+    }
+
+    commands
 }
