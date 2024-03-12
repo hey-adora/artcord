@@ -1,6 +1,6 @@
 use crate::app::pages::register::GlobalAuthState;
 use crate::app::utils::{PageProfileState, ScrollSection};
-use leptos::logging::log;
+
 use leptos::{
     create_rw_signal, RwSignal, SignalWith,
     StoredValue,
@@ -86,7 +86,7 @@ impl GlobalState {
 
     pub fn auth_is_logged_in(&self) -> bool {
         self.auth.with(|a| match a {
-            AuthState::LoggedIn { user_id } => true,
+            AuthState::LoggedIn { user_id: _ } => true,
             _ => false,
         })
     }

@@ -2,7 +2,7 @@ pub mod app;
 
 use app::App;
 use wasm_bindgen::prelude::wasm_bindgen;
-use leptos::{logging::log, *};
+
 
 #[wasm_bindgen]
 pub fn hydrate() {

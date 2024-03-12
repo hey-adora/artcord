@@ -2,18 +2,18 @@ use crate::app::pages::admin::Admin;
 use crate::app::pages::login::Login;
 use crate::app::pages::register::Register;
 use global_state::GlobalState;
-use leptos::logging::log;
+
 use leptos::*;
 use leptos_meta::*;
 use leptos_router::*;
-use leptos_use::use_window;
+
+use crate::app::utils::ws_runtime::WsRuntime;
+use artcord_leptos_web_sockets::Runtime;
 use pages::account::Account;
 use pages::gallery::GalleryPage;
 use pages::home::HomePage;
 use pages::not_found::NotFound;
 use pages::profile::Profile;
-use artcord_leptos_web_sockets::Runtime;
-use crate::app::utils::ws_runtime::WsRuntime;
 
 pub mod components;
 pub mod global_state;
@@ -25,7 +25,7 @@ pub fn App() -> impl IntoView {
     provide_meta_context();
     provide_context(GlobalState::new());
     WsRuntime::new();
-
+    // a a
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
 
     view! {

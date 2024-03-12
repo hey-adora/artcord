@@ -50,7 +50,7 @@ pub fn Navbar() -> impl IntoView {
     });
 
     let title = move || {
-        let mut output = String::from("ArtCord");
+        let output = String::from("ArtCord");
         // log!("{:?} {:?}", global_state.section.get(), global_state.page_profile.gallery_loaded.get());
         if global_state.section.get() == ScrollSection::UserProfile
             && global_state.page_profile.gallery_loaded.get() == LoadingNotFound::Loaded
@@ -75,7 +75,7 @@ pub fn Navbar() -> impl IntoView {
     };
 
     let logout = move |_: MouseEvent| {
-        let res = create_local_resource(
+        let _res = create_local_resource(
             || {},
             move |_| async move {
                 let resp = Request::post("/login_delete_token").build();

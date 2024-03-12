@@ -1,7 +1,7 @@
 use crate::app::components::navbar::Navbar;
 use crate::app::global_state::GlobalState;
 use crate::app::utils::client_msg_wrap::ClientMsgWrap;
-use crate::app::utils::server_msg_wrap::ServerMsgWrap;
+
 use artcord_state::message::client_msg::ClientMsg;
 use artcord_state::misc::registration_invalid::{RegistrationInvalidMsg, MINIMUM_PASSWORD_LENGTH};
 use leptos::html::Input;
@@ -122,7 +122,7 @@ pub fn Register() -> impl IntoView {
 
         log!("Submit: '{}' '{}' '{}'", email, password, password_confirm);
 
-        let msg = ClientMsgWrap(ClientMsg::Register { password, email });
+        let _msg = ClientMsgWrap(ClientMsg::Register { password, email });
 
         //global_state.socket_send(&msg);
 

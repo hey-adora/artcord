@@ -5,7 +5,7 @@ use std::rc::Rc;
 use cfg_if::cfg_if;
 use leptos::logging::log;
 use leptos::*;
-use leptos_use::{use_interval_fn, use_window};
+use leptos_use::use_window;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use web_sys::{ErrorEvent, MessageEvent, WebSocket};
@@ -131,7 +131,7 @@ pub trait Runtime<
                 };
 
                 ws.set_value(Some(create_ws()));
-                let reconnect_interval = use_interval_fn(
+                let reconnect_interval = leptos_use::use_interval_fn(
                     move || {
                         let is_closed = ws.with_value(move |ws| {
                             ws.as_ref()

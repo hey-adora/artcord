@@ -20,21 +20,21 @@ use web_sys::Event;
 
 use crate::app::utils::ServerMsgImgResized;
 
-fn create_client_test_imgs() -> Vec<ServerMsgImgResized> {
-    let mut new_imgs: Vec<ServerMsgImgResized> = Vec::new();
-    for _ in 0..25 {
-        new_imgs.push(ServerMsgImgResized::default());
-    }
-    new_imgs
-}
+// fn create_client_test_imgs() -> Vec<ServerMsgImgResized> {
+//     let mut new_imgs: Vec<ServerMsgImgResized> = Vec::new();
+//     for _ in 0..25 {
+//         new_imgs.push(ServerMsgImgResized::default());
+//     }
+//     new_imgs
+// }
 
-fn create_server_test_imgs() -> Vec<AggImg> {
-    let mut new_imgs: Vec<AggImg> = Vec::new();
-    for _ in 0..25 {
-        new_imgs.push(AggImg::default());
-    }
-    new_imgs
-}
+// fn create_server_test_imgs() -> Vec<AggImg> {
+//     let mut new_imgs: Vec<AggImg> = Vec::new();
+//     for _ in 0..25 {
+//         new_imgs.push(AggImg::default());
+//     }
+//     new_imgs
+// }
 
 #[derive(Copy, Clone, Debug)]
 pub struct GalleryPageState {
@@ -198,7 +198,7 @@ pub fn GalleryPage() -> impl IntoView {
         let left = scroll_height - (client_height + scroll_top);
 
         if left < client_height {
-            let msg = ClientMsgWrap(ClientMsg::GalleryInit {
+            let _msg = ClientMsgWrap(ClientMsg::GalleryInit {
                 amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
                 from: last,
             });

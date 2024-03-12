@@ -3,11 +3,11 @@ use crate::message::server_msg::{
     SERVER_MSG_IMGS_NAME, SERVER_MSG_LOGIN, SERVER_MSG_PROFILE, SERVER_MSG_PROFILE_IMGS_NAME,
     SERVER_MSG_REGISTRATION,
 };
-use bson::DateTime;
-use chrono::Utc;
+
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::convert::Infallible;
+
 use std::net::IpAddr;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
@@ -44,15 +44,15 @@ pub enum ClientMsg {
 impl ClientMsg {
     pub fn name(&self) -> &'static str {
         match self {
-            ClientMsg::GalleryInit { amount, from } => SERVER_MSG_IMGS_NAME,
+            ClientMsg::GalleryInit { amount: _, from: _ } => SERVER_MSG_IMGS_NAME,
             ClientMsg::UserGalleryInit {
-                from,
-                amount,
-                user_id,
+                from: _,
+                amount: _,
+                user_id: _,
             } => SERVER_MSG_PROFILE_IMGS_NAME,
-            ClientMsg::User { user_id } => SERVER_MSG_PROFILE,
-            ClientMsg::Register { email, password } => SERVER_MSG_REGISTRATION,
-            ClientMsg::Login { email, password } => SERVER_MSG_LOGIN,
+            ClientMsg::User { user_id: _ } => SERVER_MSG_PROFILE,
+            ClientMsg::Register { email: _, password: _ } => SERVER_MSG_REGISTRATION,
+            ClientMsg::Login { email: _, password: _ } => SERVER_MSG_LOGIN,
             ClientMsg::Logout => SERVER_MSG_LOGIN,
         }
     }
@@ -163,15 +163,15 @@ impl WsPath {
 impl From<&ClientMsg> for WsPath {
     fn from(value: &ClientMsg) -> Self {
         match value {
-            ClientMsg::GalleryInit { amount, from } => WsPath::Gallery,
+            ClientMsg::GalleryInit { amount: _, from: _ } => WsPath::Gallery,
             ClientMsg::UserGalleryInit {
-                from,
-                amount,
-                user_id,
+                from: _,
+                amount: _,
+                user_id: _,
             } => WsPath::UserGallery,
-            ClientMsg::User { user_id } => WsPath::User,
-            ClientMsg::Login { email, password } => WsPath::Login,
-            ClientMsg::Register { email, password } => WsPath::Register,
+            ClientMsg::User { user_id: _ } => WsPath::User,
+            ClientMsg::Login { email: _, password: _ } => WsPath::Login,
+            ClientMsg::Register { email: _, password: _ } => WsPath::Register,
             ClientMsg::Logout => WsPath::Logout,
         }
     }
@@ -179,9 +179,9 @@ impl From<&ClientMsg> for WsPath {
 
 #[cfg(test)]
 mod ClientMsgTests {
-    use bson::DateTime;
+    
     use chrono::Utc;
-    use std::cell::{Cell, RefCell};
+    use std::cell::{RefCell};
     use std::collections::HashMap;
     use std::net::{IpAddr, Ipv4Addr};
     use std::rc::Rc;
@@ -190,7 +190,7 @@ mod ClientMsgTests {
 
     #[test]
     fn msg_throttle() {
-        let mut current_time = Rc::new(RefCell::new(Utc::now().timestamp_millis()));
+        let current_time = Rc::new(RefCell::new(Utc::now().timestamp_millis()));
         let duration = 60 * 1000;
         let msg = Rc::new(RefCell::new(ClientMsg::GalleryInit {
             amount: 10,
@@ -198,9 +198,9 @@ mod ClientMsgTests {
         }));
 
         let max_count = 10;
-        let mut throttle_times: Rc<RefCell<HashMap<WsPath, (u64, HashMap<IpAddr, u64>)>>> =
+        let throttle_times: Rc<RefCell<HashMap<WsPath, (u64, HashMap<IpAddr, u64>)>>> =
             Rc::new(RefCell::new(HashMap::new()));
-        let mut ip = IpAddr::from(Ipv4Addr::new(127, 0, 0, 1));
+        let ip = IpAddr::from(Ipv4Addr::new(127, 0, 0, 1));
 
         //let result = msg.throttle(&mut throttle_times, &ip, time);
 
@@ -211,7 +211,7 @@ mod ClientMsgTests {
         // let count = clients.get(&ip).expect(&format!("Expected hashmap with {:?} key.", ip));
 
         //assert!(*count == 1, "Expected count to be 1.");
-        let mut check = |start: u64, state: bool, check_index: bool| {
+        let check = |start: u64, state: bool, check_index: bool| {
             for i in start..=max_count {
                 let throttle_times = &mut *throttle_times.borrow_mut();
                 let msg = msg.borrow();
@@ -227,7 +227,7 @@ mod ClientMsgTests {
                 );
                 assert!(result == state, "Expected throttle to be {}.", state);
 
-                let (ms, clients) = throttle_times.get(&path).expect(&format!(
+                let (_ms, clients) = throttle_times.get(&path).expect(&format!(
                     "Expected hashmap to be created with {:?} key.",
                     path
                 ));

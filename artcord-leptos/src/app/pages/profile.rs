@@ -7,7 +7,7 @@ use crate::app::global_state::GlobalState;
 
 #[component]
 pub fn Profile() -> impl IntoView {
-    let params = use_params_map();
+    let _params = use_params_map();
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
     let nav_tran = global_state.nav_tran;
 

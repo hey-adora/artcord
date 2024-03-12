@@ -1,17 +1,17 @@
 use crate::app::global_state::GlobalState;
-use chrono::Utc;
-use leptos::ev::resize;
-use leptos::html::Section;
-use leptos::logging::log;
+
+
+
+
 use leptos::*;
 use leptos_router::use_location;
-use leptos_use::{use_event_listener, use_window};
-use std::collections::HashMap;
-use std::rc::Rc;
-use web_sys::Event;
+
+
+
+
 
 use crate::app::utils::{
-    calc_fit_count, resize_imgs, LoadingNotFound, ServerMsgImgResized, NEW_IMG_HEIGHT,
+    LoadingNotFound, ServerMsgImgResized,
 };
 
 // //F: Fn(ServerMsgImgResized) -> IV + 'static, IV: IntoView
@@ -115,16 +115,16 @@ pub fn Gallery<
     OnClick: Fn(ServerMsgImgResized) + Copy + 'static,
     OnFetch: Fn(i64, u32) + Copy + 'static,
 >(
-    global_gallery_imgs: RwSignal<Vec<ServerMsgImgResized>>,
-    on_click: OnClick,
-    on_fetch: OnFetch,
-    loaded_sig: RwSignal<LoadingNotFound>,
-    connection_load_state_name: &'static str,
+    _global_gallery_imgs: RwSignal<Vec<ServerMsgImgResized>>,
+    _on_click: OnClick,
+    _on_fetch: OnFetch,
+    _loaded_sig: RwSignal<LoadingNotFound>,
+    _connection_load_state_name: &'static str,
 ) -> impl IntoView {
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
 
-    let nav_tran = global_state.nav_tran;
-    let location = use_location();
+    let _nav_tran = global_state.nav_tran;
+    let _location = use_location();
 
     // create_effect(move |_| {
     //     global_gallery_imgs.update_untracked(move |imgs| {

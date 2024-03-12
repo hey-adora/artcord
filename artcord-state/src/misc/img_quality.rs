@@ -20,20 +20,20 @@ impl ImgQuality {
         format!("/assets/gallery/org_{}.{}", hex, format)
     }
 
-    pub fn gen_img_path_org(root: &str, hex: &str, format: &str) -> String {
+    pub fn gen_img_path_org(_root: &str, hex: &str, format: &str) -> String {
         // format!("target/site/gallery/org_{}.{}", hex, format)
         format!("target/site/gallery/org_{}.{}", hex, format)
     }
 
-    pub fn gen_img_path_high(root: &str, hex: &str) -> String {
+    pub fn gen_img_path_high(_root: &str, hex: &str) -> String {
         format!("target/site/gallery/high_{}.webp", hex)
     }
 
-    pub fn gen_img_path_medium(root: &str, hex: &str) -> String {
+    pub fn gen_img_path_medium(_root: &str, hex: &str) -> String {
         format!("target/site/gallery/medium_{}.webp", hex)
     }
 
-    pub fn gen_img_path_low(root: &str, hex: &str) -> String {
+    pub fn gen_img_path_low(_root: &str, hex: &str) -> String {
         format!("target/site/gallery/low_{}.webp", hex)
     }
 

@@ -1,6 +1,6 @@
 use crate::app::components::navbar::Navbar;
 use crate::app::global_state::GlobalState;
-use crate::app::pages::register::{auth_input_show_error, validate_registration, AuthLoadingState};
+use crate::app::pages::register::{auth_input_show_error, AuthLoadingState};
 use crate::app::utils::client_msg_wrap::ClientMsgWrap;
 use artcord_state::message::client_msg::ClientMsg;
 use artcord_state::misc::registration_invalid::MINIMUM_PASSWORD_LENGTH;
@@ -73,7 +73,7 @@ pub fn Login() -> impl IntoView {
 
         log!("Submit: '{}' '{}'", email, password);
 
-        let msg = ClientMsgWrap(ClientMsg::Login { password, email });
+        let _msg = ClientMsgWrap(ClientMsg::Login { password, email });
 
         //global_state.socket_send(&msg); a
 

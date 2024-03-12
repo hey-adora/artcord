@@ -24,7 +24,7 @@ impl DB {
             .find_one(
                 doc! {
                     ImgFieldName::GuildId.name(): guild_id.to_string(),
-                    ImgFieldName::OrgHash.name(): file_hash.clone()
+                    ImgFieldName::OrgHash.name(): file_hash
                 },
                 None,
             )

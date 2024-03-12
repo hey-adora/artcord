@@ -2,12 +2,12 @@ use leptos::*;
 use leptos_router::use_params_map;
 
 use crate::app::components::navbar::Navbar;
-use crate::app::components::profile_gallery::ProfileGallery;
+
 use crate::app::global_state::GlobalState;
 
 #[component]
 pub fn Admin() -> impl IntoView {
-    let params = use_params_map();
+    let _params = use_params_map();
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
     let nav_tran = global_state.nav_tran;
 

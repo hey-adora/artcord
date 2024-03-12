@@ -2,7 +2,7 @@
 // use crate::database::models::user::User;
 use chrono::Utc;
 use field_types::FieldName;
-use serde::{Deserialize, Serialize};
+
 
 use crate::{misc::img_quality::ImgQuality, model::user::User};
 

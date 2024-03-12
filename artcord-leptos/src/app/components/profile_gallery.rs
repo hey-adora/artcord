@@ -24,7 +24,7 @@ pub fn ProfileGallery() -> impl IntoView {
     let global_gallery_imgs = global_state.page_profile.gallery_imgs;
     let selected_img: RwSignal<Option<SelectedImg>> = create_rw_signal(None);
     let loaded_sig = global_state.page_profile.gallery_loaded;
-    let connection_load_state_name = SERVER_MSG_PROFILE_IMGS_NAME;
+    let _connection_load_state_name = SERVER_MSG_PROFILE_IMGS_NAME;
     let location = use_location();
 
     let on_click = move |img: ServerMsgImgResized| {
@@ -137,7 +137,7 @@ pub fn ProfileGallery() -> impl IntoView {
         // }
 
         if !same_user {
-            let msg = ClientMsg::User {
+            let _msg = ClientMsg::User {
                 user_id: String::from(new_user),
             };
             //global_state.socket_send(&msg);
@@ -159,7 +159,7 @@ pub fn ProfileGallery() -> impl IntoView {
 
         let user = global_state.page_profile.user.get();
         log!("TWO {:?}", user);
-        let Some(user) = user else {
+        let Some(_user) = user else {
             return;
         };
 

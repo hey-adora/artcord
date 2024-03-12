@@ -1,27 +1,18 @@
-use actix::{Actor, Addr, AsyncContext, Handler, Recipient, StreamHandler};
 use actix_files::Files;
-use actix_web::cookie::time::OffsetDateTime;
-use actix_web::cookie::{Cookie, SameSite};
+
 use actix_web::dev::Server;
-use actix_web::web::Bytes;
-use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer, Responder};
-use actix_web_actors::ws::{self, CloseCode, CloseReason, ProtocolError};
-use artcord_mongodb::database::DB;
-use artcord_state::message::client_msg::WsPath;
-use futures::{StreamExt, TryStreamExt};
+
+use actix_web::{web, App, HttpResponse, HttpServer, Responder};
+
 use leptos::leptos_config::ConfFile;
 use leptos::leptos_config::Env::DEV;
 use leptos::leptos_config::ReloadWSProtocol::WS;
 use leptos_actix::{generate_route_list, LeptosRoutes};
-use std::collections::HashMap;
+
 use std::fs::read_to_string;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
-use std::time::Instant;
-use std::{num::ParseIntError, sync::Arc};
-use thiserror::Error;
-use tokio::sync::RwLock;
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 
-
+use std::sync::Arc;
 
 pub const TOKEN_SIZE: usize = 257;
 
@@ -164,7 +155,6 @@ pub const TOKEN_SIZE: usize = 257;
 //     let sessions = server_state.sessions.read().await;
 //     HttpResponse::Ok().body(format!("Live connection: {}", sessions.len()))
 // }
-
 
 // pub async fn create_server(
 //     db: Arc<DB>,
@@ -365,7 +355,6 @@ pub const TOKEN_SIZE: usize = 257;
 //     }
 // }
 
-
 pub async fn favicon() -> actix_web::Result<actix_files::NamedFile> {
     Ok(actix_files::NamedFile::open("target/site/favicon.ico")?)
 }
@@ -391,7 +380,7 @@ pub async fn hello() -> impl Responder {
     //                 }
     //             }
     //             idle(() => {
-                  
+
     //                 import('/pkg/leptos_start5.js')
     //                     .then(mod => {
     //                         console.log(\"dflopdfdf,l\");
@@ -400,24 +389,20 @@ pub async fn hello() -> impl Responder {
     //             });
     //         </script>
     //     </head>
-        
+
     //     <body>
     //     </body>
-        
-        
+
     //         <script>__LEPTOS_PENDING_RESOURCES = [];__LEPTOS_RESOLVED_RESOURCES = new Map();__LEPTOS_RESOURCE_RESOLVERS = new Map();__LEPTOS_LOCAL_ONLY = [];</script>
-    //     </html> 
+    //     </html>
     // ")
 }
 
-use leptos::{get_configuration, LeptosOptions};
+use leptos::LeptosOptions;
 
-pub async fn create_server(
-    galley_root_dir: Arc<String>,
-    assets_root_dir: Arc<String>,
-) -> Server {
+pub async fn create_server(galley_root_dir: Arc<String>, assets_root_dir: Arc<String>) -> Server {
     println!("Teeeeeeeeeeeeeeeeeeeeeeee 3 3");
-    //let conf = get_configuration(None).await.unwrap(); a a a
+    //let conf = get_configuration(None).await.unwrap(); a
     let conf: ConfFile = ConfFile {
         leptos_options: LeptosOptions {
             output_name: "leptos_start5".to_string(),
@@ -430,7 +415,7 @@ pub async fn create_server(
             reload_ws_protocol: WS,
             not_found_path: "/404".to_string(),
             hash_file: String::from("hash.txt"),
-            hash_files: true
+            hash_files: true,
         },
     };
     println!("CONFIG: {:#?}", &conf);
@@ -458,14 +443,13 @@ pub async fn create_server(
                 routes.to_owned(),
                 artcord_leptos::app::App,
             )
-            //.route("/{filename:.*}", web::get().to(hello))
-            // .leptos_routes(
-            //     leptos_options.to_owned(),
-            //     routes.to_owned(),
-            //     artcord_leptos::app::App,
-            // )
-            //.route("/{filename:.*}", web::get().to(hello))
-       
+        //.route("/{filename:.*}", web::get().to(hello))
+        // .leptos_routes(
+        //     leptos_options.to_owned(),
+        //     routes.to_owned(),
+        //     artcord_leptos::app::App,
+        // )
+        //.route("/{filename:.*}", web::get().to(hello))
     })
     .workers(1)
     .bind(&addr)
