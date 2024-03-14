@@ -343,9 +343,12 @@ version = "0.1.0"
 dependencies = [
  "actix-web",
  "artcord-actix",
+ "cfg-if",
  "dotenv",
  "futures",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -359,11 +362,14 @@ dependencies = [
  "artcord-leptos",
  "artcord-mongodb",
  "artcord-state",
+ "cfg-if",
  "futures",
  "leptos",
  "leptos_actix",
  "thiserror",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
  "uuid",
 ]
 

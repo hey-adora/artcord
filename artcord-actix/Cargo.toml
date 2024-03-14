@@ -19,3 +19,9 @@ thiserror = "1.0.57"
 artcord-state = { path = "../artcord-state" }
 artcord-mongodb = { path = "../artcord-mongodb" }
 artcord-leptos = { path = "../artcord-leptos" }
+cfg-if = "1"
+tracing = { version = "0.1.40" }
+tracing-subscriber = "0.3.18"
+
+[features]
+production = ["tracing/max_level_warn"]

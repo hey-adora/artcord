@@ -8,9 +8,9 @@ use leptos::leptos_config::ConfFile;
 use leptos::leptos_config::Env::DEV;
 use leptos::leptos_config::ReloadWSProtocol::WS;
 use leptos_actix::{generate_route_list, LeptosRoutes};
-
 use std::fs::read_to_string;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+use cfg_if::cfg_if;
 
 use std::sync::Arc;
 
@@ -360,7 +360,7 @@ pub async fn favicon() -> actix_web::Result<actix_files::NamedFile> {
 }
 
 pub async fn hello() -> impl Responder {
-    let index = read_to_string("index.html").unwrap_or_default();
+    let index = read_to_string("artcord-builder/index.html").unwrap_or_default();
     HttpResponse::Ok().body(index)
     // HttpResponse::Ok().body("
     //     <!DOCTYPE html>
@@ -402,7 +402,7 @@ use leptos::LeptosOptions;
 
 pub async fn create_server(galley_root_dir: Arc<String>, assets_root_dir: Arc<String>) -> Server {
     println!("Teeeeeeeeeeeeeeeeeeeeeeee 3 3");
-    //let conf = get_configuration(None).await.unwrap(); a
+    //let conf = get_configuration(None).await.unwrap(); a a a a a
     let conf: ConfFile = ConfFile {
         leptos_options: LeptosOptions {
             output_name: "leptos_start5".to_string(),
@@ -433,7 +433,22 @@ pub async fn create_server(galley_root_dir: Arc<String>, assets_root_dir: Arc<St
         let pkg_url = format!("{}/pkg", &*assets_root_dir);
         println!("pkg dir: {}", pkg_url);
 
-        App::new()
+        let mut debug = true;
+        cfg_if! {
+            if #[cfg(feature = "production")] {
+                debug = false;
+            }
+        };
+
+        let app = if debug {
+            App::new()
+            .route("/favicon.ico", web::get().to(favicon))
+            .service(Files::new("/assets/gallery", &*galley_root_dir))
+            .service(Files::new("/assets", &*assets_root_dir))
+            .service(Files::new("/pkg", pkg_url))
+            .route("/{filename:.*}", web::get().to(hello))
+        } else {
+            App::new()
             .route("/favicon.ico", web::get().to(favicon))
             .service(Files::new("/assets/gallery", &*galley_root_dir))
             .service(Files::new("/assets", &*assets_root_dir))
@@ -443,6 +458,18 @@ pub async fn create_server(galley_root_dir: Arc<String>, assets_root_dir: Arc<St
                 routes.to_owned(),
                 artcord_leptos::app::App,
             )
+        };
+
+        // let create_prodution_app =  || {
+            
+        // };
+        // let app = create_prodution_app();
+
+        // let create_debug_app =  || {
+            
+        // };
+
+        app
         //.route("/{filename:.*}", web::get().to(hello))
         // .leptos_routes(
         //     leptos_options.to_owned(),

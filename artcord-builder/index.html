@@ -13,7 +13,7 @@
     <link rel="modulepreload" href="/pkg/leptos_start5.js" />
     <link
       rel="preload"
-      href="/pkg/leptos_start5.wasm"
+      href="/pkg/leptos_start5_bg.wasm"
       as="fetch"
       type="application/wasm"
       crossorigin=""
@@ -28,7 +28,7 @@
       }
       idle(() => {
         import("/pkg/leptos_start5.js").then((mod) => {
-          mod.default("/pkg/leptos_start5.wasm").then(() => mod.hydrate());
+          mod.default("/pkg/leptos_start5_bg.wasm").then(() => mod.hydrate());
         });
       });
     </script>
