@@ -9,6 +9,7 @@ edition = "2021"
 
 [dependencies]
 artcord-actix = { path = "../artcord-actix" }
+artcord-tungstenite = { path = "../artcord-tungstenite" }
 tokio = { version = "1.36.0", features = ["full"] }
 dotenv = { version = "0.15.0" }
 actix-web = { version = "4.5.1", features = ["macros"] }

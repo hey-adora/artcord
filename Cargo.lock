@@ -343,6 +343,7 @@ version = "0.1.0"
 dependencies = [
  "actix-web",
  "artcord-actix",
+ "artcord-tungstenite",
  "cfg-if",
  "dotenv",
  "futures",

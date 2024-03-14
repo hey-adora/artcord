@@ -1,4 +1,5 @@
 use artcord_actix::server::create_server;
+use artcord_tungstenite::create_websockets;
 use dotenv::dotenv;
 use tracing::{info, Level};
 use std::{env, sync::Arc};
@@ -31,11 +32,15 @@ async fn main() {
     let gallery_root_dir = Arc::new(gallery_root_dir);
 
     let web_server = create_server(gallery_root_dir, assets_root_dir).await;
+    let web_sockets = create_websockets();
 
     let r = try_join!(
         async { web_server.await.or_else(|e| Err(e.to_string())) },
+        async { web_sockets.await.or_else(|e| Err(e.to_string())) },
      //   async { bot_server.start().await.or_else(|e| Err(e.to_string())) } a a aa a a a
     );
+
+
 
     r.unwrap();
 }
