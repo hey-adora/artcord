@@ -6,6 +6,7 @@ use global_state::GlobalState;
 use leptos::*;
 use leptos_meta::*;
 use leptos_router::*;
+use tracing::trace;
 
 use crate::app::utils::ws_runtime::WsRuntime;
 use artcord_leptos_web_sockets::Runtime;
@@ -26,6 +27,7 @@ pub fn App() -> impl IntoView {
     provide_context(GlobalState::new());
     WsRuntime::new();
     // a a a a a a
+    
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
 
     view! {

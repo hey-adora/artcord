@@ -403,6 +403,7 @@ dependencies = [
  "leptos_meta",
  "leptos_router",
  "log",
+ "tracing-wasm",
  "uuid",
  "wasm-bindgen",
  "web-sys",
@@ -3360,6 +3361,17 @@ dependencies = [
  "thread_local",
  "tracing-core",
  "tracing-log",
+]
+
+[[package]]
+name = "tracing-wasm"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4575c663a174420fa2d78f4108ff68f65bf2fbb7dd89f33749b6e826b3626e07"
+dependencies = [
+ "tracing",
+ "tracing-subscriber",
+ "wasm-bindgen",
 ]
 
 [[package]]

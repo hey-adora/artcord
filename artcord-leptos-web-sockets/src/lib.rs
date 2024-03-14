@@ -6,6 +6,7 @@ use cfg_if::cfg_if;
 use leptos::logging::log;
 use leptos::*;
 use leptos_use::use_window;
+use tracing::{error, info, trace, warn};
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use web_sys::{ErrorEvent, MessageEvent, WebSocket};
@@ -98,7 +99,7 @@ pub trait Runtime<
                 ))));
 
                 let create_ws = move || -> WebSocket {
-                    log!("CONNECTING");
+                    info!("ws: CONNECTING");
                     let ws = WebSocket::new(&get_ws_path()).unwrap();
                     ws.set_binary_type(web_sys::BinaryType::Arraybuffer);
 
@@ -139,7 +140,7 @@ pub trait Runtime<
                                 .unwrap_or(false)
                         });
                         if is_closed {
-                            log!("RECONNECTING");
+                            info!("ws: RECONNECTING");
                             ws.set_value(Some(create_ws()));
                         }
                     },
@@ -161,16 +162,16 @@ pub trait Runtime<
 
 
     fn on_open(socket_pending_client_msgs: StoredValue<Vec<Vec<u8>>>, ws: StoredValue<Option<WebSocket>>) {
-        log!("CONNECTED");
+        info!("ws: CONNECTED");
         Self::flush_pending_client_msgs(socket_pending_client_msgs, ws);
     }
 
     fn on_close() {
-        log!("DISCONNECTED");
+        info!("ws: DISCONNECTED");
     }
 
     fn on_err(e: ErrorEvent) {
-        log!("WS ERROR: {:?}", e);
+        error!("WS: ERROR: {:?}", e);
     }
 
     fn on_msg(
@@ -185,13 +186,13 @@ pub trait Runtime<
         let bytes: Vec<u8> = array.to_vec();
 
         if bytes.is_empty() {
-            log!("Empty byte msg received.");
+            trace!("ws: Empty byte msg received.");
             return;
         };
 
         let server_msg = ServerMsg::recv_from_vec(&bytes);
         let Ok((id, server_msg)) = server_msg else {
-            log!("Error decoding msg: {}", server_msg.err().unwrap());
+            error!("ws: Error decoding msg: {}", server_msg.err().unwrap());
             return;
         };
 
@@ -216,7 +217,7 @@ pub trait Runtime<
                     }
                 });
             } else {
-                log!("WebSockets are not initialized.");
+                warn!("ws: not initialized.");
             }
        
         });
@@ -229,7 +230,7 @@ pub trait Runtime<
     ) {
         closures.update_value(move |socket_closures| {
             let Some(f) = socket_closures.get(id) else {
-                log!("Fn not found for {:?}", id);
+                warn!("ws: Fn not found for {:?}", id);
                 return;
             };
 
@@ -247,13 +248,13 @@ pub fn get_ws_path() -> String {
     let mut output = String::new();
     let window = &*use_window();
     let Some(window) = window else {
-        log!("Failed to get window for get_ws_path, using default ws path: {}", default);
+        error!("ws: Failed to get window for get_ws_path, using default ws path: {}", default);
         return default;
     };
     //let location = use_location();
     let protocol = window.location().protocol();
     let Ok(protocol) = protocol else {
-        log!("Failed to get window for protocol, using default ws path: {}", default);
+        error!("ws: Failed to get window for protocol, using default ws path: {}", default);
         return default;
     };
     if protocol == "http:" {
@@ -263,7 +264,7 @@ pub fn get_ws_path() -> String {
     }
     let hostname = window.location().hostname();
     let Ok(hostname) = hostname else {
-        log!("Failed to get window for hostname, using default ws path: {}", default);
+        error!("ws: Failed to get window for hostname, using default ws path: {}", default);
         return default;
     };
     output.push_str(&format!("{}:3420", hostname));

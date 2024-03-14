@@ -8,6 +8,7 @@ use leptos::leptos_config::ConfFile;
 use leptos::leptos_config::Env::DEV;
 use leptos::leptos_config::ReloadWSProtocol::WS;
 use leptos_actix::{generate_route_list, LeptosRoutes};
+use tracing::info;
 use std::fs::read_to_string;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use cfg_if::cfg_if;
@@ -398,49 +399,48 @@ pub async fn hello() -> impl Responder {
     // ")
 }
 
-use leptos::LeptosOptions;
+use leptos::{get_configuration, LeptosOptions};
 
 pub async fn create_server(galley_root_dir: Arc<String>, assets_root_dir: Arc<String>) -> Server {
-    println!("Teeeeeeeeeeeeeeeeeeeeeeee 3 3");
-    //let conf = get_configuration(None).await.unwrap(); a a a a a
-    let conf: ConfFile = ConfFile {
-        leptos_options: LeptosOptions {
-            output_name: "leptos_start5".to_string(),
-            site_root: "target/site".to_string(),
-            site_pkg_dir: "pkg".to_string(),
-            env: DEV,
-            site_addr: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 3000)),
-            reload_port: 3001,
-            reload_external_port: None,
-            reload_ws_protocol: WS,
-            not_found_path: "/404".to_string(),
-            hash_file: String::from("hash.txt"),
-            hash_files: true,
-        },
-    };
-    println!("CONFIG: {:#?}", &conf);
+    let conf = get_configuration(Some("Cargo.toml")).await.unwrap();
+    // let conf: ConfFile = ConfFile {
+    //     leptos_options: LeptosOptions {
+    //         output_name: "leptos_start5".to_string(),
+    //         site_root: "target/site".to_string(),
+    //         site_pkg_dir: "pkg".to_string(),
+    //         env: DEV,
+    //         site_addr: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 3000)),
+    //         reload_port: 3001,
+    //         reload_external_port: None,
+    //         reload_ws_protocol: WS,
+    //         not_found_path: "/404".to_string(),
+    //         hash_file: String::from("hash.txt"),
+    //         hash_files: true,
+    //     },
+    // };
+    //info!("current leptos config is {:#?}", &conf);
     let addr = conf.leptos_options.site_addr;
     let routes = generate_route_list(artcord_leptos::app::App);
-    println!("listening on http://{}", &addr);
+    info!("listening on http://{}", &addr);
     //let sessions = Arc::new(RwLock::new(HashMap::<uuid::Uuid, Addr<WsConnection>>::new()));
 
     //let galley_root_dir = galley_root_dir.to_string();
-    //let assets_root_dir = assets_root_dir.to_string();
+    //let assets_root_dir = assets_root_dir.to_string(); a
     HttpServer::new(move || {
         let leptos_options = &conf.leptos_options;
         // let site_root = &leptos_options.site_root;
-        println!("site root: {}", &*assets_root_dir);
+        //println!("site root: {}", &*assets_root_dir);
         let pkg_url = format!("{}/pkg", &*assets_root_dir);
-        println!("pkg dir: {}", pkg_url);
+        //println!("pkg dir: {}", pkg_url);
 
-        let mut debug = true;
+        let mut _debug = true;
         cfg_if! {
             if #[cfg(feature = "production")] {
                 debug = false;
             }
         };
 
-        let app = if debug {
+        let app = if _debug {
             App::new()
             .route("/favicon.ico", web::get().to(favicon))
             .service(Files::new("/assets/gallery", &*galley_root_dir))
