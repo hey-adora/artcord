@@ -3,7 +3,7 @@ use std::{collections::HashMap, fmt::Debug};
 use std::rc::Rc;
 
 use cfg_if::cfg_if;
-use leptos::logging::log;
+
 use leptos::*;
 use leptos_use::use_window;
 use tracing::{error, info, trace, warn};
@@ -67,7 +67,7 @@ pub trait Runtime<
     ClientMsg: Clone + Send<IdType> + Debug + 'static,
 >
 {
-    fn connect(_default: &str, _port: &str) {
+    fn connect(_default: &'static str, _port: &'static str) {
         provide_context(LeptosWebSockets::<IdType, ServerMsg, ClientMsg>::new());
         // "wss://artcord.uk.to", "3420"
         cfg_if! {
@@ -135,7 +135,7 @@ pub trait Runtime<
                 };
 
                 ws.set_value(Some(create_ws()));
-                let reconnect_interval = leptos_use::use_interval_fn(
+                let _reconnect_interval = leptos_use::use_interval_fn(
                     move || {
                         let is_closed = ws.with_value(move |ws| {
                             ws.as_ref()

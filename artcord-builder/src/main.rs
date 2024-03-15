@@ -1,4 +1,4 @@
-use std::{ffi::OsStr, net::SocketAddr, path::Path, pin::Pin, process::ExitStatus, time::Duration};
+use std::{ffi::OsStr, net::SocketAddr, path::Path, pin::Pin, process::ExitStatus};
 
 use cfg_if::cfg_if;
 use futures::{future::join_all, Future, FutureExt, SinkExt, StreamExt, TryStreamExt};
@@ -7,18 +7,16 @@ use notify::{
     Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
 };
 use tokio::{
-    fs::File,
     sync::{broadcast, mpsc},
-    time::sleep,
 };
-use tokio::{join, sync::oneshot};
+use tokio::{join};
 use tokio::{
     net::TcpListener,
     process::{Child, Command},
 };
 use tokio::{net::TcpStream, select};
 use tokio_tungstenite::tungstenite::Message;
-use tracing::{debug, debug_span, error, info, info_span, instrument, trace, Instrument, Level};
+use tracing::{debug, error, info, trace, Level};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum ProjectKind {
@@ -66,9 +64,9 @@ enum CompilerEventKind {
 async fn main() {
     cfg_if! {
         if #[cfg(feature = "production")] {
-            tracing_subscriber::fmt().with_max_level(Level::WARN).try_init().unwrap();
+            tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).try_init().unwrap();
         } else {
-            tracing_subscriber::fmt().with_max_level(Level::TRACE).try_init().unwrap();
+            tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).try_init().unwrap();
         }
     }
 
@@ -176,7 +174,7 @@ async fn sockets_handle_connection(
         .await
         .expect("socket: failed to accept connection");
     info!("socket: new websocket connection: {}", peer);
-    let (mut write, mut read) = ws_stream.split();
+    let (mut write, read) = ws_stream.split();
     let (send_msg, mut recv_msg) = mpsc::channel::<String>(1000);
     
 
@@ -492,7 +490,7 @@ async fn compiler_on_kill(
 async fn compiler_on_run(
     recv_compiler_event: &mut broadcast::Receiver<CompilerEventKind>,
     project_kind: ProjectKind,
-    send_manager_event: mpsc::Sender<ManagerEventKind>,
+    _send_manager_event: mpsc::Sender<ManagerEventKind>,
 ) {
     while let Ok(compiler_event_kind) = recv_compiler_event.recv().await {
         match compiler_event_kind {
@@ -522,7 +520,7 @@ async fn manager(
     let mut compiler_state = CompilerState::Ready;
     let mut compile_next: Option<ProjectKind> = None;
 
-    let mut back_is_running = false;
+    let _back_is_running = false;
 
     let mut event_kind = ManagerEventKind::File(ProjectKind::Back);
 
@@ -557,10 +555,10 @@ async fn manager(
                                     compile_next = Some(project_kind);
                                 }
                             }
-                            CompilerState::Killing(current_project_kind) => {
+                            CompilerState::Killing(_current_project_kind) => {
                                 trace!("Manager: skipped: compiler is busy killing");
                             }
-                            CompilerState::Starting(current_project_kind) => {
+                            CompilerState::Starting(_current_project_kind) => {
                                 trace!("Manager: skipped: compiler is busy starting up");
                             }
                             CompilerState::Ready => {
@@ -589,14 +587,14 @@ async fn manager(
                         // }
                     }
                     ProjectKind::Front => match compiler_state {
-                        CompilerState::Compiling(current_project_kind) => {
+                        CompilerState::Compiling(_current_project_kind) => {
                             trace!("Manager: set: compiling next: Some({:?})", project_kind);
                             compile_next = Some(project_kind);
                         }
-                        CompilerState::Killing(current_project_kind) => {
+                        CompilerState::Killing(_current_project_kind) => {
                             trace!("Manager: skipped: compiler is busy killing");
                         }
-                        CompilerState::Starting(current_project_kind) => {
+                        CompilerState::Starting(_current_project_kind) => {
                             trace!("Manager: skipped: compiler is busy starting up");
                         }
                         CompilerState::Ready => {

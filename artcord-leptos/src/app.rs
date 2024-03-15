@@ -6,7 +6,7 @@ use global_state::GlobalState;
 use leptos::*;
 use leptos_meta::*;
 use leptos_router::*;
-use tracing::trace;
+
 
 use crate::app::utils::ws_runtime::WsRuntime;
 use artcord_leptos_web_sockets::Runtime;

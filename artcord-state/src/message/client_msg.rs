@@ -178,10 +178,10 @@ impl From<&ClientMsg> for WsPath {
 }
 
 #[cfg(test)]
-mod ClientMsgTests {
+mod client_msg_tests {
     
     use chrono::Utc;
-    use std::cell::{RefCell};
+    use std::cell::RefCell;
     use std::collections::HashMap;
     use std::net::{IpAddr, Ipv4Addr};
     use std::rc::Rc;

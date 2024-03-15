@@ -19,6 +19,7 @@ services:
           cargo run --package artcord-builder
     environment:
       - CARGO_HOME=./cache
+      - RUST_LOG=artcord=trace
   mongo:
       image: mongo
       volumes:

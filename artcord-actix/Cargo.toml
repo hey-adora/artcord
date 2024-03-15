@@ -21,7 +21,7 @@ artcord-mongodb = { path = "../artcord-mongodb" }
 artcord-leptos = { path = "../artcord-leptos" }
 cfg-if = "1"
 tracing = { version = "0.1.40" }
-tracing-subscriber = "0.3.18"
+tracing-subscriber = {version ="0.3.18", features = ["env-filter"] }
 
 [features]
 production = ["tracing/max_level_warn"]

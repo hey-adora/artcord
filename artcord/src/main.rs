@@ -4,7 +4,7 @@ use cfg_if::cfg_if;
 use dotenv::dotenv;
 use futures::try_join;
 use std::{env, sync::Arc};
-use tracing::{info, Level};
+use tracing::{info};
 
 #[actix_web::main]
 async fn main() {
@@ -12,9 +12,9 @@ async fn main() {
 
     cfg_if! {
         if #[cfg(feature = "production")] {
-            tracing_subscriber::fmt().with_max_level(Level::WARN).try_init().unwrap();
+            tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).try_init().unwrap();
         } else {
-            tracing_subscriber::fmt().with_max_level(Level::TRACE).try_init().unwrap();
+            tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).try_init().unwrap();
         }
     }
 
