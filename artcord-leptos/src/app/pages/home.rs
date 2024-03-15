@@ -30,7 +30,7 @@ pub fn HomePage() -> impl IntoView {
                 // <button on:click=test_click>"CLICK ME"</button> a
                 <div class="flex flex-col gap-[2rem] md:gap-[4rem]  max-w-min ">
                     <div class="text-left flex flex-col justify-start">
-                        <h2 class="text-[2rem] font-bold whitespace-nowrap ">"Discord Art Server 3"</h2>
+                        <h2 class="text-[2rem] font-bold whitespace-nowrap ">"Discord Art Server"</h2>
                         <p class="text-[1.3rem]">"Where creativity knows no bounds and artistic expression finds its true home! "</p>
                         <div class="flex gap-8 mt-4 items-center ">
                             <a target="_blank" href="https://discord.gg/habmw7Ehga" class="flex gap-2 items-center text-[1rem] h-12 font-black bg-gradient-to-br from-first-one to-second-one hover:to-dark-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem]  transition-colors duration-300 " >

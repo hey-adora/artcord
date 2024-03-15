@@ -25,7 +25,8 @@ pub mod utils;
 pub fn App() -> impl IntoView {
     provide_meta_context();
     provide_context(GlobalState::new());
-    WsRuntime::new();
+    WsRuntime::connect("wss://artcord.uk.to", "3420");
+    WsRuntime::connect("ws://localhost", "3001");
     // a a a a a a
     
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");

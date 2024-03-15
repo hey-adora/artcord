@@ -1,10 +1,10 @@
 use artcord_actix::server::create_server;
 use artcord_tungstenite::create_websockets;
-use dotenv::dotenv;
-use tracing::{info, Level};
-use std::{env, sync::Arc};
-use futures::try_join;
 use cfg_if::cfg_if;
+use dotenv::dotenv;
+use futures::try_join;
+use std::{env, sync::Arc};
+use tracing::{info, Level};
 
 #[actix_web::main]
 async fn main() {
@@ -27,7 +27,7 @@ async fn main() {
     info!("current assets directory is {}", assets_root_dir);
     let gallery_root_dir = env::var("GALLERY_ROOT_DIR").unwrap_or("./gallery/".to_string());
     info!("current gallery directory is {}", gallery_root_dir);
-    
+
     let assets_root_dir = Arc::new(assets_root_dir);
     let gallery_root_dir = Arc::new(gallery_root_dir);
 
@@ -37,10 +37,8 @@ async fn main() {
     let r = try_join!(
         async { web_server.await.or_else(|e| Err(e.to_string())) },
         async { web_sockets.await.or_else(|e| Err(e.to_string())) },
-     //   async { bot_server.start().await.or_else(|e| Err(e.to_string())) } a a aa a a a
+        //   async { bot_server.start().await.or_else(|e| Err(e.to_string())) } a a aa a a a
     );
-
-
 
     r.unwrap();
 }

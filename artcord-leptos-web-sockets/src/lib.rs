@@ -67,9 +67,9 @@ pub trait Runtime<
     ClientMsg: Clone + Send<IdType> + Debug + 'static,
 >
 {
-    fn new() {
+    fn connect(_default: &str, _port: &str) {
         provide_context(LeptosWebSockets::<IdType, ServerMsg, ClientMsg>::new());
-
+        // "wss://artcord.uk.to", "3420"
         cfg_if! {
             if #[cfg(target_arch = "wasm32")] {
                 let global_state = use_context::<LeptosWebSockets<IdType, ServerMsg, ClientMsg>>().expect("Failed to provide global state");
@@ -100,7 +100,10 @@ pub trait Runtime<
 
                 let create_ws = move || -> WebSocket {
                     info!("ws: CONNECTING");
-                    let ws = WebSocket::new(&get_ws_path()).unwrap();
+                    let ws = WebSocket::new(&get_ws_path(_default, _port)).unwrap();
+
+
+
                     ws.set_binary_type(web_sys::BinaryType::Arraybuffer);
 
                     ws_on_msg.with_value(|ws_on_msg| {
@@ -243,8 +246,8 @@ pub trait Runtime<
 
 }
 
-pub fn get_ws_path() -> String {
-    let default = String::from("wss://artcord.uk.to:3420");
+pub fn get_ws_path(default: &str, port: &str) -> String {
+    let default = format!("{}:{}", default, port);
     let mut output = String::new();
     let window = &*use_window();
     let Some(window) = window else {
@@ -267,7 +270,7 @@ pub fn get_ws_path() -> String {
         error!("ws: Failed to get window for hostname, using default ws path: {}", default);
         return default;
     };
-    output.push_str(&format!("{}:3420", hostname));
+    output.push_str(&format!("{}:{}", hostname, port));
 
     output
 }

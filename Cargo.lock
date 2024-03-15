@@ -383,6 +383,7 @@ dependencies = [
  "futures",
  "notify",
  "tokio",
+ "tokio-tungstenite",
  "tracing",
  "tracing-subscriber",
 ]

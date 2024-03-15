@@ -15,3 +15,4 @@ RUN rustup toolchain install stable
 RUN rustup target add wasm32-unknown-unknown
 RUN rustup default stable
 RUN cargo install cargo-leptos
+RUN cargo install wasm-bindgen-cli

@@ -13,6 +13,7 @@ tokio = { version = "1.36.0", features = ["full"] }
 tracing = { version = "0.1.40" }
 tracing-subscriber = "0.3.18"
 cfg-if = "1"
+tokio-tungstenite = "0.21.0"
 #log = { version = "0.4.21", features = ["max_level_warn"] }
 
 [features]

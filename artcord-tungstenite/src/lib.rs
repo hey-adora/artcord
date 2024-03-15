@@ -60,6 +60,7 @@ async fn accept_connection(stream: TcpStream) {
                             println!("Failed to serialize server msg: {}", bytes.err().unwrap());
                             return Ok(());
                         };
+                        Message::Ping(vec![]);
                         let server_msg = Message::binary(bytes);
                         tx.send(server_msg).await.unwrap();
                         return Ok(());

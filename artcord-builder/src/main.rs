@@ -1,20 +1,24 @@
-use std::{ffi::OsStr, path::Path, pin::Pin, process::ExitStatus, time::Duration};
+use std::{ffi::OsStr, net::SocketAddr, path::Path, pin::Pin, process::ExitStatus, time::Duration};
 
 use cfg_if::cfg_if;
-use futures::{future::join_all, Future, FutureExt};
+use futures::{future::join_all, Future, FutureExt, SinkExt, StreamExt, TryStreamExt};
 use notify::{
     event::{AccessKind, AccessMode},
     Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
 };
-use tokio::process::{Child, Command};
-use tokio::select;
-use tokio::sync::oneshot;
 use tokio::{
     fs::File,
     sync::{broadcast, mpsc},
     time::sleep,
 };
-use tracing::{debug, debug_span, error, info, trace, Level};
+use tokio::{join, sync::oneshot};
+use tokio::{
+    net::TcpListener,
+    process::{Child, Command},
+};
+use tokio::{net::TcpStream, select};
+use tokio_tungstenite::tungstenite::Message;
+use tracing::{debug, debug_span, error, info, info_span, instrument, trace, Instrument, Level};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum ProjectKind {
@@ -84,7 +88,12 @@ async fn main() {
         "artcord-tungstenite",
     ];
 
-    let paths_frontend = ["artcord-leptos", "assets", "style", "artcord-leptos-web-sockets"];
+    let paths_frontend = [
+        "artcord-leptos",
+        "assets",
+        "style",
+        "artcord-leptos-web-sockets",
+    ];
 
     for path in paths_backend {
         let fut = watch_dir(path, send_manager_event.clone(), ProjectKind::Back);
@@ -96,7 +105,11 @@ async fn main() {
         futs.push(fut.boxed());
     }
 
-    let manager_fut = manager(recv_manager_event, send_compiler_event, send_runtime_restart_event);
+    let manager_fut = manager(
+        recv_manager_event,
+        send_compiler_event,
+        send_runtime_restart_event,
+    );
     futs.push(manager_fut.boxed());
 
     let compiler_fut = compiler(send_manager_event.clone(), recv_compiler_event);
@@ -104,6 +117,9 @@ async fn main() {
 
     let runtime_fut = runtime(recv_runtime_restart_event);
     futs.push(runtime_fut.boxed());
+
+    let socket_fut = sockets();
+    futs.push(socket_fut.boxed());
 
     // send_manager_event
     //     .send(ManagerEventKind::File(ProjectKind::Back))
@@ -122,6 +138,92 @@ async fn main() {
     join_all(futs).await;
 }
 
+async fn sockets() {
+    let addr = "127.0.0.1:3001";
+    let listener = TcpListener::bind(&addr)
+        .await
+        .expect("Failed to bind socket addr");
+    info!("socket: restart socket listening on: ws://{}", &addr);
+
+    while let Ok((stream, _)) = listener.accept().await {
+        let peer = stream.peer_addr().expect("Failed to get peer addr");
+        info!("socket: connected: {}", peer);
+
+        tokio::spawn(sockets_accept_connection(peer, stream));
+        // unimplemented!();
+    }
+
+}
+
+async fn sockets_accept_connection(peer: SocketAddr, stream: TcpStream) {
+    if let Err(e) = sockets_handle_connection(peer, stream).await {
+        match e {
+            tokio_tungstenite::tungstenite::Error::ConnectionClosed
+            | tokio_tungstenite::tungstenite::Error::Protocol(_)
+            | tokio_tungstenite::tungstenite::Error::Utf8 => (),
+            err => error!("socket: Error proccesing connection: {err}"),
+        }
+    }
+}
+
+
+
+async fn sockets_handle_connection(
+    peer: SocketAddr,
+    stream: TcpStream,
+) -> tokio_tungstenite::tungstenite::Result<()> {
+    let ws_stream = tokio_tungstenite::accept_async(stream)
+        .await
+        .expect("socket: failed to accept connection");
+    info!("socket: new websocket connection: {}", peer);
+    let (mut write, mut read) = ws_stream.split();
+    let (send_msg, mut recv_msg) = mpsc::channel::<String>(1000);
+    
+
+    let read = read.try_for_each_concurrent(1000, move |msg| {
+        let send_msg = send_msg.clone();
+        async move { 
+            match msg {
+                // tokio_tungstenite::tungstenite::Message::Binary(msg) => {
+    
+                // }
+                tokio_tungstenite::tungstenite::Message::Text(msg) => {
+                    debug!("socekt: msg recv: {}", msg);
+                    let send_result = send_msg.send(String::from("restart")).await;
+                    if let Err(e) = send_result {
+                        error!("socket: sent: error: {}", e);
+                    }
+                }
+                _ => {
+                    info!("socket: received uwknown msg");
+                }
+            }
+    
+            Ok(())
+        }
+    });
+
+    let write = async move {
+        while let Some(msg) = recv_msg.recv().await {
+            let send_result = write.send(Message::Text(msg)).await;
+            if let Err(e) = send_result {
+                error!("socket: sent: error: {}", e);
+            }
+        }
+    };
+
+
+    let r = join!(read, write);
+    
+    r.0.unwrap();
+
+    info!("socket: disconnected: {}", peer);
+    // socket_err.unwrap();
+    // tokio_err.unwrap();
+
+    Ok(())
+}
+
 async fn runtime(mut recv_runtime_restart_event: broadcast::Receiver<()>) {
     let path_bin = "./target/debug/artcord";
     let path = Path::new(path_bin);
@@ -133,8 +235,8 @@ async fn runtime(mut recv_runtime_restart_event: broadcast::Receiver<()>) {
             let Ok(mut command) = command else {
                 let err = command
                     .err()
-                    .and_then(|e| Some(e.to_string()))
-                    .unwrap_or_else(|| "uwknown error".to_string());
+                    .map(|e| e.to_string())
+                    .unwrap_or("uwknown error".to_string());
                 error!("runtime: recv error: {}", err);
                 continue;
             };
@@ -170,7 +272,16 @@ async fn compiler(
     mut recv_compiler_event: broadcast::Receiver<CompilerEventKind>,
 ) {
     let mut commands_backend = build_commands([
-        vec!["cargo", "build", "--package", "artcord-leptos", "--features", "csr", "--target", "wasm32-unknown-unknown"],
+        vec![
+            "cargo",
+            "build",
+            "--package",
+            "artcord-leptos",
+            "--features",
+            "csr",
+            "--target",
+            "wasm32-unknown-unknown",
+        ],
         vec!["rm", "-r", "./target/site"],
         vec!["mkdir", "./target/site"],
         vec!["mkdir", "./target/site/pkg"],
@@ -196,7 +307,16 @@ async fn compiler(
     .await;
 
     let mut commands_frontend = build_commands([
-        vec!["cargo", "build", "--package", "artcord-leptos", "--features", "csr", "--target", "wasm32-unknown-unknown"],
+        vec![
+            "cargo",
+            "build",
+            "--package",
+            "artcord-leptos",
+            "--features",
+            "csr",
+            "--target",
+            "wasm32-unknown-unknown",
+        ],
         vec!["rm", "-r", "./target/site"],
         vec!["mkdir", "./target/site"],
         vec!["mkdir", "./target/site/pkg"],
@@ -312,12 +432,14 @@ async fn compiler_on_finish(
     if good {
         trace!(
             "Compiler(COMMAND-{:?}): finished: {}",
-            project_kind, command_name
+            project_kind,
+            command_name
         );
         if last {
             trace!(
                 "Compiler(COMMAND-{:?}): sent: CompilerEnded({:?})",
-                project_kind, project_kind
+                project_kind,
+                project_kind
             );
             let send_result = send_manager_event
                 .send(ManagerEventKind::CompilerEnded(project_kind))
@@ -330,7 +452,8 @@ async fn compiler_on_finish(
     } else {
         trace!(
             "Compiler(COMMAND-{:?}): sent: CompilerFailed({:?})",
-            project_kind, project_kind
+            project_kind,
+            project_kind
         );
         let send_result = send_manager_event
             .send(ManagerEventKind::CompilerFailed(project_kind))
@@ -354,11 +477,12 @@ async fn compiler_on_kill(
 
     trace!(
         "Compiler(RUNNING-{:?}): sent: CompilerKilled({:?})",
-        project_kind, project_kind
+        project_kind,
+        project_kind
     );
     let send_result = send_manager_event
-    .send(ManagerEventKind::CompilerKilled(project_kind))
-    .await;
+        .send(ManagerEventKind::CompilerKilled(project_kind))
+        .await;
 
     if let Err(e) = send_result {
         error!("Compiler(RUNNING-{:?}): sent: error: {}", project_kind, e);
@@ -377,7 +501,7 @@ async fn compiler_on_run(
                     "Compiler(RUNNING-{:?}): recv: CompilerEventKind::Kill",
                     project_kind
                 );
-                
+
                 break;
             }
             CompilerEventKind::Start(_project_kind) => {
@@ -407,7 +531,8 @@ async fn manager(
             ManagerEventKind::File(project_kind) => {
                 trace!(
                     "Manager: recv: file: {:?}, current compiler state: {:?}",
-                    project_kind, compiler_state
+                    project_kind,
+                    compiler_state
                 );
                 match project_kind {
                     ProjectKind::Back => {
@@ -463,47 +588,43 @@ async fn manager(
 
                         // }
                     }
-                    ProjectKind::Front => {
-                        match compiler_state {
-                            CompilerState::Compiling(current_project_kind) => {
+                    ProjectKind::Front => match compiler_state {
+                        CompilerState::Compiling(current_project_kind) => {
+                            trace!("Manager: set: compiling next: Some({:?})", project_kind);
+                            compile_next = Some(project_kind);
+                        }
+                        CompilerState::Killing(current_project_kind) => {
+                            trace!("Manager: skipped: compiler is busy killing");
+                        }
+                        CompilerState::Starting(current_project_kind) => {
+                            trace!("Manager: skipped: compiler is busy starting up");
+                        }
+                        CompilerState::Ready => {
+                            trace!(
+                                "Manager: sent: compile: {:?}",
+                                CompilerEventKind::Start(project_kind)
+                            );
+                            let send_result =
+                                send_compiler_event.send(CompilerEventKind::Start(project_kind));
+                            if let Err(e) = send_result {
+                                error!("Manager: send compiler event: error: {}", e);
+                                continue;
+                            } else {
                                 trace!(
-                                    "Manager: set: compiling next: Some({:?})",
+                                    "Manager: set: compiling state: Starting({:?})",
                                     project_kind
                                 );
-                                compile_next = Some(project_kind);
-                            }
-                            CompilerState::Killing(current_project_kind) => {
-                                trace!("Manager: skipped: compiler is busy killing");
-                            }
-                            CompilerState::Starting(current_project_kind) => {
-                                trace!("Manager: skipped: compiler is busy starting up");
-                            }
-                            CompilerState::Ready => {
-                                trace!(
-                                    "Manager: sent: compile: {:?}",
-                                    CompilerEventKind::Start(project_kind)
-                                );
-                                let send_result = send_compiler_event
-                                    .send(CompilerEventKind::Start(project_kind));
-                                if let Err(e) = send_result {
-                                    error!("Manager: send compiler event: error: {}", e);
-                                    continue;
-                                } else {
-                                    trace!(
-                                        "Manager: set: compiling state: Starting({:?})",
-                                        project_kind
-                                    );
-                                    compiler_state = CompilerState::Starting(project_kind);
-                                }
+                                compiler_state = CompilerState::Starting(project_kind);
                             }
                         }
-                    }
+                    },
                 }
             }
             ManagerEventKind::CompilerStarted(project_kind) => {
                 trace!(
                     "Manager: recv: compilation_started: {:?}, current compiler state: {:?}",
-                    project_kind, compiler_state
+                    project_kind,
+                    compiler_state
                 );
                 match project_kind {
                     ProjectKind::Back => match compiler_state {
@@ -549,7 +670,7 @@ async fn manager(
                         CompilerState::Ready => {
                             error!("Manager: sync: error: compiler state suppose to be Starting, not ready");
                         }
-                    }
+                    },
                 }
             }
             ManagerEventKind::CompilerEnded(project_kind) => {
@@ -558,7 +679,6 @@ async fn manager(
                     ProjectKind::Back => match compiler_state {
                         CompilerState::Compiling(current_project_kind) => {
                             if current_project_kind == project_kind {
-
                                 if let Some(next_project_knd) = compile_next {
                                     trace!(
                                         "Manager: sent: compile next: {:?}",
@@ -587,7 +707,6 @@ async fn manager(
                                         continue;
                                     }
                                 }
-                                
                             } else {
                                 error!("Manager: sync: error: compiler state Compiling project kind do not match, recv {:?}, current: {:?}", project_kind, current_project_kind);
                             }
@@ -621,7 +740,7 @@ async fn manager(
                         CompilerState::Ready => {
                             error!("Manager: sync: error: compiler state suppose to be Compiling, not ready");
                         }
-                    }
+                    },
                 }
             }
             ManagerEventKind::CompilerKilled(project_kind) => {
@@ -634,7 +753,9 @@ async fn manager(
                         CompilerState::Killing(current_project_kind) => {
                             if current_project_kind == project_kind {
                                 if let Some(next_project_knd) = compile_next {
-                                    if let (ProjectKind::Back, ProjectKind::Front) = (current_project_kind, next_project_knd) {
+                                    if let (ProjectKind::Back, ProjectKind::Front) =
+                                        (current_project_kind, next_project_knd)
+                                    {
                                         error!("Manager: error: killing backend to compile frontend, something is wrong.");
                                     }
 
@@ -710,7 +831,7 @@ async fn manager(
                         CompilerState::Ready => {
                             error!("Manager: sync: error: compiler state suppose to be Killing({:?}), not ready", project_kind);
                         }
-                    }
+                    },
                 }
             }
             ManagerEventKind::CompilerFailed(project_kind) => {
@@ -753,17 +874,15 @@ async fn manager(
                         CompilerState::Ready => {
                             error!("Manager: sync: error: compiler state suppose to be Compiling, not ready");
                         }
-                    }
+                    },
                 }
             }
         }
 
-        while let Some(new_event_kind) = recv_manager_event.recv().await {
+        if let Some(new_event_kind) = recv_manager_event.recv().await {
             event_kind = new_event_kind;
-            break;
         }
     }
-    
 }
 
 async fn watch_dir(
@@ -806,7 +925,7 @@ async fn watch_dir(
                     }
                 }
             }
-            Err(e) => println!("watch error: {:?}", e),
+            Err(e) => error!("watch error: {:?}", e),
         }
     }
 }
