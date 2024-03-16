@@ -211,9 +211,18 @@ async fn sockets_handle_connection(
     };
 
 
-    let r = join!(read, write);
+    select!(
+            _ = read => {
+
+            }, 
+            _ = write => {
+
+            }
+    );
+
     
-    r.0.unwrap();
+    
+    
 
     info!("socket: disconnected: {}", peer);
     // socket_err.unwrap();
@@ -270,11 +279,10 @@ async fn compiler(
     mut recv_compiler_event: broadcast::Receiver<CompilerEventKind>,
 ) {
     let mut commands_backend = build_commands([
-        vec!["cargo", "--frozen", "build", "--package", "artcord"],
+        vec!["cargo", "build", "--package", "artcord"],
         vec![
             "cargo",
             "build",
-            "--frozen",
             "--package",
             "artcord-leptos",
             "--features",
@@ -310,7 +318,6 @@ async fn compiler(
         vec![
             "cargo",
             "build",
-            "--frozen",
             "--package",
             "artcord-leptos",
             "--features",

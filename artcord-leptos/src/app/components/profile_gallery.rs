@@ -1,4 +1,4 @@
-use crate::app::{components::navbar::shrink_nav, utils::client_msg_wrap::ClientMsgWrap};
+use crate::app::{components::navbar::shrink_nav};
 use crate::app::global_state::GlobalState;
 use artcord_state::message::{client_msg::ClientMsg, server_msg::SERVER_MSG_PROFILE_IMGS_NAME};
 use chrono::Utc;
@@ -43,11 +43,11 @@ pub fn ProfileGallery() -> impl IntoView {
             return;
         };
 
-        let msg = ClientMsgWrap(ClientMsg::UserGalleryInit {
+        let msg = ClientMsg::UserGalleryInit {
             amount,
             from,
             user_id: String::from(new_user),
-        });
+        };
         log!("USER GALLERY FETCH: {:#?}", &msg);
         //global_state.socket_send(&msg);
     };

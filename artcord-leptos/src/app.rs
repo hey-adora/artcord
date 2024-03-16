@@ -1,6 +1,9 @@
 use crate::app::pages::admin::Admin;
 use crate::app::pages::login::Login;
 use crate::app::pages::register::Register;
+use artcord_leptos_web_sockets::WsRuntime;
+use artcord_state::message::client_msg::ClientMsg;
+use artcord_state::message::server_msg::ServerMsg;
 use global_state::GlobalState;
 
 use leptos::*;
@@ -8,8 +11,8 @@ use leptos_meta::*;
 use leptos_router::*;
 
 
-use crate::app::utils::ws_runtime::WsRuntime;
-use artcord_leptos_web_sockets::Runtime;
+//use crate::app::utils::ws_runtime::WsRuntime;
+//use artcord_leptos_web_sockets::Runtime;
 use pages::account::Account;
 use pages::gallery::GalleryPage;
 use pages::home::HomePage;
@@ -25,11 +28,16 @@ pub mod utils;
 pub fn App() -> impl IntoView {
     provide_meta_context();
     provide_context(GlobalState::new());
-    WsRuntime::connect("wss://artcord.uk.to", "3420");
-    WsRuntime::connect("ws://localhost", "3001");
+
+    let debug_ws = WsRuntime::<u128, ServerMsg, ClientMsg>::new();
+    debug_ws.connect(3001).unwrap();
+    
+   
+    // WsRuntime::connect("ws://localhost", "3001");
     // a a a a a a
     
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
+    global_state.ws.connect(3420).unwrap();
 
     view! {
         <meta name="viewport" content="width=device-width, initial-scale=1.0"/>

@@ -447,6 +447,7 @@ version = "0.1.0"
 name = "artcord-state"
 version = "0.1.0"
 dependencies = [
+ "artcord-leptos-web-sockets",
  "bincode",
  "bson",
  "chrono",

@@ -1,11 +1,9 @@
 use crate::app::components::navbar::{shrink_nav, Navbar};
 use crate::app::global_state::GlobalState;
-use crate::app::utils::client_msg_wrap::ClientMsgWrap;
 use crate::app::utils::{
     calc_fit_count, resize_imgs, LoadingNotFound, SelectedImg, NEW_IMG_HEIGHT,
 };
-use crate::app::WsRuntime;
-use artcord_leptos_web_sockets::Runtime;
+use artcord_leptos_web_sockets::WsRuntime;
 use artcord_state::aggregation::server_msg_img::AggImg;
 use artcord_state::message::client_msg::ClientMsg;
 use artcord_state::message::server_msg::ServerMsg;
@@ -60,7 +58,7 @@ pub fn GalleryPage() -> impl IntoView {
     let gallery_section = create_node_ref::<Section>();
     let loaded_sig = global_state.pages.gallery.gallery_loaded;
     let location = use_location();
-    let ws_img_singleton = WsRuntime::new_singleton();
+    //let ws_img_singleton = WsRuntime::new_singleton();
     //let sender = global_state.pages.gallery.img_sender;
 
     //let sender = global_state.create_sender();
@@ -198,10 +196,10 @@ pub fn GalleryPage() -> impl IntoView {
         let left = scroll_height - (client_height + scroll_top);
 
         if left < client_height {
-            let _msg = ClientMsgWrap(ClientMsg::GalleryInit {
-                amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
-                from: last,
-            });
+            // let _msg = ClientMsgWrap(ClientMsg::GalleryInit {
+            //     amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
+            //     from: last,
+            // });
             // sender.send(&msg, move |server_msg| {
             //     if let ServerMsg::Imgs(imgs) = server_msg {
             //         on_fetch(imgs);
@@ -256,20 +254,20 @@ pub fn GalleryPage() -> impl IntoView {
         let client_height = section.client_height();
         let client_width = section.client_width();
 
-        let msg = ClientMsgWrap(ClientMsg::GalleryInit {
-            amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
-            from: Utc::now().timestamp_millis(),
-        });
+        // let msg = ClientMsgWrap(ClientMsg::GalleryInit {
+        //     amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
+        //     from: Utc::now().timestamp_millis(),
+        // });
 
         // loaded_sig.set_untracked(LoadingNotFound::Loading);
 
-        let _ = ws_img_singleton.send_once(&msg, move |server_msg| {
-            // on receive
-            if let ServerMsg::Imgs(imgs) = server_msg.0 {
-                log!("{:#?}", &imgs);
-                on_fetch(imgs);
-            }
-        });
+        // let _ = ws_img_singleton.send_once(&msg, move |server_msg| {
+        //     // on receive
+        //     if let ServerMsg::Imgs(imgs) = server_msg.0 {
+        //         log!("{:#?}", &imgs);
+        //         on_fetch(imgs);
+        //     }
+        // });
     });
 
     view! {

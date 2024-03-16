@@ -17,6 +17,12 @@ pub enum ServerMsg {
     Reset,
 }
 
+impl artcord_leptos_web_sockets::Receive<u128> for ServerMsg {
+    fn recv_from_vec(bytes: &[u8]) -> Result<(u128, Self), String> where Self: std::marker::Sized {
+        ServerMsg::from_bytes(bytes).map_err(|e| e.to_string())
+    }
+}
+
 pub const SERVER_MSG_IMGS_NAME: &str = "imgs";
 pub const SERVER_MSG_PROFILE_IMGS_NAME: &str = "profile_imgs";
 pub const SERVER_MSG_PROFILE: &str = "profile";

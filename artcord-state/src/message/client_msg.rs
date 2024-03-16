@@ -41,6 +41,12 @@ pub enum ClientMsg {
     },
 }
 
+impl artcord_leptos_web_sockets::Send<u128> for ClientMsg {
+    fn send_as_vec(&self, id: &u128) -> Result<Vec<u8>, String> {
+        self.as_vec(*id).map_err(|e| e.to_string())
+    }
+}
+
 impl ClientMsg {
     pub fn name(&self) -> &'static str {
         match self {

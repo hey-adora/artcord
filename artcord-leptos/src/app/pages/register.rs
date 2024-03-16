@@ -1,6 +1,5 @@
 use crate::app::components::navbar::Navbar;
 use crate::app::global_state::GlobalState;
-use crate::app::utils::client_msg_wrap::ClientMsgWrap;
 
 use artcord_state::message::client_msg::ClientMsg;
 use artcord_state::misc::registration_invalid::{RegistrationInvalidMsg, MINIMUM_PASSWORD_LENGTH};
@@ -122,7 +121,7 @@ pub fn Register() -> impl IntoView {
 
         log!("Submit: '{}' '{}' '{}'", email, password, password_confirm);
 
-        let _msg = ClientMsgWrap(ClientMsg::Register { password, email });
+        let _msg = ClientMsg::Register { password, email };
 
         //global_state.socket_send(&msg);
 

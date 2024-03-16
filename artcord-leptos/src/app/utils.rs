@@ -8,9 +8,9 @@ use std::fmt::Debug;
 use wasm_bindgen::JsValue;
 use web_sys::Location;
 
-pub mod server_msg_wrap;
-pub mod client_msg_wrap;
-pub mod ws_runtime;
+// pub mod server_msg_wrap;
+// pub mod client_msg_wrap;
+// pub mod ws_runtime;
 
 // use crate::bot::img_quality::ImgQuality;
 // use crate::database::models::user::User;
