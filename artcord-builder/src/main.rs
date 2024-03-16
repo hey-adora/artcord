@@ -137,7 +137,7 @@ async fn main() {
 }
 
 async fn sockets() {
-    let addr = "127.0.0.1:3001";
+    let addr = "0.0.0.0:3001";
     let listener = TcpListener::bind(&addr)
         .await
         .expect("Failed to bind socket addr");
@@ -270,9 +270,11 @@ async fn compiler(
     mut recv_compiler_event: broadcast::Receiver<CompilerEventKind>,
 ) {
     let mut commands_backend = build_commands([
+        vec!["cargo", "--frozen", "build", "--package", "artcord"],
         vec![
             "cargo",
             "build",
+            "--frozen",
             "--package",
             "artcord-leptos",
             "--features",
@@ -300,7 +302,7 @@ async fn compiler(
             "--out-name",
             "leptos_start5",
         ],
-        vec!["cargo", "build", "--package", "artcord"],
+        
     ])
     .await;
 
@@ -308,6 +310,7 @@ async fn compiler(
         vec![
             "cargo",
             "build",
+            "--frozen",
             "--package",
             "artcord-leptos",
             "--features",

@@ -15,7 +15,7 @@ use tokio::sync::mpsc;
 use futures::SinkExt;
 
 pub async fn create_websockets() -> Result<(), String> {
-    let addr = String::from("127.0.0.1:3420");
+    let addr = String::from("0.0.0.0:3420");
     let try_socket = TcpListener::bind(&addr).await;
     let listener = try_socket.expect("Failed to bind");
     println!("Listening on: {}", addr);

@@ -68,10 +68,19 @@ pub trait Runtime<
 >
 {
     fn connect(_default: &'static str, _port: &'static str) {
+        let path = get_ws_path(_default, _port);
+        let exists = use_context::<LeptosWebSockets<IdType, ServerMsg, ClientMsg>>();
+        if exists.is_some() {
+            warn!("ws: already initialized, cant initialize for {}", &path);
+            return;
+        }
+
         provide_context(LeptosWebSockets::<IdType, ServerMsg, ClientMsg>::new());
         // "wss://artcord.uk.to", "3420"
         cfg_if! {
             if #[cfg(target_arch = "wasm32")] {
+                
+
                 let global_state = use_context::<LeptosWebSockets<IdType, ServerMsg, ClientMsg>>().expect("Failed to provide global state");
 
                 let ws_on_msg = global_state.ws_on_msg;
@@ -82,56 +91,73 @@ pub trait Runtime<
                 let ws_pending = global_state.global_pending_client_msgs;
                 let ws = global_state.ws;
 
-                ws_on_msg.set_value(Some(Rc::new(Closure::<dyn FnMut(_)>::new(
-                    move |e: MessageEvent| Self::on_msg(ws_closures, e)
-                ))));
+         
 
-                ws_on_err.set_value(Some(Rc::new(Closure::<dyn FnMut(_)>::new(
-                    move |e: ErrorEvent| Self::on_err(e)
-                ))));
+                ws_on_msg.set_value({
+                    let path = path.clone();
+                    Some(Rc::new(Closure::<dyn FnMut(_)>::new(
+                        move |e: MessageEvent| Self::on_msg(ws_closures, e, &path)
+                    )))
+                });
 
-                ws_on_open.set_value(Some(Rc::new(Closure::<dyn FnMut()>::new(
-                    move || Self::on_open(ws_pending, ws)
-                ))));
+                ws_on_err.set_value({
+                    let path = path.clone();
+                    Some(Rc::new(Closure::<dyn FnMut(_)>::new(
+                        move |e: ErrorEvent| Self::on_err(e, &path)
+                    )))
+                });
 
-                ws_on_close.set_value(Some(Rc::new(Closure::<dyn FnMut()>::new(
-                    move || Self::on_close()
-                ))));
+                ws_on_open.set_value({
+                    let path = path.clone();
+                    Some(Rc::new(Closure::<dyn FnMut()>::new(
+                        move || Self::on_open(ws_pending, ws, &path)
+                    )))
+                });
 
-                let create_ws = move || -> WebSocket {
-                    info!("ws: CONNECTING");
-                    let ws = WebSocket::new(&get_ws_path(_default, _port)).unwrap();
+                ws_on_close.set_value({
+                    let path = path.clone();
+                    Some(Rc::new(Closure::<dyn FnMut()>::new(
+                        move || Self::on_close(&path)
+                    )))
+                });
 
-
-
-                    ws.set_binary_type(web_sys::BinaryType::Arraybuffer);
-
-                    ws_on_msg.with_value(|ws_on_msg| {
-                        if let Some(ws_on_msg) = ws_on_msg {
-                            ws.set_onmessage(Some((**ws_on_msg).as_ref().unchecked_ref()));
-                        }
-                    });
-
-                    ws_on_err.with_value(|ws_on_err| {
-                        if let Some(ws_on_err) = ws_on_err {
-                            ws.set_onerror(Some((**ws_on_err).as_ref().unchecked_ref()));
-                        }
-                    });
-
-                    ws_on_open.with_value(|ws_on_open| {
-                        if let Some(ws_on_open) = ws_on_open {
-                            ws.set_onopen(Some((**ws_on_open).as_ref().unchecked_ref()));
-                        }
-                    });
-
-                    ws_on_close.with_value(|ws_on_close| {
-                        if let Some(ws_on_close) = ws_on_close {
-                            ws.set_onclose(Some((**ws_on_close).as_ref().unchecked_ref()));
-                        }
-                    });
-
-
-                    ws
+                let create_ws = {
+                    let path = path.clone();
+                    move || -> WebSocket {
+                        info!("ws: connecting to: {}", &path);
+                        let ws = WebSocket::new(&path).unwrap();
+    
+    
+    
+                        ws.set_binary_type(web_sys::BinaryType::Arraybuffer);
+    
+                        ws_on_msg.with_value(|ws_on_msg| {
+                            if let Some(ws_on_msg) = ws_on_msg {
+                                ws.set_onmessage(Some((**ws_on_msg).as_ref().unchecked_ref()));
+                            }
+                        });
+    
+                        ws_on_err.with_value(|ws_on_err| {
+                            if let Some(ws_on_err) = ws_on_err {
+                                ws.set_onerror(Some((**ws_on_err).as_ref().unchecked_ref()));
+                            }
+                        });
+    
+                        ws_on_open.with_value(|ws_on_open| {
+                            if let Some(ws_on_open) = ws_on_open {
+                                ws.set_onopen(Some((**ws_on_open).as_ref().unchecked_ref()));
+                            }
+                        });
+    
+                        ws_on_close.with_value(|ws_on_close| {
+                            if let Some(ws_on_close) = ws_on_close {
+                                ws.set_onclose(Some((**ws_on_close).as_ref().unchecked_ref()));
+                            }
+                        });
+    
+    
+                        ws
+                    }
                 };
 
                 ws.set_value(Some(create_ws()));
@@ -143,7 +169,7 @@ pub trait Runtime<
                                 .unwrap_or(false)
                         });
                         if is_closed {
-                            info!("ws: RECONNECTING");
+                            info!("ws: reconnecting {}", path);
                             ws.set_value(Some(create_ws()));
                         }
                     },
@@ -164,22 +190,23 @@ pub trait Runtime<
     fn generate_key() -> IdType;
 
 
-    fn on_open(socket_pending_client_msgs: StoredValue<Vec<Vec<u8>>>, ws: StoredValue<Option<WebSocket>>) {
-        info!("ws: CONNECTED");
+    fn on_open(socket_pending_client_msgs: StoredValue<Vec<Vec<u8>>>, ws: StoredValue<Option<WebSocket>>, path: &str)  {
+        info!("ws: connected to {}", path);
         Self::flush_pending_client_msgs(socket_pending_client_msgs, ws);
     }
 
-    fn on_close() {
-        info!("ws: DISCONNECTED");
+    fn on_close(path: &str) {
+        info!("ws: disconnected {}", path);
     }
 
-    fn on_err(e: ErrorEvent) {
-        error!("WS: ERROR: {:?}", e);
+    fn on_err(e: ErrorEvent, path:&str) {
+        error!("WS: error from {}: {:?}", path, e);
     }
 
     fn on_msg(
         closures: StoredValue<HashMap<IdType, Rc<dyn Fn(ServerMsg) -> ()>>>,
         e: MessageEvent,
+        path: &str
     ) {
         let data = e.data().dyn_into::<js_sys::ArrayBuffer>();
         let Ok(data) = data else {
@@ -189,13 +216,13 @@ pub trait Runtime<
         let bytes: Vec<u8> = array.to_vec();
 
         if bytes.is_empty() {
-            trace!("ws: Empty byte msg received.");
+            trace!("ws: msg from {}: empty.", path);
             return;
         };
 
         let server_msg = ServerMsg::recv_from_vec(&bytes);
         let Ok((id, server_msg)) = server_msg else {
-            error!("ws: Error decoding msg: {}", server_msg.err().unwrap());
+            error!("ws: error from {}: decoding msg: {}", path, server_msg.err().unwrap());
             return;
         };
 
