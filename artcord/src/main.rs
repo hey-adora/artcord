@@ -9,14 +9,15 @@ use tracing::{info};
 #[actix_web::main]
 async fn main() {
     dotenv().ok();
-
-    cfg_if! {
-        if #[cfg(feature = "production")] {
-            tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).try_init().unwrap();
-        } else {
-            tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).try_init().unwrap();
-        }
-    }
+    tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).try_init().unwrap();
+    //tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::builder().parse_lossy("artcord=trace")).try_init().unwrap();
+    // cfg_if! {
+    //     if #[cfg(feature = "production")] {
+    //         tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).try_init().unwrap();
+    //     } else {
+    //         tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).try_init().unwrap();
+    //     }
+    // }
 
     info!("started!");
 
