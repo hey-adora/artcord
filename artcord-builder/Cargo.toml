@@ -14,7 +14,6 @@ tracing = { version = "0.1.40"  }
 tracing-subscriber = {version ="0.3.18", features = ["env-filter"] }
 cfg-if = "1"
 tokio-tungstenite = "0.21.0"
-ctrlc = "3.4.4"
 dotenv = "0.15.0"
 tokio-util = { version = "0.7.10", features = ["full"] }
 #log = { version = "0.4.21", features = ["max_level_warn"] }
