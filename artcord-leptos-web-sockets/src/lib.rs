@@ -69,19 +69,22 @@ pub struct WsRuntime<
     ServerMsg: Clone + Receive<IdType> + 'static,
     ClientMsg: Clone + Send<IdType> + Debug + 'static,
 > {
-
     pub global_msgs_callbacks: GlobalMsgCallbacks<IdType, ServerMsg>,
     pub global_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
     pub ws: StoredValue<Option<WebSocket>>,
-    pub ws_on_msg: WsCallback<dyn FnMut(MessageEvent)> ,
+    pub ws_on_msg: WsCallback<dyn FnMut(MessageEvent)>,
     pub ws_on_err: WsCallback<dyn FnMut(ErrorEvent)>,
     pub ws_on_open: WsCallback<dyn FnMut()>,
     pub ws_on_close: WsCallback<dyn FnMut()>,
     phantom: PhantomData<ClientMsg>,
 }
 
-impl <IdType: KeyGen, ServerMsg: Clone + Receive<IdType>, ClientMsg: Clone + Send<IdType> + Debug> Copy for WsRuntime<IdType, ServerMsg, ClientMsg> {
-
+impl<
+        IdType: KeyGen,
+        ServerMsg: Clone + Receive<IdType>,
+        ClientMsg: Clone + Send<IdType> + Debug,
+    > Copy for WsRuntime<IdType, ServerMsg, ClientMsg>
+{
 }
 
 impl<
@@ -206,7 +209,7 @@ impl<
 
                 ws.set_value(Some(create_ws()));
                 let _reconnect_interval = leptos_use::use_interval_fn(
-                    
+
                     {
                         let url = url.clone();
                         move || {
@@ -225,10 +228,9 @@ impl<
                 );
             }
         }
-
     }
 
-    pub fn new_singleton(&self) -> WsSingleton<IdType, ServerMsg, ClientMsg> {
+    pub fn create_singleton(&self) -> WsSingleton<IdType, ServerMsg, ClientMsg> {
         // let global_state = use_context::<LeptosWebSockets<IdType, ServerMsg, ClientMsg>>()
         //     .expect("Failed to provide global state");
         // let ws_closures = global_state.global_msgs_closures;
@@ -247,8 +249,7 @@ impl<
     fn on_open(
         url: &str,
         socket_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
-        ws: StoredValue<Option<WebSocket>>
-        
+        ws: StoredValue<Option<WebSocket>>,
     ) {
         info!("ws: connected to {}", url);
         Self::flush_pending_client_msgs(socket_pending_client_msgs, ws);
@@ -258,15 +259,11 @@ impl<
         info!("ws: disconnected {}", url);
     }
 
-    fn on_err(url: &str, e: ErrorEvent ) {
+    fn on_err(url: &str, e: ErrorEvent) {
         error!("WS: error from {}: {:?}", url, e);
     }
 
-    fn on_msg(
-        url: &str,
-        closures: GlobalMsgCallbacks<IdType, ServerMsg>,
-        e: MessageEvent
-    ) {
+    fn on_msg(url: &str, closures: GlobalMsgCallbacks<IdType, ServerMsg>, e: MessageEvent) {
         let data = e.data().dyn_into::<js_sys::ArrayBuffer>();
         let Ok(data) = data else {
             return;
@@ -299,16 +296,20 @@ impl<
         ws.with_value(|ws| {
             if let Some(ws) = ws {
                 socket_pending_client_msgs.update_value(|msgs| {
+                    trace!("sending msgs from queue, left: {}", msgs.len());
                     let mut index: usize = 0;
                     for msg in msgs.iter() {
                         let result = ws.send_with_u8_array(msg);
                         if result.is_err() {
+                            warn!("failed to send msg {}:{:?}", index, msg);
                             break;
                         }
+                        trace!("sent msg {} from queue: {:?}", index, msg);
                         index += 1;
                     }
                     if index < msgs.len() && index > 0 {
                         *msgs = (&msgs[index..]).to_vec();
+                        trace!("msg left in queue: {}", msgs.len());
                     }
                 });
             } else {
@@ -340,7 +341,10 @@ pub fn get_ws_url(port: u32) -> Result<String, GetUrlError> {
     let window = use_window();
     let window = window.as_ref().ok_or(GetUrlError::GetWindow)?;
 
-    let protocol = window.location().protocol().or(Err(GetUrlError::GetProtocol))?;
+    let protocol = window
+        .location()
+        .protocol()
+        .or(Err(GetUrlError::GetProtocol))?;
 
     if protocol == "http:" {
         output.push_str("ws://");
@@ -348,7 +352,10 @@ pub fn get_ws_url(port: u32) -> Result<String, GetUrlError> {
         output.push_str("wss://");
     }
 
-    let hostname = window.location().hostname().or(Err(GetUrlError::GetHostname))?;
+    let hostname = window
+        .location()
+        .hostname()
+        .or(Err(GetUrlError::GetHostname))?;
     output.push_str(&format!("{}:{}", hostname, port));
 
     Ok(output)
@@ -406,7 +413,7 @@ impl<
         on_receive: impl Fn(ServerMsg) + 'static,
     ) -> Result<SendResult, SendError> {
         self.ws.with_value(|ws| -> Result<SendResult, SendError> {
-            let ws = ws.as_ref().ok_or(SendError::WsNotInitialized)?;
+            //let ws = ws.as_ref().ok_or(SendError::WsNotInitialized)?;
             let bytes = client_msg
                 .send_as_vec(&self.key)
                 .map_err(SendError::SendError)?;
@@ -427,30 +434,37 @@ impl<
                 }
             });
 
-            let is_open = self.ws.with_value(move |ws| {
-                ws.as_ref()
-                    .map(|ws| ws.ready_state() == WebSocket::OPEN)
-                    .unwrap_or(false)
-            });
+            //let mut queue = true;
 
-            if is_open {
-                ws.send_with_u8_array(&bytes)
-                    .map(|_| SendResult::Sent)
-                    .map_err(|e| {
-                        self.global_msgs_closures.update_value({
-                            move |socket_closures| {
-                                socket_closures.remove(&self.key);
-                            }
+            if let Some(ws) = ws {
+                let is_open = self.ws.with_value(move |ws| {
+                    ws.as_ref()
+                        .map(|ws| ws.ready_state() == WebSocket::OPEN)
+                        .unwrap_or(false)
+                });
+
+                if is_open {
+                    return ws
+                        .send_with_u8_array(&bytes)
+                        .map(|_| SendResult::Sent)
+                        .map_err(|e| {
+                            self.global_msgs_closures.update_value({
+                                move |socket_closures| {
+                                    socket_closures.remove(&self.key);
+                                }
+                            });
+                            SendError::SendError(
+                                e.as_string()
+                                    .unwrap_or(String::from("Failed to send web-socket package")),
+                            )
                         });
-                        SendError::SendError(e.as_string().unwrap_or(String::from(
-                            "Failed to send web-socket package",
-                        )))
-                    })
-            } else {
-                self.global_pending_client_msgs
-                    .update_value(|pending| pending.push(bytes));
-                Ok(SendResult::Queued)
+                }
             }
+
+            trace!("msg \"{:?}\" pushed to queue", client_msg);
+            self.global_pending_client_msgs
+                .update_value(|pending| pending.push(bytes));
+            Ok(SendResult::Queued)
         })
     }
 }
@@ -458,7 +472,7 @@ impl<
 #[derive(Error, Debug)]
 pub enum ConnectError {
     #[error("Failed to get generate connection url: {0}")]
-    GetUrlError(#[from] GetUrlError)
+    GetUrlError(#[from] GetUrlError),
 }
 
 #[derive(Error, Debug)]
@@ -470,9 +484,8 @@ pub enum GetUrlError {
     GetProtocol,
 
     #[error("window.location().hostname() failed")]
-    GetHostname
+    GetHostname,
 }
-
 
 #[derive(Debug, Clone)]
 pub enum SendResult {

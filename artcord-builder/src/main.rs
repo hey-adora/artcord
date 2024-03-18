@@ -1,13 +1,16 @@
 use std::{ffi::OsStr, net::SocketAddr, ops::Deref, path::Path, pin::Pin, process::ExitStatus};
 
+use artcord_state::message::{debug_client_msg::DebugClientMsg, debug_server_msg::DebugServerMsg};
 use cfg_if::cfg_if;
+use dotenv::dotenv;
 use futures::{future::join_all, Future, FutureExt, SinkExt, StreamExt, TryStreamExt};
 use notify::{
     event::{AccessKind, AccessMode},
     Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
 };
+use tokio::join;
+use tokio::signal;
 use tokio::sync::{broadcast, mpsc, watch};
-use tokio::{join};
 use tokio::{
     net::TcpListener,
     process::{Child, Command},
@@ -16,8 +19,6 @@ use tokio::{net::TcpStream, select};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_util::task::TaskTracker;
 use tracing::{debug, error, info, trace, warn, Level};
-use tokio::signal;
-use dotenv::dotenv;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum ProjectKind {
@@ -43,8 +44,6 @@ enum ManagerEventKind {
     Exit,
 }
 
-
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum CompilerEventKind {
     Start(ProjectKind),
@@ -57,8 +56,6 @@ enum RuntimeEvent {
     Restart,
     Exit,
 }
-
-
 
 // async fn do_stuff_async() {
 //     loop {
@@ -76,7 +73,15 @@ enum RuntimeEvent {
 #[tokio::main]
 async fn main() {
     dotenv().ok();
-    tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).try_init().unwrap();
+    tracing_subscriber::fmt()
+        .event_format(
+            tracing_subscriber::fmt::format()
+                .with_file(true)
+                .with_line_number(true),
+        )
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .try_init()
+        .unwrap();
     //tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::builder().parse_lossy("artcord=trace")).try_init().unwrap();
     // cfg_if! {
     //     if #[cfg(feature = "production")] {
@@ -90,7 +95,8 @@ async fn main() {
 
     let (send_manager_event, recv_manager_event) = mpsc::channel::<ManagerEventKind>(1000);
     let (send_compiler_event, recv_compiler_event) = broadcast::channel::<CompilerEventKind>(1);
-    let (send_runtime_restart_event, recv_runtime_restart_event) = broadcast::channel::<RuntimeEvent>(1);
+    let (send_runtime_restart_event, recv_runtime_restart_event) =
+        broadcast::channel::<RuntimeEvent>(1);
     let (send_exit, recv_exit) = watch::channel::<Option<()>>(None);
     let mut futs: Vec<Pin<Box<dyn Future<Output = ()>>>> = Vec::new();
 
@@ -111,12 +117,22 @@ async fn main() {
     ];
 
     for path in paths_backend {
-        let fut = watch_dir(path, send_manager_event.clone(), recv_exit.clone(), ProjectKind::Back);
+        let fut = watch_dir(
+            path,
+            send_manager_event.clone(),
+            recv_exit.clone(),
+            ProjectKind::Back,
+        );
         futs.push(fut.boxed());
     }
 
     for path in paths_frontend {
-        let fut = watch_dir(path, send_manager_event.clone(), recv_exit.clone(), ProjectKind::Front);
+        let fut = watch_dir(
+            path,
+            send_manager_event.clone(),
+            recv_exit.clone(),
+            ProjectKind::Front,
+        );
         futs.push(fut.boxed());
     }
 
@@ -136,14 +152,23 @@ async fn main() {
     let socket_fut = sockets(recv_exit.clone());
     futs.push(socket_fut.boxed());
 
-    let handle_exit = handle_exit(send_exit, send_manager_event.clone(), send_compiler_event.clone(), send_runtime_restart_event.clone());
+    let handle_exit = handle_exit(
+        send_exit,
+        send_manager_event.clone(),
+        send_compiler_event.clone(),
+        send_runtime_restart_event.clone(),
+    );
     futs.push(handle_exit.boxed());
 
     join_all(futs).await;
 }
 
-
-async fn handle_exit(send_exit: watch::Sender<Option<()>>, send_manager_event: mpsc::Sender<ManagerEventKind>, send_compiler_event: broadcast::Sender<CompilerEventKind>, send_runtime_restart_event: broadcast::Sender<RuntimeEvent>) {
+async fn handle_exit(
+    send_exit: watch::Sender<Option<()>>,
+    send_manager_event: mpsc::Sender<ManagerEventKind>,
+    send_compiler_event: broadcast::Sender<CompilerEventKind>,
+    send_runtime_restart_event: broadcast::Sender<RuntimeEvent>,
+) {
     let result = signal::ctrl_c().await;
     if let Err(err) = result {
         error!("handle_exit: err: receiving ctrl+c: {}", err);
@@ -165,13 +190,11 @@ async fn handle_exit(send_exit: watch::Sender<Option<()>>, send_manager_event: m
     if let Err(err) = result {
         error!("error sending runtime exit signal: {}", err);
     }
-    
+
     let result = send_exit.send(Some(()));
     if let Err(err) = result {
         error!("error sending general exit signal: {}", err);
     }
-
-    
 }
 
 async fn sockets(recv_exit: watch::Receiver<Option<()>>) {
@@ -187,7 +210,7 @@ async fn sockets(recv_exit: watch::Receiver<Option<()>>) {
         while let Ok((stream, _)) = listener.accept().await {
             let peer = stream.peer_addr().expect("Failed to get peer addr");
             info!("socket: connected: {}", peer);
-    
+
             connection_tasks.spawn(sockets_accept_connection(peer, stream, recv_exit.clone()));
         }
     };
@@ -196,7 +219,6 @@ async fn sockets(recv_exit: watch::Receiver<Option<()>>) {
         let mut recv_exit = recv_exit.clone();
         async move {
             loop {
-                
                 let should_exit = recv_exit.borrow_and_update().deref().is_some();
                 if should_exit {
                     break;
@@ -213,7 +235,7 @@ async fn sockets(recv_exit: watch::Receiver<Option<()>>) {
     select!(
         _ = handle_connections => {
 
-        }, 
+        },
         _ = handle_exit => {
 
         },
@@ -226,7 +248,11 @@ async fn sockets(recv_exit: watch::Receiver<Option<()>>) {
     trace!("socket: ws://{} exited", &addr);
 }
 
-async fn sockets_accept_connection(peer: SocketAddr, stream: TcpStream, recv_exit: watch::Receiver<Option<()>>) {
+async fn sockets_accept_connection(
+    peer: SocketAddr,
+    stream: TcpStream,
+    recv_exit: watch::Receiver<Option<()>>,
+) {
     if let Err(e) = sockets_handle_connection(peer, stream, recv_exit).await {
         match e {
             tokio_tungstenite::tungstenite::Error::ConnectionClosed
@@ -237,11 +263,10 @@ async fn sockets_accept_connection(peer: SocketAddr, stream: TcpStream, recv_exi
     }
 }
 
-
-enum SocketMsg {
-    Msg(Vec<u8>),
-    Exit
-}
+// enum SocketMsg {
+//     Msg(Vec<u8>),
+//     Exit
+// }
 
 async fn sockets_handle_connection(
     peer: SocketAddr,
@@ -255,10 +280,10 @@ async fn sockets_handle_connection(
 
     //ws_stream.re
     let (mut write, mut read) = ws_stream.split();
-    let (send_msg, mut recv_msg) = mpsc::channel::<String>(1000);
+    let (send_msg, mut recv_msg) = mpsc::channel::<Vec<u8>>(1000);
     // recv_msg.close();
     // send_msg.close();
-    
+
     //ws_stream.close(None);
 
     // write.close();
@@ -287,21 +312,60 @@ async fn sockets_handle_connection(
     //     // };
 
     //     let handle_exit = async {
-            
+
     //     };
-        
+
     // }
 
     let read_fut = read.try_for_each_concurrent(1000, move |msg| {
         let send_msg = send_msg.clone();
-        async move { 
+        async move {
             match msg {
                 // tokio_tungstenite::tungstenite::Message::Binary(msg) => {
-    
+
                 // }
-                tokio_tungstenite::tungstenite::Message::Text(msg) => {
-                    debug!("socekt: msg recv: {}", msg);
-                    let send_result = send_msg.send(String::from("restart")).await;
+                tokio_tungstenite::tungstenite::Message::Binary(client_msg_bytes) => {
+                    let client_msg = DebugClientMsg::from_bytes(&client_msg_bytes);
+
+                    let Ok((key, client_msg)) = client_msg.inspect_err(|err| {
+                        error!(
+                            "socket: error deserializing client msg: {:?} : {}",
+                            client_msg_bytes, err
+                        );
+                    }) else {
+                        return Ok(());
+                    };
+
+                    // let Ok(client_msg) = client_msg else {
+                    //     let err = client_msg.err().map(|e|e.to_string()).unwrap_or("unknown error".to_string());
+                    //     error!("socket: error deserializing client msg: {:?} : {}", client_msg_bytes, err);
+                    //     return Ok(());
+                    // };
+
+                    // let client_msg = match client_msg {
+                    //     Ok(a) => a,
+                    //     Err(err) => {
+                    //         error!("socket: error deserializing client msg: {:?} : {}", client_msg_bytes, err);
+                    //         return Ok(());
+                    //     }
+                    // };
+
+                    //send_msg.send();
+
+                    trace!("socekt: msg recv: ({},{:?})", key, &client_msg);
+
+                    let server_msg_whole = DebugServerMsg::Restart;
+                    let server_msg = server_msg_whole.as_bytes(key);
+                    let Ok(server_msg) = server_msg.inspect_err(|err| {
+                        error!(
+                            "socket: error serializing server msg: {:?} : {}",
+                            server_msg_whole, err
+                        );
+                    }) else {
+                        return Ok(());
+                    };
+
+                    let send_result = send_msg.send(server_msg).await;
                     if let Err(e) = send_result {
                         error!("socket: sent: error: {}", e);
                     }
@@ -310,7 +374,7 @@ async fn sockets_handle_connection(
                     info!("socket: received uwknown msg");
                 }
             }
-    
+
             Ok(())
         }
     });
@@ -324,7 +388,8 @@ async fn sockets_handle_connection(
                     error!("socket: recv: closed for {}", peer);
                     return true;
                 };
-                let send_result = write.send(Message::Text(msg)).await;
+                write.close().await;
+                let send_result = write.send(Message::binary(msg)).await;
                 if let Err(e) = send_result {
                     error!("socket: sent: error: {}", e);
                 }
@@ -333,7 +398,11 @@ async fn sockets_handle_connection(
 
             let exit_handle = async {
                 let should_exit = recv_exit.borrow_and_update().deref().is_some();
-                trace!("socket_handle_connection({}): received exit value: {}", peer, should_exit);
+                trace!(
+                    "socket_handle_connection({}): received exit value: {}",
+                    peer,
+                    should_exit
+                );
                 if should_exit {
                     return true;
                 }
@@ -346,27 +415,26 @@ async fn sockets_handle_connection(
             };
 
             select!(
-                exit = msg_handle => {
-                    if exit {
-                        break;
-                    }
-                }, 
-                exit = exit_handle => {
-                    if exit {
-                        break;
-                    }
-                },
-        );
+                    exit = msg_handle => {
+                        if exit {
+                            break;
+                        }
+                    },
+                    exit = exit_handle => {
+                        if exit {
+                            break;
+                        }
+                    },
+            );
         }
     };
 
     // let exit_handle = sockets_handle_connection_on_exit(&peer, recv_exit);
 
-
     select!(
             _ = read_fut => {
 
-            }, 
+            },
             _ = write => {
 
             },
@@ -375,10 +443,6 @@ async fn sockets_handle_connection(
 
             // }
     );
-
-    
-    
-    
 
     info!("socket: disconnected: {}", peer);
     // socket_err.unwrap();
@@ -389,7 +453,7 @@ async fn sockets_handle_connection(
 
 // async fn sockets_handle_connection_on_exit(peer: &SocketAddr, mut recv_exit: watch::Receiver<Option<()>>) {
 //     loop {
-            
+
 //         let should_exit = recv_exit.borrow_and_update().deref().is_some();
 //         if should_exit {
 //             break;
@@ -446,26 +510,22 @@ async fn runtime(mut recv_runtime_restart_event: broadcast::Receiver<RuntimeEven
             };
         }
 
-        
         loop {
             let result = recv_runtime_restart_event.recv().await;
             match result {
-                Ok(result) => {
-                    match result {
-                        RuntimeEvent::Restart => {
-                            continue 'main_loop;
-                        }
-                        RuntimeEvent::Exit => {
-                            break 'main_loop;
-                        }
+                Ok(result) => match result {
+                    RuntimeEvent::Restart => {
+                        continue 'main_loop;
                     }
-                }
+                    RuntimeEvent::Exit => {
+                        break 'main_loop;
+                    }
+                },
                 Err(err) => {
                     error!("runtime: recv error: {}", err);
                 }
             }
         }
-        
     }
 
     trace!("runtime: exited.");
@@ -523,7 +583,6 @@ async fn compiler(
             "--out-name",
             "leptos_start5",
         ],
-        
     ])
     .await;
 
@@ -578,16 +637,16 @@ async fn compiler(
                     "Compiler: recv: compiler_event_kind: {:?}",
                     compiler_event_kind
                 );
-        
+
                 // match compiler_event_kind {
                 //     CompilerEventKind::Kill => {
-        
+
                 //     }
                 //     CompilerEventKind::Start(project_kind) => {
-        
+
                 //     }
                 // };
-        
+
                 trace!("Compiler: sent: file: CompilerStarted({:?})", project_kind);
                 let send_result = send_manager_event
                     .send(ManagerEventKind::CompilerStarted(project_kind))
@@ -596,23 +655,23 @@ async fn compiler(
                     error!("Compiler: sent: error: {}", e);
                     continue;
                 }
-        
+
                 // sleep(Duration::from_secs(5)).await;
-        
+
                 let commands: &mut [(Command, String)] = match project_kind {
                     ProjectKind::Back => commands_backend.as_mut(),
                     ProjectKind::Front => commands_frontend.as_mut(),
                 };
-        
+
                 let commands_count = commands.len();
-        
+
                 for (i, (command, command_name)) in commands.iter_mut().enumerate() {
                     let mut command = command.spawn().unwrap();
-        
+
                     select! {
                        command_return = command.wait() => {
                            let good = compiler_on_finish(i == commands_count - 1,project_kind, command_return, command_name, send_manager_event.clone()).await;
-        
+
                            if !good {
                                break;
                            }
@@ -640,7 +699,6 @@ async fn compiler(
                 break;
             }
         }
-   
     }
 
     trace!("compiler: exited.");
@@ -747,9 +805,12 @@ async fn compiler_on_run(
                     broadcast::error::RecvError::Closed => {
                         error!("compiler_run: recv: closed");
                         return true;
-                    },
+                    }
                     broadcast::error::RecvError::Lagged(msg_count) => {
-                        warn!("compiler_run: recv: lagged, missed msg count: {}", msg_count);
+                        warn!(
+                            "compiler_run: recv: lagged, missed msg count: {}",
+                            msg_count
+                        );
                     }
                 }
             } else {
@@ -817,7 +878,7 @@ async fn manager(
                                         "Manager: set: compiling state: Killing({:?})",
                                         current_project_kind
                                     );
-                                    compiler_state = CompilerState::Killing(project_kind);
+                                    compiler_state = CompilerState::Killing(current_project_kind);
                                     trace!(
                                         "Manager: set: compiling next: Some({:?})",
                                         project_kind
@@ -832,6 +893,13 @@ async fn manager(
                                 trace!("Manager: skipped: compiler is busy starting up");
                             }
                             CompilerState::Ready => {
+                                if let Some(current_compile_next) = compile_next {
+                                    trace!(
+                                        "Manager: compile next is set to: Some({:?}), will reset to None",
+                                        current_compile_next
+                                    );
+                                    compile_next = None;
+                                }
                                 trace!(
                                     "Manager: sent: compile: {:?}",
                                     CompilerEventKind::Start(project_kind)
@@ -857,9 +925,69 @@ async fn manager(
                         // }
                     }
                     ProjectKind::Front => match compiler_state {
-                        CompilerState::Compiling(_current_project_kind) => {
+                        CompilerState::Compiling(current_project_kind) => {
                             trace!("Manager: set: compiling next: Some({:?})", project_kind);
-                            compile_next = Some(project_kind);
+                            if let Some(current_compile_next) = compile_next {
+                                trace!(
+                                    "Manager: has compiling next already set to Some({:?})",
+                                    current_compile_next
+                                );
+                                match current_compile_next {
+                                    ProjectKind::Back => {
+                                        //trace!("Manager: skipping: compiling next is already set to Some({:?})", project_kind);
+                                        //compile_next = Some(project_kind);
+
+                                        trace!("Manager: sent: {:?}", CompilerEventKind::Kill);
+                                        let send_result =
+                                            send_compiler_event.send(CompilerEventKind::Kill);
+                                        if let Err(e) = send_result {
+                                            error!("Manager: sent compiler event: error: {}", e);
+                                            continue;
+                                        } else {
+                                            trace!(
+                                                "Manager: set: compiling state: Killing({:?})",
+                                                current_project_kind
+                                            );
+                                            compiler_state =
+                                                CompilerState::Killing(current_project_kind);
+                                        }
+                                    }
+                                    ProjectKind::Front => {
+                                        match current_project_kind {
+                                            ProjectKind::Back => {
+                                                trace!("Manager: skipping: compiling next is already set to Some({:?})", project_kind);
+                                            }
+                                            ProjectKind::Front => {
+                                                trace!(
+                                                    "Manager: sent: {:?}",
+                                                    CompilerEventKind::Kill
+                                                );
+                                                let send_result = send_compiler_event
+                                                    .send(CompilerEventKind::Kill);
+                                                if let Err(e) = send_result {
+                                                    error!(
+                                                        "Manager: sent compiler event: error: {}",
+                                                        e
+                                                    );
+                                                    continue;
+                                                } else {
+                                                    trace!(
+                                                        "Manager: set: compiling state: Killing({:?})",
+                                                        current_project_kind
+                                                    );
+                                                    compiler_state = CompilerState::Killing(
+                                                        current_project_kind,
+                                                    );
+                                                }
+                                            }
+                                        }
+
+                                        //compile_next = Some(project_kind);
+                                    }
+                                }
+                            } else {
+                                compile_next = Some(project_kind);
+                            }
                         }
                         CompilerState::Killing(_current_project_kind) => {
                             trace!("Manager: skipped: compiler is busy killing");
@@ -868,21 +996,58 @@ async fn manager(
                             trace!("Manager: skipped: compiler is busy starting up");
                         }
                         CompilerState::Ready => {
-                            trace!(
-                                "Manager: sent: compile: {:?}",
-                                CompilerEventKind::Start(project_kind)
-                            );
-                            let send_result =
-                                send_compiler_event.send(CompilerEventKind::Start(project_kind));
-                            if let Err(e) = send_result {
-                                error!("Manager: send compiler event: error: {}", e);
-                                continue;
+                            if let Some(current_compile_next) = compile_next {
+                                trace!(
+                                    "Manager: has compiling next already set to Some({:?})",
+                                    current_compile_next
+                                );
+
+                                trace!(
+                                    "Manager: sent: compile: {:?}",
+                                    CompilerEventKind::Start(current_compile_next)
+                                );
+                                let send_result = send_compiler_event
+                                    .send(CompilerEventKind::Start(current_compile_next));
+                                if let Err(e) = send_result {
+                                    error!("Manager: send compiler event: error: {}", e);
+                                    continue;
+                                } else {
+                                    trace!(
+                                        "Manager: set: compiling state: Starting({:?})",
+                                        current_compile_next
+                                    );
+                                    compiler_state = CompilerState::Starting(current_compile_next);
+
+                                    trace!("Manager: set: compiling next: None");
+
+                                    compile_next = None;
+                                }
+
+                                // match current_compile_next {
+                                //     ProjectKind::Back => {
+
+                                //     }
+                                //     ProjectKind::Front => {
+
+                                //     }
+                                // }
                             } else {
                                 trace!(
-                                    "Manager: set: compiling state: Starting({:?})",
-                                    project_kind
+                                    "Manager: sent: compile: {:?}",
+                                    CompilerEventKind::Start(project_kind)
                                 );
-                                compiler_state = CompilerState::Starting(project_kind);
+                                let send_result = send_compiler_event
+                                    .send(CompilerEventKind::Start(project_kind));
+                                if let Err(e) = send_result {
+                                    error!("Manager: send compiler event: error: {}", e);
+                                    continue;
+                                } else {
+                                    trace!(
+                                        "Manager: set: compiling state: Starting({:?})",
+                                        project_kind
+                                    );
+                                    compiler_state = CompilerState::Starting(project_kind);
+                                }
                             }
                         }
                     },
@@ -969,7 +1134,8 @@ async fn manager(
                                 } else {
                                     trace!("Manager: set: compiler state to Ready");
                                     compiler_state = CompilerState::Ready;
-                                    let send_result = send_runtime_restart_event.send(RuntimeEvent::Restart);
+                                    let send_result =
+                                        send_runtime_restart_event.send(RuntimeEvent::Restart);
                                     if let Err(e) = send_result {
                                         error!("Manager: sent runtime restart event: error: {}", e);
                                         continue;
@@ -992,8 +1158,37 @@ async fn manager(
                     ProjectKind::Front => match compiler_state {
                         CompilerState::Compiling(current_project_kind) => {
                             if current_project_kind == project_kind {
-                                trace!("Manager: set: compiler state to Ready");
-                                compiler_state = CompilerState::Ready;
+                                if let Some(next_project_knd) = compile_next {
+                                    trace!(
+                                        "Manager: sent: compile next: {:?}",
+                                        CompilerEventKind::Start(next_project_knd)
+                                    );
+                                    let send_result = send_compiler_event
+                                        .send(CompilerEventKind::Start(next_project_knd));
+                                    if let Err(e) = send_result {
+                                        error!("Manager: sent: error: {}", e);
+                                        continue;
+                                    } else {
+                                        trace!(
+                                            "Manager: set: compiling state: Starting({:?})",
+                                            next_project_knd
+                                        );
+                                        compiler_state = CompilerState::Starting(next_project_knd);
+                                        trace!("Manager: set: compiling next: None");
+                                        compile_next = None;
+                                    }
+                                } else {
+                                    trace!("Manager: set: compiler state to Ready");
+                                    compiler_state = CompilerState::Ready;
+                                    // let send_result = send_runtime_restart_event.send(RuntimeEvent::Restart);
+                                    // if let Err(e) = send_result {
+                                    //     error!("Manager: sent runtime restart event: error: {}", e);
+                                    //     continue;
+                                    // }
+                                }
+
+                                // trace!("Manager: set: compiler state to Ready");
+                                // compiler_state = CompilerState::Ready;
                                 // todo: restart frontend
                             } else {
                                 error!("Manager: sync: error: compiler state Compiling project kind do not match, recv {:?}, current: {:?}", project_kind, current_project_kind);
@@ -1110,6 +1305,8 @@ async fn manager(
                             if current_project_kind == project_kind {
                                 trace!("Manager: set: compiler state to Ready");
                                 compiler_state = CompilerState::Ready;
+                                trace!("Manager: set: compile next to Some({:?})", project_kind);
+                                compile_next = Some(project_kind);
                             } else {
                                 error!("Manager: sync: error: compiler state Compiling project kind do not match, recv {:?}, current: {:?}", project_kind, current_project_kind);
                             }
@@ -1191,9 +1388,9 @@ async fn watch_dir(
 
             let Ok(event) = result else {
                 let err = result
-                .err()
-                .map(|e| e.to_string())
-                .unwrap_or_else(|| "uwknown error".to_string());
+                    .err()
+                    .map(|e| e.to_string())
+                    .unwrap_or_else(|| "uwknown error".to_string());
                 error!("watcher: recv: error: {}", err);
 
                 continue;
@@ -1213,7 +1410,6 @@ async fn watch_dir(
 
     let exit = async {
         loop {
-            
             let should_exit = recv_exit.borrow_and_update().deref().is_some();
             if should_exit {
                 break;
@@ -1236,7 +1432,6 @@ async fn watch_dir(
     }
 
     trace!("watch({}): exited.", path);
-
 }
 
 async fn build_commands<I>(commands_parts: I) -> Vec<(Command, String)>

@@ -378,6 +378,7 @@ dependencies = [
 name = "artcord-builder"
 version = "0.1.0"
 dependencies = [
+ "artcord-state",
  "cfg-if",
  "chrono",
  "dotenv",
@@ -455,6 +456,7 @@ dependencies = [
  "chrono",
  "field_types",
  "serde",
+ "tracing",
 ]
 
 [[package]]

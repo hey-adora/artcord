@@ -16,6 +16,8 @@ cfg-if = "1"
 tokio-tungstenite = "0.21.0"
 dotenv = "0.15.0"
 tokio-util = { version = "0.7.10", features = ["full"] }
+artcord-state = { path = "../artcord-state" }
+#artcord-leptos-web-sockets = { path = "../artcord-leptos-web-sockets" }
 #log = { version = "0.4.21", features = ["max_level_warn"] }
 
 [features]

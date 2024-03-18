@@ -12,3 +12,4 @@ field_types = "1.1.0"
 serde = "1.0.197"
 bincode = "1.3.3"
 artcord-leptos-web-sockets = { path = "../artcord-leptos-web-sockets" }
+tracing = "0.1.40"

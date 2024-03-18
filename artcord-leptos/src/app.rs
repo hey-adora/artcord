@@ -3,6 +3,8 @@ use crate::app::pages::login::Login;
 use crate::app::pages::register::Register;
 use artcord_leptos_web_sockets::WsRuntime;
 use artcord_state::message::client_msg::ClientMsg;
+use artcord_state::message::debug_client_msg::DebugClientMsg;
+use artcord_state::message::debug_server_msg::DebugServerMsg;
 use artcord_state::message::server_msg::ServerMsg;
 use global_state::GlobalState;
 
@@ -18,19 +20,28 @@ use pages::gallery::GalleryPage;
 use pages::home::HomePage;
 use pages::not_found::NotFound;
 use pages::profile::Profile;
+use tracing::trace;
 
 pub mod components;
 pub mod global_state;
 pub mod pages;
 pub mod utils;
 
+   
+     
+
 #[component]
 pub fn App() -> impl IntoView {
     provide_meta_context();
     provide_context(GlobalState::new());
 
-    let debug_ws = WsRuntime::<u128, ServerMsg, ClientMsg>::new();
+    let debug_ws = WsRuntime::<u128, DebugServerMsg, DebugClientMsg>::new();
     debug_ws.connect(3001).unwrap();
+    let test = debug_ws.create_singleton();
+    
+    test.send_once(&DebugClientMsg::Ready, |server_msg| {
+        trace!("server msg received: {:#?}", server_msg);
+    }).expect("failed to send");
     
    
     // WsRuntime::connect("ws://localhost", "3001");

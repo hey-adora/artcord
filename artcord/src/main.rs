@@ -4,12 +4,20 @@ use cfg_if::cfg_if;
 use dotenv::dotenv;
 use futures::try_join;
 use std::{env, sync::Arc};
-use tracing::{info};
+use tracing::info;
 
 #[actix_web::main]
 async fn main() {
     dotenv().ok();
-    tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).try_init().unwrap();
+    tracing_subscriber::fmt()
+        .event_format(
+            tracing_subscriber::fmt::format()
+                .with_file(true)
+                .with_line_number(true),
+        )
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .try_init()
+        .unwrap();
     //tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::builder().parse_lossy("artcord=trace")).try_init().unwrap();
     // cfg_if! {
     //     if #[cfg(feature = "production")] {
