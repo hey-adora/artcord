@@ -16,7 +16,7 @@ use tokio::{
     process::{Child, Command},
 };
 use tokio::{net::TcpStream, select};
-use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::tungstenite::{protocol::CloseFrame, Message};
 use tokio_util::task::TaskTracker;
 use tracing::{debug, error, info, trace, warn, Level};
 
@@ -317,130 +317,150 @@ async fn sockets_handle_connection(
 
     // }
 
-    let read_fut = read.try_for_each_concurrent(1000, move |msg| {
-        let send_msg = send_msg.clone();
-        async move {
-            match msg {
-                // tokio_tungstenite::tungstenite::Message::Binary(msg) => {
+    let read_fut = {
+       // let send_msg = &send_msg;
+        read.try_for_each_concurrent(1000,  |msg| {
+            let send_msg = send_msg.clone();
+            async move {
+                match msg {
 
-                // }
-                tokio_tungstenite::tungstenite::Message::Binary(client_msg_bytes) => {
-                    let client_msg = DebugClientMsg::from_bytes(&client_msg_bytes);
-
-                    let Ok((key, client_msg)) = client_msg.inspect_err(|err| {
-                        error!(
-                            "socket: error deserializing client msg: {:?} : {}",
-                            client_msg_bytes, err
-                        );
-                    }) else {
-                        return Ok(());
-                    };
-
-                    // let Ok(client_msg) = client_msg else {
-                    //     let err = client_msg.err().map(|e|e.to_string()).unwrap_or("unknown error".to_string());
-                    //     error!("socket: error deserializing client msg: {:?} : {}", client_msg_bytes, err);
-                    //     return Ok(());
-                    // };
-
-                    // let client_msg = match client_msg {
-                    //     Ok(a) => a,
-                    //     Err(err) => {
-                    //         error!("socket: error deserializing client msg: {:?} : {}", client_msg_bytes, err);
-                    //         return Ok(());
-                    //     }
-                    // };
-
-                    //send_msg.send();
-
-                    trace!("socekt: msg recv: ({},{:?})", key, &client_msg);
-
-                    let server_msg_whole = DebugServerMsg::Restart;
-                    let server_msg = server_msg_whole.as_bytes(key);
-                    let Ok(server_msg) = server_msg.inspect_err(|err| {
-                        error!(
-                            "socket: error serializing server msg: {:?} : {}",
-                            server_msg_whole, err
-                        );
-                    }) else {
-                        return Ok(());
-                    };
-
-                    let send_result = send_msg.send(server_msg).await;
-                    if let Err(e) = send_result {
-                        error!("socket: sent: error: {}", e);
+                    
+                    // tokio_tungstenite::tungstenite::Message::Binary(msg) => {
+    
+                    // }
+                    tokio_tungstenite::tungstenite::Message::Binary(client_msg_bytes) => {
+                        let client_msg = DebugClientMsg::from_bytes(&client_msg_bytes);
+    
+                        let Ok((key, client_msg)) = client_msg.inspect_err(|err| {
+                            error!(
+                                "socket: error deserializing client msg: {:?} : {}",
+                                client_msg_bytes, err
+                            );
+                        }) else {
+                            return Ok(());
+                        };
+    
+                        // let Ok(client_msg) = client_msg else {
+                        //     let err = client_msg.err().map(|e|e.to_string()).unwrap_or("unknown error".to_string());
+                        //     error!("socket: error deserializing client msg: {:?} : {}", client_msg_bytes, err);
+                        //     return Ok(());
+                        // };
+    
+                        // let client_msg = match client_msg {
+                        //     Ok(a) => a,
+                        //     Err(err) => {
+                        //         error!("socket: error deserializing client msg: {:?} : {}", client_msg_bytes, err);
+                        //         return Ok(());
+                        //     }
+                        // };
+    
+                        //send_msg.send();
+    
+                        trace!("socekt: msg recv: ({},{:?})", key, &client_msg);
+    
+                        let server_msg_whole = DebugServerMsg::Restart;
+                        let server_msg = server_msg_whole.as_bytes(key);
+                        let Ok(server_msg) = server_msg.inspect_err(|err| {
+                            error!(
+                                "socket: error serializing server msg: {:?} : {}",
+                                server_msg_whole, err
+                            );
+                        }) else {
+                            return Ok(());
+                        };
+    
+                        let send_result = send_msg.send(server_msg).await;
+                        if let Err(e) = send_result {
+                            error!("socket: sent: error: {}", e);
+                        }
+                    }
+                    _ => {
+                        info!("socket: received uwknown msg");
                     }
                 }
-                _ => {
-                    info!("socket: received uwknown msg");
-                }
+    
+                Ok(())
             }
-
-            Ok(())
-        }
-    });
+        })
+    };
 
     //read.close();
 
-    let write = async move {
-        loop {
-            let msg_handle = async {
+    let write_fut = async move {
+        let write_handle = async {
+            loop {
                 let Some(msg) = recv_msg.recv().await else {
                     error!("socket: recv: closed for {}", peer);
-                    return true;
+                    return;
                 };
-                write.close().await;
+    
                 let send_result = write.send(Message::binary(msg)).await;
                 if let Err(e) = send_result {
                     error!("socket: sent: error: {}", e);
                 }
-                false
-            };
+            }
+        };
 
-            let exit_handle = async {
-                let should_exit = recv_exit.borrow_and_update().deref().is_some();
-                trace!(
-                    "socket_handle_connection({}): received exit value: {}",
-                    peer,
-                    should_exit
-                );
-                if should_exit {
-                    return true;
-                }
-                let result = recv_exit.changed().await;
-                if let Err(err) = result {
-                    error!("socket_handle_connection({}): recv: error: {}", peer, err);
-                }
-                trace!("socket_handle_connection({}): exiting... ", peer);
-                false
-            };
+        let exit_handle = {
+            async move {
+                
+                loop {
+                    let should_exit = recv_exit.borrow_and_update().deref().is_some();
+                    trace!(
+                        "socket_handle_connection({}): received exit value: {}",
+                        peer,
+                        should_exit
+                    );
+                    if should_exit {
 
-            select!(
-                    exit = msg_handle => {
-                        if exit {
-                            break;
-                        }
-                    },
-                    exit = exit_handle => {
-                        if exit {
-                            break;
-                        }
-                    },
-            );
-        }
+                        trace!("socket_handle_connection({}): exiting... ", peer);
+                        break;
+                    }
+                    let result = recv_exit.changed().await;
+                    if let Err(err) = result {
+                        error!("socket_handle_connection({}): recv: error: {}", peer, err);
+                        break;
+                    }
+                } 
+            }
+        };
+
+        let close_frame = CloseFrame {
+            code: tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Normal,
+            reason:  std::borrow::Cow::Borrowed("boom") 
+        };
+
+        select!(
+                _ = write_handle => {
+                   
+                },
+                _ = exit_handle => {
+                    let result = write.send(Message::Close(Some(close_frame))).await;
+                    if let Err(err) = result {
+                        error!("socket_handle_connection({}): send: error: {}", peer, err);
+                    }
+                },
+        );
     };
 
-    // let exit_handle = sockets_handle_connection_on_exit(&peer, recv_exit);
+   
 
+    // let exit_handle = sockets_handle_connection_on_exit(&peer, recv_exit);
+    
+    //join!(async { let _ = read_fut.await.inspect_err(|err| error!("socket_connection: error in read: {}", err)); }, async { write.await; });
+
+    //let futures = [read_fut.boxed(), write.boxed()];
+    //join_all(futures);
     select!(
             _ = read_fut => {
-
+                trace!("socket_connection({}): read_fut finished first", peer);
             },
-            _ = write => {
-
+            _ = write_fut => {
+                trace!("socket_connection({}): write_fut finished first", peer);
             },
 
             // _ = exit_handle => {
-
+            //     trace!("socket_connection({}): exit_handle finished first", peer);
             // }
     );
 
