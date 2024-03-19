@@ -387,18 +387,42 @@ impl<
         closures: GlobalMsgCallbacks<TempKeyType, PermKeyType, ServerMsg>,
         package: WsPackage<TempKeyType, PermKeyType, ServerMsg>,
     ) {
-        closures.update_value(move |socket_closures: &mut HashMap<WsRouteKey<TempKeyType, PermKeyType>, Rc<dyn Fn(ServerMsg)>>| {
-            let key: WsRouteKey<TempKeyType, PermKeyType> = package.key.clone();
-            trace!("ws: current callbacks: {:#?}", &socket_closures.keys());
-            let Some(f) = socket_closures.get(&key) else {
-                warn!("ws: Fn not found for {:?}", &key);
-                return;
-            };
-
-            f(package.data);
-
-            socket_closures.remove(&key);
+        let key: WsRouteKey<TempKeyType, PermKeyType> = package.key;
+        let closure: Option<Rc<dyn Fn(ServerMsg)>> = closures.with_value({
+            let key = key.clone();
+            move |socket_closures: &HashMap<WsRouteKey<TempKeyType, PermKeyType>, Rc<dyn Fn(ServerMsg)>>| {
+            
+                trace!("ws: current callbacks: {:#?}", &socket_closures.keys());
+         
+                let Some(f) = socket_closures.get(&key) else {
+                    warn!("ws: Fn not found for {:?}", &key);
+                    return None;
+                };
+    
+                Some(f.clone())
+            }
         });
+
+        let Some(closure) = closure else {
+            return;
+        };
+
+        match &key {
+            WsRouteKey::Perm(_) => {
+                closure(package.data);
+            }
+            WsRouteKey::Temp(_) => {
+                closure(package.data);
+                closures.update_value(|socket_closures| {
+                    socket_closures.remove(&key);
+                });
+            }
+        }
+
+        
+        // 
+
+        // socket_closures.remove(&key);
     }
 
 

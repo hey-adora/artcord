@@ -32,12 +32,6 @@ pub mod utils;
 
 
 
-
-
-
-
-
-
      
 
 #[component]
@@ -53,8 +47,11 @@ pub fn App() -> impl IntoView {
         trace!("server msg received: {:#?}", server_msg);
     }).expect("failed to send");
 
+    //let location = use_location();
+
     debug_ws.on(DebugMsgPermKey::Restart, |server_msg| {
         trace!("Restart received: {:?}", server_msg);
+        window().location().reload().unwrap();
     });
     
    
