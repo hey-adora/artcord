@@ -1,6 +1,6 @@
 use std::{ffi::OsStr, net::SocketAddr, ops::Deref, path::Path, pin::Pin, process::ExitStatus};
 
-use artcord_state::message::{debug_client_msg::DebugClientMsg, debug_server_msg::DebugServerMsg};
+use artcord_state::message::{debug_client_msg::DebugClientMsg, debug_msg_key::DebugMsgKey, debug_server_msg::DebugServerMsg};
 use cfg_if::cfg_if;
 use dotenv::dotenv;
 use futures::{future::join_all, Future, FutureExt, SinkExt, StreamExt, TryStreamExt};
@@ -57,6 +57,13 @@ enum RuntimeEvent {
     Exit,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum BrowserEvent {
+    Restart,
+}
+
+
+
 // async fn do_stuff_async() {
 //     loop {
 //         trace!("boop");
@@ -95,9 +102,9 @@ async fn main() {
 
     let (send_manager_event, recv_manager_event) = mpsc::channel::<ManagerEventKind>(1000);
     let (send_compiler_event, recv_compiler_event) = broadcast::channel::<CompilerEventKind>(1);
-    let (send_runtime_restart_event, recv_runtime_restart_event) =
-        broadcast::channel::<RuntimeEvent>(1);
+    let (send_runtime_restart_event, recv_runtime_restart_event) = broadcast::channel::<RuntimeEvent>(1);
     let (send_exit, recv_exit) = watch::channel::<Option<()>>(None);
+    let (send_browser_event, recv_browser_event) = broadcast::channel::<BrowserEvent>(1);
     let mut futs: Vec<Pin<Box<dyn Future<Output = ()>>>> = Vec::new();
 
     let paths_backend = [
@@ -140,6 +147,7 @@ async fn main() {
         recv_manager_event,
         send_compiler_event.clone(),
         send_runtime_restart_event.clone(),
+        send_browser_event,
     );
     futs.push(manager_fut.boxed());
 
@@ -149,7 +157,7 @@ async fn main() {
     let runtime_fut = runtime(recv_runtime_restart_event);
     futs.push(runtime_fut.boxed());
 
-    let socket_fut = sockets(recv_exit.clone());
+    let socket_fut = sockets(recv_exit.clone(), recv_browser_event);
     futs.push(socket_fut.boxed());
 
     let handle_exit = handle_exit(
@@ -197,7 +205,7 @@ async fn handle_exit(
     }
 }
 
-async fn sockets(recv_exit: watch::Receiver<Option<()>>) {
+async fn sockets(recv_exit: watch::Receiver<Option<()>>, recv_browser_event: broadcast::Receiver<BrowserEvent>) {
     let connection_tasks = TaskTracker::new();
 
     let addr = "0.0.0.0:3001";
@@ -211,7 +219,7 @@ async fn sockets(recv_exit: watch::Receiver<Option<()>>) {
             let peer = stream.peer_addr().expect("Failed to get peer addr");
             info!("socket: connected: {}", peer);
 
-            connection_tasks.spawn(sockets_accept_connection(peer, stream, recv_exit.clone()));
+            connection_tasks.spawn(sockets_accept_connection(peer, stream, recv_exit.clone(), recv_browser_event.resubscribe()));
         }
     };
 
@@ -219,7 +227,9 @@ async fn sockets(recv_exit: watch::Receiver<Option<()>>) {
         let mut recv_exit = recv_exit.clone();
         async move {
             loop {
-                let should_exit = recv_exit.borrow_and_update().deref().is_some();
+                let should_exit = {
+                    recv_exit.borrow_and_update().deref().is_some()
+                };
                 if should_exit {
                     break;
                 }
@@ -252,8 +262,9 @@ async fn sockets_accept_connection(
     peer: SocketAddr,
     stream: TcpStream,
     recv_exit: watch::Receiver<Option<()>>,
+    recv_browser_event: broadcast::Receiver<BrowserEvent>
 ) {
-    if let Err(e) = sockets_handle_connection(peer, stream, recv_exit).await {
+    if let Err(e) = sockets_handle_connection(peer, stream, recv_exit, recv_browser_event).await {
         match e {
             tokio_tungstenite::tungstenite::Error::ConnectionClosed
             | tokio_tungstenite::tungstenite::Error::Protocol(_)
@@ -272,6 +283,7 @@ async fn sockets_handle_connection(
     peer: SocketAddr,
     stream: TcpStream,
     mut recv_exit: watch::Receiver<Option<()>>,
+    mut recv_browser_event: broadcast::Receiver<BrowserEvent>
 ) -> tokio_tungstenite::tungstenite::Result<()> {
     let ws_stream = tokio_tungstenite::accept_async(stream)
         .await
@@ -279,7 +291,7 @@ async fn sockets_handle_connection(
     info!("socket: new websocket connection: {}", peer);
 
     //ws_stream.re
-    let (mut write, mut read) = ws_stream.split();
+    let (mut write, read) = ws_stream.split();
     let (send_msg, mut recv_msg) = mpsc::channel::<Vec<u8>>(1000);
     // recv_msg.close();
     // send_msg.close();
@@ -320,7 +332,7 @@ async fn sockets_handle_connection(
     let read_fut = {
        // let send_msg = &send_msg;
         read.try_for_each_concurrent(1000,  |msg| {
-            let send_msg = send_msg.clone();
+            //let send_msg = send_msg.clone();
             async move {
                 match msg {
 
@@ -339,7 +351,7 @@ async fn sockets_handle_connection(
                         }) else {
                             return Ok(());
                         };
-    
+                        trace!("socekt: msg recv: ({:?},{:?})", key, &client_msg);
                         // let Ok(client_msg) = client_msg else {
                         //     let err = client_msg.err().map(|e|e.to_string()).unwrap_or("unknown error".to_string());
                         //     error!("socket: error deserializing client msg: {:?} : {}", client_msg_bytes, err);
@@ -356,23 +368,7 @@ async fn sockets_handle_connection(
     
                         //send_msg.send();
     
-                        trace!("socekt: msg recv: ({},{:?})", key, &client_msg);
-    
-                        let server_msg_whole = DebugServerMsg::Restart;
-                        let server_msg = server_msg_whole.as_bytes(key);
-                        let Ok(server_msg) = server_msg.inspect_err(|err| {
-                            error!(
-                                "socket: error serializing server msg: {:?} : {}",
-                                server_msg_whole, err
-                            );
-                        }) else {
-                            return Ok(());
-                        };
-    
-                        let send_result = send_msg.send(server_msg).await;
-                        if let Err(e) = send_result {
-                            error!("socket: sent: error: {}", e);
-                        }
+                      
                     }
                     _ => {
                         info!("socket: received uwknown msg");
@@ -405,7 +401,9 @@ async fn sockets_handle_connection(
             async move {
                 
                 loop {
-                    let should_exit = recv_exit.borrow_and_update().deref().is_some();
+                    let should_exit = {
+                        recv_exit.borrow_and_update().deref().is_some()
+                    };
                     trace!(
                         "socket_handle_connection({}): received exit value: {}",
                         peer,
@@ -443,6 +441,60 @@ async fn sockets_handle_connection(
         );
     };
 
+    let browser_event_handler = {
+        
+        async move {
+            loop {
+              
+                let result = recv_browser_event.recv().await;
+                match result {
+                    Ok(result) => {
+                        match result {
+                            BrowserEvent::Restart => {
+                                //trace!("socekt: msg recv: ({},{:?})", key, &client_msg);
+                
+                                let server_msg_whole = DebugServerMsg::Restart;
+                                let server_msg_key = DebugMsgKey::Restart;
+                                let server_msg = server_msg_whole.as_bytes(&server_msg_key);
+                                match server_msg {
+                                    Ok(server_msg) => {
+                                        trace!("socekt_connection: send: ({:?},{:?})", server_msg_key, server_msg_whole);
+                                        let send_result = send_msg.send(server_msg).await;
+                                        if let Err(e) = send_result {
+                                            error!("socket_connection: sent: error: {}", e);
+                                        }
+                                    }
+                                    Err(err) => {
+                                        error!(
+                                            "socket_connection: error serializing server msg: {:?} : {}",
+                                            server_msg_whole, err
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    Err(err) => {
+                        match err {
+                            broadcast::error::RecvError::Closed => {
+                                error!("socket_connection({}): recv: error: {}", peer, err);
+                                break;
+                            }
+                            broadcast::error::RecvError::Lagged(missed) => {
+                                warn!("socket_connection({}): recv: error: {}", peer, err);
+                            }
+                        }
+                        continue;
+                    }
+                };
+
+             
+            } 
+    
+            
+        }
+    };
+
    
 
     // let exit_handle = sockets_handle_connection_on_exit(&peer, recv_exit);
@@ -453,11 +505,14 @@ async fn sockets_handle_connection(
     //join_all(futures);
     select!(
             _ = read_fut => {
-                trace!("socket_connection({}): read_fut finished first", peer);
+                //trace!("socket_connection({}): read_fut finished first", peer);
             },
             _ = write_fut => {
-                trace!("socket_connection({}): write_fut finished first", peer);
+                //trace!("socket_connection({}): write_fut finished first", peer);
             },
+            _ = browser_event_handler => {
+
+            }
 
             // _ = exit_handle => {
             //     trace!("socket_connection({}): exit_handle finished first", peer);
@@ -864,6 +919,7 @@ async fn manager(
     mut recv_manager_event: mpsc::Receiver<ManagerEventKind>,
     send_compiler_event: broadcast::Sender<CompilerEventKind>,
     send_runtime_restart_event: broadcast::Sender<RuntimeEvent>,
+    send_browser_event: broadcast::Sender<BrowserEvent>,
 ) {
     // let mut back_is_compiling = false;
     // let mut back_is_starting = false;
@@ -1200,11 +1256,12 @@ async fn manager(
                                 } else {
                                     trace!("Manager: set: compiler state to Ready");
                                     compiler_state = CompilerState::Ready;
+                                    let send_result = send_browser_event.send(BrowserEvent::Restart);
                                     // let send_result = send_runtime_restart_event.send(RuntimeEvent::Restart);
-                                    // if let Err(e) = send_result {
-                                    //     error!("Manager: sent runtime restart event: error: {}", e);
-                                    //     continue;
-                                    // }
+                                    if let Err(e) = send_result {
+                                        error!("Manager: sent browser restart event: error: {}", e);
+                                        continue;
+                                    }
                                 }
 
                                 // trace!("Manager: set: compiler state to Ready");
@@ -1430,7 +1487,9 @@ async fn watch_dir(
 
     let exit = async {
         loop {
-            let should_exit = recv_exit.borrow_and_update().deref().is_some();
+            let should_exit = {
+                recv_exit.borrow_and_update().deref().is_some()
+            };
             if should_exit {
                 break;
             }

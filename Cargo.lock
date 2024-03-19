@@ -457,6 +457,7 @@ dependencies = [
  "field_types",
  "serde",
  "tracing",
+ "uuid",
 ]
 
 [[package]]

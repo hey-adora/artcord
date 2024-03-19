@@ -31,6 +31,11 @@ use web_sys::{ErrorEvent, MessageEvent, WebSocket};
 //     fn generate_key() -> T;
 // }
 
+enum KeyKind<IdType: KeyGen + Clone + std::cmp::Eq + std::hash::Hash + std::fmt::Debug> {
+    Perm(IdType),
+    Temp(IdType)
+}
+
 impl KeyGen for u128 {
     fn generate_key() -> Self {
         uuid::Uuid::new_v4().as_u128()
@@ -230,6 +235,7 @@ impl<
         }
     }
 
+  
     pub fn create_singleton(&self) -> WsSingleton<IdType, ServerMsg, ClientMsg> {
         // let global_state = use_context::<LeptosWebSockets<IdType, ServerMsg, ClientMsg>>()
         //     .expect("Failed to provide global state");
@@ -324,16 +330,31 @@ impl<
         server_msg: ServerMsg,
     ) {
         closures.update_value(move |socket_closures| {
+            
+            trace!("ws: current callbacks: {:#?}", &socket_closures.keys());
             let Some(f) = socket_closures.get(id) else {
                 warn!("ws: Fn not found for {:?}", id);
                 return;
             };
+
 
             f(server_msg);
 
             socket_closures.remove(id);
         });
     }
+
+    pub fn on(&self, key: IdType, on_receive: impl Fn(ServerMsg) + 'static) {
+        self.global_msgs_callbacks.update_value({
+            move |global_msgs_callbacks| {
+                let new_msg_closure = Rc::new(move |server_msg| {
+                    on_receive(server_msg);
+                });
+                global_msgs_callbacks.insert(key.clone(), new_msg_closure);
+            }
+        });
+    }
+
 }
 
 pub fn get_ws_url(port: u32) -> Result<String, GetUrlError> {
@@ -360,6 +381,8 @@ pub fn get_ws_url(port: u32) -> Result<String, GetUrlError> {
 
     Ok(output)
 }
+
+
 
 #[derive(Clone, Debug)]
 pub struct WsSingleton<

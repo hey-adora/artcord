@@ -13,3 +13,4 @@ serde = "1.0.197"
 bincode = "1.3.3"
 artcord-leptos-web-sockets = { path = "../artcord-leptos-web-sockets" }
 tracing = "0.1.40"
+uuid = "1.7.0"
