@@ -10,3 +10,5 @@ futures = "0.3.30"
 tokio = { version = "1.36.0", features = ["full"] }
 tokio-tungstenite = "0.21.0"
 artcord-state = { path = "../artcord-state" }
+artcord-leptos-web-sockets = { path = "../artcord-leptos-web-sockets" }
+tracing = { version = "0.1.40"  }

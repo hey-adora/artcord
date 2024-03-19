@@ -5,10 +5,14 @@ use crate::message::server_msg::{
 };
 
 
+use artcord_leptos_web_sockets::{WsPackage, WsRouteKey};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use std::net::IpAddr;
+
+use super::prod_perm_key::ProdMsgPermKey;
+
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub enum ClientMsg {
@@ -41,9 +45,12 @@ pub enum ClientMsg {
     },
 }
 
-impl artcord_leptos_web_sockets::Send<u128> for ClientMsg {
-    fn send_as_vec(&self, id: &u128) -> Result<Vec<u8>, String> {
-        self.as_vec(*id).map_err(|e| e.to_string())
+impl artcord_leptos_web_sockets::Send<u128, ProdMsgPermKey> for ClientMsg {
+    fn send_as_vec(
+            package: &WsPackage<u128, ProdMsgPermKey, Self>,
+        ) -> Result<Vec<u8>, String> where
+        Self: Clone {
+            Self::as_vec(package).map_err(|e| e.to_string())
     }
 }
 
@@ -63,15 +70,15 @@ impl ClientMsg {
         }
     }
 
-    pub fn as_vec(&self, id: u128) -> Result<Vec<u8>, bincode::Error> {
-        let a = bincode::serialize::<(u128, ClientMsg)>(&(id, self.clone()));
+    pub fn as_vec(package: &WsPackage<u128, ProdMsgPermKey, Self>) -> Result<Vec<u8>, bincode::Error> {
+        let a = bincode::serialize::<WsPackage<u128, ProdMsgPermKey, Self>>(&package);
         //log!("SERIALIZE {:?} {:?}", self, a);
         a
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<(u128, ClientMsg), bincode::Error> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<WsPackage<u128, ProdMsgPermKey, Self>, bincode::Error> {
         //log!("DESERIALIZE {:?}", bytes);
-        let a = bincode::deserialize::<(u128, ClientMsg)>(bytes);
+        let a = bincode::deserialize::<WsPackage<u128, ProdMsgPermKey, Self>>(bytes);
         a
     }
 

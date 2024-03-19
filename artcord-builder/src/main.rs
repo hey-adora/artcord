@@ -1,6 +1,6 @@
 use std::{ffi::OsStr, net::SocketAddr, ops::Deref, path::Path, pin::Pin, process::ExitStatus};
 
-use artcord_state::message::{debug_client_msg::DebugClientMsg, debug_msg_key::DebugMsgKey, debug_server_msg::DebugServerMsg};
+use artcord_state::message::{debug_client_msg::DebugClientMsg, debug_msg_key::DebugMsgPermKey, debug_server_msg::DebugServerMsg};
 use cfg_if::cfg_if;
 use dotenv::dotenv;
 use futures::{future::join_all, Future, FutureExt, SinkExt, StreamExt, TryStreamExt};
@@ -19,6 +19,8 @@ use tokio::{net::TcpStream, select};
 use tokio_tungstenite::tungstenite::{protocol::CloseFrame, Message};
 use tokio_util::task::TaskTracker;
 use tracing::{debug, error, info, trace, warn, Level};
+use artcord_leptos_web_sockets::WsPackage;
+use artcord_leptos_web_sockets::WsRouteKey;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum ProjectKind {
@@ -343,7 +345,7 @@ async fn sockets_handle_connection(
                     tokio_tungstenite::tungstenite::Message::Binary(client_msg_bytes) => {
                         let client_msg = DebugClientMsg::from_bytes(&client_msg_bytes);
     
-                        let Ok((key, client_msg)) = client_msg.inspect_err(|err| {
+                        let Ok(client_msg) = client_msg.inspect_err(|err| {
                             error!(
                                 "socket: error deserializing client msg: {:?} : {}",
                                 client_msg_bytes, err
@@ -351,7 +353,7 @@ async fn sockets_handle_connection(
                         }) else {
                             return Ok(());
                         };
-                        trace!("socekt: msg recv: ({:?},{:?})", key, &client_msg);
+                        trace!("socekt: msg recv: {:?}", &client_msg);
                         // let Ok(client_msg) = client_msg else {
                         //     let err = client_msg.err().map(|e|e.to_string()).unwrap_or("unknown error".to_string());
                         //     error!("socket: error deserializing client msg: {:?} : {}", client_msg_bytes, err);
@@ -449,16 +451,19 @@ async fn sockets_handle_connection(
                 let result = recv_browser_event.recv().await;
                 match result {
                     Ok(result) => {
+                        trace!("socekt_connection: recv: {:?}", &result);
                         match result {
                             BrowserEvent::Restart => {
                                 //trace!("socekt: msg recv: ({},{:?})", key, &client_msg);
-                
-                                let server_msg_whole = DebugServerMsg::Restart;
-                                let server_msg_key = DebugMsgKey::Restart;
-                                let server_msg = server_msg_whole.as_bytes(&server_msg_key);
+                                let restart_package = WsPackage::<u128, DebugMsgPermKey, DebugServerMsg> {
+                                    key: WsRouteKey::Perm(DebugMsgPermKey::Restart),
+                                    data: DebugServerMsg::Restart,
+                                };
+                                trace!("socekt_connection: send: {:?}", &restart_package);
+                                let server_msg = DebugServerMsg::as_bytes(&restart_package);
+
                                 match server_msg {
                                     Ok(server_msg) => {
-                                        trace!("socekt_connection: send: ({:?},{:?})", server_msg_key, server_msg_whole);
                                         let send_result = send_msg.send(server_msg).await;
                                         if let Err(e) = send_result {
                                             error!("socket_connection: sent: error: {}", e);
@@ -467,7 +472,7 @@ async fn sockets_handle_connection(
                                     Err(err) => {
                                         error!(
                                             "socket_connection: error serializing server msg: {:?} : {}",
-                                            server_msg_whole, err
+                                            &restart_package, err
                                         );
                                     }
                                 }

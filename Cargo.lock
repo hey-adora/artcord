@@ -378,6 +378,7 @@ dependencies = [
 name = "artcord-builder"
 version = "0.1.0"
 dependencies = [
+ "artcord-leptos-web-sockets",
  "artcord-state",
  "cfg-if",
  "chrono",
@@ -424,6 +425,7 @@ dependencies = [
  "js-sys",
  "leptos",
  "leptos-use",
+ "serde",
  "thiserror",
  "uuid",
  "wasm-bindgen",
@@ -464,10 +466,12 @@ dependencies = [
 name = "artcord-tungstenite"
 version = "0.1.0"
 dependencies = [
+ "artcord-leptos-web-sockets",
  "artcord-state",
  "futures",
  "tokio",
  "tokio-tungstenite",
+ "tracing",
 ]
 
 [[package]]

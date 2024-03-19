@@ -3,6 +3,7 @@ use crate::app::utils::{PageProfileState, ScrollSection};
 
 use artcord_leptos_web_sockets::WsRuntime;
 use artcord_state::message::client_msg::ClientMsg;
+use artcord_state::message::prod_perm_key::ProdMsgPermKey;
 use artcord_state::message::server_msg::ServerMsg;
 use leptos::{
     create_rw_signal, RwSignal, SignalWith,
@@ -29,7 +30,7 @@ pub struct GlobalState {
     pub socket_connected: RwSignal<bool>,
     pub socket_closures: StoredValue<HashMap<u128, Rc<dyn Fn(ServerMsg)>>>,
     pub socket_pending_client_msgs: StoredValue<Vec<u8>>,
-    pub ws: WsRuntime<u128, ServerMsg, ClientMsg>
+    pub ws: WsRuntime<u128, ProdMsgPermKey, ServerMsg, ClientMsg>
     // pub ws: StoredValue<Option<WebSocket>>,
     // pub ws_on_msg: StoredValue<Option<Rc<Closure<dyn FnMut(MessageEvent)>>>>,
     // pub ws_on_err: StoredValue<Option<Rc<Closure<dyn FnMut(ErrorEvent)>>>>,
@@ -74,7 +75,7 @@ impl GlobalState {
             socket_timestamps: create_rw_signal(HashMap::new()),
             socket_closures: StoredValue::new(HashMap::new()),
             socket_pending_client_msgs: StoredValue::new(Vec::new()),
-            ws: WsRuntime::<u128, ServerMsg, ClientMsg>::new(),
+            ws: WsRuntime::<u128, ProdMsgPermKey, ServerMsg, ClientMsg>::new(),
             // ws: StoredValue::new(None),
             // ws_on_msg: StoredValue::new(None),
             // ws_on_err: StoredValue::new(None),

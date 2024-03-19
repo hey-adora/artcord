@@ -12,6 +12,7 @@ const-random = "0.1.17"
 js-sys = "0.3.68"
 leptos = "0.6.6"
 leptos-use = "0.10.3"
+serde = "1.0.197"
 thiserror = "1.0.57"
 uuid = "1.7.0"
 wasm-bindgen = { version = "0.2.92", features = [] }
