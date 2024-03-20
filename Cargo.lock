@@ -362,6 +362,7 @@ dependencies = [
  "actix-web",
  "actix-web-actors",
  "artcord-leptos",
+ "artcord-leptos-web-sockets",
  "artcord-mongodb",
  "artcord-state",
  "cfg-if",
@@ -370,8 +371,10 @@ dependencies = [
  "leptos_actix",
  "thiserror",
  "tokio",
+ "tokio-tungstenite",
  "tracing",
  "tracing-subscriber",
+ "url",
  "uuid",
 ]
 

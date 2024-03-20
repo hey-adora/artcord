@@ -46,6 +46,8 @@ enum ManagerEventKind {
     CompilerEnded(ProjectKind),
     CompilerKilled(ProjectKind),
     CompilerFailed(ProjectKind),
+    RuntimeReady,
+    BrowserReady,
     Exit,
 }
 
@@ -349,7 +351,10 @@ async fn sockets_handle_connection(
 
                     // }
                     tokio_tungstenite::tungstenite::Message::Binary(client_msg_bytes) => {
-                        let client_msg = DebugClientMsg::from_bytes(&client_msg_bytes);
+                        let client_msg: Result<
+                            WsPackage<u128, DebugMsgPermKey, DebugClientMsg>,
+                            _,
+                        > = DebugClientMsg::from_bytes(&client_msg_bytes);
 
                         let Ok(client_msg) = client_msg.inspect_err(|err| {
                             error!(
@@ -360,6 +365,7 @@ async fn sockets_handle_connection(
                             return Ok(());
                         };
                         trace!("socekt: msg recv: {:?}", &client_msg);
+
                         // let Ok(client_msg) = client_msg else {
                         //     let err = client_msg.err().map(|e|e.to_string()).unwrap_or("unknown error".to_string());
                         //     error!("socket: error deserializing client msg: {:?} : {}", client_msg_bytes, err);
@@ -455,7 +461,7 @@ async fn sockets_handle_connection(
                                 //trace!("socekt: msg recv: ({},{:?})", key, &client_msg);
                                 let restart_package =
                                     WsPackage::<u128, DebugMsgPermKey, DebugServerMsg> {
-                                        key: WsRouteKey::Perm(DebugMsgPermKey::Restart),
+                                        key: WsRouteKey::Perm(DebugMsgPermKey::Debug),
                                         data: DebugServerMsg::Restart,
                                     };
                                 trace!("socekt_connection: send: {:?}", &restart_package);
@@ -932,7 +938,10 @@ async fn manager(
     let mut compiler_state = CompilerState::Ready;
     let mut compile_next: Option<ProjectKind> = None;
 
-    let _back_is_running = false;
+    //let _back_is_running = false;
+
+    let mut browser_needs_restart = false;
+    // let mut browser_ready = false;
 
     let mut event_kind = ManagerEventKind::File(ProjectKind::Back);
 
@@ -1428,6 +1437,21 @@ async fn manager(
             ManagerEventKind::Exit => {
                 trace!("manager: exiting...");
                 break;
+            }
+            ManagerEventKind::BrowserReady => {
+                if browser_needs_restart {
+                    trace!("Manager: set: compiler state to Ready");
+                    compiler_state = CompilerState::Ready;
+                    let send_result = send_browser_event.send(BrowserEvent::Restart);
+                    // let send_result = send_runtime_restart_event.send(RuntimeEvent::Restart);
+                    if let Err(e) = send_result {
+                        error!("Manager: sent browser restart event: error: {}", e);
+                        continue;
+                    }
+                }
+            }
+            ManagerEventKind::RuntimeReady => {
+                browser_needs_restart = true;
             }
         }
 

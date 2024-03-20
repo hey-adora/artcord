@@ -9,6 +9,7 @@ pub enum DebugServerMsg {
     Restart,
 }
 
+
 impl artcord_leptos_web_sockets::Receive<u128, DebugMsgPermKey> for DebugServerMsg {
     fn recv_from_vec(
             bytes: &[u8],

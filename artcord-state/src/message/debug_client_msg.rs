@@ -6,7 +6,8 @@ use super::debug_msg_key::DebugMsgPermKey;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Hash)]
 pub enum DebugClientMsg {
-    Ready,
+    BrowserReady,
+    RuntimeReady,
 }
 
 impl artcord_leptos_web_sockets::Send<u128, DebugMsgPermKey> for DebugClientMsg {
@@ -21,8 +22,8 @@ impl artcord_leptos_web_sockets::Send<u128, DebugMsgPermKey> for DebugClientMsg 
 impl DebugClientMsg {
     pub fn as_vec( package: &artcord_leptos_web_sockets::WsPackage<u128, DebugMsgPermKey, Self>) -> Result<Vec<u8>, bincode::Error> {
         //let object = (id.clone(), *self);
-        let result: Result<Vec<u8>, Box<bincode::ErrorKind>> = bincode::serialize::<artcord_leptos_web_sockets::WsPackage<u128, DebugMsgPermKey, Self>>(&package);
-        trace!("debug client msg serialized from {:?} {:?}", &package, &result);
+        let result: Result<Vec<u8>, Box<bincode::ErrorKind>> = bincode::serialize::<artcord_leptos_web_sockets::WsPackage<u128, DebugMsgPermKey, Self>>(package);
+        trace!("debug client msg serialized from {:?} {:?}", package, &result);
         result
     }
 

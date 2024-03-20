@@ -71,7 +71,7 @@ impl ClientMsg {
     }
 
     pub fn as_vec(package: &WsPackage<u128, ProdMsgPermKey, Self>) -> Result<Vec<u8>, bincode::Error> {
-        let a = bincode::serialize::<WsPackage<u128, ProdMsgPermKey, Self>>(&package);
+        let a = bincode::serialize::<WsPackage<u128, ProdMsgPermKey, Self>>(package);
         //log!("SERIALIZE {:?} {:?}", self, a);
         a
     }

@@ -22,6 +22,9 @@ artcord-leptos = { path = "../artcord-leptos" }
 cfg-if = "1"
 tracing = { version = "0.1.40" }
 tracing-subscriber = {version ="0.3.18", features = ["env-filter"] }
+url = "2.5.0"
+tokio-tungstenite = "0.21.0"
+artcord-leptos-web-sockets = { path = "../artcord-leptos-web-sockets" }
 
 [features]
 csr = []

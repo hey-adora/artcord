@@ -7,8 +7,11 @@ use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 
 
 
+use futures::StreamExt;
+use leptos::logging::warn;
 use leptos_actix::{generate_route_list, LeptosRoutes};
-use tracing::info;
+
+use tracing::{error, info, trace};
 use std::fs::read_to_string;
 
 use cfg_if::cfg_if;
@@ -426,7 +429,7 @@ pub async fn create_server(galley_root_dir: Arc<String>, assets_root_dir: Arc<St
 
     //let galley_root_dir = galley_root_dir.to_string();
     //let assets_root_dir = assets_root_dir.to_string(); a
-    HttpServer::new(move || {
+    let server = HttpServer::new(move || {
         let leptos_options = &conf.leptos_options;
         // let site_root = &leptos_options.site_root;
         //println!("site root: {}", &*assets_root_dir);
@@ -453,6 +456,10 @@ pub async fn create_server(galley_root_dir: Arc<String>, assets_root_dir: Arc<St
             }
         };
 
+
+        
+        
+
         
 
         // let create_prodution_app =  || {
@@ -476,5 +483,99 @@ pub async fn create_server(galley_root_dir: Arc<String>, assets_root_dir: Arc<St
     .workers(1)
     .bind(&addr)
     .unwrap()
-    .run()
+    .run();
+
+    #[cfg(debug_assertions)]
+    {
+        use tokio_tungstenite::connect_async;
+        use tokio::sync::mpsc;
+        use artcord_state::message::debug_client_msg::DebugClientMsg;
+        use futures::SinkExt;
+        use tokio_tungstenite::tungstenite::Message;
+        use artcord_leptos_web_sockets::WsPackage;
+        use artcord_state::message::debug_msg_key::DebugMsgPermKey;
+        use artcord_state::message::debug_server_msg::DebugServerMsg;
+        use artcord_leptos_web_sockets::WsRouteKey;
+        use futures::future;
+        use futures::pin_mut;
+
+        
+
+        
+
+        
+
+        let url = url::Url::parse("ws://localhost:3001").unwrap();
+
+        let (send, mut recv) = mpsc::channel::<Message>(1);
+
+        let ready_package = WsPackage::<u128, DebugMsgPermKey, DebugClientMsg> {
+            key: WsRouteKey::Perm(DebugMsgPermKey::Debug),
+            data: DebugClientMsg::RuntimeReady,
+        };
+
+        let ready_package = DebugClientMsg::as_vec(&ready_package);
+
+        match ready_package {
+            Ok(ready_package) => {
+                let ready_package = Message::binary(ready_package);
+                trace!("socekt: sending ready msg: {:?}", &ready_package);
+                let send_result = send.send(ready_package).await;
+                if let Err(err) = send_result {
+                    error!("ws: failed to send ready msg: {}", err);
+                }
+            }
+            Err(err) => {
+                error!("ws: failed to serialize ready msg: {}", err);
+            }
+        }
+
+
+        let (ws_stream, _) = connect_async(url).await.unwrap();
+        let (mut write, read) = ws_stream.split();
+        
+        let read = {
+            read.for_each_concurrent(100, |server_msg| async {
+                match server_msg {
+                    Ok(server_msg) => {
+                        match server_msg {
+                            tokio_tungstenite::tungstenite::Message::Binary(client_msg) => {
+                                let client_msg = DebugServerMsg::from_bytes(&client_msg);
+                                match client_msg {
+                                    Ok(client_msg) => {
+                                        trace!("ws: recv client msg: {:?}", client_msg);
+                                    }
+                                    Err(err) => {
+                                        error!("ws: failed to deserialize client msg: {}", err);
+                                    }
+                                }
+                            }
+                            _ => {
+                                warn!("ws: recv uwknown msg");
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        error!("ws: error on recv: {}", err);
+                    }
+                }
+            })
+        };
+
+        let write = async move {
+            while let Some(msg) = recv.recv().await {
+                write.send(msg).await.unwrap();
+            }
+        };
+
+        
+
+        tokio::spawn(async move {
+            pin_mut!(read, write);
+            future::select(read, write).await;
+        });
+    }
+
+
+    server
 }

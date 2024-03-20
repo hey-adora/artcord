@@ -48,10 +48,10 @@ async fn accept_connection(stream: TcpStream) {
 
     let read = read.try_for_each_concurrent(1000, {
         let tx = tx.clone();
-        move |msgclient_msg| {
+        move |client_msg| {
             let tx = tx.clone();
             async move {
-                if let Message::Binary(msgclient_msg) = msgclient_msg {
+                if let Message::Binary(msgclient_msg) = client_msg {
                     let client_msg = ClientMsg::from_bytes(&msgclient_msg);
                     match client_msg {
                         Ok(client_msg) => {

@@ -43,25 +43,31 @@ pub fn App() -> impl IntoView {
     provide_context(GlobalState::new());
 
    
-
+    
     //let location = use_location();
-    cfg_if! {
-        if #[cfg(feature = "csr")] {
-            let debug_ws = WsRuntime::<u128, DebugMsgPermKey, DebugServerMsg, DebugClientMsg>::new();
-            debug_ws.connect(3001).unwrap();
-            let ready_channel = debug_ws.create_singleton();
-            
-            ready_channel.send_once(DebugClientMsg::Ready, |server_msg| {
-                trace!("server msg received: {:#?}", server_msg);
-            }).expect("failed to send");
+    #[cfg(feature = "csr")]
+    {
+        let debug_ws = WsRuntime::<u128, DebugMsgPermKey, DebugServerMsg, DebugClientMsg>::new();
+        debug_ws.connect(3001).unwrap();
+        // let ready_channel = debug_ws.create_singleton();
+        
+        // ready_channel.send_once(DebugClientMsg::BrowserReady, |server_msg| {
+        //     trace!("server msg received: {:#?}", server_msg);
+        // }).expect("failed to send");
 
-            debug_ws.on(DebugMsgPermKey::Restart, |server_msg| {
-                trace!("Restart received: {:?}", server_msg);
-                window().location().reload().unwrap();
-            });
-        }
-    };
+        debug_ws.on_open(move || {
+            trace!("ws: sending browser ready package");
+            debug_ws.send(DebugMsgPermKey::Debug, DebugClientMsg::BrowserReady);
+        });
 
+        
+        
+
+        debug_ws.on(DebugMsgPermKey::Debug, |server_msg| {
+            trace!("Restart received: {:?}", server_msg);
+            window().location().reload().unwrap();
+        });
+    }
    
     
    
