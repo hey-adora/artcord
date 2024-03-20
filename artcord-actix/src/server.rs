@@ -433,32 +433,27 @@ pub async fn create_server(galley_root_dir: Arc<String>, assets_root_dir: Arc<St
         let pkg_url = format!("{}/pkg", &*assets_root_dir);
         //println!("pkg dir: {}", pkg_url);
 
-        let mut _debug = true;
+
+        let mut app = App::new()
+        .route("/favicon.ico", web::get().to(favicon))
+        .service(Files::new("/assets/gallery", &*galley_root_dir))
+        .service(Files::new("/assets", &*assets_root_dir))
+        .service(Files::new("/pkg", pkg_url));
+
         cfg_if! {
-            if #[cfg(feature = "production")] {
-                debug = false;
+            if #[cfg(feature = "csr")] {
+                app = app.route("/{filename:.*}", web::get().to(hello));
+            }
+            else {
+                app = app.leptos_routes(
+                    leptos_options.to_owned(),
+                    routes.to_owned(),
+                    artcord_leptos::app::App,
+                );
             }
         };
 
-        let app = if _debug {
-            App::new()
-            .route("/favicon.ico", web::get().to(favicon))
-            .service(Files::new("/assets/gallery", &*galley_root_dir))
-            .service(Files::new("/assets", &*assets_root_dir))
-            .service(Files::new("/pkg", pkg_url))
-            .route("/{filename:.*}", web::get().to(hello))
-        } else {
-            App::new()
-            .route("/favicon.ico", web::get().to(favicon))
-            .service(Files::new("/assets/gallery", &*galley_root_dir))
-            .service(Files::new("/assets", &*assets_root_dir))
-            .service(Files::new("/pkg", pkg_url))
-            .leptos_routes(
-                leptos_options.to_owned(),
-                routes.to_owned(),
-                artcord_leptos::app::App,
-            )
-        };
+        
 
         // let create_prodution_app =  || {
             

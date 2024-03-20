@@ -21,6 +21,8 @@ pub fn HomePage() -> impl IntoView {
         shrink_nav(nav_tran, y as u32);
     };
 
+    
+
     view! {
         <main  on:scroll=on_scroll _ref=scroll_el class="flex flex-col ">
            

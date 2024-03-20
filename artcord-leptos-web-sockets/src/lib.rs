@@ -36,7 +36,7 @@ use web_sys::{ErrorEvent, MessageEvent, WebSocket};
 
 #[derive(Deserialize, Serialize, Debug, Eq, PartialEq, Clone, Hash)]
 pub enum WsRouteKey<
-    TempKeyType: KeyGen + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+    TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
     PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
 > {
     Perm(PermKeyType),
@@ -45,7 +45,7 @@ pub enum WsRouteKey<
 
 #[derive(Deserialize, Serialize, Debug, Eq, PartialEq, Clone, Hash)]
 pub struct WsPackage<
-    TempKeyType: KeyGen + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+    TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
     PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
     Data: Clone + 'static,
 > {
@@ -92,7 +92,7 @@ where
 }
 
 pub trait Send<
-    TempKeyType: KeyGen + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+    TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
     PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
 >
 {
@@ -103,7 +103,7 @@ pub trait Send<
 }
 
 pub trait Receive<
-    TempKeyType: KeyGen + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+    TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
     PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
 >
 {
@@ -116,14 +116,14 @@ pub trait Receive<
 
 type WsCallback<T> = StoredValue<Option<Rc<Closure<T>>>>;
 type GlobalMsgCallbacks<
-    KeyGen: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
     PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
     ServerMsg: Clone + 'static,
-> = StoredValue<HashMap<WsRouteKey<KeyGen, PermKeyType>, Rc<dyn Fn(ServerMsg)>>>;
+> = StoredValue<HashMap<WsRouteKey<TempKeyType, PermKeyType>, HashMap<TempKeyType, Rc<dyn Fn(&ServerMsg)>>>>;
 
 #[derive(Clone, Debug)]
 pub struct WsRuntime<
-    TempKeyType: KeyGen + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
+    TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
     PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
     ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
     ClientMsg: Clone + Send<TempKeyType, PermKeyType> + Debug + 'static,
@@ -139,7 +139,7 @@ pub struct WsRuntime<
 }
 
 impl<
-        TempKeyType: KeyGen + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+        TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
         PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
         ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
         ClientMsg: Clone + Send<TempKeyType, PermKeyType> + Debug + 'static,
@@ -148,7 +148,7 @@ impl<
 }
 
 impl<
-        TempKeyType: KeyGen + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+        TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
         PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
         ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
         ClientMsg: Clone + Send<TempKeyType, PermKeyType> + Debug + 'static,
@@ -169,7 +169,7 @@ impl<
 }
 
 impl<
-        TempKeyType: KeyGen + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
+        TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
         PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
         ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
         ClientMsg: Clone + Send<TempKeyType, PermKeyType> + Debug + 'static,
@@ -384,13 +384,14 @@ impl<
     }
 
     fn execute(
-        closures: GlobalMsgCallbacks<TempKeyType, PermKeyType, ServerMsg>,
+        callbacks: GlobalMsgCallbacks<TempKeyType, PermKeyType, ServerMsg>,
         package: WsPackage<TempKeyType, PermKeyType, ServerMsg>,
     ) {
-        let key: WsRouteKey<TempKeyType, PermKeyType> = package.key;
-        let closure: Option<Rc<dyn Fn(ServerMsg)>> = closures.with_value({
+        let key: WsRouteKey<TempKeyType, PermKeyType> = package.key.clone();
+        
+        let callback_cluster: Option<HashMap<TempKeyType, Rc<dyn Fn(&ServerMsg)>>> = callbacks.with_value({
             let key = key.clone();
-            move |socket_closures: &HashMap<WsRouteKey<TempKeyType, PermKeyType>, Rc<dyn Fn(ServerMsg)>>| {
+            move |socket_closures| {
             
                 trace!("ws: current callbacks: {:#?}", &socket_closures.keys());
          
@@ -403,18 +404,27 @@ impl<
             }
         });
 
-        let Some(closure) = closure else {
+        let Some(callback_cluster) = callback_cluster else {
             return;
         };
 
         match &key {
             WsRouteKey::Perm(_) => {
-                closure(package.data);
+                for (_, callback) in callback_cluster {
+                    callback(&package.data);
+                }
             }
             WsRouteKey::Temp(_) => {
-                closure(package.data);
-                closures.update_value(|socket_closures| {
-                    socket_closures.remove(&key);
+                for temp_key in callback_cluster.keys().cloned() {
+                    let callback = callback_cluster.get(&temp_key);
+                    let Some(callback) = callback else {
+                        warn!("ws: temp callback missing {:?}", temp_key);
+                        continue;
+                    };
+                    callback(&package.data);
+                }
+                callbacks.update_value(|callbacks| {
+                    callbacks.remove(&key);
                 });
             }
         }
@@ -426,15 +436,53 @@ impl<
     }
 
 
-    pub fn on(&self, perm_route: PermKeyType, on_receive: impl Fn(ServerMsg) + 'static) {
-        let ws_route_kind = WsRouteKey::<TempKeyType, PermKeyType>::Perm(perm_route);
+    pub fn on(&self, perm_key: PermKeyType, on_receive: impl Fn(&ServerMsg) + 'static) {
+        let perm_key = WsRouteKey::<TempKeyType, PermKeyType>::Perm(perm_key);
+        //let temp_key = WsRouteKey::<TempKeyType, PermKeyType>::Temp(TempKeyType::generate_key());
+        let temp_key = TempKeyType::generate_key();
         self.global_msgs_callbacks.update_value({
+            let temp_key = temp_key.clone();
+            let perm_key = perm_key.clone();
             move |global_msgs_callbacks| {
-                let new_msg_closure = Rc::new(move |server_msg| {
+                let new_msg_closure = Rc::new(move |server_msg: &ServerMsg| {
                     on_receive(server_msg);
                 });
 
-                global_msgs_callbacks.insert(ws_route_kind, new_msg_closure);
+
+
+
+                //let key = WsRouteKey::Perm(perm_route);
+                let current_callback_cluster: Option<&mut HashMap<TempKeyType, Rc<dyn Fn(&ServerMsg)>>> = global_msgs_callbacks.get_mut(&perm_key);
+                match current_callback_cluster {
+                    Some(current_callback_cluster) => {
+                        current_callback_cluster.insert(temp_key, new_msg_closure);
+                    }
+                    None => {
+                        let mut callback_cluster: HashMap<TempKeyType, Rc<dyn Fn(&ServerMsg)>> = HashMap::new();
+                        callback_cluster.insert(temp_key, new_msg_closure);
+                        global_msgs_callbacks.insert(perm_key, callback_cluster);
+                    }
+                }
+
+                //global_msgs_callbacks.insert(ws_route_key, new_msg_closure);
+            }
+        });
+        on_cleanup({
+            // let temp_key = temp_key.clone();
+            // let perm_key = perm_key.clone();
+            let callbacks = self.global_msgs_callbacks.clone();
+            move || {
+                callbacks.update_value({
+                    move |callbacks| {
+                        //callbacks.get_mut(&perm_key).inspect(|callback_cluster| {callback_cluster.remove(&terp_key);}).map_or_else(|| trace!("ws: singletone cleanup: closure not found: {:?}", &perm_key));
+                        let callback_cluster = callbacks.get_mut(&perm_key);
+                        let Some(callback_cluster) = callback_cluster else {
+                            trace!("ws: singletone cleanup: closure not found: {:?}", &perm_key);
+                            return;
+                        };
+                        callback_cluster.remove(&temp_key);
+                    }
+                });
             }
         });
     }
@@ -467,7 +515,7 @@ pub fn get_ws_url(port: u32) -> Result<String, GetUrlError> {
 
 #[derive(Clone, Debug)]
 pub struct WsSingleton<
-    TempKeyType: KeyGen + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
+    TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
     PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
     ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
     ClientMsg: Clone + Send<TempKeyType, PermKeyType> + Debug + 'static,
@@ -481,7 +529,7 @@ pub struct WsSingleton<
 }
 
 impl<
-        TempKeyType: KeyGen + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+        TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
         PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
         ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
         ClientMsg: Clone + Send<TempKeyType, PermKeyType> + Debug + 'static,
@@ -516,15 +564,44 @@ impl<
     pub fn send_once(
         &self,
         client_msg: ClientMsg,
-        on_receive: impl Fn(ServerMsg) + 'static,
+        on_receive: impl Fn(&ServerMsg) + 'static,
     ) -> Result<SendResult, SendError> {
         self.ws.with_value(|ws| -> Result<SendResult, SendError> {
             //let ws = ws.as_ref().ok_or(SendError::WsNotInitialized)?;
             
-            let exists = self
-                .global_msgs_closures
-                .with_value(|socket_closures| socket_closures.contains_key(&self.key));
-            if exists {
+            // let exists = self
+            //     .global_msgs_closures
+            //     .with_value(|socket_closures| socket_closures.contains_key(&self.key));
+            let exists: Option<bool> = self.global_msgs_closures.try_update_value({
+                move |global_msgs_closures| {
+                    let new_msg_closure = Rc::new(move |server_msg: &ServerMsg| {
+                        on_receive(server_msg);
+                    });
+
+                    
+                    
+                    let current_callback_cluster = global_msgs_closures.get(&self.key);
+                    match current_callback_cluster {
+                        Some(current_callback_cluster) => {
+                            //current_callback_cluster.insert(temp_key, new_msg_closure);
+                            return true;
+                        }
+                        None => {
+                            let mut callback_cluster: HashMap<TempKeyType, Rc<dyn Fn(&ServerMsg)>> = HashMap::new();
+                            callback_cluster.insert(TempKeyType::generate_key(), new_msg_closure);
+                            global_msgs_closures.insert(self.key.clone(), callback_cluster);
+                        }
+                    }
+                    // let Some(callback_cluster) = callback_cluster else {
+                    //     trace!("ws: ");
+                    //     return;
+                    // };
+                    //global_msgs_closures.insert(self.key.clone(), new_msg_closure);
+                    false
+                }
+            });
+
+            if exists.unwrap_or(false) {
                 return Ok(SendResult::Skipped);
             }
 
@@ -534,14 +611,7 @@ impl<
             };
             let bytes = ClientMsg::send_as_vec(&package).map_err(SendError::SendError)?;
 
-            self.global_msgs_closures.update_value({
-                move |global_msgs_closures| {
-                    let new_msg_closure = Rc::new(move |server_msg| {
-                        on_receive(server_msg);
-                    });
-                    global_msgs_closures.insert(self.key.clone(), new_msg_closure);
-                }
-            });
+            
 
             //let mut queue = true;
 

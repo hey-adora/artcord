@@ -22,6 +22,8 @@ use pages::home::HomePage;
 use pages::not_found::NotFound;
 use pages::profile::Profile;
 use tracing::trace;
+use tracing::debug;
+use cfg_if::cfg_if;
 
 pub mod components;
 pub mod global_state;
@@ -39,23 +41,32 @@ pub fn App() -> impl IntoView {
     provide_meta_context();
     provide_context(GlobalState::new());
 
-    let debug_ws = WsRuntime::<u128, DebugMsgPermKey, DebugServerMsg, DebugClientMsg>::new();
-    debug_ws.connect(3001).unwrap();
-    let test = debug_ws.create_singleton();
-    
-    test.send_once(DebugClientMsg::Ready, |server_msg| {
-        trace!("server msg received: {:#?}", server_msg);
-    }).expect("failed to send");
-
-    //let location = use_location();
-
-    debug_ws.on(DebugMsgPermKey::Restart, |server_msg| {
-        trace!("Restart received: {:?}", server_msg);
-        window().location().reload().unwrap();
-    });
-    
    
 
+    //let location = use_location();
+    cfg_if! {
+        if #[cfg(feature = "csr")] {
+            let debug_ws = WsRuntime::<u128, DebugMsgPermKey, DebugServerMsg, DebugClientMsg>::new();
+            debug_ws.connect(3001).unwrap();
+            let ready_channel = debug_ws.create_singleton();
+            
+            ready_channel.send_once(DebugClientMsg::Ready, |server_msg| {
+                trace!("server msg received: {:#?}", server_msg);
+            }).expect("failed to send");
+
+            debug_ws.on(DebugMsgPermKey::Restart, |server_msg| {
+                trace!("Restart received: {:?}", server_msg);
+                window().location().reload().unwrap();
+            });
+        }
+    };
+
+   
+    
+   
+    // debug_ws.on(DebugMsgPermKey::Restart, |server_msg| {
+    //     debug!("Restart received 22222222222: {:?}", server_msg);
+    // });
     // WsRuntime::connect("ws://localhost", "3001");
     // a a a a a a
     

@@ -1,6 +1,11 @@
 use std::{ffi::OsStr, net::SocketAddr, ops::Deref, path::Path, pin::Pin, process::ExitStatus};
 
-use artcord_state::message::{debug_client_msg::DebugClientMsg, debug_msg_key::DebugMsgPermKey, debug_server_msg::DebugServerMsg};
+use artcord_leptos_web_sockets::WsPackage;
+use artcord_leptos_web_sockets::WsRouteKey;
+use artcord_state::message::{
+    debug_client_msg::DebugClientMsg, debug_msg_key::DebugMsgPermKey,
+    debug_server_msg::DebugServerMsg,
+};
 use cfg_if::cfg_if;
 use dotenv::dotenv;
 use futures::{future::join_all, Future, FutureExt, SinkExt, StreamExt, TryStreamExt};
@@ -19,8 +24,6 @@ use tokio::{net::TcpStream, select};
 use tokio_tungstenite::tungstenite::{protocol::CloseFrame, Message};
 use tokio_util::task::TaskTracker;
 use tracing::{debug, error, info, trace, warn, Level};
-use artcord_leptos_web_sockets::WsPackage;
-use artcord_leptos_web_sockets::WsRouteKey;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum ProjectKind {
@@ -64,8 +67,6 @@ enum BrowserEvent {
     Restart,
 }
 
-
-
 // async fn do_stuff_async() {
 //     loop {
 //         trace!("boop");
@@ -104,7 +105,8 @@ async fn main() {
 
     let (send_manager_event, recv_manager_event) = mpsc::channel::<ManagerEventKind>(1000);
     let (send_compiler_event, recv_compiler_event) = broadcast::channel::<CompilerEventKind>(1);
-    let (send_runtime_restart_event, recv_runtime_restart_event) = broadcast::channel::<RuntimeEvent>(1);
+    let (send_runtime_restart_event, recv_runtime_restart_event) =
+        broadcast::channel::<RuntimeEvent>(1);
     let (send_exit, recv_exit) = watch::channel::<Option<()>>(None);
     let (send_browser_event, recv_browser_event) = broadcast::channel::<BrowserEvent>(1);
     let mut futs: Vec<Pin<Box<dyn Future<Output = ()>>>> = Vec::new();
@@ -207,7 +209,10 @@ async fn handle_exit(
     }
 }
 
-async fn sockets(recv_exit: watch::Receiver<Option<()>>, recv_browser_event: broadcast::Receiver<BrowserEvent>) {
+async fn sockets(
+    recv_exit: watch::Receiver<Option<()>>,
+    recv_browser_event: broadcast::Receiver<BrowserEvent>,
+) {
     let connection_tasks = TaskTracker::new();
 
     let addr = "0.0.0.0:3001";
@@ -221,7 +226,12 @@ async fn sockets(recv_exit: watch::Receiver<Option<()>>, recv_browser_event: bro
             let peer = stream.peer_addr().expect("Failed to get peer addr");
             info!("socket: connected: {}", peer);
 
-            connection_tasks.spawn(sockets_accept_connection(peer, stream, recv_exit.clone(), recv_browser_event.resubscribe()));
+            connection_tasks.spawn(sockets_accept_connection(
+                peer,
+                stream,
+                recv_exit.clone(),
+                recv_browser_event.resubscribe(),
+            ));
         }
     };
 
@@ -229,9 +239,7 @@ async fn sockets(recv_exit: watch::Receiver<Option<()>>, recv_browser_event: bro
         let mut recv_exit = recv_exit.clone();
         async move {
             loop {
-                let should_exit = {
-                    recv_exit.borrow_and_update().deref().is_some()
-                };
+                let should_exit = { recv_exit.borrow_and_update().deref().is_some() };
                 if should_exit {
                     break;
                 }
@@ -264,7 +272,7 @@ async fn sockets_accept_connection(
     peer: SocketAddr,
     stream: TcpStream,
     recv_exit: watch::Receiver<Option<()>>,
-    recv_browser_event: broadcast::Receiver<BrowserEvent>
+    recv_browser_event: broadcast::Receiver<BrowserEvent>,
 ) {
     if let Err(e) = sockets_handle_connection(peer, stream, recv_exit, recv_browser_event).await {
         match e {
@@ -285,7 +293,7 @@ async fn sockets_handle_connection(
     peer: SocketAddr,
     stream: TcpStream,
     mut recv_exit: watch::Receiver<Option<()>>,
-    mut recv_browser_event: broadcast::Receiver<BrowserEvent>
+    mut recv_browser_event: broadcast::Receiver<BrowserEvent>,
 ) -> tokio_tungstenite::tungstenite::Result<()> {
     let ws_stream = tokio_tungstenite::accept_async(stream)
         .await
@@ -332,19 +340,17 @@ async fn sockets_handle_connection(
     // }
 
     let read_fut = {
-       // let send_msg = &send_msg;
-        read.try_for_each_concurrent(1000,  |msg| {
+        // let send_msg = &send_msg;
+        read.try_for_each_concurrent(1000, |msg| {
             //let send_msg = send_msg.clone();
             async move {
                 match msg {
-
-                    
                     // tokio_tungstenite::tungstenite::Message::Binary(msg) => {
-    
+
                     // }
                     tokio_tungstenite::tungstenite::Message::Binary(client_msg_bytes) => {
                         let client_msg = DebugClientMsg::from_bytes(&client_msg_bytes);
-    
+
                         let Ok(client_msg) = client_msg.inspect_err(|err| {
                             error!(
                                 "socket: error deserializing client msg: {:?} : {}",
@@ -359,7 +365,7 @@ async fn sockets_handle_connection(
                         //     error!("socket: error deserializing client msg: {:?} : {}", client_msg_bytes, err);
                         //     return Ok(());
                         // };
-    
+
                         // let client_msg = match client_msg {
                         //     Ok(a) => a,
                         //     Err(err) => {
@@ -367,16 +373,14 @@ async fn sockets_handle_connection(
                         //         return Ok(());
                         //     }
                         // };
-    
+
                         //send_msg.send();
-    
-                      
                     }
                     _ => {
                         info!("socket: received uwknown msg");
                     }
                 }
-    
+
                 Ok(())
             }
         })
@@ -391,7 +395,7 @@ async fn sockets_handle_connection(
                     error!("socket: recv: closed for {}", peer);
                     return;
                 };
-    
+
                 let send_result = write.send(Message::binary(msg)).await;
                 if let Err(e) = send_result {
                     error!("socket: sent: error: {}", e);
@@ -401,18 +405,14 @@ async fn sockets_handle_connection(
 
         let exit_handle = {
             async move {
-                
                 loop {
-                    let should_exit = {
-                        recv_exit.borrow_and_update().deref().is_some()
-                    };
+                    let should_exit = { recv_exit.borrow_and_update().deref().is_some() };
                     trace!(
                         "socket_handle_connection({}): received exit value: {}",
                         peer,
                         should_exit
                     );
                     if should_exit {
-
                         trace!("socket_handle_connection({}): exiting... ", peer);
                         break;
                     }
@@ -421,18 +421,18 @@ async fn sockets_handle_connection(
                         error!("socket_handle_connection({}): recv: error: {}", peer, err);
                         break;
                     }
-                } 
+                }
             }
         };
 
         let close_frame = CloseFrame {
             code: tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Normal,
-            reason:  std::borrow::Cow::Borrowed("boom") 
+            reason: std::borrow::Cow::Borrowed("boom"),
         };
 
         select!(
                 _ = write_handle => {
-                   
+
                 },
                 _ = exit_handle => {
                     let result = write.send(Message::Close(Some(close_frame))).await;
@@ -444,10 +444,8 @@ async fn sockets_handle_connection(
     };
 
     let browser_event_handler = {
-        
         async move {
             loop {
-              
                 let result = recv_browser_event.recv().await;
                 match result {
                     Ok(result) => {
@@ -455,10 +453,11 @@ async fn sockets_handle_connection(
                         match result {
                             BrowserEvent::Restart => {
                                 //trace!("socekt: msg recv: ({},{:?})", key, &client_msg);
-                                let restart_package = WsPackage::<u128, DebugMsgPermKey, DebugServerMsg> {
-                                    key: WsRouteKey::Perm(DebugMsgPermKey::Restart),
-                                    data: DebugServerMsg::Restart,
-                                };
+                                let restart_package =
+                                    WsPackage::<u128, DebugMsgPermKey, DebugServerMsg> {
+                                        key: WsRouteKey::Perm(DebugMsgPermKey::Restart),
+                                        data: DebugServerMsg::Restart,
+                                    };
                                 trace!("socekt_connection: send: {:?}", &restart_package);
                                 let server_msg = DebugServerMsg::as_bytes(&restart_package);
 
@@ -478,7 +477,7 @@ async fn sockets_handle_connection(
                                 }
                             }
                         }
-                    },
+                    }
                     Err(err) => {
                         match err {
                             broadcast::error::RecvError::Closed => {
@@ -492,18 +491,12 @@ async fn sockets_handle_connection(
                         continue;
                     }
                 };
-
-             
-            } 
-    
-            
+            }
         }
     };
 
-   
-
     // let exit_handle = sockets_handle_connection_on_exit(&peer, recv_exit);
-    
+
     //join!(async { let _ = read_fut.await.inspect_err(|err| error!("socket_connection: error in read: {}", err)); }, async { write.await; });
 
     //let futures = [read_fut.boxed(), write.boxed()];
@@ -632,7 +625,14 @@ async fn compiler(
     mut recv_compiler_event: broadcast::Receiver<CompilerEventKind>,
 ) {
     let mut commands_backend = build_commands([
-        vec!["cargo", "build", "--package", "artcord"],
+        vec![
+            "cargo",
+            "build",
+            "--package",
+            "artcord",
+            "--features",
+            "csr",
+        ],
         vec![
             "cargo",
             "build",
@@ -1261,7 +1261,8 @@ async fn manager(
                                 } else {
                                     trace!("Manager: set: compiler state to Ready");
                                     compiler_state = CompilerState::Ready;
-                                    let send_result = send_browser_event.send(BrowserEvent::Restart);
+                                    let send_result =
+                                        send_browser_event.send(BrowserEvent::Restart);
                                     // let send_result = send_runtime_restart_event.send(RuntimeEvent::Restart);
                                     if let Err(e) = send_result {
                                         error!("Manager: sent browser restart event: error: {}", e);
@@ -1492,9 +1493,7 @@ async fn watch_dir(
 
     let exit = async {
         loop {
-            let should_exit = {
-                recv_exit.borrow_and_update().deref().is_some()
-            };
+            let should_exit = { recv_exit.borrow_and_update().deref().is_some() };
             if should_exit {
                 break;
             }
