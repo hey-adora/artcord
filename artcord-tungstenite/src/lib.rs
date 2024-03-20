@@ -16,6 +16,8 @@ use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message;
 use tracing::{trace, error};
 
+pub mod ws_route;
+
 pub async fn create_websockets() -> Result<(), String> {
     let addr = String::from("0.0.0.0:3420");
     let try_socket = TcpListener::bind(&addr).await;
@@ -54,13 +56,28 @@ async fn accept_connection(stream: TcpStream) {
                     match client_msg {
                         Ok(client_msg) => {
                             println!("SOME MSG: {:?}", &client_msg);
+                            let key = client_msg.key;
+                            let data = client_msg.data;
 
-                            let server_package = WsPackage::<u128, ProdMsgPermKey, ServerMsg> {
-                                key: client_msg.key,
-                                data: ServerMsg::None,
+                            let server_msg = match data {
+                                ClientMsg::GalleryInit { amount, from } => {
+                                    let server_package = WsPackage::<u128, ProdMsgPermKey, ServerMsg> {
+                                        key,
+                                        data: ServerMsg::None,
+                                    };
+                                    trace!("ws: sending: {:?}", &server_package);
+                                    ServerMsg::as_bytes(server_package)
+                                }
+                                _ => {
+                                    let server_package = WsPackage::<u128, ProdMsgPermKey, ServerMsg> {
+                                        key,
+                                        data: ServerMsg::None,
+                                    };
+                                    trace!("ws: sending: {:?}", &server_package);
+                                    ServerMsg::as_bytes(server_package)
+                                }
                             };
-                            trace!("ws: sending: {:?}", &server_package);
-                            let server_msg = ServerMsg::as_bytes(server_package);
+                           
                             match server_msg {
                                 Ok(server_msg) => {
                                     let server_msg = Message::binary(server_msg);

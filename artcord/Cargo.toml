@@ -10,12 +10,13 @@ edition = "2021"
 [dependencies]
 artcord-actix = { path = "../artcord-actix" }
 artcord-tungstenite = { path = "../artcord-tungstenite" }
+artcord-mongodb = { path = "../artcord-mongodb" }
 tokio = { version = "1.36.0", features = ["full"] }
 dotenv = { version = "0.15.0" }
 actix-web = { version = "4.5.1", features = ["macros"] }
 futures = "0.3.30"
 cfg-if = "1"
-tracing = { version = "0.1.40" }
+tracing = { version = "0.1.40", features = ["release_max_level_warn"] }
 tracing-subscriber = {version ="0.3.18", features = ["env-filter"] }
 #artcord-leptos = { path = "../artcord-actix" }
 # actix-files = { version = "0.6.5", optional = true }

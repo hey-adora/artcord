@@ -14,6 +14,7 @@ use leptos::logging::log;
 use leptos::*;
 use leptos_router::use_location;
 use leptos_use::{use_event_listener, use_window};
+use tracing::{debug, error, trace};
 use web_sys::Event;
 
 use crate::app::utils::ServerMsgImgResized;
@@ -63,6 +64,10 @@ pub fn GalleryPage() -> impl IntoView {
 
     //let sender = global_state.create_sender();
     //let test_ws_group = WsRuntime::new_singleton();
+
+
+    let ws_gallery = global_state.ws.create_singleton();
+
     create_effect(move |_| {
         nav_tran.set(true);
 
@@ -254,12 +259,24 @@ pub fn GalleryPage() -> impl IntoView {
         let client_height = section.client_height();
         let client_width = section.client_width();
 
-        // let msg = ClientMsgWrap(ClientMsg::GalleryInit {
-        //     amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
-        //     from: Utc::now().timestamp_millis(),
-        // });
+        let msg = ClientMsg::GalleryInit {
+            amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
+            from: Utc::now().timestamp_millis(),
+        };
 
-        // loaded_sig.set_untracked(LoadingNotFound::Loading);
+        loaded_sig.set_untracked(LoadingNotFound::Loading);
+
+        let send_result = ws_gallery.send_once(msg, move |server_msg| {
+            debug!("received: {:#?}", server_msg);
+        });
+        match send_result {
+            Ok(send_result) => {
+                trace!("fetching gallery");
+            }
+            Err(err) => {
+                error!("failed to fetch gallery: {}", err);
+            }
+        }
 
         // let _ = ws_img_singleton.send_once(&msg, move |server_msg| {
         //     // on receive

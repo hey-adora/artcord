@@ -343,6 +343,7 @@ version = "0.1.0"
 dependencies = [
  "actix-web",
  "artcord-actix",
+ "artcord-mongodb",
  "artcord-tungstenite",
  "cfg-if",
  "dotenv",
@@ -444,6 +445,7 @@ dependencies = [
  "futures",
  "mongodb",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]

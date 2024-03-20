@@ -17,4 +17,4 @@ thiserror = "1.0.57"
 uuid = "1.7.0"
 wasm-bindgen = { version = "0.2.92", features = [] }
 web-sys = { version = "0.3.68", features = ["WebSocket"] }
-tracing = { version = "0.1.40", features = ["release_max_level_warn"] }
+tracing = { version = "0.1.40" }

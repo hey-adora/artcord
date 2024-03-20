@@ -15,6 +15,7 @@ use mongodb::options::{ClientOptions};
 use mongodb::{Client};
 
 use thiserror::Error;
+use tracing::{info, trace};
 
 pub mod query;
 
@@ -32,11 +33,15 @@ pub struct DB {
     collection_acc_session: mongodb::Collection<AccSession>,
 }
 
-const DATABASE_NAME: &'static str = "artcord";
 
+
+
+
+const DATABASE_NAME: &'static str = "artcord";
+ 
 impl DB {
-    pub async fn new(mongo_url: String) -> Self {
-        println!("Connecting to database...");
+    pub async fn new(mongo_url: impl AsRef<str>) -> Self {
+        info!("Connecting to database: {}", mongo_url.as_ref());
 
         let mut client_options = ClientOptions::parse(mongo_url).await.unwrap();
         client_options.app_name = Some("My App".to_string());

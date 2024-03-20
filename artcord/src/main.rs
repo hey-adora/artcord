@@ -1,10 +1,12 @@
 use artcord_actix::server::create_server;
+use artcord_mongodb::database::DB;
 use artcord_tungstenite::create_websockets;
 use cfg_if::cfg_if;
 use dotenv::dotenv;
 use futures::try_join;
 use std::{env, sync::Arc};
 use tracing::info;
+use tracing::trace;
 
 #[actix_web::main]
 async fn main() {
@@ -27,18 +29,24 @@ async fn main() {
     //     }
     // }
 
-    info!("started!");
+
+    trace!("started!");
+
+    
 
     let path = env::current_dir().unwrap();
-    info!("current working directory is {}", path.display());
+    trace!("current working directory is {}", path.display());
 
     let assets_root_dir = env::var("ASSETS_ROOT_DIR").unwrap_or("./target/site".to_string());
-    info!("current assets directory is {}", assets_root_dir);
+    trace!("current assets directory is {}", assets_root_dir);
     let gallery_root_dir = env::var("GALLERY_ROOT_DIR").unwrap_or("./gallery/".to_string());
-    info!("current gallery directory is {}", gallery_root_dir);
+    trace!("current gallery directory is {}", gallery_root_dir);
+    let mongodb_url = env::var("MONGO_URL").unwrap_or("mongodb://root:U2L63zXot4n5@localhost:27017".to_string());
+    trace!("current gallery directory is {}", gallery_root_dir);
 
     let assets_root_dir = Arc::new(assets_root_dir);
     let gallery_root_dir = Arc::new(gallery_root_dir);
+    let db = DB::new(mongodb_url).await;
 
     let web_server = create_server(gallery_root_dir, assets_root_dir).await;
     let web_sockets = create_websockets();
