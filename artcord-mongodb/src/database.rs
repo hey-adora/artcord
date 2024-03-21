@@ -7,7 +7,7 @@ use artcord_state::model::allowed_role::AllowedRole;
 use artcord_state::model::auto_reaction::AutoReaction;
 use artcord_state::model::img::Img;
 use artcord_state::model::user::User;
-
+use cfg_if::cfg_if;
 
 
 use mongodb::options::{ClientOptions};
@@ -34,14 +34,18 @@ pub struct DB {
 }
 
 
-
-
-
 const DATABASE_NAME: &'static str = "artcord";
  
 impl DB {
     pub async fn new(mongo_url: impl AsRef<str>) -> Self {
-        info!("Connecting to database: {}", mongo_url.as_ref());
+        cfg_if! {
+            if #[cfg(debug_assertions)] {
+                info!("Connecting to database: {}", mongo_url.as_ref());
+            } else {
+                info!("Connecting to database...");
+            }
+        } 
+        
 
         let mut client_options = ClientOptions::parse(mongo_url).await.unwrap();
         client_options.app_name = Some("My App".to_string());

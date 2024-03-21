@@ -163,7 +163,7 @@ async fn main() {
     let runtime_fut = runtime(recv_runtime_restart_event);
     futs.push(runtime_fut.boxed());
 
-    let socket_fut = sockets(recv_exit.clone(), recv_browser_event);
+    let socket_fut = sockets(recv_exit.clone(), recv_browser_event, send_manager_event.clone());
     futs.push(socket_fut.boxed());
 
     let handle_exit = handle_exit(
@@ -214,6 +214,7 @@ async fn handle_exit(
 async fn sockets(
     recv_exit: watch::Receiver<Option<()>>,
     recv_browser_event: broadcast::Receiver<BrowserEvent>,
+    send_manager_event: mpsc::Sender<ManagerEventKind>,
 ) {
     let connection_tasks = TaskTracker::new();
 
@@ -233,6 +234,7 @@ async fn sockets(
                 stream,
                 recv_exit.clone(),
                 recv_browser_event.resubscribe(),
+                send_manager_event.clone()
             ));
         }
     };
@@ -275,8 +277,9 @@ async fn sockets_accept_connection(
     stream: TcpStream,
     recv_exit: watch::Receiver<Option<()>>,
     recv_browser_event: broadcast::Receiver<BrowserEvent>,
+    send_manager_event: mpsc::Sender<ManagerEventKind>,
 ) {
-    if let Err(e) = sockets_handle_connection(peer, stream, recv_exit, recv_browser_event).await {
+    if let Err(e) = sockets_handle_connection(peer, stream, recv_exit, recv_browser_event, send_manager_event.clone()).await {
         match e {
             tokio_tungstenite::tungstenite::Error::ConnectionClosed
             | tokio_tungstenite::tungstenite::Error::Protocol(_)
@@ -296,6 +299,7 @@ async fn sockets_handle_connection(
     stream: TcpStream,
     mut recv_exit: watch::Receiver<Option<()>>,
     mut recv_browser_event: broadcast::Receiver<BrowserEvent>,
+    send_manager_event: mpsc::Sender<ManagerEventKind>,
 ) -> tokio_tungstenite::tungstenite::Result<()> {
     let ws_stream = tokio_tungstenite::accept_async(stream)
         .await
@@ -343,8 +347,9 @@ async fn sockets_handle_connection(
 
     let read_fut = {
         // let send_msg = &send_msg;
-        read.try_for_each_concurrent(1000, |msg| {
+        read.try_for_each_concurrent(1000, move |msg| {
             //let send_msg = send_msg.clone();
+            let send_manager_event = send_manager_event.clone();
             async move {
                 match msg {
                     // tokio_tungstenite::tungstenite::Message::Binary(msg) => {
@@ -365,6 +370,20 @@ async fn sockets_handle_connection(
                             return Ok(());
                         };
                         trace!("socekt: msg recv: {:?}", &client_msg);
+                        let key = client_msg.key;
+                        let client_msg = client_msg.data;
+                        let send_result = match client_msg {
+                            DebugClientMsg::BrowserReady => {
+                                send_manager_event.send(ManagerEventKind::BrowserReady).await
+                            }
+                            DebugClientMsg::RuntimeReady => {
+                                send_manager_event.send(ManagerEventKind::RuntimeReady).await
+                            }
+                        };
+
+                        if let Err(e) = send_result {
+                            error!("socket: sent manager event: error: {}", e);
+                        }
 
                         // let Ok(client_msg) = client_msg else {
                         //     let err = client_msg.err().map(|e|e.to_string()).unwrap_or("unknown error".to_string());
@@ -940,7 +959,7 @@ async fn manager(
 
     //let _back_is_running = false;
 
-    let mut browser_needs_restart = false;
+    //let mut browser_needs_restart = false;
     // let mut browser_ready = false;
 
     let mut event_kind = ManagerEventKind::File(ProjectKind::Back);
@@ -1439,19 +1458,21 @@ async fn manager(
                 break;
             }
             ManagerEventKind::BrowserReady => {
-                if browser_needs_restart {
-                    trace!("Manager: set: compiler state to Ready");
-                    compiler_state = CompilerState::Ready;
-                    let send_result = send_browser_event.send(BrowserEvent::Restart);
-                    // let send_result = send_runtime_restart_event.send(RuntimeEvent::Restart);
-                    if let Err(e) = send_result {
-                        error!("Manager: sent browser restart event: error: {}", e);
-                        continue;
-                    }
-                }
+                trace!("Manager: recv BrowserReady");
+                // if browser_needs_restart {
+                //     // trace!("Manager: set: compiler state to Ready");
+                //     // compiler_state = CompilerState::Ready;
+                    
+                // }
             }
             ManagerEventKind::RuntimeReady => {
-                browser_needs_restart = true;
+                trace!("Manager: sending browser restart event");
+                let send_result = send_browser_event.send(BrowserEvent::Restart);
+                    // let send_result = send_runtime_restart_event.send(RuntimeEvent::Restart);
+                if let Err(e) = send_result {
+                    error!("Manager: sent browser restart event: error: {}", e);
+                    continue;
+                }
             }
         }
 

@@ -8,6 +8,10 @@ use std::{env, sync::Arc};
 use tracing::info;
 use tracing::trace;
 
+
+
+
+
 #[actix_web::main]
 async fn main() {
     dotenv().ok();
@@ -27,7 +31,7 @@ async fn main() {
     //     } else {
     //         tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).try_init().unwrap();
     //     }
-    // }
+    // } 
 
 
     trace!("started!");

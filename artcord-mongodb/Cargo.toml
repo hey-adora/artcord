@@ -13,6 +13,7 @@ mongodb = "2.8.1"
 thiserror = "1.0.57"
 tracing = { version = "0.1.40"  }
 artcord-state = { path = "../artcord-state" }
+cfg-if = "1"
 
 [features]
 default = ["ssr"]
