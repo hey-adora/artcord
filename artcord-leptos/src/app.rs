@@ -51,7 +51,8 @@ pub fn App() -> impl IntoView {
         debug_ws.connect(3001).unwrap();
         // let ready_channel = debug_ws.create_singleton();
         
-        // ready_channel.send_once(DebugClientMsg::BrowserReady, |server_msg| {
+        //let client_msg = DebugClientMsg::BrowserReady;
+        // ready_channel.send_once(client_msg, |server_msg| {
         //     trace!("server msg received: {:#?}", server_msg);
         // }).expect("failed to send");
 

@@ -226,7 +226,7 @@ async fn sockets(
     let handle_connections = async {
         while let Ok((stream, _)) = listener.accept().await {
             let peer = stream.peer_addr().expect("Failed to get peer addr");
-            info!("socket: connected: {}", peer);
+            trace!("socket: connected: {}", peer);
 
             connection_tasks.spawn(sockets_accept_connection(
                 peer,
@@ -300,7 +300,7 @@ async fn sockets_handle_connection(
     let ws_stream = tokio_tungstenite::accept_async(stream)
         .await
         .expect("socket: failed to accept connection");
-    info!("socket: new websocket connection: {}", peer);
+    trace!("socket: new websocket connection: {}", peer);
 
     //ws_stream.re
     let (mut write, read) = ws_stream.split();
@@ -383,7 +383,7 @@ async fn sockets_handle_connection(
                         //send_msg.send();
                     }
                     _ => {
-                        info!("socket: received uwknown msg");
+                        warn!("socket: received uwknown msg");
                     }
                 }
 
@@ -523,7 +523,7 @@ async fn sockets_handle_connection(
             // }
     );
 
-    info!("socket: disconnected: {}", peer);
+    trace!("socket: disconnected: {}", peer);
     // socket_err.unwrap();
     // tokio_err.unwrap();
 
@@ -562,10 +562,10 @@ async fn runtime(mut recv_runtime_restart_event: broadcast::Receiver<RuntimeEven
                 error!("runtime: recv error: {}", err);
                 continue;
             };
-            info!("runtime: started");
+            trace!("runtime: started");
             select! {
                _ = command.wait() => {
-                   info!("runtime: finished");
+                   trace!("runtime: finished");
                 },
                 result = recv_runtime_restart_event.recv() => {
                     match result {
@@ -623,7 +623,7 @@ async fn runtime_on_kill(command: &mut Child) {
     if let Err(err) = command_kill_result {
         error!("Runtime: error killing command: {}", err);
     };
-    info!("runtime: killed, restarting");
+    trace!("runtime: killed, restarting");
 }
 
 async fn compiler(
@@ -831,7 +831,7 @@ async fn compiler_on_finish(
         }
         true
     } else {
-        trace!(
+        error!(
             "Compiler(COMMAND-{:?}): sent: CompilerFailed({:?})",
             project_kind,
             project_kind
