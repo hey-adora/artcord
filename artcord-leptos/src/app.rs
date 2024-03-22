@@ -17,10 +17,10 @@ use leptos_router::*;
 //use crate::app::utils::ws_runtime::WsRuntime;
 //use artcord_leptos_web_sockets::Runtime;
 use pages::account::Account;
-use pages::gallery::GalleryPage;
+use pages::main_gallery::MainGalleryPage;
 use pages::home::HomePage;
 use pages::not_found::NotFound;
-use pages::profile::Profile;
+use pages::user_gallery::UserGalleryPage;
 use tracing::trace;
 use tracing::debug;
 use cfg_if::cfg_if;
@@ -99,8 +99,8 @@ pub fn App() -> impl IntoView {
         <Router>
                 <Routes>
                     <Route path="" view=HomePage/>
-                    <Route path="/gallery" view=GalleryPage/>
-                    <Route path="/user/:id" view=Profile/>
+                    <Route path="/gallery" view=MainGalleryPage/>
+                    <Route path="/user/:id" view=UserGalleryPage/>
                     <Route path="/account" view=Account/>
                     <Route path="/admin" view=Admin/>
                     <Route path="/*any" view=NotFound/>

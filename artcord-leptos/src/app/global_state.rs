@@ -1,5 +1,4 @@
 use crate::app::pages::register::GlobalAuthState;
-use crate::app::utils::{PageProfileState, ScrollSection};
 
 use artcord_leptos_web_sockets::WsRuntime;
 use artcord_state::message::prod_client_msg::ClientMsg;
@@ -15,7 +14,7 @@ use wasm_bindgen::closure::Closure;
 use web_sys::{ErrorEvent, MessageEvent, WebSocket};
 // use crate::app::utils::server_msg_wrap::ServerMsgWrap;
 
-use super::pages::gallery::GalleryPageState;
+use super::{pages::{main_gallery::GalleryPageState, user_gallery::PageUserGalleryState}, utils::ScrollSection};
 
 
 #[derive(Copy, Clone, Debug)]
@@ -24,18 +23,13 @@ pub struct GlobalState {
     pub section: RwSignal<ScrollSection>,
     pub nav_open: RwSignal<bool>,
     pub nav_tran: RwSignal<bool>,
-    pub page_profile: PageProfileState,
+    pub page_profile: PageUserGalleryState,
     pub pages: Pages,
     pub socket_timestamps: RwSignal<HashMap<&'static str, i64>>,
     pub socket_connected: RwSignal<bool>,
     pub socket_closures: StoredValue<HashMap<u128, Rc<dyn Fn(ServerMsg)>>>,
     pub socket_pending_client_msgs: StoredValue<Vec<u8>>,
     pub ws: WsRuntime<u128, ProdMsgPermKey, ServerMsg, ClientMsg>
-    // pub ws: StoredValue<Option<WebSocket>>,
-    // pub ws_on_msg: StoredValue<Option<Rc<Closure<dyn FnMut(MessageEvent)>>>>,
-    // pub ws_on_err: StoredValue<Option<Rc<Closure<dyn FnMut(ErrorEvent)>>>>,
-    // pub ws_on_open: StoredValue<Option<Rc<Closure<dyn FnMut()>>>>,
-    // pub ws_on_close: StoredValue<Option<Rc<Closure<dyn FnMut()>>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -69,19 +63,13 @@ impl GlobalState {
             section: create_rw_signal(ScrollSection::Home),
             nav_open: create_rw_signal(false),
             nav_tran: create_rw_signal(true),
-            page_profile: PageProfileState::new(),
+            page_profile: PageUserGalleryState::new(),
             pages: Pages::new(),
             socket_connected: create_rw_signal(false),
             socket_timestamps: create_rw_signal(HashMap::new()),
             socket_closures: StoredValue::new(HashMap::new()),
             socket_pending_client_msgs: StoredValue::new(Vec::new()),
             ws: WsRuntime::<u128, ProdMsgPermKey, ServerMsg, ClientMsg>::new(),
-            // ws: StoredValue::new(None),
-            // ws_on_msg: StoredValue::new(None),
-            // ws_on_err: StoredValue::new(None),
-            // ws_on_open: StoredValue::new(None),
-            // ws_on_close: StoredValue::new(None),
-            
         }
     }
 

@@ -1,8 +1,8 @@
 pub mod account;
 pub mod admin;
-pub mod gallery;
+pub mod main_gallery;
 pub mod home;
 pub mod login;
 pub mod not_found;
-pub mod profile;
+pub mod user_gallery;
 pub mod register;

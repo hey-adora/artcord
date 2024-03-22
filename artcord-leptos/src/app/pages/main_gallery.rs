@@ -1,7 +1,9 @@
 use crate::app::components::navbar::{shrink_nav, Navbar};
 use crate::app::global_state::GlobalState;
+use crate::app::utils::img_resize::{calc_fit_count, resize_imgs, NEW_IMG_HEIGHT};
+use crate::app::utils::img_resized::ServerMsgImgResized;
 use crate::app::utils::{
-    calc_fit_count, resize_imgs, LoadingNotFound, SelectedImg, NEW_IMG_HEIGHT,
+    LoadingNotFound, SelectedImg, 
 };
 use artcord_leptos_web_sockets::WsRuntime;
 use artcord_state::aggregation::server_msg_img::AggImg;
@@ -17,7 +19,6 @@ use leptos_use::{use_event_listener, use_window};
 use tracing::{debug, error, trace};
 use web_sys::Event;
 
-use crate::app::utils::ServerMsgImgResized;
 
 // fn create_client_test_imgs() -> Vec<ServerMsgImgResized> {
 //     let mut new_imgs: Vec<ServerMsgImgResized> = Vec::new();
@@ -51,7 +52,7 @@ impl GalleryPageState {
 }
 
 #[component]
-pub fn GalleryPage() -> impl IntoView {
+pub fn MainGalleryPage() -> impl IntoView {
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
     let nav_tran = global_state.nav_tran;
     let imgs: RwSignal<Vec<ServerMsgImgResized>> = global_state.pages.gallery.gallery_imgs;
