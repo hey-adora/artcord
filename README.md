@@ -10,7 +10,7 @@ Roadmap:
 - [x] Pull art from discord server.
 - [x] Display art in website gallery.
 - [x] Add author profiles with their art only.
-- [-] Refactoring and making the code easier to work with and read. [link](https://github.com/hey-adora/artcord/issues/1)
+- [ ] (in progress) Refactoring and making the code easier to work with and read. [link](https://github.com/hey-adora/artcord/issues/1)
 - [ ] Add connection limit and throttle and auto block.
 - [ ] Add admin dashboard for seeing ip's and connection count with ability to block.
 - [ ] Add authentication by email or discord.
