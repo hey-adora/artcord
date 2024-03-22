@@ -12,6 +12,7 @@ use tracing::trace;
 
 
 
+
 #[actix_web::main]
 async fn main() {
     dotenv().ok();
@@ -51,9 +52,10 @@ async fn main() {
     let assets_root_dir = Arc::new(assets_root_dir);
     let gallery_root_dir = Arc::new(gallery_root_dir);
     let db = DB::new(mongodb_url).await;
+    let db = Arc::new(db);
 
     let web_server = create_server(gallery_root_dir, assets_root_dir).await;
-    let web_sockets = create_websockets();
+    let web_sockets = create_websockets(db.clone());
 
     let r = try_join!(
         async { web_server.await.or_else(|e| Err(e.to_string())) },

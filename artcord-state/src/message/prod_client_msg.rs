@@ -1,8 +1,8 @@
 //use crate::database::rkw::date_time::DT;
-use crate::message::server_msg::{
-    SERVER_MSG_IMGS_NAME, SERVER_MSG_LOGIN, SERVER_MSG_PROFILE, SERVER_MSG_PROFILE_IMGS_NAME,
-    SERVER_MSG_REGISTRATION,
-};
+// use crate::message::server_msg::{
+//     SERVER_MSG_IMGS_NAME, SERVER_MSG_LOGIN, SERVER_MSG_PROFILE, SERVER_MSG_PROFILE_IMGS_NAME,
+//     SERVER_MSG_REGISTRATION,
+// };
 
 
 use artcord_leptos_web_sockets::{WsPackage, WsRouteKey};
@@ -55,20 +55,20 @@ impl artcord_leptos_web_sockets::Send<u128, ProdMsgPermKey> for ClientMsg {
 }
 
 impl ClientMsg {
-    pub fn name(&self) -> &'static str {
-        match self {
-            ClientMsg::GalleryInit { amount: _, from: _ } => SERVER_MSG_IMGS_NAME,
-            ClientMsg::UserGalleryInit {
-                from: _,
-                amount: _,
-                user_id: _,
-            } => SERVER_MSG_PROFILE_IMGS_NAME,
-            ClientMsg::User { user_id: _ } => SERVER_MSG_PROFILE,
-            ClientMsg::Register { email: _, password: _ } => SERVER_MSG_REGISTRATION,
-            ClientMsg::Login { email: _, password: _ } => SERVER_MSG_LOGIN,
-            ClientMsg::Logout => SERVER_MSG_LOGIN,
-        }
-    }
+    // pub fn name(&self) -> &'static str {
+    //     match self {
+    //         ClientMsg::GalleryInit { amount: _, from: _ } => SERVER_MSG_IMGS_NAME,
+    //         ClientMsg::UserGalleryInit {
+    //             from: _,
+    //             amount: _,
+    //             user_id: _,
+    //         } => SERVER_MSG_PROFILE_IMGS_NAME,
+    //         ClientMsg::User { user_id: _ } => SERVER_MSG_PROFILE,
+    //         ClientMsg::Register { email: _, password: _ } => SERVER_MSG_REGISTRATION,
+    //         ClientMsg::Login { email: _, password: _ } => SERVER_MSG_LOGIN,
+    //         ClientMsg::Logout => SERVER_MSG_LOGIN,
+    //     }
+    // }
 
     pub fn as_vec(package: &WsPackage<u128, ProdMsgPermKey, Self>) -> Result<Vec<u8>, bincode::Error> {
         let a = bincode::serialize::<WsPackage<u128, ProdMsgPermKey, Self>>(package);

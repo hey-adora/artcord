@@ -2,9 +2,9 @@ use crate::app::pages::register::GlobalAuthState;
 use crate::app::utils::{PageProfileState, ScrollSection};
 
 use artcord_leptos_web_sockets::WsRuntime;
-use artcord_state::message::client_msg::ClientMsg;
+use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_perm_key::ProdMsgPermKey;
-use artcord_state::message::server_msg::ServerMsg;
+use artcord_state::message::prod_server_msg::ServerMsg;
 use leptos::{
     create_rw_signal, RwSignal, SignalWith,
     StoredValue,

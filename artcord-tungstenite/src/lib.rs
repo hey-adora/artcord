@@ -1,10 +1,15 @@
+use std::net::SocketAddr;
+use std::sync::Arc;
+
 use artcord_leptos_web_sockets::WsPackage;
 use artcord_leptos_web_sockets::WsRouteKey;
-use artcord_state::message::client_msg::ClientMsg;
+use artcord_mongodb::database::DB;
+use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_perm_key::ProdMsgPermKey;
-use artcord_state::message::server_msg::ServerMsg;
+use artcord_state::message::prod_server_msg::ServerMsg;
 use futures::pin_mut;
 use futures::TryStreamExt;
+use thiserror::Error;
 use tokio::net::TcpListener;
 use tokio::net::TcpStream;
 use tokio::task;
@@ -14,136 +19,63 @@ use futures::SinkExt;
 use futures::StreamExt;
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message;
-use tracing::{trace, error};
+use tracing::Instrument;
+use tracing::{error, trace};
+use ws_route::ws_main_gallery::WsHandleMainGalleryError;
+
+use crate::ws_route::ws_main_gallery::ws_handle_main_gallery;
 
 pub mod ws_route;
 
-pub async fn create_websockets() -> Result<(), String> {
-    let addr = String::from("0.0.0.0:3420");
-    let try_socket = TcpListener::bind(&addr).await;
+pub async fn create_websockets(db: Arc<DB>) -> Result<(), String> {
+    let ws_addr = String::from("0.0.0.0:3420");
+    let try_socket = TcpListener::bind(&ws_addr).await;
     let listener = try_socket.expect("Failed to bind");
-    println!("Listening on: {}", addr);
+    trace!("ws({}): started", &ws_addr);
     while let Ok((stream, _)) = listener.accept().await {
-        task::spawn(accept_connection(stream));
+        let Ok(user_addr) = stream.peer_addr().inspect_err(|err| error!("failed to get peer addr: {}", err)) else {
+            continue;
+        };
+
+        
+        task::spawn(
+            accept_connection(user_addr, stream, db.clone()).instrument(tracing::trace_span!("ws", "{}-{}", ws_addr, user_addr.to_string())),
+        );
     }
+
 
     Ok(())
 }
 
-async fn accept_connection(stream: TcpStream) {
-    let addr = stream
-        .peer_addr()
-        .expect("Connected streams should have a peer address.");
-    println!("Peer address: {}", addr);
+async fn accept_connection(addr: SocketAddr ,stream: TcpStream, db: Arc<DB>) {
+    trace!("connecting...");
 
     let ws_stream = tokio_tungstenite::accept_async(stream)
         .await
         .expect("Error during the websocket handshake occurred.");
 
-    println!("New WebSocket connection: {}", addr);
+    trace!("connected");
 
-    let (tx, mut rx) = mpsc::channel::<Message>(1000);
+    let (send, mut recv) = mpsc::channel::<Message>(1000);
     let (mut write, read) = ws_stream.split();
-    //let tx = Arc::new(tx);
 
-    let read = read.try_for_each_concurrent(1000, {
-        let tx = tx.clone();
-        move |client_msg| {
-            let tx = tx.clone();
-            async move {
-                if let Message::Binary(msgclient_msg) = client_msg {
-                    let client_msg = ClientMsg::from_bytes(&msgclient_msg);
-                    match client_msg {
-                        Ok(client_msg) => {
-                            println!("SOME MSG: {:?}", &client_msg);
-                            let key = client_msg.key;
-                            let data = client_msg.data;
-
-                            let server_msg = match data {
-                                ClientMsg::GalleryInit { amount, from } => {
-                                    let server_package = WsPackage::<u128, ProdMsgPermKey, ServerMsg> {
-                                        key,
-                                        data: ServerMsg::None,
-                                    };
-                                    trace!("ws: sending: {:?}", &server_package);
-                                    ServerMsg::as_bytes(server_package)
-                                }
-                                _ => {
-                                    let server_package = WsPackage::<u128, ProdMsgPermKey, ServerMsg> {
-                                        key,
-                                        data: ServerMsg::None,
-                                    };
-                                    trace!("ws: sending: {:?}", &server_package);
-                                    ServerMsg::as_bytes(server_package)
-                                }
-                            };
-                           
-                            match server_msg {
-                                Ok(server_msg) => {
-                                    let server_msg = Message::binary(server_msg);
-                                    let send_result = tx.send(server_msg).await;
-                                    match send_result {
-                                        Ok(_) => {
-                                        }
-                                        Err(err) => {
-                                            error!("ws: sending server msg error: {}", err);
-                                        }
-                                    }
-                                }
-                                Err(err) => {
-                                    error!("ws: server msg serialization error: {}", err);
-                                }
-                            }
-                           
-                        }
-                        Err(err) => {
-                            error!(
-                                "ws: client msg serialization error: {}",
-                                err
-                            );
-                            let reset_package = WsPackage::<u128, ProdMsgPermKey, ServerMsg> {
-                                key: WsRouteKey::Perm(ProdMsgPermKey::Reset),
-                                data: ServerMsg::Reset,
-                            };
-                            trace!("ws: sending: {:?}", &reset_package);
-                            let bytes = ServerMsg::as_bytes(reset_package);
-                            match bytes {
-                                Ok(bytes) => {
-                                    let server_msg = Message::binary(bytes);
-                                    let send_result = tx.send(server_msg).await;
-                                    match send_result {
-                                        Ok(_) => {
-                                        }
-                                        Err(err) => {
-                                            error!("ws: sending reset msg error: {}", err);
-                                        }
-                                    }
-                                }
-                                Err(err) => {
-                                    error!("ws: reset msg serialization error: {}", err);
-                                }
-                            }
-                            // let Ok(bytes) = bytes else {
-                            //     println!("Failed to serialize server msg: {}", bytes.err().unwrap());
-                            //     return Ok(());
-                            // };
-                            //Message::Ping(vec![]);
-                            
-                            
-                        }
-                    }
+    let read = read
+        .try_for_each_concurrent(1000, {
+            move |client_msg| {
+                let send = send.clone();
+                let db = db.clone();
+                async move {
+                    let _ = response_handler(db, send, client_msg)
+                        .await
+                        .inspect_err(|err| error!("reponse handler error: {:#?}", err));
+                    Ok(())
                 }
-                //write.send(server_msg);
-
-                Ok(())
             }
-        }
-    });
-
-    //let write = rx.forward(write);
+        })
+        ;
 
     let write = async move {
-        while let Some(msg) = rx.recv().await {
+        while let Some(msg) = recv.recv().await {
             write.send(msg).await.unwrap();
         }
     };
@@ -151,10 +83,76 @@ async fn accept_connection(stream: TcpStream) {
     pin_mut!(read, write);
 
     future::select(read, write).await;
-    // read.try_filter(|msg| future::ready(msg.is_text() || msg.is_binary()))
-    //     .forward(write)
-    //     .await
-    //     .expect("Failed to forward message");
 
-    println!("ho ho ho ho");
+    trace!("disconnected");
+}
+
+async fn response_handler(
+    db: Arc<DB>,
+    send: mpsc::Sender<Message>,
+    client_msg: Message,
+) -> Result<(), WsResponseHandlerError> {
+    if let Message::Binary(msgclient_msg) = client_msg {
+        let client_msg = ClientMsg::from_bytes(&msgclient_msg)?;
+
+        trace!("received: {:?}", &client_msg);
+        let key: WsRouteKey<u128, ProdMsgPermKey> = client_msg.key;
+        let data = client_msg.data;
+
+        let server_msg: Result<ServerMsg, WsResponseHandlerError> = match data {
+            ClientMsg::GalleryInit { amount, from } => ws_handle_main_gallery(db, amount, from)
+                .await
+                .map(ServerMsg::MainGallery)
+                .map_err(WsResponseHandlerError::MainGallery),
+            _ => Ok(ServerMsg::NotImplemented),
+        };
+
+        let server_msg = server_msg
+            .inspect_err(|err| {
+                error!("reponse error: {:#?}", err);
+            })
+            .unwrap_or(ServerMsg::Error);
+
+        let server_package = WsPackage::<u128, ProdMsgPermKey, ServerMsg> {
+            key,
+            data: server_msg,
+        };
+
+        #[cfg(debug_assertions)]
+        {
+            let mut output = format!("{:?}", &server_package);
+            output.truncate(100);
+            trace!("sent: {}", output);
+        }
+        
+        let bytes = ServerMsg::as_bytes(server_package)?;
+
+        let server_msg = Message::binary(bytes);
+        send.send(server_msg).await?;
+    }
+    Ok(())
+}
+
+#[derive(Error, Debug)]
+pub enum WsResponseHandlerError {
+    #[error("MainGallery error: {0}")]
+    MainGallery(#[from] WsHandleMainGalleryError),
+
+    #[error("MainGallery error: {0}")]
+    Serialization(#[from] bincode::Error),
+
+    #[error("Send error: {0}")]
+    Send(#[from] tokio::sync::mpsc::error::SendError<tokio_tungstenite::tungstenite::Message>),
+    // tokio::sync::mpsc::error::SendError<tokio_tungstenite::tungstenite::Message>>>
+    // #[error("Mongodb error: {0}")]
+    // MongoDB(#[from] mongodb::error::Error),
+
+    // #[error("Bcrypt error: {0}")]
+    // Bcrypt(#[from] bcrypt::BcryptError),
+
+    // #[error("JWT error: {0}")]
+    // JWT(#[from] jsonwebtoken::errors::Error),
+
+    // #[error("RwLock error: {0}")]
+    // RwLock(String),
 }

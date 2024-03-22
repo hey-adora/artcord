@@ -475,8 +475,12 @@ name = "artcord-tungstenite"
 version = "0.1.0"
 dependencies = [
  "artcord-leptos-web-sockets",
+ "artcord-mongodb",
  "artcord-state",
+ "bincode",
  "futures",
+ "mongodb",
+ "thiserror",
  "tokio",
  "tokio-tungstenite",
  "tracing",

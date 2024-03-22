@@ -1,6 +1,6 @@
 use crate::app::{components::navbar::shrink_nav};
 use crate::app::global_state::GlobalState;
-use artcord_state::message::{client_msg::ClientMsg, server_msg::SERVER_MSG_PROFILE_IMGS_NAME};
+use artcord_state::message::{prod_client_msg::ClientMsg};
 use chrono::Utc;
 use leptos::ev::resize;
 use leptos::html::Section;
@@ -24,7 +24,7 @@ pub fn ProfileGallery() -> impl IntoView {
     let global_gallery_imgs = global_state.page_profile.gallery_imgs;
     let selected_img: RwSignal<Option<SelectedImg>> = create_rw_signal(None);
     let loaded_sig = global_state.page_profile.gallery_loaded;
-    let _connection_load_state_name = SERVER_MSG_PROFILE_IMGS_NAME;
+   // let _connection_load_state_name = SERVER_MSG_PROFILE_IMGS_NAME;
     let location = use_location();
 
     let on_click = move |img: ServerMsgImgResized| {

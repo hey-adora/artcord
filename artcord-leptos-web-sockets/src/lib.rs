@@ -63,9 +63,17 @@ pub struct WsPackage<
 //     data: ServerMsg,
 // }
 
+
+
 enum WsMsg<C, S> {
     Client(C),
     Server(S),
+}
+
+enum WsResponse<T> {
+    Ok(T),
+    SendErr,
+    TimeOut
 }
 
 enum ExampleRoutes {

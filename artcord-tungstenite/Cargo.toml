@@ -12,3 +12,7 @@ tokio-tungstenite = "0.21.0"
 artcord-state = { path = "../artcord-state" }
 artcord-leptos-web-sockets = { path = "../artcord-leptos-web-sockets" }
 tracing = { version = "0.1.40"  }
+artcord-mongodb = { path = "../artcord-mongodb" }
+thiserror = "1.0.57"
+bincode = "1.3.3"
+mongodb = "2.8.1"

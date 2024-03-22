@@ -5,8 +5,8 @@ use crate::app::utils::{
 };
 use artcord_leptos_web_sockets::WsRuntime;
 use artcord_state::aggregation::server_msg_img::AggImg;
-use artcord_state::message::client_msg::ClientMsg;
-use artcord_state::message::server_msg::ServerMsg;
+use artcord_state::message::prod_client_msg::ClientMsg;
+use artcord_state::message::prod_server_msg::{MainGalleryResponse, ServerMsg};
 use chrono::Utc;
 use leptos::ev::resize;
 use leptos::html::Section;
@@ -54,7 +54,7 @@ impl GalleryPageState {
 pub fn GalleryPage() -> impl IntoView {
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
     let nav_tran = global_state.nav_tran;
-    let imgs = global_state.pages.gallery.gallery_imgs;
+    let imgs: RwSignal<Vec<ServerMsgImgResized>> = global_state.pages.gallery.gallery_imgs;
     let selected_img: RwSignal<Option<SelectedImg>> = create_rw_signal(None);
     let gallery_section = create_node_ref::<Section>();
     let loaded_sig = global_state.pages.gallery.gallery_loaded;
@@ -64,7 +64,6 @@ pub fn GalleryPage() -> impl IntoView {
 
     //let sender = global_state.create_sender();
     //let test_ws_group = WsRuntime::new_singleton();
-
 
     let ws_gallery = global_state.ws.create_singleton();
 
@@ -115,14 +114,13 @@ pub fn GalleryPage() -> impl IntoView {
                 let document = document();
                 let gallery_section = document.get_element_by_id("gallery_section");
                 let Some(gallery_section) = gallery_section else {
-                    return ;
+                    return;
                 };
                 let width = gallery_section.client_width() as u32;
                 resize_imgs(NEW_IMG_HEIGHT, width, imgs);
             });
 
             loaded_sig.set(LoadingNotFound::Loaded);
-        
         }
     };
 
@@ -159,11 +157,11 @@ pub fn GalleryPage() -> impl IntoView {
     //                 .page_galley
     //                 .gallery_loaded
     //                 .set(LoadingNotFound::Loaded);
-            
+
     //         }
-            
+
     //     }
-        
+
     //     Ok(())
     // });
 
@@ -247,10 +245,10 @@ pub fn GalleryPage() -> impl IntoView {
 
     create_effect(move |_| {
         // let connected = global_state.socket_connected.get();
-        // let not_loaded = loaded_sig.with(|state| *state == LoadingNotFound::NotLoaded);
-        // if !not_loaded || !connected {
-        //     return;
-        // }
+        let loaded = !loaded_sig.with_untracked(|state| *state == LoadingNotFound::NotLoaded);
+        if loaded {
+            return;
+        }
 
         let Some(section) = gallery_section.get() else {
             return;
@@ -264,11 +262,37 @@ pub fn GalleryPage() -> impl IntoView {
             from: Utc::now().timestamp_millis(),
         };
 
-        loaded_sig.set_untracked(LoadingNotFound::Loading);
+        loaded_sig.set(LoadingNotFound::Loading);
 
         let send_result = ws_gallery.send_once(msg, move |server_msg| {
-            debug!("received: {:#?}", server_msg);
+            debug!("received: {:#?}", &server_msg);
+            match server_msg {
+                ServerMsg::MainGallery(response) => {
+                    let response = *response;
+                    match response {
+                        MainGalleryResponse::Imgs(new_imgs) => {
+                            let new_imgs = new_imgs
+                                .iter()
+                                .map(|img| ServerMsgImgResized::from(img.to_owned()))
+                                .collect::<Vec<ServerMsgImgResized>>();
+
+                            imgs.update(|imgs| {
+                                let section = gallery_section.get_untracked();
+                                if let Some(section) = section {
+                                    let width = section.client_width() as u32;
+                
+                                    // log!("RESIZING!!!!!!!!!!!!");
+                                    resize_imgs(NEW_IMG_HEIGHT, width, imgs);
+                                };
+                            });
+                        }
+                    }
+                }
+                _ => {}
+            }
+            loaded_sig.set(LoadingNotFound::Loaded);
         });
+
         match send_result {
             Ok(send_result) => {
                 trace!("fetching gallery");
