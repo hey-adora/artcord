@@ -112,7 +112,8 @@ pub fn GalleryPage() -> impl IntoView {
             imgs.update(|imgs| {
                 imgs.extend(new_imgs);
                 let document = document();
-                let gallery_section = document.get_element_by_id("gallery_section");
+                //let gallery_section = document.get_element_by_id("gallery_section");
+                let gallery_section = gallery_section.get_untracked();
                 let Some(gallery_section) = gallery_section else {
                     return;
                 };
@@ -213,10 +214,43 @@ pub fn GalleryPage() -> impl IntoView {
             //     last,
             //     calc_fit_count(client_width as u32, client_height as u32) * 2,
             // );
-            // let msg = ClientMsg::GalleryInit {
-            //     amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
-            //     from: last,
-            // };
+            let msg = ClientMsg::GalleryInit {
+                amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
+                from: last,
+            };
+
+            let send_result = ws_gallery.send_once(msg, move |server_msg| {
+                debug!("received: {:#?}", &server_msg);
+                if let ServerMsg::MainGallery(MainGalleryResponse::Imgs(new_imgs)) = server_msg {
+                    on_fetch(new_imgs);
+                    // let new_imgs = new_imgs
+                    // .iter()
+                    // .map(|img| ServerMsgImgResized::from(img.to_owned()))
+                    // .collect::<Vec<ServerMsgImgResized>>();
+    
+                    // imgs.update(|imgs| {
+                    //     imgs.extend(new_imgs);
+                    //     let section = gallery_section.get_untracked();
+                    //     if let Some(section) = section {
+                    //         let width = section.client_width() as u32;
+    
+                    //         // log!("RESIZING!!!!!!!!!!!!");
+                    //         resize_imgs(NEW_IMG_HEIGHT, width, imgs);
+                    //     };
+                    // });
+                }
+                // match server_msg {
+                //     ServerMsg::MainGallery(response) => {
+                //         match response {
+                //             MainGalleryResponse::Imgs(new_imgs) => {
+                                
+                //             }
+                //         }
+                //     }
+                //     _ => {}
+                // }
+                //loaded_sig.set(LoadingNotFound::Loaded);
+            });
             // global_state.socket_send(msg);
         }
     };
@@ -242,6 +276,7 @@ pub fn GalleryPage() -> impl IntoView {
     // let lll = watch(move || global_state.socket_connected.get(), move |num, prev_num, aaa| {
     //     aaa.stop();
     // }, false);
+    
 
     create_effect(move |_| {
         // let connected = global_state.socket_connected.get();
@@ -266,31 +301,35 @@ pub fn GalleryPage() -> impl IntoView {
 
         let send_result = ws_gallery.send_once(msg, move |server_msg| {
             debug!("received: {:#?}", &server_msg);
-            match server_msg {
-                ServerMsg::MainGallery(response) => {
-                    let response = *response;
-                    match response {
-                        MainGalleryResponse::Imgs(new_imgs) => {
-                            let new_imgs = new_imgs
-                                .iter()
-                                .map(|img| ServerMsgImgResized::from(img.to_owned()))
-                                .collect::<Vec<ServerMsgImgResized>>();
+            if let ServerMsg::MainGallery(MainGalleryResponse::Imgs(new_imgs)) = server_msg {
+                on_fetch(new_imgs);
+                // let new_imgs = new_imgs
+                // .iter()
+                // .map(|img| ServerMsgImgResized::from(img.to_owned()))
+                // .collect::<Vec<ServerMsgImgResized>>();
 
-                            imgs.update(|imgs| {
-                                let section = gallery_section.get_untracked();
-                                if let Some(section) = section {
-                                    let width = section.client_width() as u32;
-                
-                                    // log!("RESIZING!!!!!!!!!!!!");
-                                    resize_imgs(NEW_IMG_HEIGHT, width, imgs);
-                                };
-                            });
-                        }
-                    }
-                }
-                _ => {}
+                // imgs.update(|imgs| {
+                //     imgs.extend(new_imgs);
+                //     let section = gallery_section.get_untracked();
+                //     if let Some(section) = section {
+                //         let width = section.client_width() as u32;
+
+                //         // log!("RESIZING!!!!!!!!!!!!");
+                //         resize_imgs(NEW_IMG_HEIGHT, width, imgs);
+                //     };
+                // });
             }
-            loaded_sig.set(LoadingNotFound::Loaded);
+            // match server_msg {
+            //     ServerMsg::MainGallery(response) => {
+            //         match response {
+            //             MainGalleryResponse::Imgs(new_imgs) => {
+                            
+            //             }
+            //         }
+            //     }
+            //     _ => {}
+            // }
+            //loaded_sig.set(LoadingNotFound::Loaded);
         });
 
         match send_result {

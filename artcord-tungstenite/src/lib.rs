@@ -133,6 +133,7 @@ async fn response_handler(
     Ok(())
 }
 
+
 #[derive(Error, Debug)]
 pub enum WsResponseHandlerError {
     #[error("MainGallery error: {0}")]
