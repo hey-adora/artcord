@@ -257,7 +257,7 @@ impl<
             let create_ws = {
                 let url = url.clone();
                 move || -> WebSocket {
-                    info!("ws({}): connecting", &url);
+                    info!("ws({})_global: connecting", &url);
                     let ws = WebSocket::new(&url).unwrap();
 
                     ws.set_binary_type(web_sys::BinaryType::Arraybuffer);
@@ -333,7 +333,7 @@ impl<
         global_on_open_callbacks: StoredValue<HashMap<TempKeyType, Rc<dyn Fn()>>>,
         ws: StoredValue<Option<WebSocket>>,
     ) {
-        info!("ws({}): connected", url);
+        info!("ws({})_global: connected", url);
 
         Self::run_on_open_callbacks(url, global_on_open_callbacks);
         Self::flush_pending_client_msgs(url, socket_pending_client_msgs, global_on_open_callbacks, ws);
@@ -342,12 +342,12 @@ impl<
 
     fn ws_on_close(url: &str, global_on_open_callbacks: StoredValue<HashMap<TempKeyType, Rc<dyn Fn()>>>,) {
         //let keys = global_on_open_callbacks.with_value(|callbacks| callbacks.keys().cloned().collect::<Vec<TempKeyType>>() );
-        trace!("ws({}): disconnect: on-open closures left: {}", url, global_on_open_callbacks.with_value(|c| c.len()));
-        info!("ws({}): disconnected", url);
+        trace!("ws({})_global: disconnect: on-open closures left: {}", url, global_on_open_callbacks.with_value(|c| c.len()));
+        info!("ws({})_global: disconnected", url);
     }
 
     fn ws_on_err(url: &str, e: ErrorEvent) {
-        error!("WS({}): error: {:?}", url, e);
+        error!("WS({})_global: error: {:?}", url, e);
     }
 
     fn ws_on_msg(
@@ -364,21 +364,21 @@ impl<
         let bytes: Vec<u8> = array.to_vec();
 
         if bytes.is_empty() {
-            trace!("ws({}): recv empty msg.", url);
+            trace!("ws({})_global: recv empty msg.", url);
             return;
         };
 
         let server_msg = ServerMsg::recv_from_vec(&bytes);
         let Ok(server_msg) = server_msg else {
             error!(
-                "ws({}): error decoding msg: {}",
+                "ws({})_global: error decoding msg: {}",
                 url,
                 server_msg.err().unwrap()
             );
             return;
         };
 
-        trace!("ws({}): recved msg: {:#?}", url, &server_msg);
+        trace!("ws({})_global: recved msg: {:#?}", url, &server_msg);
 
         match &server_msg.key {
             WsRouteKey::Perm(_) | WsRouteKey::Temp(_) => {
@@ -400,25 +400,26 @@ impl<
         ws.with_value(|ws| {
             if let Some(ws) = ws {
                 socket_pending_client_msgs.update_value(|msgs| {
-                    trace!("ws({}): sending msgs from queue, left: {}", url, msgs.len());
+                    trace!("ws({})_global: sending msgs from queue, left: {}", url, msgs.len());
                     let mut index: usize = 0;
                     for msg in msgs.iter() {
+                        trace!("ws({})_global: sending from msg {} from queue: {:?}", url, index, msg);
                         let result = ws.send_with_u8_array(msg);
                         if result.is_err() {
-                            warn!("ws({}): failed to send msg {}:{:?}", url, index, msg);
+                            warn!("ws({})_global: failed to send msg {}:{:?}", url, index, msg);
                             break;
                         }
-                        trace!("ws({}): sent msg {} from queue: {:?}", url, index, msg);
+                        
                         index += 1;
                     }
                     if index < msgs.len() && index > 0 {
                         *msgs = (&msgs[index..]).to_vec();
-                        trace!("ws({}): msg left in queue: {}", url, msgs.len());
+                        trace!("ws({})_global: msg left in queue: {}", url, msgs.len());
                     }
                     //debug!("ws: after-queue: on_open callbacks, left: {:#?}", global_on_open_callbacks);
                 });
             } else {
-                warn!("ws({}): not initialized.", url);
+                warn!("ws({})_global: not initialized.", url);
             }
         });
     }
@@ -429,7 +430,7 @@ impl<
      //   ws: StoredValue<Option<WebSocket>>,
     ) {
         let callbacks = global_on_open_callbacks.get_value();
-        trace!("ws({}): running on_open callbacks... left: {:#?}", url, callbacks.len());
+        trace!("ws({})_global: running on_open callbacks... left: {:#?}", url, callbacks.len());
         for callback in callbacks.values() {
             callback();
         }
@@ -479,10 +480,10 @@ impl<
 
 
                 move |socket_closures| {
-                    trace!("ws({}): current callbacks count: {}", url, &socket_closures.len());
+                    trace!("ws({})_global: current callbacks count: {}", url, &socket_closures.len());
 
                     let Some(f) = socket_closures.get(&key) else {
-                        warn!("ws({}): Fn not found for {:?}", url, &key);
+                        warn!("ws({})_global: Fn not found for {:?}", url, &key);
                         return None;
                     };
 
@@ -509,12 +510,12 @@ impl<
                 });
             }
             _ => {
-                warn!("ws({}): Wrong key was selected: {:?}", url, &key);
+                warn!("ws({})_global: Wrong key was selected: {:?}", url, &key);
             }
         }
 
         #[cfg(debug_assertions)]
-        callbacks_multi.with_value(|callbacks| trace!("ws({}): current callbacks left: {}", url, &callbacks.len()));
+        callbacks_multi.with_value(|callbacks| trace!("ws({})_global: current callbacks left: {}", url, &callbacks.len()));
 
         //
 
@@ -536,10 +537,10 @@ impl<
 
 
                 move |socket_closures| {
-                    trace!("ws({}): current callbacks count: {}", url, &socket_closures.len());
+                    trace!("ws({})_global: current singleton callbacks count: {}", url, &socket_closures.len());
 
                     let Some(f) = socket_closures.get(&key) else {
-                        warn!("ws({}): Fn not found for {:?}", url, &key);
+                        warn!("ws({})_global: Fn not found for {:?}", url, &key);
                         return None;
                     };
 
@@ -556,17 +557,22 @@ impl<
             WsRouteKey::TempSingle(_) => {
                 callback(package.data);
                 callbacks_single.update_value(|callbacks| {
-                    callbacks.remove(&key);
+                    let result = callbacks.remove(&key);
+                    if let Some(result) = result {
+                        trace!("ws({})_global: singleton callback was removed: {:?}", url, &key);
+                    } else {
+                        warn!("ws({})_global: singleton failed to remove callback: current_key: {:?}, current callbacks: {:#?}", url, &key, callbacks_single.get_value().keys());
+                    }
                 });
                 
             }
             _ => {
-                warn!("ws({}): Wrong key was selected: {:?}", url, &key);
+                warn!("ws({})_global: Wrong key was selected: {:?}", url, &key);
             }
         }
 
         #[cfg(debug_assertions)]
-        callbacks_single.with_value(|callbacks| trace!("ws({}): current callbacks left: {}", url, &callbacks.len()));
+        callbacks_single.with_value(|callbacks| trace!("ws({})_global: current singleton callbacks left: {}", url, &callbacks.len()));
         //
 
         // socket_closures.remove(&key);
@@ -626,7 +632,7 @@ impl<
                 });
 
                 if is_open {
-                    trace!("ws({}): msg \"{:?}\" sent", self.ws_url.get_value().unwrap_or("error".to_string()), &package);
+                    trace!("ws({})_global: msg \"{:?}\" sending", self.ws_url.get_value().unwrap_or("error".to_string()), &package);
 
                     return ws
                         .send_with_u8_array(&bytes)
@@ -649,7 +655,7 @@ impl<
                 }
             }
 
-            trace!("ws({}): msg \"{:?}\" pushed to queue", self.ws_url.get_value().unwrap_or("error".to_string()), &package);
+            trace!("ws({})_global: msg \"{:?}\" pushed to queue", self.ws_url.get_value().unwrap_or("error".to_string()), &package);
             self.global_pending_client_msgs
                 .update_value(|pending| pending.push(bytes));
             Ok(SendResult::Queued)
@@ -662,7 +668,7 @@ impl<
         self.global_on_open_callbacks.update_value({
             let temp_key = temp_key.clone();
             move |callbacks| {
-                trace!("ws({}): adding on_open callback: {:#?}", self.ws_url.get_value().unwrap_or("error".to_string()), temp_key);
+                trace!("ws({})_global: adding on_open callback: {:#?}", self.ws_url.get_value().unwrap_or("error".to_string()), temp_key);
                 callbacks.insert(temp_key, Rc::new(callback));
             }
         });
@@ -673,7 +679,7 @@ impl<
             move || {
                 callbacks.update_value({
                     move |callbacks| {
-                        trace!("ws({}): cleanup: removing on_open callback: {:#?}", ws_url.get_value().unwrap_or("error".to_string()), temp_key);
+                        trace!("ws({})_global: cleanup: removing on_open callback: {:#?}", ws_url.get_value().unwrap_or("error".to_string()), temp_key);
                         callbacks.remove(&temp_key);
                     }
                 });
@@ -723,7 +729,7 @@ impl<
                         //callbacks.get_mut(&perm_key).inspect(|callback_cluster| {callback_cluster.remove(&terp_key);}).map_or_else(|| trace!("ws: singletone cleanup: closure not found: {:?}", &perm_key));
                         let callback_cluster = callbacks.get_mut(&perm_key);
                         let Some(callback_cluster) = callback_cluster else {
-                            trace!("ws({}): singletone cleanup: closure not found: {:?}", ws_url.get_value().unwrap_or("error".to_string()), &perm_key);
+                            trace!("ws({})_global: singletone cleanup: closure not found: {:?}", ws_url.get_value().unwrap_or("error".to_string()), &perm_key);
                             return;
                         };
                         callback_cluster.remove(&temp_key);
@@ -834,10 +840,20 @@ impl<
                 //     .with_value(|socket_closures| socket_closures.contains_key(&self.key));
                 let exists: Option<bool> = self.global_msgs_closures.try_update_value({
                     move |global_msgs_closures| {
-                        let new_msg_closure = Rc::new(move |server_msg: ServerMsg| {
-                            on_receive(server_msg);
-                        });
-                        global_msgs_closures.insert(self.key.get_value(), new_msg_closure);
+                        self.key.with_value(|key| {
+                            let current_callback = global_msgs_closures.get(key);
+                            let Some(_) = current_callback else {
+                                let new_msg_closure = Rc::new(move |server_msg: ServerMsg| {
+                                    on_receive(server_msg);
+                                });
+                                global_msgs_closures.insert(key.clone(), new_msg_closure);
+                                return false;
+                            };
+                            true
+                        })
+                        
+
+
                         // let current_callback_cluster = global_msgs_closures.get(&self.key);
                         // match current_callback_cluster {
                         //     Some(current_callback_cluster) => {
@@ -859,11 +875,12 @@ impl<
                         //     return;
                         // };
                         //global_msgs_closures.insert(self.key.clone(), new_msg_closure);
-                        false
+                        
                     }
                 });
 
                 if exists.unwrap_or(false) {
+                    trace!("ws({}): callback already exists: {:?}", self.ws_url.get_value().unwrap_or("error".to_string()), self.key.get_value());
                     return Ok(TempSendResult::Skipped);
                 }
 
@@ -883,6 +900,7 @@ impl<
                     });
 
                     if is_open {
+                        trace!("ws({}): sending msg: {:?}", self.ws_url.get_value().unwrap_or("error".to_string()), &package);
                         return ws
                             .send_with_u8_array(&bytes)
                             .map(|_| TempSendResult::Sent)

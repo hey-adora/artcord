@@ -22,8 +22,12 @@ use tokio_tungstenite::tungstenite::Message;
 use tracing::Instrument;
 use tracing::{error, trace};
 use ws_route::ws_main_gallery::WsHandleMainGalleryError;
+use ws_route::ws_user::WsHandleUserError;
+use ws_route::ws_user_gallery::WsHandleUserGalleryError;
 
 use crate::ws_route::ws_main_gallery::ws_handle_main_gallery;
+use crate::ws_route::ws_user::ws_handle_user;
+use crate::ws_route::ws_user_gallery::ws_handle_user_gallery;
 
 pub mod ws_route;
 
@@ -33,21 +37,22 @@ pub async fn create_websockets(db: Arc<DB>) -> Result<(), String> {
     let listener = try_socket.expect("Failed to bind");
     trace!("ws({}): started", &ws_addr);
     while let Ok((stream, _)) = listener.accept().await {
-        let Ok(user_addr) = stream.peer_addr().inspect_err(|err| error!("failed to get peer addr: {}", err)) else {
+        let Ok(user_addr) = stream
+            .peer_addr()
+            .inspect_err(|err| error!("failed to get peer addr: {}", err))
+        else {
             continue;
         };
 
-        
-        task::spawn(
-            accept_connection(user_addr, stream, db.clone()).instrument(tracing::trace_span!("ws", "{}-{}", ws_addr, user_addr.to_string())),
-        );
+        task::spawn(accept_connection(user_addr, stream, db.clone()).instrument(
+            tracing::trace_span!("ws", "{}-{}", ws_addr, user_addr.to_string()),
+        ));
     }
-
 
     Ok(())
 }
 
-async fn accept_connection(addr: SocketAddr ,stream: TcpStream, db: Arc<DB>) {
+async fn accept_connection(addr: SocketAddr, stream: TcpStream, db: Arc<DB>) {
     trace!("connecting...");
 
     let ws_stream = tokio_tungstenite::accept_async(stream)
@@ -59,20 +64,18 @@ async fn accept_connection(addr: SocketAddr ,stream: TcpStream, db: Arc<DB>) {
     let (send, mut recv) = mpsc::channel::<Message>(1000);
     let (mut write, read) = ws_stream.split();
 
-    let read = read
-        .try_for_each_concurrent(1000, {
-            move |client_msg| {
-                let send = send.clone();
-                let db = db.clone();
-                async move {
-                    let _ = response_handler(db, send, client_msg)
-                        .await
-                        .inspect_err(|err| error!("reponse handler error: {:#?}", err));
-                    Ok(())
-                }
+    let read = read.try_for_each_concurrent(1000, {
+        move |client_msg| {
+            let send = send.clone();
+            let db = db.clone();
+            async move {
+                let _ = response_handler(db, send, client_msg)
+                    .await
+                    .inspect_err(|err| error!("reponse handler error: {:#?}", err));
+                Ok(())
             }
-        })
-        ;
+        }
+    });
 
     let write = async move {
         while let Some(msg) = recv.recv().await {
@@ -104,6 +107,18 @@ async fn response_handler(
                 .await
                 .map(ServerMsg::MainGallery)
                 .map_err(WsResponseHandlerError::MainGallery),
+            ClientMsg::UserGalleryInit {
+                amount,
+                from,
+                user_id,
+            } => ws_handle_user_gallery(db, amount, from, user_id)
+                .await
+                .map(ServerMsg::UserGallery)
+                .map_err(WsResponseHandlerError::UserGallery),
+            ClientMsg::User { user_id } => ws_handle_user(db, user_id)
+                .await
+                .map(ServerMsg::User)
+                .map_err(WsResponseHandlerError::User),
             _ => Ok(ServerMsg::NotImplemented),
         };
 
@@ -124,7 +139,7 @@ async fn response_handler(
             output.truncate(100);
             trace!("sent: {}", output);
         }
-        
+
         let bytes = ServerMsg::as_bytes(server_package)?;
 
         let server_msg = Message::binary(bytes);
@@ -133,11 +148,16 @@ async fn response_handler(
     Ok(())
 }
 
-
 #[derive(Error, Debug)]
 pub enum WsResponseHandlerError {
     #[error("MainGallery error: {0}")]
     MainGallery(#[from] WsHandleMainGalleryError),
+
+    #[error("MainGallery error: {0}")]
+    UserGallery(#[from] WsHandleUserGalleryError),
+
+    #[error("User error: {0}")]
+    User(#[from] WsHandleUserError),
 
     #[error("MainGallery error: {0}")]
     Serialization(#[from] bincode::Error),

@@ -7,6 +7,8 @@ use super::prod_perm_key::ProdMsgPermKey;
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub enum ServerMsg {
     MainGallery(MainGalleryResponse),
+    UserGallery(UserGalleryResponse),
+    User(UserResponse),
 
     // Imgs(Vec<AggImg>),
     // ProfileImgs(Option<Vec<AggImg>>),
@@ -35,6 +37,18 @@ pub enum ServerMsg {
 pub enum MainGalleryResponse {
     Imgs(Vec<AggImg>),
 
+}
+
+#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub enum UserGalleryResponse {
+    Imgs(Vec<AggImg>),
+    UserNotFound
+}
+
+#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub enum UserResponse {
+    User(User),
+    UserNotFound
 }
 
 impl artcord_leptos_web_sockets::Receive<u128, ProdMsgPermKey> for ServerMsg {

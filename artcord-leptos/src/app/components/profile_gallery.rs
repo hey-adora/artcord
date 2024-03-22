@@ -1,6 +1,7 @@
-use crate::app::{components::navbar::shrink_nav};
+use crate::app::components::navbar::shrink_nav;
 use crate::app::global_state::GlobalState;
-use artcord_state::message::{prod_client_msg::ClientMsg};
+use artcord_state::message::prod_client_msg::ClientMsg;
+use artcord_state::message::prod_server_msg::{ServerMsg, UserGalleryResponse, UserResponse};
 use chrono::Utc;
 use leptos::ev::resize;
 use leptos::html::Section;
@@ -9,6 +10,7 @@ use leptos::*;
 use leptos_router::{use_location, use_params_map};
 use leptos_use::{use_event_listener, use_window};
 use web_sys::Event;
+use tracing::{debug, error, trace};
 
 use crate::app::utils::{
     calc_fit_count, resize_imgs, LoadingNotFound, SelectedImg, ServerMsgImgResized, NEW_IMG_HEIGHT,
@@ -22,10 +24,14 @@ pub fn ProfileGallery() -> impl IntoView {
     let gallery_section = create_node_ref::<Section>();
     let nav_tran = global_state.nav_tran;
     let global_gallery_imgs = global_state.page_profile.gallery_imgs;
+    let global_gallery_user = global_state.page_profile.user;
     let selected_img: RwSignal<Option<SelectedImg>> = create_rw_signal(None);
     let loaded_sig = global_state.page_profile.gallery_loaded;
-   // let _connection_load_state_name = SERVER_MSG_PROFILE_IMGS_NAME;
+    // let _connection_load_state_name = SERVER_MSG_PROFILE_IMGS_NAME;
     let location = use_location();
+
+    let ws_gallery = global_state.ws.create_singleton();
+    let ws_user = global_state.ws.create_singleton();
 
     let on_click = move |img: ServerMsgImgResized| {
         selected_img.set(Some(SelectedImg {
@@ -38,17 +44,102 @@ pub fn ProfileGallery() -> impl IntoView {
         }))
     };
 
-    let on_fetch = move |from: i64, amount: u32| {
-        let Some(new_user) = params.with(|p| p.get("id").cloned()) else {
+    let on_fetch = move || {
+        let current_loading_state = loaded_sig.get();
+        // if current_loading_state == LoadingNotFound::NotLoaded {
+            
+        // }
+
+        let Some(section) = gallery_section.get_untracked() else {
             return;
         };
 
-        let msg = ClientMsg::UserGalleryInit {
-            amount,
-            from,
-            user_id: String::from(new_user),
+        let last = global_gallery_imgs.with_untracked(|imgs| imgs.last().map(|img|img.created_at)).unwrap_or(Utc::now().timestamp_millis());
+        let client_height = section.client_height();
+        let client_width = section.client_width();
+
+        let Some(new_user) = params.with(|p| p.get("id").cloned()) else {
+            return;
         };
-        log!("USER GALLERY FETCH: {:#?}", &msg);
+        
+        let current_user = global_gallery_user.get();
+
+        let same_user = current_user.map(|user| user.id == new_user).unwrap_or(false);
+
+        let fetch = {
+            debug!("profile_gallery: fetching imgs");
+            //let new_user = new_user.clone();
+            move |user_id: String| {
+                let msg = ClientMsg::UserGalleryInit {
+                    amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
+                    from: last,
+                    user_id,
+                };
+        
+                let _ = ws_gallery.send_once(msg, move |server_msg| {
+                    if let ServerMsg::UserGallery(response) = server_msg {
+                        match response {
+                            UserGalleryResponse::Imgs(new_imgs) => {
+                                let new_imgs = new_imgs
+                                    .iter()
+                                    .map(|img| ServerMsgImgResized::from(img.to_owned()))
+                                    .collect::<Vec<ServerMsgImgResized>>();
+        
+                                global_gallery_imgs.update(|imgs| {
+                                    imgs.extend(new_imgs);
+                                    //let document = document();
+                                    //let gallery_section = document.get_element_by_id("gallery_section");
+                                    let gallery_section = gallery_section.get_untracked();
+                                    let Some(gallery_section) = gallery_section else {
+                                        return;
+                                    };
+                                    let width = gallery_section.client_width() as u32;
+                                    resize_imgs(NEW_IMG_HEIGHT, width, imgs);
+                                });
+                                loaded_sig.set(LoadingNotFound::Loaded);
+                            }
+                            UserGalleryResponse::UserNotFound => {
+                                //error!("received wrong response for user_gallery: {:?}", &server_msg);
+                                loaded_sig.set(LoadingNotFound::NotFound);
+                            }
+                        }
+                    } else {
+                        loaded_sig.set(LoadingNotFound::Error);
+                    }
+                }).inspect_err(|err| error!("profile_gallery: failed to send msg: {err}"));
+            }
+        };
+
+        if same_user {
+            fetch(new_user);
+        } else {
+            debug!("profile_gallery: fetching user");
+            loaded_sig.set(LoadingNotFound::Loading);
+            global_gallery_imgs.set(Vec::new());
+
+            let msg = ClientMsg::User { user_id: new_user };
+            let send_result = ws_user.send_once(msg, move |server_msg| {
+                if let ServerMsg::User(response) = server_msg {
+                    match response {
+                        UserResponse::User(user) => {
+                            let user_id = user.id.clone();
+                            global_gallery_user.set(Some(user));
+                            fetch(user_id);
+                        }
+                        UserResponse::UserNotFound => {
+                            loaded_sig.set(LoadingNotFound::NotFound);
+                        }
+                    }
+                } else {
+                    error!("profile_gallery: received wrong response for user: {:?}", server_msg);
+                    loaded_sig.set(LoadingNotFound::Error);
+                }
+            });
+        }
+
+
+        
+        //log!("USER GALLERY FETCH: {:#?}", &msg);
         //global_state.socket_send(&msg);
     };
 
@@ -75,12 +166,12 @@ pub fn ProfileGallery() -> impl IntoView {
         //     return;
         // }
 
-        let Some(last) = global_gallery_imgs.with_untracked(|imgs| match imgs.last() {
-            Some(l) => Some(l.created_at),
-            None => None,
-        }) else {
-            return;
-        };
+        // let Some(last) = global_gallery_imgs.with_untracked(|imgs| match imgs.last() {
+        //     Some(l) => Some(l.created_at),
+        //     None => None,
+        // }) else {
+        //     return;
+        // };
 
         let Some(section) = gallery_section.get_untracked() else {
             return;
@@ -89,7 +180,7 @@ pub fn ProfileGallery() -> impl IntoView {
         let scroll_top = section.scroll_top();
         let client_height = section.client_height();
         let scroll_height = section.scroll_height();
-        let client_width = section.client_width();
+        //let client_width = section.client_width();
 
         shrink_nav(nav_tran, scroll_top as u32);
 
@@ -97,10 +188,7 @@ pub fn ProfileGallery() -> impl IntoView {
 
         if left < client_height {
             //global_state.socket_state_used(connection_load_state_name);
-            on_fetch(
-                last,
-                calc_fit_count(client_width as u32, client_height as u32) * 2,
-            );
+            on_fetch();
         }
     };
 
@@ -119,71 +207,61 @@ pub fn ProfileGallery() -> impl IntoView {
         });
     });
 
+    // create_effect(move |_| {
+    //     let Some(new_user) = params.with(|p| p.get("id").cloned()) else {
+    //         return;
+    //     };
+
+    //     let user = global_state.page_profile.user.get();
+
+    //     let same_user = if let Some(ref user) = user {
+    //         new_user == user.id
+    //     } else {
+    //         false
+    //     };
+    //     log!("ONE {} {:?}", same_user, user);
+    //     // if !global_state.socket_state_is_ready(SERVER_MSG_PROFILE) {
+    //     //     return;
+    //     // }
+
+    //     if !same_user {
+    //         let _msg = ClientMsg::User {
+    //             user_id: String::from(new_user),
+    //         };
+    //         //global_state.socket_send(&msg);
+    //     }
+    // });
+
     create_effect(move |_| {
-        let Some(new_user) = params.with(|p| p.get("id").cloned()) else {
-            return;
-        };
-
-        let user = global_state.page_profile.user.get();
-
-        let same_user = if let Some(ref user) = user {
-            new_user == user.id
-        } else {
-            false
-        };
-        log!("ONE {} {:?}", same_user, user);
-        // if !global_state.socket_state_is_ready(SERVER_MSG_PROFILE) {
+        // let loaded = !loaded_sig.with(|state| *state == LoadingNotFound::NotLoaded);
+        // if loaded {
         //     return;
         // }
 
-        if !same_user {
-            let _msg = ClientMsg::User {
-                user_id: String::from(new_user),
-            };
-            //global_state.socket_send(&msg);
-        }
-    });
-
-    create_effect(move |_| {
-        let connected = global_state.socket_connected.get();
-        log!("TWO CONNECTED {}", connected);
-        if !connected {
-            return;
-        }
-
-        let not_loaded = loaded_sig.with(|state| *state == LoadingNotFound::NotLoaded);
-        log!("TWO LOADED {}", not_loaded);
-        if !not_loaded {
-            return;
-        }
-
-        let user = global_state.page_profile.user.get();
-        log!("TWO {:?}", user);
-        let Some(_user) = user else {
-            return;
-        };
+        // let user = global_state.page_profile.user.get();
+        // log!("TWO {:?}", user);
+        // let Some(_user) = user else {
+        //     return;
+        // };
 
         // if !global_state.socket_state_is_ready(SERVER_MSG_PROFILE_IMGS_NAME) {
         //     return;
         // }
 
-        let Some(section) = gallery_section.get_untracked() else {
-            return;
-        };
+        // let Some(section) = gallery_section.get_untracked() else {
+        //     return;
+        // };
 
-        let client_height = section.client_height();
-        let client_width = section.client_width();
+        // let client_height = section.client_height();
+        // let client_width = section.client_width();
 
-        //global_state.socket_state_used(connection_load_state_name);
+        // // //global_state.socket_state_used(connection_load_state_name);
 
-        global_gallery_imgs.set(vec![]);
+        // // global_gallery_imgs.set(vec![]);
 
-        on_fetch(
-            Utc::now().timestamp_millis(),
-            calc_fit_count(client_width as u32, client_height as u32) * 2,
-        );
+        // loaded_sig.set(LoadingNotFound::Loading);
 
-        loaded_sig.set(LoadingNotFound::Loading);
+        on_fetch();
     });
 
     view! {

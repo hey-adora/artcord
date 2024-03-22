@@ -67,6 +67,58 @@ pub fn GalleryPage() -> impl IntoView {
 
     let ws_gallery = global_state.ws.create_singleton();
 
+    let on_fetch = move || {
+        let Some(section) = gallery_section.get_untracked() else {
+            return;
+        };
+
+        let last = imgs.with_untracked(|imgs| imgs.last().map(|img|img.created_at)).unwrap_or(Utc::now().timestamp_millis());
+        let client_height = section.client_height();
+        let client_width = section.client_width();
+
+
+        let msg = ClientMsg::GalleryInit {
+            amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
+            from: last,
+        };
+
+        let _ = ws_gallery.send_once(msg, move |server_msg| {
+            if let ServerMsg::MainGallery(MainGalleryResponse::Imgs(new_imgs)) = server_msg {
+                if new_imgs.is_empty() && loaded_sig.get_untracked() == LoadingNotFound::Loading {
+                    loaded_sig.set(LoadingNotFound::NotFound);
+                } else {
+                    let new_imgs = new_imgs
+                        .iter()
+                        .map(|img| ServerMsgImgResized::from(img.to_owned()))
+                        .collect::<Vec<ServerMsgImgResized>>();
+        
+                    // if !global_state.page_galley.gallery_loaded.get_untracked() {
+                    //     global_state.page_galley.gallery_loaded.set(true);
+                    // }
+        
+                    imgs.update(|imgs| {
+                        imgs.extend(new_imgs);
+                        let document = document();
+                        //let gallery_section = document.get_element_by_id("gallery_section");
+                        let gallery_section = gallery_section.get_untracked();
+                        let Some(gallery_section) = gallery_section else {
+                            return;
+                        };
+                        let width = gallery_section.client_width() as u32;
+                        resize_imgs(NEW_IMG_HEIGHT, width, imgs);
+                    });
+        
+                    if loaded_sig.get_untracked() != LoadingNotFound::Loaded {
+                        loaded_sig.set(LoadingNotFound::Loaded);
+                    }
+                }
+            } else {
+                error!("received wrong response for main_gallery: {:?}", server_msg);
+                loaded_sig.set(LoadingNotFound::Error);
+            }
+        }).inspect_err(|err| error!("failed to send msg: {err}"));
+    };
+
     create_effect(move |_| {
         nav_tran.set(true);
 
@@ -95,35 +147,10 @@ pub fn GalleryPage() -> impl IntoView {
         }))
     };
 
-    let on_fetch = move |new_imgs: Vec<AggImg>| {
-        //let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
-        if new_imgs.is_empty() && loaded_sig.get_untracked() == LoadingNotFound::Loading {
-            loaded_sig.set(LoadingNotFound::NotFound);
-        } else {
-            let new_imgs = new_imgs
-                .iter()
-                .map(|img| ServerMsgImgResized::from(img.to_owned()))
-                .collect::<Vec<ServerMsgImgResized>>();
-
-            // if !global_state.page_galley.gallery_loaded.get_untracked() {
-            //     global_state.page_galley.gallery_loaded.set(true);
-            // }
-
-            imgs.update(|imgs| {
-                imgs.extend(new_imgs);
-                let document = document();
-                //let gallery_section = document.get_element_by_id("gallery_section");
-                let gallery_section = gallery_section.get_untracked();
-                let Some(gallery_section) = gallery_section else {
-                    return;
-                };
-                let width = gallery_section.client_width() as u32;
-                resize_imgs(NEW_IMG_HEIGHT, width, imgs);
-            });
-
-            loaded_sig.set(LoadingNotFound::Loaded);
-        }
-    };
+    // let on_fetch = move |new_imgs: Vec<AggImg>| {
+    //     //let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
+        
+    // };
 
     //let sender = Fender::<(),()>::new();
 
@@ -200,6 +227,7 @@ pub fn GalleryPage() -> impl IntoView {
         let left = scroll_height - (client_height + scroll_top);
 
         if left < client_height {
+            on_fetch();
             // let _msg = ClientMsgWrap(ClientMsg::GalleryInit {
             //     amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
             //     from: last,
@@ -214,43 +242,7 @@ pub fn GalleryPage() -> impl IntoView {
             //     last,
             //     calc_fit_count(client_width as u32, client_height as u32) * 2,
             // );
-            let msg = ClientMsg::GalleryInit {
-                amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
-                from: last,
-            };
-
-            let send_result = ws_gallery.send_once(msg, move |server_msg| {
-                //debug!("received: {:#?}", &server_msg);
-                if let ServerMsg::MainGallery(MainGalleryResponse::Imgs(new_imgs)) = server_msg {
-                    on_fetch(new_imgs);
-                    // let new_imgs = new_imgs
-                    // .iter()
-                    // .map(|img| ServerMsgImgResized::from(img.to_owned()))
-                    // .collect::<Vec<ServerMsgImgResized>>();
-    
-                    // imgs.update(|imgs| {
-                    //     imgs.extend(new_imgs);
-                    //     let section = gallery_section.get_untracked();
-                    //     if let Some(section) = section {
-                    //         let width = section.client_width() as u32;
-    
-                    //         // log!("RESIZING!!!!!!!!!!!!");
-                    //         resize_imgs(NEW_IMG_HEIGHT, width, imgs);
-                    //     };
-                    // });
-                }
-                // match server_msg {
-                //     ServerMsg::MainGallery(response) => {
-                //         match response {
-                //             MainGalleryResponse::Imgs(new_imgs) => {
-                                
-                //             }
-                //         }
-                //     }
-                //     _ => {}
-                // }
-                //loaded_sig.set(LoadingNotFound::Loaded);
-            });
+         
             // global_state.socket_send(msg);
         }
     };
@@ -299,47 +291,49 @@ pub fn GalleryPage() -> impl IntoView {
 
         loaded_sig.set(LoadingNotFound::Loading);
 
-        let send_result = ws_gallery.send_once(msg, move |server_msg| {
-            //debug!("received: {:#?}", &server_msg);
-            if let ServerMsg::MainGallery(MainGalleryResponse::Imgs(new_imgs)) = server_msg {
-                on_fetch(new_imgs);
-                // let new_imgs = new_imgs
-                // .iter()
-                // .map(|img| ServerMsgImgResized::from(img.to_owned()))
-                // .collect::<Vec<ServerMsgImgResized>>();
+        on_fetch();
 
-                // imgs.update(|imgs| {
-                //     imgs.extend(new_imgs);
-                //     let section = gallery_section.get_untracked();
-                //     if let Some(section) = section {
-                //         let width = section.client_width() as u32;
+        // let send_result = ws_gallery.send_once(msg, move |server_msg| {
+        //     //debug!("received: {:#?}", &server_msg);
+        //     if let ServerMsg::MainGallery(MainGalleryResponse::Imgs(new_imgs)) = server_msg {
+        //         on_fetch(new_imgs);
+        //         // let new_imgs = new_imgs
+        //         // .iter()
+        //         // .map(|img| ServerMsgImgResized::from(img.to_owned()))
+        //         // .collect::<Vec<ServerMsgImgResized>>();
 
-                //         // log!("RESIZING!!!!!!!!!!!!");
-                //         resize_imgs(NEW_IMG_HEIGHT, width, imgs);
-                //     };
-                // });
-            }
-            // match server_msg {
-            //     ServerMsg::MainGallery(response) => {
-            //         match response {
-            //             MainGalleryResponse::Imgs(new_imgs) => {
+        //         // imgs.update(|imgs| {
+        //         //     imgs.extend(new_imgs);
+        //         //     let section = gallery_section.get_untracked();
+        //         //     if let Some(section) = section {
+        //         //         let width = section.client_width() as u32;
+
+        //         //         // log!("RESIZING!!!!!!!!!!!!");
+        //         //         resize_imgs(NEW_IMG_HEIGHT, width, imgs);
+        //         //     };
+        //         // });
+        //     }
+        //     // match server_msg {
+        //     //     ServerMsg::MainGallery(response) => {
+        //     //         match response {
+        //     //             MainGalleryResponse::Imgs(new_imgs) => {
                             
-            //             }
-            //         }
-            //     }
-            //     _ => {}
-            // }
-            //loaded_sig.set(LoadingNotFound::Loaded);
-        });
+        //     //             }
+        //     //         }
+        //     //     }
+        //     //     _ => {}
+        //     // }
+        //     //loaded_sig.set(LoadingNotFound::Loaded);
+        // });
 
-        match send_result {
-            Ok(send_result) => {
-                trace!("fetching gallery");
-            }
-            Err(err) => {
-                error!("failed to fetch gallery: {}", err);
-            }
-        }
+        // match send_result {
+        //     Ok(send_result) => {
+        //         trace!("fetching gallery");
+        //     }
+        //     Err(err) => {
+        //         error!("failed to fetch gallery: {}", err);
+        //     }
+        // }
 
         // let _ = ws_img_singleton.send_once(&msg, move |server_msg| {
         //     // on receive

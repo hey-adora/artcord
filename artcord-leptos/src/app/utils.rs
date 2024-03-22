@@ -22,6 +22,7 @@ pub enum LoadingNotFound {
     Loading,
     Loaded,
     NotFound,
+    Error,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
