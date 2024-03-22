@@ -220,7 +220,7 @@ pub fn GalleryPage() -> impl IntoView {
             };
 
             let send_result = ws_gallery.send_once(msg, move |server_msg| {
-                debug!("received: {:#?}", &server_msg);
+                //debug!("received: {:#?}", &server_msg);
                 if let ServerMsg::MainGallery(MainGalleryResponse::Imgs(new_imgs)) = server_msg {
                     on_fetch(new_imgs);
                     // let new_imgs = new_imgs
@@ -276,7 +276,7 @@ pub fn GalleryPage() -> impl IntoView {
     // let lll = watch(move || global_state.socket_connected.get(), move |num, prev_num, aaa| {
     //     aaa.stop();
     // }, false);
-    
+
 
     create_effect(move |_| {
         // let connected = global_state.socket_connected.get();
@@ -300,7 +300,7 @@ pub fn GalleryPage() -> impl IntoView {
         loaded_sig.set(LoadingNotFound::Loading);
 
         let send_result = ws_gallery.send_once(msg, move |server_msg| {
-            debug!("received: {:#?}", &server_msg);
+            //debug!("received: {:#?}", &server_msg);
             if let ServerMsg::MainGallery(MainGalleryResponse::Imgs(new_imgs)) = server_msg {
                 on_fetch(new_imgs);
                 // let new_imgs = new_imgs

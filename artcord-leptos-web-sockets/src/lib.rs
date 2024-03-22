@@ -378,6 +378,8 @@ impl<
             return;
         };
 
+        trace!("ws({}): recved msg: {:#?}", url, &server_msg);
+
         match &server_msg.key {
             WsRouteKey::Perm(_) | WsRouteKey::Temp(_) => {
                 Self::execute_multi(url, callbacks_multi, server_msg);
@@ -477,7 +479,7 @@ impl<
 
 
                 move |socket_closures| {
-                    trace!("ws({}): current callbacks: {:#?}", url, &socket_closures.keys());
+                    trace!("ws({}): current callbacks count: {}", url, &socket_closures.len());
 
                     let Some(f) = socket_closures.get(&key) else {
                         warn!("ws({}): Fn not found for {:?}", url, &key);
@@ -511,6 +513,9 @@ impl<
             }
         }
 
+        #[cfg(debug_assertions)]
+        callbacks_multi.with_value(|callbacks| trace!("ws({}): current callbacks left: {}", url, &callbacks.len()));
+
         //
 
         // socket_closures.remove(&key);
@@ -531,7 +536,7 @@ impl<
 
 
                 move |socket_closures| {
-                    trace!("ws({}): current callbacks: {:#?}", url, &socket_closures.keys());
+                    trace!("ws({}): current callbacks count: {}", url, &socket_closures.len());
 
                     let Some(f) = socket_closures.get(&key) else {
                         warn!("ws({}): Fn not found for {:?}", url, &key);
@@ -550,12 +555,18 @@ impl<
         match &key {
             WsRouteKey::TempSingle(_) => {
                 callback(package.data);
+                callbacks_single.update_value(|callbacks| {
+                    callbacks.remove(&key);
+                });
+                
             }
             _ => {
                 warn!("ws({}): Wrong key was selected: {:?}", url, &key);
             }
         }
 
+        #[cfg(debug_assertions)]
+        callbacks_single.with_value(|callbacks| trace!("ws({}): current callbacks left: {}", url, &callbacks.len()));
         //
 
         // socket_closures.remove(&key);
