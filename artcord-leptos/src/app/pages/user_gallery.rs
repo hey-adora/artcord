@@ -6,7 +6,7 @@ use crate::app::utils::img_resize::resize_imgs;
 use crate::app::utils::img_resize::NEW_IMG_HEIGHT;
 use crate::app::utils::img_resized::ServerMsgImgResized;
 use crate::app::utils::{LoadingNotFound, SelectedImg};
-use artcord_leptos_web_sockets::WsResult;
+use artcord_leptos_web_sockets::WsResourceResult;
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_server_msg::{ServerMsg, UserGalleryResponse, UserResponse};
 use artcord_state::model::user::User;
@@ -107,9 +107,9 @@ pub fn UserGalleryPage() -> impl IntoView {
                     user_id,
                 };
 
-                match ws_gallery.send_once(msg, move |server_msg| {
+                match ws_gallery.send_or_skip(msg, move |server_msg| {
                     match server_msg {
-                        WsResult::Ok(server_msg) => match server_msg {
+                        WsResourceResult::Ok(server_msg) => match server_msg {
                             ServerMsg::UserGallery(response) => {
                                 match response {
                                     UserGalleryResponse::Imgs(new_imgs) => {
@@ -145,7 +145,7 @@ pub fn UserGalleryPage() -> impl IntoView {
                                 loaded_sig.set(LoadingNotFound::Error);
                             }
                         },
-                        WsResult::TimeOut => {
+                        WsResourceResult::TimeOut => {
                             trace!("user_gallery: timeout: loadeding state set to: Error");
                             loaded_sig.set(LoadingNotFound::Error);
                         }
@@ -176,9 +176,9 @@ pub fn UserGalleryPage() -> impl IntoView {
             global_gallery_imgs.set(Vec::new());
 
             let msg = ClientMsg::User { user_id: new_user };
-            match ws_user.send_once(msg, move |server_msg| {
+            match ws_user.send_or_skip(msg, move |server_msg| {
                 match server_msg {
-                    WsResult::Ok(server_msg) => {
+                    WsResourceResult::Ok(server_msg) => {
                         match server_msg {
                             ServerMsg::User(response) => {
                                 match response {
@@ -204,7 +204,7 @@ pub fn UserGalleryPage() -> impl IntoView {
                             }
                         }
                     }
-                    WsResult::TimeOut  => {
+                    WsResourceResult::TimeOut  => {
                         trace!("user_gallery: timeout: loadeding state set to: Error");
                         loaded_sig.set(LoadingNotFound::Error);
                     }

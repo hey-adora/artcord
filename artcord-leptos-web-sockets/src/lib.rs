@@ -13,34 +13,12 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{ErrorEvent, MessageEvent, WebSocket};
 
-// const WS_TIMEOUT_MS: i64 = 30000;
-// const WS_TIMEOUT_MS_MARGIN: i64 = 100;
-
-// pub trait Send<T: KeyGen<T>> {
-//     fn send() {
-//         stuff.send(T::generate_key())
-//     }
-// }
-
-// pub trait Recv<T: KeyGen<T>> {
-//     fn recv() {
-//         stuff.recv(T::generate_key())
-//     }
-// }
-
-// pub trait KeyGen<T> {
-//     fn generate_key() -> T;
-// }
-
-//trait KeyGenTraits = Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug;
-
 #[derive(Deserialize, Serialize, Debug, Eq, PartialEq, Clone, Hash)]
 pub enum WsRouteKey<
     TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
     PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
 > {
     Perm(PermKeyType),
-    //  Temp(TempKeyType),
     TempSingle(TempKeyType),
 }
 
@@ -52,31 +30,6 @@ pub struct WsPackage<
 > {
     pub key: WsRouteKey<TempKeyType, PermKeyType>,
     pub data: Data,
-}
-
-// struct WsServerPackage<
-//     KeyGen: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
-//     PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
-//     WsTempRoute: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
-//     ServerMsg: Clone + Receive<WsRouteKind<KeyGen, PermKeyType, WsTempRoute>> + 'static,
-// > {
-//     key: WsRouteKind<KeyGen, PermKeyType, WsTempRoute>,
-//     data: ServerMsg,
-// }
-
-enum WsMsg<C, S> {
-    Client(C),
-    Server(S),
-}
-
-// pub enum WsResponse<T> {
-//     Ok(T),
-//     SendErr(String),
-//     TimeOut,
-// }
-
-enum ExampleRoutes {
-    User(WsMsg<u128, String>),
 }
 
 impl KeyGen for u128 {
@@ -123,7 +76,7 @@ type GlobalMsgCallbacksMulti<TempKeyType, PermKeyType, ServerMsg> = StoredValue<
     HashMap<WsRouteKey<TempKeyType, PermKeyType>, HashMap<TempKeyType, Rc<dyn Fn(&ServerMsg)>>>,
 >;
 type GlobalMsgCallbacksSingle<TempKeyType, PermKeyType, ServerMsg> =
-    StoredValue<HashMap<WsRouteKey<TempKeyType, PermKeyType>, Rc<dyn Fn(WsResult<ServerMsg>)>>>;
+    StoredValue<HashMap<WsRouteKey<TempKeyType, PermKeyType>, Rc<dyn Fn(WsResourceResult<ServerMsg>)>>>;
 
 #[derive(Clone, Debug)]
 pub struct WsRuntime<
@@ -302,21 +255,14 @@ impl<
         }
     }
 
-    pub fn create_singleton(&self) -> WsSingleton<TempKeyType, PermKeyType, ServerMsg, ClientMsg> {
-        // let global_state = use_context::<LeptosWebSockets<WsRoute, ServerMsg, ClientMsg>>()
-        //     .expect("Failed to provide global state");
-        // let ws_closures = global_state.global_msgs_closures;
-        // let ws = global_state.ws;
-        // let socket_pending_client_msgs = global_state.global_pending_client_msgs;
-        WsSingleton::<TempKeyType, PermKeyType, ServerMsg, ClientMsg>::new(
+    pub fn create_singleton(&self) -> WsResource<TempKeyType, PermKeyType, ServerMsg, ClientMsg> {
+        WsResource::<TempKeyType, PermKeyType, ServerMsg, ClientMsg>::new(
             self.ws_url,
             self.global_msgs_callbacks_single,
             self.ws,
             self.global_pending_client_msgs,
         )
     }
-
-    //fn generate_key() -> WsRoute;
 
     fn ws_on_open(
         url: &str,
@@ -339,7 +285,6 @@ impl<
         url: &str,
         global_on_open_callbacks: StoredValue<HashMap<TempKeyType, Rc<dyn Fn()>>>,
     ) {
-        //let keys = global_on_open_callbacks.with_value(|callbacks| callbacks.keys().cloned().collect::<Vec<TempKeyType>>() );
         trace!(
             "ws({})_global: disconnect: on-open closures left: {}",
             url,
@@ -426,7 +371,6 @@ impl<
                         *msgs = (&msgs[index..]).to_vec();
                         trace!("ws({})_global: msg left in queue: {}", url, msgs.len());
                     }
-                    //debug!("ws: after-queue: on_open callbacks, left: {:#?}", global_on_open_callbacks);
                 });
             } else {
                 warn!("ws({})_global: not initialized.", url);
@@ -437,54 +381,12 @@ impl<
     fn run_on_open_callbacks(
         url: &str,
         global_on_open_callbacks: StoredValue<HashMap<TempKeyType, Rc<dyn Fn()>>>,
-        //   ws: StoredValue<Option<WebSocket>>,
     ) {
         let callbacks = global_on_open_callbacks.get_value();
-        // trace!(
-        //     "ws({})_global: running on_open callbacks... count: {:#?}",
-        //     url,
-        //     callbacks.len()
-        // );
         for (key, callback) in callbacks {
             trace!("ws({})_global: running on_open callback: {:#?}", url, key);
             callback();
         }
-        //global_on_open_callbacks.set_value(HashMap::new());
-        // trace!(
-        //     "ws({})_global: running on_open callbacks... left: {:#?}",
-        //     url,
-        //     callbacks.len()
-        // );
-        // global_on_open_callbacks.update_value(|callbacks| {
-
-        //     //debug!("ws: running on_open callbacks... left: {}", callbacks.len());
-        //     trace!("ws: running on_open callbacks... left: {:#?}", callbacks.keys().cloned());
-
-        //     // trace!("sending msgs from queue, left: {}", msgs.len());
-        //     // let mut index: usize = 0;
-        //     // for msg in msgs.iter() {
-        //     //     let result = ws.send_with_u8_array(msg);
-        //     //     if result.is_err() {
-        //     //         warn!("failed to send msg {}:{:?}", index, msg);
-        //     //         break;
-        //     //     }
-        //     //     trace!("sent msg {} from queue: {:?}", index, msg);
-        //     //     index += 1;
-        //     // }
-        //     // if index < msgs.len() && index > 0 {
-        //     //     *msgs = (&msgs[index..]).to_vec();
-        //     //     trace!("msg left in queue: {}", msgs.len());
-        //     // }
-        // });
-
-        // ws.with_value(|ws| {
-        //     if let Some(ws) = ws {
-        //         //let callbacks = self.global_on_open_callbacks.get_value();
-
-        //     } else {
-        //         warn!("ws: not initialized.");
-        //     }
-        // });
     }
 
     fn execute_multi(
@@ -499,12 +401,6 @@ impl<
                 let key = key.clone();
 
                 move |socket_closures| {
-                    // trace!(
-                    //     "ws({})_global: current callbacks count: {}",
-                    //     url,
-                    //     &socket_closures.len()
-                    // );
-
                     let Some(f) = socket_closures.get(&key) else {
                         warn!("ws({})_global: Fn not found for {:?}", url, &key);
                         return None;
@@ -520,7 +416,6 @@ impl<
 
         match &key {
             WsRouteKey::Perm(_) => {
-                //let data = Result::Ok(package.data);
                 for (key, callback) in callback_cluster {
                     trace!(
                         "ws({})_global: running(execute_multi) callback: {:#?}",
@@ -530,38 +425,10 @@ impl<
                     callback(&package.data);
                 }
             }
-            // WsRouteKey::Temp(_) => {
-            //     let data = Result::Ok(package.data);
-            //     for (_, callback) in callback_cluster {
-            //         trace!(
-            //             "ws({})_global: running(execute_multi) callback: {:#?}",
-            //             url,
-            //             key
-            //         );
-            //         callback(&data);
-            //     }
-            //     callbacks_multi.update_value(|callbacks| {
-            //         trace!("ws({})_global: execute_multi callback was removed: {:?}", url, &key);
-            //         callbacks.remove(&key);
-            //     });
-            // }
             _ => {
                 warn!("ws({})_global: Wrong key was selected: {:?}", url, &key);
             }
         }
-
-        // #[cfg(debug_assertions)]
-        // callbacks_multi.with_value(|callbacks| {
-        //     trace!(
-        //         "ws({})_global: current callbacks left: {}",
-        //         url,
-        //         &callbacks.len()
-        //     )
-        // });
-
-        //
-
-        // socket_closures.remove(&key);
     }
 
     fn execute_single(
@@ -571,15 +438,10 @@ impl<
     ) {
         let key: WsRouteKey<TempKeyType, PermKeyType> = package.key.clone();
 
-        let callback: Option<Rc<dyn Fn(WsResult<ServerMsg>)>> = callbacks_single.with_value({
+        let callback: Option<Rc<dyn Fn(WsResourceResult<ServerMsg>)>> = callbacks_single.with_value({
             let key = key.clone();
 
             move |socket_closures| {
-                // trace!(
-                //     "ws({})_global: current singleton callbacks count: {}",
-                //     url,
-                //     &socket_closures.len()
-                // );
 
                 let Some(f) = socket_closures.get(&key) else {
                     warn!("ws({})_global: Fn not found for {:?}", url, &key);
@@ -601,7 +463,7 @@ impl<
                     url,
                     key
                 );
-                callback(WsResult::Ok(package.data));
+                callback(WsResourceResult::Ok(package.data));
                 callbacks_single.update_value(|callbacks| {
                     let result = callbacks.remove(&key);
                     if let Some(result) = result {
@@ -616,17 +478,7 @@ impl<
             }
         }
 
-        // #[cfg(debug_assertions)]
-        // callbacks_single.with_value(|callbacks| {
-        //     trace!(
-        //         "ws({})_global: current singleton callbacks left: {}",
-        //         url,
-        //         &callbacks.len()
-        //     )
-        // });
-        //
 
-        // socket_closures.remove(&key);
     }
 
     pub fn send(
@@ -787,7 +639,7 @@ pub fn get_ws_url(port: u32) -> Result<String, GetUrlError> {
 }
 
 #[derive(Clone, Debug)]
-pub struct WsSingleton<
+pub struct WsResource<
     TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
     PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
     ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
@@ -807,7 +659,7 @@ impl<
         PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
         ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
         ClientMsg: Clone + Send<TempKeyType, PermKeyType> + Debug + 'static,
-    > Copy for WsSingleton<TempKeyType, PermKeyType, ServerMsg, ClientMsg>
+    > Copy for WsResource<TempKeyType, PermKeyType, ServerMsg, ClientMsg>
 {
 }
 
@@ -816,7 +668,7 @@ impl<
         PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
         ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
         ClientMsg: Clone + Send<TempKeyType, PermKeyType> + Debug + 'static,
-    > WsSingleton<TempKeyType, PermKeyType, ServerMsg, ClientMsg>
+    > WsResource<TempKeyType, PermKeyType, ServerMsg, ClientMsg>
 {
     pub fn new(
         ws_url: StoredValue<Option<String>>,
@@ -847,12 +699,12 @@ impl<
         }
     }
 
-    pub fn send_once(
+    pub fn send_or_skip(
         &self,
         client_msg: ClientMsg,
-        on_receive: impl Fn(WsResult<ServerMsg>) + 'static,
-    ) -> Result<TempSendResult, WsError> {
-        self.ws.with_value(|ws| -> Result<TempSendResult, WsError> {
+        on_receive: impl Fn(WsResourceResult<ServerMsg>) + 'static,
+    ) -> Result<WsResourcSendResult, WsError> {
+        self.ws.with_value(|ws| -> Result<WsResourcSendResult, WsError> {
             let exists: Option<bool> = self.global_msgs_closures.try_update_value({
                 move |global_msgs_closures| {
                     self.key.with_value(|key| {
@@ -873,7 +725,7 @@ impl<
                     self.ws_url.get_value().unwrap_or("error".to_string()),
                     self.key.get_value()
                 );
-                return Ok(TempSendResult::Skipped);
+                return Ok(WsResourcSendResult::Skipped);
             }
 
             let package = WsPackage::<TempKeyType, PermKeyType, ClientMsg> {
@@ -901,7 +753,7 @@ impl<
                     );
                     return ws
                         .send_with_u8_array(&bytes)
-                        .map(|_| TempSendResult::Sent)
+                        .map(|_| WsResourcSendResult::Sent)
                         .map_err(|err| {
                             self.remove_callback();
                             WsError::SendError(
@@ -921,7 +773,7 @@ impl<
             self.global_pending_client_msgs
                 .update_value(|pending| pending.push(bytes));
 
-            Ok(TempSendResult::Queued)
+            Ok(WsResourcSendResult::Queued)
         })
     }
 
@@ -971,7 +823,7 @@ pub enum GetUrlError {
 }
 
 #[derive(Debug, Clone)]
-pub enum TempSendResult {
+pub enum WsResourcSendResult {
     Sent,
     Skipped,
     Queued,
@@ -983,18 +835,6 @@ pub enum SendResult {
     Queued,
 }
 
-// #[derive(Error, Debug)]
-// pub enum SendError {
-//     #[error("Sending error: {0}.")]
-//     SendError(String),
-
-//     #[error("Failed to serialize client message: {0}.")]
-//     Serializatoin(String),
-
-//     #[error("WebSocket runtime is not initialized.")]
-//     WsNotInitialized,
-// }
-
 #[derive(Error, Debug, Clone)]
 pub enum WsError {
     #[error("Sending error: {0}.")]
@@ -1005,7 +845,7 @@ pub enum WsError {
 }
 
 #[derive(Debug, Clone)]
-pub enum WsResult<T: Debug + Clone> {
+pub enum WsResourceResult<T: Debug + Clone> {
     Ok(T),
     TimeOut,
 }
