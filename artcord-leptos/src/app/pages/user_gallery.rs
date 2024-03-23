@@ -1,10 +1,11 @@
-use crate::app::components::navbar::Navbar;
 use crate::app::components::navbar::shrink_nav;
+use crate::app::components::navbar::Navbar;
 use crate::app::global_state::GlobalState;
 use crate::app::utils::img_resize::calc_fit_count;
 use crate::app::utils::img_resize::resize_imgs;
 use crate::app::utils::img_resize::NEW_IMG_HEIGHT;
 use crate::app::utils::img_resized::ServerMsgImgResized;
+use crate::app::utils::{LoadingNotFound, SelectedImg};
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_server_msg::{ServerMsg, UserGalleryResponse, UserResponse};
 use artcord_state::model::user::User;
@@ -15,12 +16,8 @@ use leptos::logging::log;
 use leptos::*;
 use leptos_router::{use_location, use_params_map};
 use leptos_use::{use_event_listener, use_window};
-use web_sys::Event;
 use tracing::{debug, error, trace};
-use crate::app::utils::{
-    LoadingNotFound, SelectedImg,
-};
-
+use web_sys::Event;
 
 #[derive(Copy, Clone, Debug)]
 pub struct PageUserGalleryState {
@@ -67,105 +64,150 @@ pub fn UserGalleryPage() -> impl IntoView {
     };
 
     let on_fetch = move || {
-        let Some(section) = gallery_section.get_untracked() else {
-            return;
-        };
+        trace!("user_gallery: fetching started");
 
-        let last = global_gallery_imgs
-            .with_untracked(|imgs| imgs.last().map(|img| img.created_at))
-            .unwrap_or(Utc::now().timestamp_millis());
-        let client_height = section.client_height();
-        let client_width = section.client_width();
+        if loaded_sig.with(|v| *v == LoadingNotFound::Loading) {
+            trace!("user_gallery: returned: still loading");
+            return;
+        }
 
         let Some(new_user) = params.with(|p| p.get("id").cloned()) else {
+            trace!("user_gallery: returned: missing gallery section");
             return;
         };
 
-        let current_user = global_gallery_user.get();
+        let current_user = global_gallery_user.get_untracked();
 
-        let same_user = current_user
+        let same_user = current_user.as_ref()
             .map(|user| user.id == new_user)
             .unwrap_or(false);
 
-        let fetch = {
-            debug!("profile_gallery: fetching imgs");
+        
+        trace!("user_gallery: same_user: {}, new_user: {}, current_user: {}", same_user, &new_user, current_user.as_ref().map(|u|u.id.clone()).unwrap_or("None".to_string()));
 
+        let fetch = {
             move |user_id: String| {
+                debug!("user_gallery: fetching imgs...");
+
+                let Some(section) = gallery_section.get_untracked() else {
+                    trace!("user_gallery: returned: missing gallery section");
+                    return;
+                };
+        
+                let last = global_gallery_imgs
+                    .with_untracked(|imgs| imgs.last().map(|img| img.created_at))
+                    .unwrap_or(Utc::now().timestamp_millis());
+                let client_height = section.client_height();
+                let client_width = section.client_width();
+
                 let msg = ClientMsg::UserGalleryInit {
                     amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
                     from: last,
                     user_id,
                 };
 
-                let _ = ws_gallery
-                    .send_once(msg, move |server_msg| {
-                        if let ServerMsg::UserGallery(response) = server_msg {
-                            match response {
-                                UserGalleryResponse::Imgs(new_imgs) => {
-                                    let new_imgs = new_imgs
-                                        .iter()
-                                        .map(|img| ServerMsgImgResized::from(img.to_owned()))
-                                        .collect::<Vec<ServerMsgImgResized>>();
-
-                                    global_gallery_imgs.update(|imgs| {
-                                        imgs.extend(new_imgs);
-                                        let gallery_section = gallery_section.get_untracked();
-                                        let Some(gallery_section) = gallery_section else {
-                                            return;
-                                        };
-                                        let width = gallery_section.client_width() as u32;
-                                        resize_imgs(NEW_IMG_HEIGHT, width, imgs);
-                                    });
-                                    loaded_sig.set(LoadingNotFound::Loaded);
+                ws_gallery.send_once(msg, move |server_msg| {
+                    match server_msg {
+                        Ok(server_msg) => match server_msg {
+                            ServerMsg::UserGallery(response) => {
+                                match response {
+                                    UserGalleryResponse::Imgs(new_imgs) => {
+                                        let new_imgs = new_imgs
+                                            .iter()
+                                            .map(|img| ServerMsgImgResized::from(img.to_owned()))
+                                            .collect::<Vec<ServerMsgImgResized>>();
+        
+                                        global_gallery_imgs.update(|imgs| {
+                                            imgs.extend(new_imgs);
+                                            let gallery_section = gallery_section.get_untracked();
+                                            let Some(gallery_section) = gallery_section else {
+                                                return;
+                                            };
+                                            let width = gallery_section.client_width() as u32;
+                                            resize_imgs(NEW_IMG_HEIGHT, width, imgs);
+                                        });
+                                        trace!("user_gallery: loadeding state set to: Loaded");
+                                        loaded_sig.set(LoadingNotFound::Loaded);
+                                    }
+                                    UserGalleryResponse::UserNotFound => {
+                                        trace!("user_gallery: loadeding state set to: NotFound");
+                                        loaded_sig.set(LoadingNotFound::NotFound);
+                                    }
                                 }
-                                UserGalleryResponse::UserNotFound => {
-                                    loaded_sig.set(LoadingNotFound::NotFound);
-                                }
+                            },
+                            ServerMsg::Error => {
+                                trace!("user_gallery: loadeding state set to: Error");
+                                loaded_sig.set(LoadingNotFound::Error);
+                            },
+                            msg => {
+                                error!("user_gallery: received wrong msg: {:#?}", msg);
+                                loaded_sig.set(LoadingNotFound::Error);
                             }
-                        } else {
+                        },
+                        Err(err) => {
+                            trace!("user_gallery: loadeding state set to: Error");
                             loaded_sig.set(LoadingNotFound::Error);
                         }
-                    })
-                    .inspect_err(|err| error!("profile_gallery: failed to send msg: {err}"));
+                    }
+                });
             }
         };
 
         if same_user {
             fetch(new_user);
         } else {
-            debug!("profile_gallery: fetching user");
+            debug!("user_gallery: fetching user...");
+            trace!("user_gallery: loadeding state set to: Loading");
             loaded_sig.set(LoadingNotFound::Loading);
             global_gallery_imgs.set(Vec::new());
 
             let msg = ClientMsg::User { user_id: new_user };
-            let send_result = ws_user.send_once(msg, move |server_msg| {
-                if let ServerMsg::User(response) = server_msg {
-                    match response {
-                        UserResponse::User(user) => {
-                            let user_id = user.id.clone();
-                            global_gallery_user.set(Some(user));
-                            fetch(user_id);
-                        }
-                        UserResponse::UserNotFound => {
-                            loaded_sig.set(LoadingNotFound::NotFound);
+            ws_user.send_once(msg, move |server_msg| {
+                match server_msg {
+                    Ok(server_msg) => {
+                        match server_msg {
+                            ServerMsg::User(response) => {
+                                match response {
+                                    UserResponse::User(user) => {
+                                        let user_id = user.id.clone();
+                                        global_gallery_user.set(Some(user));
+                                        trace!("user_gallery: user received '{}', fetching imgs", &user_id);
+                                        fetch(user_id);
+                                    }
+                                    UserResponse::UserNotFound => {
+                                        trace!("user_gallery: loadeding state set to: NotFound");
+                                        loaded_sig.set(LoadingNotFound::NotFound);
+                                    }
+                                }
+                            }
+                            ServerMsg::Error => {
+                                trace!("user_gallery: loadeding state set to: Error");
+                                loaded_sig.set(LoadingNotFound::Error);
+                            }
+                           msg => {
+                                error!("user_gallery: received wrong msg: {:#?}", msg);
+                                loaded_sig.set(LoadingNotFound::Error);
+                            }
                         }
                     }
-                } else {
-                    error!(
-                        "profile_gallery: received wrong response for user: {:?}",
-                        server_msg
-                    );
-                    loaded_sig.set(LoadingNotFound::Error);
+                    Err(err) => {
+                        trace!("user_gallery: loadeding state set to: Error");
+                        loaded_sig.set(LoadingNotFound::Error);
+                    }
                 }
             });
         }
     };
 
     create_effect(move |_| {
-        let loaded = loaded_sig.with_untracked(|state| *state == LoadingNotFound::Loaded);
-        if !loaded {
+        nav_tran.set(true);
+    });
+
+    create_effect(move |_| {
+        if !loaded_sig.with_untracked(|state| *state == LoadingNotFound::Loaded) {
             return;
         }
+
         let _ = location.pathname.get();
         let _ = location.hash.get();
 
@@ -214,9 +256,7 @@ pub fn UserGalleryPage() -> impl IntoView {
         on_fetch();
     });
 
-    create_effect(move |_| {
-        nav_tran.set(true);
-    });
+    
 
     view! {
         <main class=move||format!("grid grid-rows-[1fr] min-h-[100dvh] transition-all duration-300 {}", if nav_tran.get() {"pt-[4rem]"} else {"pt-[0rem]"})>
@@ -242,7 +282,7 @@ pub fn UserGalleryPage() -> impl IntoView {
                     }
                 }
             }
-            <section id="profile_gallery_section" on:scroll=section_scroll _ref=gallery_section class="relative content-start overflow-x-hidden overflow-y-scroll h-full" >
+            <section id="user_gallery_section" on:scroll=section_scroll _ref=gallery_section class="relative content-start overflow-x-hidden overflow-y-scroll h-full" >
                 <Show when=move|| global_state.socket_connected.get() fallback=move || { "Connecting..." }>
                     <Show when=move||loaded_sig.with(|state| *state == LoadingNotFound::NotLoaded || *state == LoadingNotFound::Loading) >
                     <div>"LOADING..."</div>

@@ -8,7 +8,7 @@ use crate::app::utils::{
 use artcord_leptos_web_sockets::WsRuntime;
 use artcord_state::aggregation::server_msg_img::AggImg;
 use artcord_state::message::prod_client_msg::ClientMsg;
-use artcord_state::message::prod_server_msg::{MainGalleryResponse, ServerMsg};
+use artcord_state::message::prod_server_msg::{MainGalleryResponse, ServerMsg, UserGalleryResponse};
 use chrono::Utc;
 use leptos::ev::resize;
 use leptos::html::Section;
@@ -19,22 +19,6 @@ use leptos_use::{use_event_listener, use_window};
 use tracing::{debug, error, trace};
 use web_sys::Event;
 
-
-// fn create_client_test_imgs() -> Vec<ServerMsgImgResized> {
-//     let mut new_imgs: Vec<ServerMsgImgResized> = Vec::new();
-//     for _ in 0..25 {
-//         new_imgs.push(ServerMsgImgResized::default());
-//     }
-//     new_imgs
-// }
-
-// fn create_server_test_imgs() -> Vec<AggImg> {
-//     let mut new_imgs: Vec<AggImg> = Vec::new();
-//     for _ in 0..25 {
-//         new_imgs.push(AggImg::default());
-//     }
-//     new_imgs
-// }
 
 #[derive(Copy, Clone, Debug)]
 pub struct GalleryPageState {
@@ -60,11 +44,6 @@ pub fn MainGalleryPage() -> impl IntoView {
     let gallery_section = create_node_ref::<Section>();
     let loaded_sig = global_state.pages.gallery.gallery_loaded;
     let location = use_location();
-    //let ws_img_singleton = WsRuntime::new_singleton();
-    //let sender = global_state.pages.gallery.img_sender;
-
-    //let sender = global_state.create_sender();
-    //let test_ws_group = WsRuntime::new_singleton();
 
     let ws_gallery = global_state.ws.create_singleton();
 
@@ -83,59 +62,56 @@ pub fn MainGalleryPage() -> impl IntoView {
             from: last,
         };
 
-        let _ = ws_gallery.send_once(msg, move |server_msg| {
-            if let ServerMsg::MainGallery(MainGalleryResponse::Imgs(new_imgs)) = server_msg {
-                if new_imgs.is_empty() && loaded_sig.get_untracked() == LoadingNotFound::Loading {
-                    loaded_sig.set(LoadingNotFound::NotFound);
-                } else {
-                    let new_imgs = new_imgs
-                        .iter()
-                        .map(|img| ServerMsgImgResized::from(img.to_owned()))
-                        .collect::<Vec<ServerMsgImgResized>>();
-        
-                    // if !global_state.page_galley.gallery_loaded.get_untracked() {
-                    //     global_state.page_galley.gallery_loaded.set(true);
-                    // }
-        
-                    imgs.update(|imgs| {
-                        imgs.extend(new_imgs);
-                        let document = document();
-                        //let gallery_section = document.get_element_by_id("gallery_section");
-                        let gallery_section = gallery_section.get_untracked();
-                        let Some(gallery_section) = gallery_section else {
-                            return;
-                        };
-                        let width = gallery_section.client_width() as u32;
-                        resize_imgs(NEW_IMG_HEIGHT, width, imgs);
-                    });
-        
-                    if loaded_sig.get_untracked() != LoadingNotFound::Loaded {
-                        loaded_sig.set(LoadingNotFound::Loaded);
+        ws_gallery.send_once(msg, move |server_msg| {
+            match server_msg {
+                Ok(server_msg) => {
+                    match server_msg {
+                        ServerMsg::MainGallery(response) => {
+                            match response {
+                                MainGalleryResponse::Imgs(new_imgs) => {
+                                    if new_imgs.is_empty() && loaded_sig.get_untracked() == LoadingNotFound::Loading {
+                                        loaded_sig.set(LoadingNotFound::NotFound);
+                                    } else {
+                                        let new_imgs = new_imgs
+                                            .iter()
+                                            .map(|img| ServerMsgImgResized::from(img.to_owned()))
+                                            .collect::<Vec<ServerMsgImgResized>>();
+                            
+                                        imgs.update(|imgs| {
+                                            imgs.extend(new_imgs);
+                                            let document = document();
+                                            //let gallery_section = document.get_element_by_id("gallery_section");
+                                            let gallery_section = gallery_section.get_untracked();
+                                            let Some(gallery_section) = gallery_section else {
+                                                return;
+                                            };
+                                            let width = gallery_section.client_width() as u32;
+                                            resize_imgs(NEW_IMG_HEIGHT, width, imgs);
+                                        });
+                            
+                                        if loaded_sig.get_untracked() != LoadingNotFound::Loaded {
+                                            loaded_sig.set(LoadingNotFound::Loaded);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        ServerMsg::Error => {
+                            error!("main_gallery: internal server error");
+                            loaded_sig.set(LoadingNotFound::Error);
+                        },
+                        msg => {
+                            error!("main_gallery: received wrong msg: {:#?}", msg);
+                                loaded_sig.set(LoadingNotFound::Error);
+                        }
                     }
                 }
-            } else {
-                error!("received wrong response for main_gallery: {:?}", server_msg);
-                loaded_sig.set(LoadingNotFound::Error);
+                Err(err) => {
+                    loaded_sig.set(LoadingNotFound::Error);
+                }
             }
-        }).inspect_err(|err| error!("failed to send msg: {err}"));
-    };
-
-    create_effect(move |_| {
-        nav_tran.set(true);
-
-        let _ = use_event_listener(use_window(), resize, move |_| {
-            // log!("TRYING TO RESIZE");
-            imgs.update(|imgs| {
-                let section = gallery_section.get_untracked();
-                if let Some(section) = section {
-                    let width = section.client_width() as u32;
-
-                    // log!("RESIZING!!!!!!!!!!!!");
-                    resize_imgs(NEW_IMG_HEIGHT, width, imgs);
-                };
-            });
         });
-    });
+    };
 
     let select_click_img = move |img: ServerMsgImgResized| {
         selected_img.set(Some(SelectedImg {
@@ -148,64 +124,7 @@ pub fn MainGalleryPage() -> impl IntoView {
         }))
     };
 
-    // let on_fetch = move |new_imgs: Vec<AggImg>| {
-    //     //let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
-        
-    // };
-
-    //let sender = Fender::<(),()>::new();
-
-    // let send = create_sender(move |msg| -> Result<(), ()> {
-    //     if let ServerMsg::Imgs(new_imgs) = msg {
-    //         log!("oh wow ok??? {:?}", new_imgs);
-
-    //         if new_imgs.is_empty() && global_state.page_galley.gallery_loaded.get_untracked() == LoadingNotFound::Loading {
-    //             global_state.page_galley.gallery_loaded.set(LoadingNotFound::NotFound);
-    //         } else {
-    //             let new_imgs = new_imgs
-    //                 .iter()
-    //                 .map(|img| ServerMsgImgResized::from(img.to_owned()))
-    //                 .collect::<Vec<ServerMsgImgResized>>();
-
-    //             // if !global_state.page_galley.gallery_loaded.get_untracked() {
-    //             //     global_state.page_galley.gallery_loaded.set(true);
-    //             // }
-
-    //             global_state.page_galley.gallery_imgs.update(|imgs| {
-    //                 imgs.extend(new_imgs);
-    //                 let document = document();
-    //                 let gallery_section = document.get_element_by_id("gallery_section");
-    //                 let Some(gallery_section) = gallery_section else {
-    //                     return ;
-    //                 };
-    //                 let width = gallery_section.client_width() as u32;
-    //                 resize_imgs(NEW_IMG_HEIGHT, width, imgs);
-    //             });
-
-    //             global_state
-    //                 .page_galley
-    //                 .gallery_loaded
-    //                 .set(LoadingNotFound::Loaded);
-
-    //         }
-
-    //     }
-
-    //     Ok(())
-    // });
-
-    // let on_fetch = move |from: i64, amount: u32| {
-    //     let msg = ClientMsg::GalleryInit { amount, from };
-    //     log!("hmmmmmmmmm");
-    //     send(&msg);
-    //     //global_state.socket_send(&msg);
-    // };
-
     let section_scroll = move |_: Event| {
-        // if sender.is_loading() {
-        //     log!("NOT READY YET");
-        //     return;
-        // }
 
         let Some(last) = imgs.with_untracked(|imgs| match imgs.last() {
             Some(l) => Some(l.created_at),
@@ -229,28 +148,27 @@ pub fn MainGalleryPage() -> impl IntoView {
 
         if left < client_height {
             on_fetch();
-            // let _msg = ClientMsgWrap(ClientMsg::GalleryInit {
-            //     amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
-            //     from: last,
-            // });
-            // sender.send(&msg, move |server_msg| {
-            //     if let ServerMsg::Imgs(imgs) = server_msg {
-            //         on_fetch(imgs);
-            //     }
-            // });
-            //global_state.socket_state_used(connection_load_state_name);
-            // on_fetch(
-            //     last,
-            //     calc_fit_count(client_width as u32, client_height as u32) * 2,
-            // );
-         
-            // global_state.socket_send(msg);
         }
     };
 
     create_effect(move |_| {
-        let loaded = loaded_sig.with_untracked(|state| *state == LoadingNotFound::Loaded);
-        if !loaded {
+        nav_tran.set(true);
+    });
+
+    create_effect(move |_| {
+        let _ = use_event_listener(use_window(), resize, move |_| {
+            imgs.update(|imgs| {
+                let section = gallery_section.get_untracked();
+                if let Some(section) = section {
+                    let width = section.client_width() as u32;
+                    resize_imgs(NEW_IMG_HEIGHT, width, imgs);
+                };
+            });
+        });
+    });
+
+    create_effect(move |_| {
+        if !loaded_sig.with_untracked(|state| *state == LoadingNotFound::Loaded) {
             return;
         }
         let _ = location.pathname.get();
@@ -266,83 +184,8 @@ pub fn MainGalleryPage() -> impl IntoView {
         });
     });
 
-    // let lll = watch(move || global_state.socket_connected.get(), move |num, prev_num, aaa| {
-    //     aaa.stop();
-    // }, false);
-
-
     create_effect(move |_| {
-        // let connected = global_state.socket_connected.get();
-        let loaded = !loaded_sig.with_untracked(|state| *state == LoadingNotFound::NotLoaded);
-        if loaded {
-            return;
-        }
-
-        let Some(section) = gallery_section.get() else {
-            return;
-        };
-
-        let client_height = section.client_height();
-        let client_width = section.client_width();
-
-        let msg = ClientMsg::GalleryInit {
-            amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
-            from: Utc::now().timestamp_millis(),
-        };
-
-        loaded_sig.set(LoadingNotFound::Loading);
-
         on_fetch();
-
-        // let send_result = ws_gallery.send_once(msg, move |server_msg| {
-        //     //debug!("received: {:#?}", &server_msg);
-        //     if let ServerMsg::MainGallery(MainGalleryResponse::Imgs(new_imgs)) = server_msg {
-        //         on_fetch(new_imgs);
-        //         // let new_imgs = new_imgs
-        //         // .iter()
-        //         // .map(|img| ServerMsgImgResized::from(img.to_owned()))
-        //         // .collect::<Vec<ServerMsgImgResized>>();
-
-        //         // imgs.update(|imgs| {
-        //         //     imgs.extend(new_imgs);
-        //         //     let section = gallery_section.get_untracked();
-        //         //     if let Some(section) = section {
-        //         //         let width = section.client_width() as u32;
-
-        //         //         // log!("RESIZING!!!!!!!!!!!!");
-        //         //         resize_imgs(NEW_IMG_HEIGHT, width, imgs);
-        //         //     };
-        //         // });
-        //     }
-        //     // match server_msg {
-        //     //     ServerMsg::MainGallery(response) => {
-        //     //         match response {
-        //     //             MainGalleryResponse::Imgs(new_imgs) => {
-                            
-        //     //             }
-        //     //         }
-        //     //     }
-        //     //     _ => {}
-        //     // }
-        //     //loaded_sig.set(LoadingNotFound::Loaded);
-        // });
-
-        // match send_result {
-        //     Ok(send_result) => {
-        //         trace!("fetching gallery");
-        //     }
-        //     Err(err) => {
-        //         error!("failed to fetch gallery: {}", err);
-        //     }
-        // }
-
-        // let _ = ws_img_singleton.send_once(&msg, move |server_msg| {
-        //     // on receive
-        //     if let ServerMsg::Imgs(imgs) = server_msg.0 {
-        //         log!("{:#?}", &imgs);
-        //         on_fetch(imgs);
-        //     }
-        // });
     });
 
     view! {
