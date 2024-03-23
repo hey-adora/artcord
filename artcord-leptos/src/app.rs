@@ -21,7 +21,7 @@ use pages::main_gallery::MainGalleryPage;
 use pages::home::HomePage;
 use pages::not_found::NotFound;
 use pages::user_gallery::UserGalleryPage;
-use tracing::trace;
+use tracing::{trace, error};
 use tracing::debug;
 use cfg_if::cfg_if;
 
@@ -45,7 +45,7 @@ pub fn App() -> impl IntoView {
    
     
     //let location = use_location();
-    #[cfg(feature = "csr")]
+    //#[cfg(feature = "csr")]
     {
         let debug_ws = WsRuntime::<u128, DebugMsgPermKey, DebugServerMsg, DebugClientMsg>::new();
         debug_ws.connect(3001).unwrap();
@@ -57,15 +57,19 @@ pub fn App() -> impl IntoView {
         // }).expect("failed to send");
 
         debug_ws.on_open(move || {
-            trace!("ws: sending browser ready package");
-            debug_ws.send(DebugMsgPermKey::Debug, DebugClientMsg::BrowserReady);
+            trace!("ws_debug: sending browser ready package");
+            match debug_ws.send(DebugMsgPermKey::Debug, DebugClientMsg::BrowserReady) {
+                Ok(result) => {
+                    trace!("ws_debug: returned: {:?}", result);
+                }
+                Err(err) => {
+                    error!("ws_debug: send error: {}", err);
+                }
+            };
         });
-
         
-        
-
         debug_ws.on(DebugMsgPermKey::Debug, |server_msg| {
-            trace!("Restart received: {:?}", server_msg);
+            trace!("ws_debug: Restart received: {:?}", server_msg);
             window().location().reload().unwrap();
         });
     }

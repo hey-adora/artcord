@@ -5,7 +5,7 @@ use crate::app::utils::img_resized::ServerMsgImgResized;
 use crate::app::utils::{
     LoadingNotFound, SelectedImg, 
 };
-use artcord_leptos_web_sockets::WsRuntime;
+use artcord_leptos_web_sockets::{WsResult, WsRuntime};
 use artcord_state::aggregation::server_msg_img::AggImg;
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_server_msg::{MainGalleryResponse, ServerMsg, UserGalleryResponse};
@@ -62,9 +62,9 @@ pub fn MainGalleryPage() -> impl IntoView {
             from: last,
         };
 
-        ws_gallery.send_once(msg, move |server_msg| {
+        match ws_gallery.send_once(msg, move |server_msg| {
             match server_msg {
-                Ok(server_msg) => {
+                WsResult::Ok(server_msg) => {
                     match server_msg {
                         ServerMsg::MainGallery(response) => {
                             match response {
@@ -106,11 +106,20 @@ pub fn MainGalleryPage() -> impl IntoView {
                         }
                     }
                 }
-                Err(err) => {
+                WsResult::TimeOut => {
+                    trace!("main_gallery: timeout: loadeding state set to: Error");
                     loaded_sig.set(LoadingNotFound::Error);
                 }
             }
-        });
+        }) {
+            Ok(result) => {
+                trace!("main_gallery: fetch_imgs returned: {:?}", result);
+            }
+            Err(err) => {
+                error!("main_gallery: send error: {}", err);
+                loaded_sig.set(LoadingNotFound::Error);
+            }
+        };
     };
 
     let select_click_img = move |img: ServerMsgImgResized| {
