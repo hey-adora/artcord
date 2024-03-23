@@ -101,8 +101,10 @@ async fn response_handler(
         trace!("received: {:?}", &client_msg);
         let key: WsRouteKey<u128, ProdMsgPermKey> = client_msg.key;
         let data = client_msg.data;
-
+        //return Ok(());
         let server_msg: Result<ServerMsg, WsResponseHandlerError> = match data {
+            
+
             ClientMsg::GalleryInit { amount, from } => ws_handle_main_gallery(db, amount, from)
                 .await
                 .map(ServerMsg::MainGallery)

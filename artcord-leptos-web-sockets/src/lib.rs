@@ -1,9 +1,11 @@
 use std::marker::PhantomData;
 use std::rc::Rc;
+use std::time::Duration;
 use std::{collections::HashMap, fmt::Debug};
 
 use cfg_if::cfg_if;
 
+use chrono::{DateTime, TimeDelta, Utc};
 use leptos::*;
 use leptos_use::use_window;
 use serde::{Deserialize, Serialize};
@@ -76,7 +78,7 @@ type GlobalMsgCallbacksMulti<TempKeyType, PermKeyType, ServerMsg> = StoredValue<
     HashMap<WsRouteKey<TempKeyType, PermKeyType>, HashMap<TempKeyType, Rc<dyn Fn(&ServerMsg)>>>,
 >;
 type GlobalMsgCallbacksSingle<TempKeyType, PermKeyType, ServerMsg> =
-    StoredValue<HashMap<WsRouteKey<TempKeyType, PermKeyType>, Rc<dyn Fn(WsResourceResult<ServerMsg>)>>>;
+    StoredValue<HashMap<WsRouteKey<TempKeyType, PermKeyType>, (DateTime<chrono::Utc>, Rc<dyn Fn(WsResourceResult<ServerMsg>)>)>>;
 
 #[derive(Clone, Debug)]
 pub struct WsRuntime<
@@ -154,7 +156,7 @@ impl<
     }
 
     pub fn connect_to(&self, url: &str) {
-        #[cfg(target_arch = "wasm32")]
+       // #[cfg(target_arch = "wasm32")]
         {
             let url = String::from(url);
 
@@ -245,14 +247,68 @@ impl<
                                 .unwrap_or(false)
                         });
                         if is_closed {
-                            info!("ws: reconnecting {}", url);
+                            info!("ws({}): reconnecting...", url);
                             ws.set_value(Some(create_ws()));
                         }
                     }
                 },
                 1000,
             );
+
+            let _timeout_interval = leptos_use::use_interval_fn(
+                {
+                    let url = url.clone();
+                    move || {
+                        let callbacks: Vec<(WsRouteKey<TempKeyType, PermKeyType>, Rc<dyn Fn(WsResourceResult<ServerMsg>)>)> = ws_callbacks_single.with_value(|callbacks: &HashMap<WsRouteKey<TempKeyType, PermKeyType>, (DateTime<Utc>, Rc<dyn Fn(WsResourceResult<ServerMsg>)>)>| {
+                            let mut output: Vec<(WsRouteKey<TempKeyType, PermKeyType>, Rc<dyn Fn(WsResourceResult<ServerMsg>)>)> = Vec::new();
+
+                            // for i in 0..callbacks.len() {
+                            //     let Some(item) = callbacks.get(i) else {
+                            //         break;
+                            //     };
+                            // }
+                            trace!("ws({}): timeout: total callback count: {}", url, callbacks.len());
+                            for (i, (key, (time, callback))) in callbacks.iter().enumerate() {
+                                trace!("ws({}): timedout: comparing time: {:?} > {:?}", url,  Utc::now() - *time, TimeDelta::microseconds(10 * 1000));
+                                if Utc::now() - *time > TimeDelta::microseconds(10 * 1000 * 1000) {
+                                    trace!("ws({}): timedout: found callback: {:?}", url, key);
+                                    output.push((key.clone(), callback.clone()));
+                                } else {
+                                    trace!("ws({}): timeout: finished looking for callbacks at: {}", url, i);
+                                    break;
+                                }
+                            }
+
+                            output
+                        });
+
+                        // let Some(callbacks) = callbacks else {
+                        //     trace!("ws({}): timeout: no callbacks found", url);
+                        //     return;
+                        // };
+
+                        trace!("ws({}): timeout: timedout callback count: {}", url, callbacks.len());
+
+                        for (key, callback) in callbacks {
+                            trace!("ws({}): timeout: running callback: {:?}", url, &key);
+                            callback(WsResourceResult::TimeOut);
+                            
+                            ws_callbacks_single.update_value(|ws| {
+                                let result = ws.remove(&key);
+                                if let Some(result) = result {
+                                    trace!("ws({}): timeout: removed callback: {:?}", url, &key);
+                                } else {
+                                    trace!("ws({}): timeout: callback not found: {:?}", url, &key);
+                                }
+                            });
+                        }
+                        
+                    }
+                },
+                1000,
+            );
         }
+        
     }
 
     pub fn create_singleton(&self) -> WsResource<TempKeyType, PermKeyType, ServerMsg, ClientMsg> {
@@ -438,7 +494,7 @@ impl<
     ) {
         let key: WsRouteKey<TempKeyType, PermKeyType> = package.key.clone();
 
-        let callback: Option<Rc<dyn Fn(WsResourceResult<ServerMsg>)>> = callbacks_single.with_value({
+        let callback: Option<(DateTime<chrono::Utc>, Rc<dyn Fn(WsResourceResult<ServerMsg>)>)> = callbacks_single.with_value({
             let key = key.clone();
 
             move |socket_closures| {
@@ -452,7 +508,7 @@ impl<
             }
         });
 
-        let Some(callback) = callback else {
+        let Some((_, callback)) = callback else {
             return;
         };
 
@@ -712,7 +768,7 @@ impl<
                             .get(key)
                             .map(|_| true)
                             .unwrap_or_else(|| {
-                                global_msgs_closures.insert(key.clone(), Rc::new(on_receive));
+                                global_msgs_closures.insert(key.clone(), (Utc::now(), Rc::new(on_receive)));
                                 false
                             })
                     })

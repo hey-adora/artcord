@@ -235,6 +235,9 @@ pub fn MainGalleryPage() -> impl IntoView {
             <Show when=move||loaded_sig.with(|state| *state == LoadingNotFound::NotFound) >
               <div>"No Images Found."</div>
             </Show>
+            <Show when=move||loaded_sig.with(|state| *state == LoadingNotFound::Error) >
+              <div>"Error loading."</div>
+            </Show>
             <For each=move || imgs.get().into_iter().enumerate()  key=|state| state.1.id.clone() let:data > {
                     let img = data.1;
                     let i = data.0;
