@@ -156,7 +156,7 @@ impl<
     }
 
     pub fn connect_to(&self, url: &str) {
-       // #[cfg(target_arch = "wasm32")]
+        #[cfg(target_arch = "wasm32")]
         {
             let url = String::from(url);
 
@@ -834,6 +834,12 @@ impl<
     }
 
     fn remove_callback(&self) -> bool {
+
+        // let a = async {
+
+        // };
+        // let b = tokio::spawn(a);
+        
         self.key.with_value(|key| {
             let mut output = false;
             self.global_msgs_closures.update_value({

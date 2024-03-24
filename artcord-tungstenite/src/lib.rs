@@ -135,7 +135,7 @@ async fn response_handler(
             data: server_msg,
         };
 
-        #[cfg(debug_assertions)]
+        #[cfg(feature = "development")]
         {
             let mut output = format!("{:?}", &server_package);
             output.truncate(100);

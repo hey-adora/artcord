@@ -45,7 +45,7 @@ pub fn App() -> impl IntoView {
    
     
     //let location = use_location();
-    //#[cfg(feature = "csr")]
+    #[cfg(feature = "development")]
     {
         let debug_ws = WsRuntime::<u128, DebugMsgPermKey, DebugServerMsg, DebugClientMsg>::new();
         debug_ws.connect(3001).unwrap();

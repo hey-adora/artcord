@@ -16,5 +16,6 @@ artcord-state = { path = "../artcord-state" }
 cfg-if = "1"
 
 [features]
-default = ["ssr"]
-ssr = []
+development = []
+# default = ["ssr"]
+# ssr = []

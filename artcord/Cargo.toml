@@ -196,4 +196,4 @@ tracing-subscriber = {version ="0.3.18", features = ["env-filter"] }
 # # Defines a size-optimized profile for the WASM bundle in release mode
 
 [features]
-csr = ["artcord-actix/csr"]
+development = ["artcord-actix/development", "artcord-tungstenite/development", "artcord-mongodb/development"]

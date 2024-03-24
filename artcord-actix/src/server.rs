@@ -444,7 +444,7 @@ pub async fn create_server(galley_root_dir: Arc<String>, assets_root_dir: Arc<St
         .service(Files::new("/pkg", pkg_url));
 
         cfg_if! {
-            if #[cfg(feature = "csr")] {
+            if #[cfg(feature = "development")] {
                 app = app.route("/{filename:.*}", web::get().to(hello));
             }
             else {
@@ -485,7 +485,7 @@ pub async fn create_server(galley_root_dir: Arc<String>, assets_root_dir: Arc<St
     .unwrap()
     .run();
 
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "development")]
     {
         use tokio_tungstenite::connect_async;
         use tokio::sync::mpsc;

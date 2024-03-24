@@ -27,4 +27,4 @@ tokio-tungstenite = "0.21.0"
 artcord-leptos-web-sockets = { path = "../artcord-leptos-web-sockets" }
 
 [features]
-csr = []
+development = []

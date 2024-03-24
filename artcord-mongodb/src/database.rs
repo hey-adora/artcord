@@ -39,7 +39,7 @@ const DATABASE_NAME: &'static str = "artcord";
 impl DB {
     pub async fn new(mongo_url: impl AsRef<str>) -> Self {
         cfg_if! {
-            if #[cfg(debug_assertions)] {
+            if #[cfg(feature = "development")] {
                 info!("Connecting to database: {}", mongo_url.as_ref());
             } else {
                 info!("Connecting to database...");
