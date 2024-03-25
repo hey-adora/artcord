@@ -1,9 +1,8 @@
-use crate::bot::commands;
-use crate::bot::commands::FEATURE_COMMANDER;
-use crate::bot::create_bot::ArcStr;
-use crate::database::create_database::DB;
+use crate::commands;
+use crate::commands::FEATURE_COMMANDER;
+use crate::create_bot::{ArcDB, ArcStr};
+use artcord_mongodb::database::DB;
 use bson::doc;
-use futures::TryStreamExt;
 use serenity::client::Context;
 use serenity::model::prelude::application_command::ApplicationCommandInteraction;
 use serenity::model::prelude::{Interaction, InteractionResponseType};
@@ -18,7 +17,7 @@ pub async fn interaction_create(ctx: Context, interaction: Interaction) {
             let data_read = ctx.data.read().await;
 
             let db = data_read
-                .get::<DB>()
+                .get::<ArcDB>()
                 .expect("Expected crate::database::DB in TypeMap")
                 .clone();
             let gallery_root_dir = data_read
@@ -168,7 +167,7 @@ pub async fn resolve_command(
             commands::sync::run(gallery_root_dir, &ctx, &command, &db, guild_id.0).await
         }
         "verify" => commands::verify::run(&ctx, &command, &db).await,
-        name => Err(crate::bot::commands::CommandError::NotImplemented(
+        name => Err(crate::commands::CommandError::NotImplemented(
             name.to_string(),
         )),
     }?;
@@ -182,7 +181,7 @@ pub enum ResolveCommandError {
     Mongo(#[from] mongodb::error::Error),
 
     #[error("Command error: {0}.")]
-    Command(#[from] crate::bot::commands::CommandError),
+    Command(#[from] crate::commands::CommandError),
 
     #[error("Not authorized.")]
     Unauthorized,

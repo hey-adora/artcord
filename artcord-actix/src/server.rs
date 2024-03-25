@@ -404,7 +404,7 @@ pub async fn hello() -> impl Responder {
 
 use leptos::{get_configuration};
 
-pub async fn create_server(galley_root_dir: Arc<String>, assets_root_dir: Arc<String>) -> Server {
+pub async fn create_server(galley_root_dir: &str, assets_root_dir: &str) -> Server {
     let conf = get_configuration(Some("Cargo.toml")).await.unwrap();
     // let conf: ConfFile = ConfFile {
     //     leptos_options: LeptosOptions {
@@ -427,8 +427,8 @@ pub async fn create_server(galley_root_dir: Arc<String>, assets_root_dir: Arc<St
     info!("listening on http://{}", &addr);
     //let sessions = Arc::new(RwLock::new(HashMap::<uuid::Uuid, Addr<WsConnection>>::new()));
 
-    //let galley_root_dir = galley_root_dir.to_string();
-    //let assets_root_dir = assets_root_dir.to_string(); a
+    let galley_root_dir = galley_root_dir.to_string();
+    let assets_root_dir = assets_root_dir.to_string(); 
     let server = HttpServer::new(move || {
         let leptos_options = &conf.leptos_options;
         // let site_root = &leptos_options.site_root;
@@ -439,8 +439,8 @@ pub async fn create_server(galley_root_dir: Arc<String>, assets_root_dir: Arc<St
 
         let mut app = App::new()
         .route("/favicon.ico", web::get().to(favicon))
-        .service(Files::new("/assets/gallery", &*galley_root_dir))
-        .service(Files::new("/assets", &*assets_root_dir))
+        .service(Files::new("/assets/gallery", &galley_root_dir))
+        .service(Files::new("/assets", &assets_root_dir))
         .service(Files::new("/pkg", pkg_url));
 
         cfg_if! {

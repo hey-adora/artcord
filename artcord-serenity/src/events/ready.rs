@@ -1,5 +1,6 @@
-use crate::bot::commands;
-use crate::database::create_database::DB;
+use crate::commands;
+use crate::create_bot::ArcDB;
+use artcord_mongodb::database::DB;
 use serenity::client::Context;
 use serenity::model::prelude::GuildId;
 
@@ -9,7 +10,7 @@ pub async fn ready(ctx: Context, ready: serenity::model::gateway::Ready) {
     let db = {
         let data_read = ctx.data.read().await;
         data_read
-            .get::<DB>()
+            .get::<ArcDB>()
             .expect("Expected crate::database::DB in TypeMap")
             .clone()
     };

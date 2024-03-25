@@ -1,6 +1,8 @@
-use crate::database::create_database::DB;
+use artcord_mongodb::database::DB;
 use serenity::client::Context;
 use serenity::model::id::{ChannelId, GuildId, MessageId};
+
+use crate::create_bot::ArcDB;
 
 pub async fn message_delete(
     ctx: Context,
@@ -16,7 +18,7 @@ pub async fn message_delete(
         let data_read = ctx.data.read().await;
 
         data_read
-            .get::<DB>()
+            .get::<ArcDB>()
             .expect("Expected crate::database::DB in TypeMap")
             .clone()
     };

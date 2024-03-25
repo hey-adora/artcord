@@ -1,4 +1,4 @@
-// use crate::bot::img_quality::ImgQuality;
+// use crate::img_quality::ImgQuality;
 // use bson::oid::ObjectId;
 // use bson::DateTime;
 use field_types::FieldName;

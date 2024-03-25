@@ -19,7 +19,7 @@
 # wasm-bindgen ./target/wasm32-unknown-unknown/debug/artcord_leptos.wasm --no-typescript --target web --out-dir ./target/site/pkg --out-name leptos_start5
 
 cargo build --package=artcord --no-default-features --release
-cargo build --package=artcord-leptos --target=wasm32-unknown-unknown --release --no-default-features --features=hydrate
+cargo build --package=artcord-leptos --target=wasm32-unknown-unknown --no-default-features --features=hydrate --profile wasm-release
 rm -r ./target/site
 mkdir ./target/site
 mkdir ./target/site/pkg

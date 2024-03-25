@@ -1,5 +1,6 @@
 use artcord_actix::server::create_server;
 use artcord_mongodb::database::DB;
+use artcord_serenity::create_bot::create_bot;
 use artcord_tungstenite::create_websockets;
 use cfg_if::cfg_if;
 use dotenv::dotenv;
@@ -40,26 +41,31 @@ async fn main() {
     
 
     let path = env::current_dir().unwrap();
-    trace!("current working directory is {}", path.display());
+   
 
     let assets_root_dir = env::var("ASSETS_ROOT_DIR").unwrap_or("./target/site".to_string());
-    trace!("current assets directory is {}", assets_root_dir);
     let gallery_root_dir = env::var("GALLERY_ROOT_DIR").unwrap_or("./gallery/".to_string());
-    trace!("current gallery directory is {}", gallery_root_dir);
     let mongodb_url = env::var("MONGO_URL").unwrap_or("mongodb://root:U2L63zXot4n5@localhost:27017".to_string());
+    let discord_bot_token = env::var("DISCORD_BOT_TOKEN").unwrap();
+
+    trace!("current working directory is {}", path.display());
+    trace!("current assets directory is {}", assets_root_dir);
+    trace!("current gallery directory is {}", gallery_root_dir);
     trace!("current gallery directory is {}", gallery_root_dir);
 
-    let assets_root_dir = Arc::new(assets_root_dir);
-    let gallery_root_dir = Arc::new(gallery_root_dir);
+    //let assets_root_dir = Arc::new(assets_root_dir);
+    //let gallery_root_dir = Arc::new(gallery_root_dir);
     let db = DB::new(mongodb_url).await;
     let db = Arc::new(db);
 
-    let web_server = create_server(gallery_root_dir, assets_root_dir).await;
+    let web_server = create_server(&gallery_root_dir, &assets_root_dir).await;
     let web_sockets = create_websockets(db.clone());
+    let mut discord_bot = create_bot(db.clone(), &discord_bot_token, &gallery_root_dir).await;
 
     let r = try_join!(
         async { web_server.await.or_else(|e| Err(e.to_string())) },
         async { web_sockets.await.or_else(|e| Err(e.to_string())) },
+        async { discord_bot.start().await; Ok(()) },
         //   async { bot_server.start().await.or_else(|e| Err(e.to_string())) } a a aa a a a
     );
 

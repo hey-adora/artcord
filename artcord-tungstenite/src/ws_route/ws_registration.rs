@@ -1,5 +1,5 @@
-use crate::database::create_database::DB;
-use crate::database::models::acc::Acc;
+use artcord_mongodb::database::DB;
+use artcord_state::model::acc::Acc;
 use crate::message::server_msg::ServerMsg;
 use crate::server::registration_invalid::{RegistrationInvalidMsg, BCRYPT_COST};
 use crate::server::ws_connection::ServerMsgCreationError;

@@ -1,4 +1,4 @@
-use crate::database::create_database::DB;
+use artcord_mongodb::database::DB;
 use bson::doc;
 use serenity::{
     builder::CreateApplicationCommand,
@@ -14,18 +14,18 @@ pub async fn run(
     ctx: &Context,
     command: &ApplicationCommandInteraction,
     db: &DB,
-) -> Result<(), crate::bot::commands::CommandError> {
+) -> Result<(), crate::commands::CommandError> {
     let guild_option = get_option_string(command.data.options.get(0))?;
     let deleted = db.allowed_guild_remove_one(guild_option.as_str()).await?;
  
     if !deleted {
-        return Err(crate::bot::commands::CommandError::NotFound(format!(
+        return Err(crate::commands::CommandError::NotFound(format!(
             "guild: {}",
             guild_option
         )));
     }
 
-    crate::bot::commands::show_guilds::run(ctx, command, db).await?;
+    crate::commands::show_guilds::run(ctx, command, db).await?;
 
     Ok(())
 }

@@ -34,6 +34,8 @@ pub struct DB {
 }
 
 
+
+
 const DATABASE_NAME: &'static str = "artcord";
  
 impl DB {

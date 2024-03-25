@@ -1574,6 +1574,7 @@ where
         let mut command: Option<Command> = None;
         let mut command_str: String = String::new();
         for part in command_parts {
+            command_str.push(' ');
             match command.as_mut() {
                 Some(command) => {
                     command_str.push_str(part.as_ref());
@@ -1581,7 +1582,6 @@ where
                 }
                 None => {
                     command_str.push_str(part.as_ref());
-                    command_str.push(' ');
                     command = Some(Command::new(part));
                 }
             }

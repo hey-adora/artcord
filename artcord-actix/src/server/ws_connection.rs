@@ -1,4 +1,4 @@
-use crate::database::models::acc::Acc;
+use artcord_state::model::acc::Acc;
 use crate::message::server_msg::ServerMsg;
 use crate::server::client_msg::{ClientMsg, WsPath};
 use crate::server::create_server::{ServerState, TOKEN_SIZE};

@@ -7,16 +7,18 @@ use serenity::{
     prelude::Context,
 };
 
-use crate::bot::create_bot::ReactionQueue;
-use crate::bot::hooks::hook_add_reaction::{CLOSE_REACTION, CONFIRM_REACTION};
-use crate::database::create_database::DB;
+use crate::create_bot::ReactionQueue;
+use crate::hooks::hook_add_reaction::{CLOSE_REACTION, CONFIRM_REACTION};
+use artcord_mongodb::database::DB;
+
+use super::to_reaction_type;
 
 pub async fn run(
     ctx: &Context,
     command: &ApplicationCommandInteraction,
     db: &DB,
     guild_id: u64,
-) -> Result<(), crate::bot::commands::CommandError> {
+) -> Result<(), crate::commands::CommandError> {
     let reaction_queue = {
         let data_read = ctx.data.read().await;
 
@@ -55,7 +57,7 @@ pub async fn run(
     let reactions = db.auto_reactions(guild_id).await?;
 
     for reaction in reactions {
-        msg.react(&ctx.http, reaction.to_reaction_type()?).await?;
+        msg.react(&ctx.http, to_reaction_type(reaction)?).await?;
     }
 
     reaction_queue_map.insert(

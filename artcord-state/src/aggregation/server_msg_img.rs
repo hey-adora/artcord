@@ -1,5 +1,5 @@
-// use crate::bot::img_quality::ImgQuality;
-// use crate::database::models::user::User;
+// use crate::img_quality::ImgQuality;
+// use artcord_state::model::user::User;
 use chrono::Utc;
 use field_types::FieldName;
 

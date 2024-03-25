@@ -1,4 +1,4 @@
-use crate::database::create_database::DB;
+use artcord_mongodb::database::DB;
 use bson::doc;
 
 impl DB {}

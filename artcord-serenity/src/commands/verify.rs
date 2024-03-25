@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 
-use crate::database::create_database::DB;
+use artcord_mongodb::database::DB;
 use bson::doc;
-use futures::TryStreamExt;
 use serenity::{
     builder::CreateApplicationCommand,
     model::{
@@ -18,7 +17,7 @@ pub async fn run(
     ctx: &Context,
     command: &ApplicationCommandInteraction,
     db: &DB,
-) -> Result<(), crate::bot::commands::CommandError> {
+) -> Result<(), crate::commands::CommandError> {
     let code = (get_option_integer(command.data.options.get(0))?
         .clone()
         .clamp(1000, 9999 + 1) as i32)

@@ -1,7 +1,7 @@
-use crate::bot::commands::FEATURE_GALLERY;
-use crate::database::create_database::DB;
-use crate::database::models::img::{Img, ImgFieldName};
-use crate::database::models::user::{User, UserFieldName};
+use crate::commands::FEATURE_GALLERY;
+use artcord_mongodb::database::DB;
+use artcord_state::model::img::{Img, ImgFieldName};
+use artcord_state::model::user::{User, UserFieldName};
 use chrono::Utc;
 use image::EncodableLayout;
 use mongodb::bson::doc;
@@ -26,13 +26,12 @@ pub async fn hook_save_attachments(
     author_avatar: Option<String>,
     force: bool,
 ) -> Result<(), SaveAttachmentsError> {
-    if !force {
-        if !db
-            .feature_exists(guild_id, channel_id, FEATURE_GALLERY)
+    if !force
+        && !db
+            .allowed_channel_exists(guild_id, channel_id, FEATURE_GALLERY)
             .await?
-        {
-            return Ok(());
-        }
+    {
+        return Ok(());
     }
 
     if attachments.len() > 0 {

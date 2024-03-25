@@ -1,4 +1,3 @@
-use async_std::sync::RwLock;
 use bson::doc;
 use rand::Rng;
 use std::path::Path;
@@ -14,10 +13,10 @@ use serenity::{
 };
 
 use super::save_attachments::SaveAttachmentsError;
-use crate::bot::create_bot::ReactionQueue;
-use crate::database::create_database::DB;
-use crate::database::models::auto_reaction::{
-    AutoReaction, FromReactionTypeError, ToReactionTypeError,
+use crate::{commands::{from_reaction_type, FromReactionTypeError, ToReactionTypeError}, create_bot::ReactionQueue};
+use artcord_mongodb::database::DB;
+use artcord_state::model::auto_reaction::{
+    AutoReaction,
 };
 use serenity::model::channel::Reaction;
 use std::sync::Arc;
@@ -103,7 +102,7 @@ pub async fn hook_add_reaction(
                 wild => {
                     // let reaction_type = reaction.emoji.clone();
                     let auto_reaction =
-                        AutoReaction::from_reaction_type(guild_id, reaction.emoji.clone())?;
+                        from_reaction_type(guild_id, reaction.emoji.clone())?;
                     let exists = db.auto_reactoin_exists(&auto_reaction).await?;
                     if (!exists && queue.add) || (exists && !queue.add) {
                         // if remove {
@@ -129,7 +128,7 @@ pub async fn hook_add_reaction(
             }
         }
         ReactionType::Custom { animated, id, name } => {
-            let auto_reaction = AutoReaction::from_reaction_type(guild_id, reaction.emoji.clone())?;
+            let auto_reaction = from_reaction_type(guild_id, reaction.emoji.clone())?;
             let exists = db.auto_reactoin_exists(&auto_reaction).await?;
             if (!exists && queue.add) || (exists && !queue.add) {
                 // if remove {

@@ -1,8 +1,4 @@
-use std::collections::HashMap;
-
-use crate::database::create_database::DB;
-use bson::doc;
-use futures::TryStreamExt;
+use artcord_mongodb::database::DB;
 use serenity::{
     builder::CreateApplicationCommand,
     model::prelude::{application_command::ApplicationCommandInteraction, InteractionResponseType},
@@ -12,18 +8,14 @@ use serenity::{
 pub async fn run(
     ctx: &Context,
     command: &ApplicationCommandInteraction,
-    db: &DB,
-) -> Result<(), crate::bot::commands::CommandError> {
-    let guilds = db.allowed_guild_all().await?;
+    _db: &DB,
+    _guild_id: u64,
+) -> Result<(), crate::commands::CommandError> {
+    let guilds = ctx.http.get_guilds(None, Some(100)).await?;
 
-    let mut output = String::from("Guilds:");
-
-    if guilds.len() < 1 {
-        output.push_str(" none.");
-    }
-
+    let mut output = String::new();
     for guild in guilds {
-        output.push_str(&format!("\n-{}:{}", guild.guild_id, guild.name));
+        output.push_str(&format!("\n{}:{}", guild.id, guild.name));
     }
 
     command
@@ -39,6 +31,6 @@ pub async fn run(
 
 pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicationCommand {
     command
-        .name("show_guilds")
-        .description("Show whitelisted guilds.")
+        .name("joined_guilds")
+        .description("Show which guilds bot is in.")
 }

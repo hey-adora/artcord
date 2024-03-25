@@ -1,10 +1,10 @@
-use crate::database::create_database::DB;
-use bson::doc;
+use artcord_mongodb::database::DB;
+use artcord_state::model::allowed_channel::AllowedChannel;
+use chrono::Utc;
 use serenity::{
     builder::CreateApplicationCommand,
     model::prelude::{
         application_command::ApplicationCommandInteraction, command::CommandOptionType,
-        InteractionResponseType,
     },
     prelude::Context,
 };
@@ -15,48 +15,37 @@ pub async fn run(
     ctx: &Context,
     command: &ApplicationCommandInteraction,
     db: &DB,
-    _guild_id: u64,
-) -> Result<(), crate::bot::commands::CommandError> {
+    guild_id: u64,
+) -> Result<(), crate::commands::CommandError> {
     let channel_option = get_option_channel(command.data.options.get(0))?;
     let feature_option = get_option_string(command.data.options.get(1))?;
 
     is_valid_channel_feature(feature_option)?;
 
-    let result = db
-        .remove_channel(&channel_option.id.0.to_string(), feature_option)
-        .await?;
+    let allowed_channel = AllowedChannel {
+        channel_id: channel_option.id.to_string(),
+        guild_id: guild_id.to_string(),
+        name: channel_option.name.clone().unwrap_or(String::from("none")),
+        feature: (*feature_option).clone(),
+        created_at: Utc::now().timestamp_millis(),
+        modified_at: Utc::now().timestamp_millis(),
+    };
 
-    if result.deleted_count < 1 {
-        return Err(crate::bot::commands::CommandError::NotFound(format!(
-            "feature: {} in <#{}>",
-            feature_option, channel_option.id
-        )));
-    }
+    db.allowed_channel_insert_one(allowed_channel).await?;
 
-    let content = format!(
-        "feature: {} in <#{}> was removed.",
-        feature_option, channel_option.id
-    );
-
-    command
-        .create_interaction_response(&ctx.http, |response| {
-            response
-                .kind(InteractionResponseType::ChannelMessageWithSource)
-                .interaction_response_data(|message| message.content(content))
-        })
-        .await?;
+    crate::commands::show_channels::run(ctx, command, db, guild_id).await?;
 
     Ok(())
 }
 
 pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicationCommand {
     command
-        .name("remove_channel")
-        .description("Remove channel from whitelist of specific feature")
+        .name("add_channel")
+        .description("Add channel to whitelist of specific feature")
         .create_option(|option| {
             option
                 .name("channel")
-                .description(format!("Channel to remove."))
+                .description(format!("Channel to whitelist."))
                 .kind(CommandOptionType::Channel)
                 .required(true)
         })

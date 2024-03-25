@@ -1,6 +1,6 @@
-use crate::bot::create_bot::ReactionQueue;
-use crate::bot::hooks::hook_add_reaction::hook_add_reaction;
-use crate::database::create_database::DB;
+use crate::create_bot::{ArcDB, ReactionQueue};
+use crate::hooks::hook_add_reaction::hook_add_reaction;
+use artcord_mongodb::database::DB;
 use serenity::client::Context;
 use serenity::model::channel::Reaction;
 
@@ -13,7 +13,7 @@ pub async fn reaction_remove(ctx: Context, remove_reaction: Reaction) {
         let data_read = ctx.data.read().await;
 
         let db = data_read
-            .get::<DB>()
+            .get::<ArcDB>()
             .expect("Expected crate::database::DB in TypeMap")
             .clone();
         let reaction_queue = data_read

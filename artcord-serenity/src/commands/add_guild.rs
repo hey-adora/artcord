@@ -1,5 +1,5 @@
-use crate::database::create_database::DB;
-use crate::database::models::allowed_guild::AllowedGuild;
+use artcord_mongodb::database::DB;
+use artcord_state::model::allowed_guild::AllowedGuild;
 use bson::doc;
 use chrono::Utc;
 use serenity::{
@@ -16,7 +16,7 @@ pub async fn run(
     ctx: &Context,
     command: &ApplicationCommandInteraction,
     db: &DB,
-) -> Result<(), crate::bot::commands::CommandError> {
+) -> Result<(), crate::commands::CommandError> {
     let guild_option = get_option_string(command.data.options.get(0))?;
     let guild = ctx.http.get_guild(guild_option.parse::<u64>()?).await?;
 
@@ -35,7 +35,7 @@ pub async fn run(
         )));
     }
 
-    crate::bot::commands::show_guilds::run(ctx, command, db).await?;
+    crate::commands::show_guilds::run(ctx, command, db).await?;
 
     Ok(())
 }

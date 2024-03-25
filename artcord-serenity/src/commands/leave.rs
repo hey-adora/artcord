@@ -1,4 +1,4 @@
-use crate::database::create_database::DB;
+use artcord_mongodb::database::DB;
 use serenity::{
     builder::CreateApplicationCommand,
     model::prelude::{
@@ -15,7 +15,7 @@ pub async fn run(
     command: &ApplicationCommandInteraction,
     _db: &DB,
     _guild_id: u64,
-) -> Result<(), crate::bot::commands::CommandError> {
+) -> Result<(), crate::commands::CommandError> {
     let guild_id = get_option_string(command.data.options.get(0))?;
     let guild_id: u64 = guild_id.parse()?;
     ctx.http.leave_guild(guild_id).await?;

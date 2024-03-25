@@ -1,4 +1,4 @@
-use crate::database::models::allowed_channel::AllowedChannel;
+use artcord_state::model::allowed_channel::AllowedChannel;
 use serenity::prelude::TypeMapKey;
 use std::collections::HashMap;
 use std::sync::Arc;

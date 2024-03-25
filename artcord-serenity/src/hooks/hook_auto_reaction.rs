@@ -9,9 +9,8 @@ use serenity::{
 };
 
 use super::save_attachments::SaveAttachmentsError;
-use crate::bot::commands::FEATURE_REACT;
-use crate::database::create_database::DB;
-use crate::database::models::auto_reaction::ToReactionTypeError;
+use crate::commands::{to_reaction_type, ToReactionTypeError, FEATURE_REACT};
+use artcord_mongodb::database::DB;
 use serenity::model::channel::Reaction;
 
 pub async fn hook_auto_react(
@@ -21,13 +20,12 @@ pub async fn hook_auto_react(
     db: &DB,
     force: bool,
 ) -> Result<(), HookReactError> {
-    if !force {
-        if !db
-            .feature_exists(guild_id, msg.channel_id.0, FEATURE_REACT)
+    if !force
+        && !db
+            .allowed_channel_exists(guild_id, msg.channel_id.0, FEATURE_REACT)
             .await?
-        {
-            return Ok(());
-        }
+    {
+        return Ok(());
     }
     let mut should_react = false;
 
@@ -117,7 +115,7 @@ pub async fn hook_auto_react(
                 total: reactions.len(),
             })?;
         let result = msg
-            .react(&ctx.http, reaction.to_owned().to_reaction_type()?)
+            .react(&ctx.http, to_reaction_type(reaction.to_owned())?)
             .await;
 
         match result {

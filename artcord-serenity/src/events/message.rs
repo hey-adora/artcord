@@ -1,7 +1,7 @@
-use crate::bot::create_bot::ArcStr;
-use crate::bot::hooks::hook_auto_reaction::hook_auto_react;
-use crate::bot::hooks::save_attachments::hook_save_attachments;
-use crate::database::create_database::DB;
+use crate::create_bot::{ArcDB, ArcStr};
+use crate::hooks::hook_auto_reaction::hook_auto_react;
+use crate::hooks::save_attachments::hook_save_attachments;
+use artcord_mongodb::database::DB;
 use serenity::client::Context;
 use serenity::model::channel::ReactionType;
 use serenity::model::id::EmojiId;
@@ -17,7 +17,7 @@ pub async fn message(ctx: Context, msg: serenity::model::channel::Message) {
         let data_read = ctx.data.read().await;
 
         let db = data_read
-            .get::<DB>()
+            .get::<ArcDB>()
             .expect("Expected crate::database::DB in TypeMap")
             .clone();
         let gallery_root_dir = data_read

@@ -1,7 +1,5 @@
-use crate::database::create_database::DB;
-use crate::database::models::allowed_role::AllowedRole;
+use artcord_mongodb::database::DB;
 use bson::doc;
-use chrono::Utc;
 use serenity::{
     builder::CreateApplicationCommand,
     model::prelude::{
@@ -17,51 +15,40 @@ pub async fn run(
     command: &ApplicationCommandInteraction,
     db: &DB,
     guild_id: u64,
-) -> Result<(), crate::bot::commands::CommandError> {
+) -> Result<(), crate::commands::CommandError> {
     let role_option = get_option_role(command.data.options.get(0))?;
     let feature_option = get_option_string(command.data.options.get(1))?;
 
-    let role = db
-        .allowed_role_find_one(
+    is_valid_role_feature(feature_option)?;
+
+    let deleted_count = db
+        .remove_allowed_role(
             &guild_id.to_string(),
-            &role_option.id.to_string(),
+            &role_option.id.0.to_string(),
             feature_option,
         )
         .await?;
 
-    if let Some(role) = role {
-        return Err(super::CommandError::AlreadyExists(format!(
-            "Role '{}'",
-            role.name
+    if deleted_count < 1 {
+        return Err(crate::commands::CommandError::NotFound(format!(
+            "feature: {} in {}",
+            feature_option, role_option.name
         )));
     }
 
-    is_valid_role_feature(feature_option)?;
-
-    let allowed_role = AllowedRole {
-        role_id: role_option.id.to_string(),
-        guild_id: guild_id.to_string(),
-        name: role_option.name.clone(),
-        feature: (*feature_option).clone(),
-        created_at: Utc::now().timestamp_millis(),
-        modified_at: Utc::now().timestamp_millis(),
-    };
-
-    db.allowed_role_insert_one(allowed_role).await?;
-
-    crate::bot::commands::show_roles::run(ctx, command, db, guild_id).await?;
+    crate::commands::show_roles::run(ctx, command, db, guild_id).await?;
 
     Ok(())
 }
 
 pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicationCommand {
     command
-        .name("add_role")
-        .description("Add role to whitelist of specific feature")
+        .name("remove_role")
+        .description("Remove role from whitelist of specific feature")
         .create_option(|option| {
             option
                 .name("role")
-                .description(format!("Role to whitelist."))
+                .description(format!("Role to remove."))
                 .kind(CommandOptionType::Role)
                 .required(true)
         })

@@ -1,4 +1,4 @@
-use crate::database::models::auto_reaction::{
+use artcord_state::model::auto_reaction::{
     AutoReaction, FromReactionTypeError, ToReactionTypeError,
 };
 use bson::oid::ObjectId;

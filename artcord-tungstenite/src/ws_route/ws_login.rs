@@ -1,5 +1,5 @@
-use crate::database::create_database::DB;
-use crate::database::models::acc_session::AccSession;
+use artcord_mongodb::database::DB;
+use artcord_state::model::acc_session::AccSession;
 use crate::message::server_msg::ServerMsg;
 use crate::server::create_server::TOKEN_SIZE;
 use crate::server::ws_connection::ServerMsgCreationError;

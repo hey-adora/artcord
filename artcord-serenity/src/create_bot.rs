@@ -1,6 +1,6 @@
-use crate::bot::events;
-use crate::database::create_database::DB;
-use crate::database::models::auto_reaction::AutoReaction;
+use crate::events;
+use artcord_mongodb::database::DB;
+use artcord_state::model::auto_reaction::AutoReaction;
 use serenity::client::Context;
 use serenity::framework::StandardFramework;
 use serenity::model::channel::Reaction;
@@ -11,6 +11,12 @@ use serenity::{async_trait, Client};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+
+pub struct ArcDB;
+impl TypeMapKey for ArcDB {
+    type Value = Arc<DB>;
+}
+
 
 pub struct ArcStr;
 impl TypeMapKey for ArcStr {
@@ -91,7 +97,8 @@ impl TypeMapKey for ReactionQueue {
     type Value = Arc<RwLock<HashMap<u64, Self>>>;
 }
 
-pub async fn create_bot(db: Arc<DB>, token: String, gallery_root_dir: &str) -> serenity::Client {
+
+pub async fn create_bot(db: Arc<DB>, token: &str, gallery_root_dir: &str) -> serenity::Client {
     let framework = StandardFramework::new();
 
     let intents = GatewayIntents::GUILD_MESSAGES
@@ -107,10 +114,11 @@ pub async fn create_bot(db: Arc<DB>, token: String, gallery_root_dir: &str) -> s
     let reaction_queue = Arc::new(RwLock::new(HashMap::new()));
     {
         let mut data = client.data.write().await;
-        data.insert::<DB>(db);
+        data.insert::<ArcDB>(db);
         data.insert::<ReactionQueue>(reaction_queue);
         data.insert::<ArcStr>(Arc::from(gallery_root_dir));
     }
 
     client
 }
+

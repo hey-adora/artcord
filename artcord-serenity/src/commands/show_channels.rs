@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 
-use crate::database::create_database::DB;
+use artcord_mongodb::database::DB;
 use bson::doc;
-use futures::TryStreamExt;
 use serenity::{
     builder::CreateApplicationCommand,
     model::prelude::{application_command::ApplicationCommandInteraction, InteractionResponseType},
@@ -14,7 +13,7 @@ pub async fn run(
     command: &ApplicationCommandInteraction,
     db: &DB,
     guild_id: u64,
-) -> Result<(), crate::bot::commands::CommandError> {
+) -> Result<(), crate::commands::CommandError> {
     let channels = db.allowed_channel_find_all(&guild_id.to_string()).await?;
 
     let mut output = String::from("Features and whitelisted channels:");

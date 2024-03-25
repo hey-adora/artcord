@@ -1,6 +1,6 @@
-use crate::bot::commands::{get_option_channel, get_option_integer};
-use crate::bot::hooks::save_attachments::{self, hook_save_attachments};
-use crate::database::create_database::DB;
+use crate::commands::{get_option_channel, get_option_integer};
+use crate::hooks::save_attachments::{self, hook_save_attachments};
+use artcord_mongodb::database::DB;
 use chrono::Utc;
 use serenity::builder::CreateApplicationCommand;
 use serenity::model::prelude::application_command::ApplicationCommandInteraction;
@@ -18,7 +18,7 @@ pub async fn run(
     command: &ApplicationCommandInteraction,
     db: &DB,
     guild_id: u64,
-) -> Result<(), crate::bot::commands::CommandError> {
+) -> Result<(), crate::commands::CommandError> {
     let channel_option = get_option_channel(command.data.options.get(0))?;
     let mut amount_option = *get_option_integer(command.data.options.get(1))?;
 

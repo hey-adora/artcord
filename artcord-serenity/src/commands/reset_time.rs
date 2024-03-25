@@ -1,4 +1,4 @@
-use crate::database::create_database::DB;
+use artcord_mongodb::database::DB;
 use serenity::{
     builder::CreateApplicationCommand,
     model::prelude::{application_command::ApplicationCommandInteraction, InteractionResponseType},
@@ -10,7 +10,7 @@ pub async fn run(
     command: &ApplicationCommandInteraction,
     db: &DB,
     guild_id: u64,
-) -> Result<(), crate::bot::commands::CommandError> {
+) -> Result<(), crate::commands::CommandError> {
     println!("wtf");
     Ok(())
 }
