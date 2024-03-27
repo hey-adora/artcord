@@ -56,16 +56,18 @@ pub fn App() -> impl IntoView {
         //     trace!("server msg received: {:#?}", server_msg);
         // }).expect("failed to send");
 
-        debug_ws.on_open(move || {
-            trace!("ws_debug: sending browser ready package");
-            match debug_ws.send(DebugMsgPermKey::Debug, DebugClientMsg::BrowserReady) {
-                Ok(result) => {
-                    trace!("ws_debug: returned: {:?}", result);
-                }
-                Err(err) => {
-                    error!("ws_debug: send error: {}", err);
-                }
-            };
+        debug_ws.on_ws_state(move |is_connected| {
+            if is_connected {
+                trace!("ws_debug: sending browser ready package");
+                match debug_ws.send(DebugMsgPermKey::Debug, DebugClientMsg::BrowserReady) {
+                    Ok(result) => {
+                        trace!("ws_debug: returned: {:?}", result);
+                    }
+                    Err(err) => {
+                        error!("ws_debug: send error: {}", err);
+                    }
+                };
+            }
         });
         
         debug_ws.on(DebugMsgPermKey::Debug, |server_msg| {

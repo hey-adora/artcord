@@ -80,6 +80,17 @@ type GlobalMsgCallbacksMulti<TempKeyType, PermKeyType, ServerMsg> = StoredValue<
 type GlobalMsgCallbacksSingle<TempKeyType, PermKeyType, ServerMsg> =
     StoredValue<HashMap<WsRouteKey<TempKeyType, PermKeyType>, (DateTime<chrono::Utc>, Rc<dyn Fn(WsResourceResult<ServerMsg>)>)>>;
 
+macro_rules! console_log {
+    ($($t:tt)*) => (log(&format_args!($($t)*).to_string()))
+}
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console)]
+    fn log(s: &str);
+}
+
+
 #[derive(Clone, Debug)]
 pub struct WsRuntime<
     TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
@@ -90,6 +101,8 @@ pub struct WsRuntime<
     pub global_msgs_callbacks_multi: GlobalMsgCallbacksMulti<TempKeyType, PermKeyType, ServerMsg>,
     pub global_msgs_callbacks_single: GlobalMsgCallbacksSingle<TempKeyType, PermKeyType, ServerMsg>,
     pub global_on_open_callbacks: StoredValue<HashMap<TempKeyType, Rc<dyn Fn()>>>,
+    pub global_on_close_callbacks: StoredValue<HashMap<TempKeyType, Rc<dyn Fn()>>>,
+    pub global_on_ws_state_change_callbacks: StoredValue<HashMap<TempKeyType, Rc<dyn Fn(bool)>>>,
     pub global_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
     pub ws: StoredValue<Option<WebSocket>>,
     pub ws_url: StoredValue<Option<String>>,
@@ -121,6 +134,8 @@ impl<
             global_msgs_callbacks_multi: StoredValue::new(HashMap::new()),
             global_msgs_callbacks_single: StoredValue::new(HashMap::new()),
             global_on_open_callbacks: StoredValue::new(HashMap::new()),
+            global_on_close_callbacks: StoredValue::new(HashMap::new()),
+            global_on_ws_state_change_callbacks: StoredValue::new(HashMap::new()),
             global_pending_client_msgs: StoredValue::new(Vec::new()),
             ws: StoredValue::new(None),
             ws_url: StoredValue::new(None),
@@ -166,7 +181,9 @@ impl<
             let ws_on_close = self.ws_on_close;
             let ws_callbacks_multi = self.global_msgs_callbacks_multi;
             let ws_callbacks_single = self.global_msgs_callbacks_single;
-            let ws_on_open_closures = self.global_on_open_callbacks;
+            //let ws_on_open_closures = self.global_on_open_callbacks;
+            //let ws_on_close_closures = self.global_on_close_callbacks;
+            let ws_on_ws_state_closures = self.global_on_ws_state_change_callbacks;
             let ws_pending = self.global_pending_client_msgs;
             let ws = self.ws;
 
@@ -189,14 +206,14 @@ impl<
             ws_on_open.set_value({
                 let url = url.clone();
                 Some(Rc::new(Closure::<dyn FnMut()>::new(move || {
-                    Self::ws_on_open(&url, ws_pending, ws_on_open_closures, ws)
+                    Self::ws_on_open(ws, &url, ws_pending, ws_on_ws_state_closures)
                 })))
             });
 
             ws_on_close.set_value({
                 let url = url.clone();
                 Some(Rc::new(Closure::<dyn FnMut()>::new(move || {
-                    Self::ws_on_close(&url, ws_on_open_closures)
+                    Self::ws_on_close(ws, &url, ws_on_ws_state_closures)
                 })))
             });
 
@@ -267,7 +284,7 @@ impl<
                             //         break;
                             //     };
                             // }
-                            trace!("ws({}): timeout: total callback count: {}", url, callbacks.len());
+                            //trace!("ws({}): timeout: total callback count: {}", url, callbacks.len());
                             for (i, (key, (time, callback))) in callbacks.iter().enumerate() {
                                 trace!("ws({}): timedout: comparing time: {:?} > {:?}", url,  Utc::now() - *time, TimeDelta::microseconds(10 * 1000));
                                 if Utc::now() - *time > TimeDelta::microseconds(10 * 1000 * 1000) {
@@ -287,7 +304,7 @@ impl<
                         //     return;
                         // };
 
-                        trace!("ws({}): timeout: timedout callback count: {}", url, callbacks.len());
+                        //trace!("ws({}): timeout: timedout callback count: {}", url, callbacks.len());
 
                         for (key, callback) in callbacks {
                             trace!("ws({}): timeout: running callback: {:?}", url, &key);
@@ -311,6 +328,8 @@ impl<
         
     }
 
+   
+
     pub fn create_singleton(&self) -> WsResource<TempKeyType, PermKeyType, ServerMsg, ClientMsg> {
         WsResource::<TempKeyType, PermKeyType, ServerMsg, ClientMsg>::new(
             self.ws_url,
@@ -321,32 +340,34 @@ impl<
     }
 
     fn ws_on_open(
+        ws: StoredValue<Option<WebSocket>>,
         url: &str,
         socket_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
-        global_on_open_callbacks: StoredValue<HashMap<TempKeyType, Rc<dyn Fn()>>>,
-        ws: StoredValue<Option<WebSocket>>,
+        global_on_ws_state_callbacks: StoredValue<HashMap<TempKeyType, Rc<dyn Fn(bool)>>>,
     ) {
-        info!("ws({})_global: connected", url);
+        info!("ws({})_global: connected, ws_on_closeclosures left {}", url, global_on_ws_state_callbacks.with_value(|c| c.len()));
 
-        Self::run_on_open_callbacks(url, global_on_open_callbacks);
+        Self::run_on_ws_state_callbacks(ws, url, global_on_ws_state_callbacks);
+        //Self::run_on_open_callbacks(url, global_on_open_callbacks);
         Self::flush_pending_client_msgs(
+            ws,
             url,
             socket_pending_client_msgs,
-            global_on_open_callbacks,
-            ws,
         );
     }
 
     fn ws_on_close(
+        ws: StoredValue<Option<WebSocket>>,
         url: &str,
-        global_on_open_callbacks: StoredValue<HashMap<TempKeyType, Rc<dyn Fn()>>>,
+        global_on_ws_closure_callbacks: StoredValue<HashMap<TempKeyType, Rc<dyn Fn(bool)>>>,
     ) {
-        trace!(
-            "ws({})_global: disconnect: on-open closures left: {}",
-            url,
-            global_on_open_callbacks.with_value(|c| c.len())
-        );
         info!("ws({})_global: disconnected", url);
+        //Self::run_on_ws_state_callbacks(ws, url, global_on_ws_closure_callbacks);
+        trace!(
+            "ws({})_global: disconnect: ws_on_closeclosures left: {}",
+            url,
+            global_on_ws_closure_callbacks.with_value(|c| c.len())
+        );
     }
 
     fn ws_on_err(url: &str, e: ErrorEvent) {
@@ -394,10 +415,9 @@ impl<
     }
 
     fn flush_pending_client_msgs(
+        ws: StoredValue<Option<WebSocket>>,
         url: &str,
         socket_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
-        global_on_open_callbacks: StoredValue<HashMap<TempKeyType, Rc<dyn Fn()>>>,
-        ws: StoredValue<Option<WebSocket>>,
     ) {
         ws.with_value(|ws| {
             if let Some(ws) = ws {
@@ -434,16 +454,49 @@ impl<
         });
     }
 
-    fn run_on_open_callbacks(
+    // let is_connected = self.ws.with_value(|ws| {
+    //     ws.as_ref().map(|ws|ws.ready_state() == WebSocket::CLOSED).unwrap_or(false)
+    // });
+
+    fn run_on_ws_state_callbacks(
+        ws: StoredValue<Option<WebSocket>>,
         url: &str,
-        global_on_open_callbacks: StoredValue<HashMap<TempKeyType, Rc<dyn Fn()>>>,
+        global_on_ws_state_callbacks: StoredValue<HashMap<TempKeyType, Rc<dyn Fn(bool)>>>,
     ) {
-        let callbacks = global_on_open_callbacks.get_value();
+        //debug!("3420 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+
+        let is_connected = ws.with_value(|ws| {
+            ws.as_ref().map(|ws|ws.ready_state() == WebSocket::OPEN).unwrap_or(false)
+        });
+
+        let callbacks = global_on_ws_state_callbacks.get_value();
         for (key, callback) in callbacks {
-            trace!("ws({})_global: running on_open callback: {:#?}", url, key);
-            callback();
+            trace!("ws({})_global: running on_ws_state callback: {:#?}", url, key);
+            callback(is_connected);
         }
     }
+
+    // fn run_on_open_callbacks(
+    //     url: &str,
+    //     global_on_open_callbacks: StoredValue<HashMap<TempKeyType, Rc<dyn Fn()>>>,
+    // ) {
+    //     let callbacks = global_on_open_callbacks.get_value();
+    //     for (key, callback) in callbacks {
+    //         trace!("ws({})_global: running on_open callback: {:#?}", url, key);
+    //         callback();
+    //     }
+    // }
+
+    // fn run_on_close_callbacks(
+    //     url: &str,
+    //     global_on_close_callbacks: StoredValue<HashMap<TempKeyType, Rc<dyn Fn()>>>,
+    // ) {
+    //     let callbacks = global_on_close_callbacks.get_value();
+    //     for (key, callback) in callbacks {
+    //         trace!("ws({})_global: running on_close callback: {:#?}", url, key);
+    //         callback();
+    //     }
+    // }
 
     fn execute_multi(
         url: &str,
@@ -586,14 +639,25 @@ impl<
         })
     }
 
-    pub fn on_open(&self, callback: impl Fn() + 'static) {
+    // pub fn on_ws_state() {
+
+    // }
+
+    pub fn on_ws_state(&self, callback: impl Fn(bool) + 'static) {
+        //console_log!("3420 count this");
         let temp_key = TempKeyType::generate_key();
 
-        self.global_on_open_callbacks.update_value({
+        let is_connected = self.ws.with_value(|ws| {
+            ws.as_ref().map(|ws|ws.ready_state() == WebSocket::OPEN).unwrap_or(false)
+        });
+
+        callback(is_connected);
+
+        self.global_on_ws_state_change_callbacks.update_value({
             let temp_key = temp_key.clone();
             move |callbacks| {
                 trace!(
-                    "ws({})_global: adding on_open callback: {:#?}",
+                    "ws({})_global: adding on_ws_state callback: {:#?}",
                     self.ws_url.get_value().unwrap_or("error".to_string()),
                     temp_key
                 );
@@ -602,13 +666,13 @@ impl<
         });
 
         on_cleanup({
-            let callbacks = self.global_on_open_callbacks;
+            let callbacks = self.global_on_ws_state_change_callbacks;
             let ws_url = self.ws_url;
             move || {
                 callbacks.update_value({
                     move |callbacks| {
                         trace!(
-                            "ws({})_global: cleanup: removing on_open callback: {:#?}",
+                            "ws({})_global: cleanup: removing on_ws_state callback: {:#?}",
                             ws_url.get_value().unwrap_or("error".to_string()),
                             temp_key
                         );
@@ -618,6 +682,72 @@ impl<
             }
         });
     }
+
+    // pub fn on_open(&self, callback: impl Fn() + 'static) {
+    //     let temp_key = TempKeyType::generate_key();
+
+    //     self.global_on_open_callbacks.update_value({
+    //         let temp_key = temp_key.clone();
+    //         move |callbacks| {
+    //             trace!(
+    //                 "ws({})_global: adding on_open callback: {:#?}",
+    //                 self.ws_url.get_value().unwrap_or("error".to_string()),
+    //                 temp_key
+    //             );
+    //             callbacks.insert(temp_key, Rc::new(callback));
+    //         }
+    //     });
+
+    //     on_cleanup({
+    //         let callbacks = self.global_on_open_callbacks;
+    //         let ws_url = self.ws_url;
+    //         move || {
+    //             callbacks.update_value({
+    //                 move |callbacks| {
+    //                     trace!(
+    //                         "ws({})_global: cleanup: removing on_open callback: {:#?}",
+    //                         ws_url.get_value().unwrap_or("error".to_string()),
+    //                         temp_key
+    //                     );
+    //                     callbacks.remove(&temp_key);
+    //                 }
+    //             });
+    //         }
+    //     });
+    // }
+
+    // pub fn on_close(&self, callback: impl Fn() + 'static) {
+    //     let temp_key = TempKeyType::generate_key();
+
+    //     self.global_on_close_callbacks.update_value({
+    //         let temp_key = temp_key.clone();
+    //         move |callbacks| {
+    //             trace!(
+    //                 "ws({})_global: adding on_close callback: {:#?}",
+    //                 self.ws_url.get_value().unwrap_or("error".to_string()),
+    //                 temp_key
+    //             );
+    //             callbacks.insert(temp_key, Rc::new(callback));
+    //         }
+    //     });
+
+    //     on_cleanup({
+    //         let callbacks = self.global_on_close_callbacks;
+    //         let ws_url = self.ws_url;
+    //         move || {
+    //             callbacks.update_value({
+    //                 move |callbacks| {
+    //                     trace!(
+    //                         "ws({})_global: cleanup: removing on_close callback: {:#?}",
+    //                         ws_url.get_value().unwrap_or("error".to_string()),
+    //                         temp_key
+    //                     );
+    //                     callbacks.remove(&temp_key);
+    //                 }
+    //             });
+    //         }
+    //     });
+    // }
 
     pub fn on(&self, perm_key: PermKeyType, on_receive: impl Fn(&ServerMsg) + 'static) {
         let perm_key = WsRouteKey::<TempKeyType, PermKeyType>::Perm(perm_key);
@@ -630,11 +760,21 @@ impl<
 
                 match current_callback_cluster {
                     Some(current_callback_cluster) => {
+                        trace!(
+                            "ws({})_global: adding global_msgs_closures callback: {:#?}",
+                            self.ws_url.get_value().unwrap_or("error".to_string()),
+                            temp_key
+                        );
                         current_callback_cluster.insert(temp_key, Rc::new(on_receive));
                     }
                     None => {
                         let mut callback_cluster: HashMap<TempKeyType, Rc<dyn Fn(&ServerMsg)>> =
                             HashMap::new();
+                        trace!(
+                            "ws({})_global: adding global_msgs_closures callback: {:#?}",
+                            self.ws_url.get_value().unwrap_or("error".to_string()),
+                            temp_key
+                        );
                         callback_cluster.insert(temp_key, Rc::new(on_receive));
                         global_msgs_callbacks.insert(perm_key, callback_cluster);
                     }
@@ -656,12 +796,13 @@ impl<
                             );
                             return;
                         };
-                        callback_cluster.remove(&temp_key);
                         trace!(
                             "ws({})_global: cleanup: removed: {:?}",
                             ws_url.get_value().unwrap_or("error".to_string()),
                             &perm_key
                         );
+                        callback_cluster.remove(&temp_key);
+                        
                     }
                 });
             }
@@ -693,6 +834,10 @@ pub fn get_ws_url(port: u32) -> Result<String, GetUrlError> {
 
     Ok(output)
 }
+use wasm_bindgen::prelude::wasm_bindgen;
+
+
+
 
 #[derive(Clone, Debug)]
 pub struct WsResource<
@@ -739,6 +884,11 @@ impl<
             move || {
                 global_msgs_closures.update_value({
                     move |socket_closures| {
+                        trace!(
+                            "ws({})_global: singletone: removed callback: {:?}",
+                            ws_url.get_value().unwrap_or("error".to_string()),
+                            &key
+                        );
                         socket_closures.remove(&key);
                     }
                 });
@@ -768,6 +918,11 @@ impl<
                             .get(key)
                             .map(|_| true)
                             .unwrap_or_else(|| {
+                                trace!(
+                                    "ws({})_global: adding global_msgs_closures callback: {:#?}",
+                                    self.ws_url.get_value().unwrap_or("error".to_string()),
+                                    &key
+                                );
                                 global_msgs_closures.insert(key.clone(), (Utc::now(), Rc::new(on_receive)));
                                 false
                             })

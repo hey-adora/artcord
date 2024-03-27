@@ -6,6 +6,7 @@ use artcord_state::misc::registration_invalid::{RegistrationInvalidMsg, MINIMUM_
 use leptos::html::Input;
 use leptos::logging::log;
 use leptos::*;
+use tracing::debug;
 use web_sys::SubmitEvent;
 
 #[derive(Copy, Clone, Debug)]
@@ -78,6 +79,7 @@ pub fn auth_input_show_error(signal: RwSignal<Option<String>>) -> bool {
 #[component]
 pub fn Register() -> impl IntoView {
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
+    let ws = global_state.ws;
     let loading_state = global_state.pages.registration.loading_state;
     let suspended_loading_state = RwSignal::new(loading_state.get_untracked());
 
@@ -88,6 +90,23 @@ pub fn Register() -> impl IntoView {
     let input_general_error: RwSignal<Option<String>> = RwSignal::new(None);
     let input_email_error: RwSignal<Option<String>> = RwSignal::new(None);
     let input_password_error: RwSignal<Option<String>> = RwSignal::new(None);
+
+
+    ws.on_ws_state(move |is_connected| {
+        if is_connected {
+            loading_state.set(AuthLoadingState::Ready);
+        } else {
+            loading_state.set(AuthLoadingState::Connecting);
+        }
+    });
+
+    // ws.on_open(move || {
+    //     loading_state.set(AuthLoadingState::Ready);
+    // });
+
+    // ws.on_close(move || {
+    //     loading_state.set(AuthLoadingState::Connecting);
+    // });
 
     let on_submit = move |ev: SubmitEvent| {
         ev.prevent_default();
@@ -128,17 +147,17 @@ pub fn Register() -> impl IntoView {
         loading_state.set(AuthLoadingState::Processing);
     };
 
-    create_effect(move |_| {
-        let connected = global_state.socket_connected.get();
-        let current_loading_state = loading_state.get_untracked();
+    // create_effect(move |_| {
+    //     let connected = global_state.socket_connected.get();
+    //     let current_loading_state = loading_state.get_untracked();
 
-        if !connected && current_loading_state != AuthLoadingState::Connecting {
-            suspended_loading_state.set(current_loading_state);
-            loading_state.set(AuthLoadingState::Connecting);
-        } else if connected && current_loading_state == AuthLoadingState::Connecting {
-            loading_state.set(suspended_loading_state.get_untracked());
-        }
-    });
+    //     if !connected && current_loading_state != AuthLoadingState::Connecting {
+    //         suspended_loading_state.set(current_loading_state);
+    //         loading_state.set(AuthLoadingState::Connecting);
+    //     } else if connected && current_loading_state == AuthLoadingState::Connecting {
+    //         loading_state.set(suspended_loading_state.get_untracked());
+    //     }
+    // });
 
     create_effect(move |_| {
         let current_loading_state = loading_state.get();

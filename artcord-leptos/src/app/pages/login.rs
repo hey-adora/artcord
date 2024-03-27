@@ -1,12 +1,16 @@
 use crate::app::components::navbar::Navbar;
 use crate::app::global_state::GlobalState;
 use crate::app::pages::register::{auth_input_show_error, AuthLoadingState};
+use artcord_leptos_web_sockets::WsResourcSendResult;
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::misc::registration_invalid::MINIMUM_PASSWORD_LENGTH;
 use leptos::html::Input;
 use leptos::leptos_dom::log;
 use leptos::*;
 use leptos_router::{use_navigate, NavigateOptions};
+use tracing::debug;
+use tracing::error;
+use tracing::warn;
 use web_sys::SubmitEvent;
 
 pub fn validate_login(email: &str, password: &str) -> (bool, Option<String>, Option<String>) {
@@ -35,6 +39,7 @@ pub fn validate_login(email: &str, password: &str) -> (bool, Option<String>, Opt
 #[component]
 pub fn Login() -> impl IntoView {
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
+    let ws = global_state.ws;
     let loading_state = global_state.pages.login.loading_state;
     let suspended_loading_state = RwSignal::new(loading_state.get_untracked());
 
@@ -44,6 +49,25 @@ pub fn Login() -> impl IntoView {
     let input_general_error: RwSignal<Option<String>> = RwSignal::new(None);
     let input_email_error: RwSignal<Option<String>> = RwSignal::new(None);
     let input_password_error: RwSignal<Option<String>> = RwSignal::new(None);
+
+    let ws_login = ws.create_singleton();
+
+    // ws_login.send_or_skip(ClientMsg::Logout, |msg| {
+    //     debug!("hellllooo");
+    // });
+
+   // #[cfg(target_arch = "wasm32")]
+    ws.on_ws_state(move |is_connected| {
+        debug!("login: running on_ws_state: {}", is_connected);
+        if is_connected {
+          //  debug!("login: ready");
+            loading_state.set(AuthLoadingState::Ready);
+        } else {
+          //  debug!("login: connecting");
+            loading_state.set(AuthLoadingState::Connecting);
+        }
+    });
+   
 
     let on_submit = move |ev: SubmitEvent| {
         ev.prevent_default();
@@ -72,32 +96,51 @@ pub fn Login() -> impl IntoView {
 
         log!("Submit: '{}' '{}'", email, password);
 
-        let _msg = ClientMsg::Login { password, email };
+        let msg = ClientMsg::Login { password, email };
 
+
+        match ws_login.send_or_skip(msg, move |msg| {
+            debug!("login: RECEIVED: {:?}", msg);
+            loading_state.set(AuthLoadingState::Completed);
+        }) {
+            Ok(result) => {
+                match result {
+                    WsResourcSendResult::Sent => {
+                        loading_state.set(AuthLoadingState::Processing);
+                    }
+                    r => {
+                        warn!("login: ws unexpected result: {:?}", r);
+                    }
+                }
+            }   
+            Err(err) => {
+                error!("login: ws error: {}", err);
+            }         
+        }
         //global_state.socket_send(&msg); a
 
-        loading_state.set(AuthLoadingState::Processing);
+        
     };
 
-    create_effect(move |_| {
-        let connected = global_state.socket_connected.get();
-        let current_loading_state = loading_state.get_untracked();
+    // create_effect(move |_| {
+    //     let connected = global_state.socket_connected.get();
+    //     let current_loading_state = loading_state.get_untracked();
 
-        if !connected && current_loading_state != AuthLoadingState::Connecting {
-            suspended_loading_state.set(current_loading_state);
-            loading_state.set(AuthLoadingState::Connecting);
-        } else if connected && current_loading_state == AuthLoadingState::Connecting {
-            loading_state.set(suspended_loading_state.get_untracked());
-        }
-    });
+    //     if !connected && current_loading_state != AuthLoadingState::Connecting {
+    //         suspended_loading_state.set(current_loading_state);
+    //         loading_state.set(AuthLoadingState::Connecting);
+    //     } else if connected && current_loading_state == AuthLoadingState::Connecting {
+    //         loading_state.set(suspended_loading_state.get_untracked());
+    //     }
+    // });
 
-    create_effect(move |_| {
-        let navigation = use_navigate();
+    // create_effect(move |_| {
+    //     let navigation = use_navigate();
 
-        if global_state.auth_is_logged_in() {
-            navigation("/", NavigateOptions::default());
-        }
-    });
+    //     if global_state.auth_is_logged_in() {
+    //         navigation("/", NavigateOptions::default());
+    //     }
+    // });
 
     view! {
         <main class=move||format!("grid grid-rows-[1fr] place-items-center min-h-[100dvh] transition-all duration-300 pt-[4rem]")>
