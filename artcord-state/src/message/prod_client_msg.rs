@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use std::net::IpAddr;
+use std::time::Duration;
 
 use super::prod_perm_key::ProdMsgPermKey;
 
@@ -135,28 +136,51 @@ pub enum WsPath {
     Logout,
 }
 
+// #[derive(Clone, PartialEq, Eq, Debug, Hash)]
+// pub struct Throttle {
+//     pub max_connections: u64,
+//     pub interval: Duration,
+// }
+
+// impl Throttle {
+//     pub fn new() -> Self {
+
+//     }
+// }
+
 impl WsPath {
-    pub fn to_ms(&self) -> i64 {
+    pub fn get_throttle(&self) -> (u64, Duration) {
         match self {
-            WsPath::Gallery => 60 * 1000,
-            WsPath::UserGallery => 60 * 1000,
-            WsPath::User => 60 * 1000,
-            WsPath::Login => 60 * 1000,
-            WsPath::Register => 60 * 1000,
-            WsPath::Logout => 60 * 1000,
+            WsPath::Gallery => (100, Duration::from_secs(1)),
+            WsPath::UserGallery => (100, Duration::from_secs(1)),
+            WsPath::User => (100, Duration::from_secs(1)),
+            WsPath::Login => (100, Duration::from_secs(1)),
+            WsPath::Register => (100, Duration::from_secs(1)),
+            WsPath::Logout => (1, Duration::from_secs(30)),
         }
     }
 
-    pub fn to_count(&self) -> u64 {
-        match self {
-            WsPath::Gallery => 6000,
-            WsPath::UserGallery => 6000,
-            WsPath::User => 6000,
-            WsPath::Login => 10,
-            WsPath::Register => 10,
-            WsPath::Logout => 10,
-        }
-    }
+    // pub fn to_ms(&self) -> Duration {
+    //     match self {
+    //         WsPath::Gallery => 60 * 1000,
+    //         WsPath::UserGallery => 60 * 1000,
+    //         WsPath::User => 60 * 1000,
+    //         WsPath::Login => 60 * 1000,
+    //         WsPath::Register => 60 * 1000,
+    //         WsPath::Logout => 60 * 1000,
+    //     }
+    // }
+
+    // pub fn to_count(&self) -> u64 {
+    //     match self {
+    //         WsPath::Gallery => 6000,
+    //         WsPath::UserGallery => 6000,
+    //         WsPath::User => 6000,
+    //         WsPath::Login => 10,
+    //         WsPath::Register => 10,
+    //         WsPath::Logout => 10,
+    //     }
+    // }
 }
 
 // impl Into<WsPath> for ClientMsg {

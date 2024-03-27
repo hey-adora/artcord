@@ -218,17 +218,31 @@ async fn sockets(
 ) {
     let connection_tasks = TaskTracker::new();
 
-    let addr = "0.0.0.0:3001";
+    let addr = "0.0.0.0:3420";
     let listener = TcpListener::bind(&addr)
         .await
         .expect("Failed to bind socket addr");
     info!("socket: restart socket listening on: ws://{}", &addr);
 
+    
+
+    // while  {
+        
+    // }
+
     let handle_connections = async {
-        while let Ok((stream, _)) = listener.accept().await {
+        loop {
+            let (stream, _) = match listener.accept().await {
+                Ok(result) => result,
+                Err(err) => {
+                    error!("socket: error accepting connection: {}", err);
+                    continue;
+                }
+            };
+    
             let peer = stream.peer_addr().expect("Failed to get peer addr");
             trace!("socket: connected: {}", peer);
-
+    
             connection_tasks.spawn(sockets_accept_connection(
                 peer,
                 stream,
@@ -251,17 +265,17 @@ async fn sockets(
                 if let Err(err) = result {
                     error!("socket: recv: error: {}", err);
                 }
-                trace!("socket: exiting...");
             }
+            debug!("socket: received exit signal, exiting...");
         }
     };
 
     select!(
-        _ = handle_connections => {
-
+        r = handle_connections => {
+            trace!("socket: ws://{} handle_connections exiting...: {:?}", &addr, r);
         },
         _ = handle_exit => {
-
+            trace!("socket: ws://{} handle_exit exiting...", &addr);
         },
     );
 
@@ -304,7 +318,7 @@ async fn sockets_handle_connection(
     let ws_stream = tokio_tungstenite::accept_async(stream)
         .await
         .expect("socket: failed to accept connection");
-    trace!("socket: new websocket connection: {}", peer);
+    //trace!("socket: new websocket connection: {}", peer);
 
     //ws_stream.re
     let (mut write, read) = ws_stream.split();
@@ -432,11 +446,11 @@ async fn sockets_handle_connection(
             async move {
                 loop {
                     let should_exit = { recv_exit.borrow_and_update().deref().is_some() };
-                    trace!(
-                        "socket_handle_connection({}): received exit value: {}",
-                        peer,
-                        should_exit
-                    );
+                    // trace!(
+                    //     "socket_handle_connection({}): received exit value: {}",
+                    //     peer,
+                    //     should_exit
+                    // );
                     if should_exit {
                         trace!("socket_handle_connection({}): exiting... ", peer);
                         break;

@@ -16,6 +16,7 @@ artcord-mongodb = { path = "../artcord-mongodb" }
 thiserror = "1.0.57"
 bincode = "1.3.3"
 mongodb = "2.8.1"
+chrono = "0.4.34"
 
 [features]
 development = []

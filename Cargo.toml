@@ -2,14 +2,15 @@
 resolver = "2"
 members = [
     "artcord",
-    "artcord-actix", "artcord-builder",
+    "artcord-actix", 
+    "artcord-builder",
     "artcord-leptos",
     "artcord-leptos-web-sockets",
     "artcord-mongodb",
     "artcord-serenity",
     "artcord-state",
     "artcord-tungstenite",
-    #   "artcord-benchmark",
+    "artcord-benchmark",
 ]
 
 [profile.dev]

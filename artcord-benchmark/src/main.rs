@@ -19,8 +19,6 @@ use std::env;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use artcord::server::client_msg::ClientMsg;
-use artcord::server::server_msg::ServerMsg;
 use futures_util::{future, pin_mut, SinkExt, StreamExt};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -61,7 +59,7 @@ impl Default for MyApp {
                     .unwrap(),
             ),
             plot: PlotType::Bell,
-            url: Arc::new(url::Url::parse("ws://localhost:3000/ws/").unwrap()),
+            url: Arc::new(url::Url::parse("ws://localhost:3000").unwrap()),
             index: Arc::new(RwLock::new(0.0)),
             points1: Arc::new(RwLock::new(Vec::new())),
             //line1: Arc::new(RwLock::new(Line::new(PlotPoints::new(vec![])))),
@@ -133,7 +131,7 @@ impl eframe::App for MyApp {
                 let url = self.url.clone();
                 let points1 = self.points1.clone();
                 let index = self.index.clone();
-                let pp_count = 1000;
+                let pp_count = 10;
                 let pp_time = 10;
                 let interval = 1;
 
