@@ -104,6 +104,7 @@ pub struct WsRuntime<
     pub global_on_close_callbacks: StoredValue<HashMap<TempKeyType, Rc<dyn Fn()>>>,
     pub global_on_ws_state_change_callbacks: StoredValue<HashMap<TempKeyType, Rc<dyn Fn(bool)>>>,
     pub global_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
+    pub connected: RwSignal<bool>,
     pub ws: StoredValue<Option<WebSocket>>,
     pub ws_url: StoredValue<Option<String>>,
     pub ws_on_msg: WsCallback<dyn FnMut(MessageEvent)>,
@@ -137,6 +138,7 @@ impl<
             global_on_close_callbacks: StoredValue::new(HashMap::new()),
             global_on_ws_state_change_callbacks: StoredValue::new(HashMap::new()),
             global_pending_client_msgs: StoredValue::new(Vec::new()),
+            connected: RwSignal::new(false),
             ws: StoredValue::new(None),
             ws_url: StoredValue::new(None),
             ws_on_msg: StoredValue::new(None),
@@ -181,6 +183,7 @@ impl<
             let ws_on_close = self.ws_on_close;
             let ws_callbacks_multi = self.global_msgs_callbacks_multi;
             let ws_callbacks_single = self.global_msgs_callbacks_single;
+            let ws_connected = self.connected;
             //let ws_on_open_closures = self.global_on_open_callbacks;
             //let ws_on_close_closures = self.global_on_close_callbacks;
             let ws_on_ws_state_closures = self.global_on_ws_state_change_callbacks;
@@ -205,15 +208,17 @@ impl<
 
             ws_on_open.set_value({
                 let url = url.clone();
+                let ws_connected = ws_connected.clone();
                 Some(Rc::new(Closure::<dyn FnMut()>::new(move || {
-                    Self::ws_on_open(ws, &url, ws_pending, ws_on_ws_state_closures)
+                    Self::ws_on_open(ws, &url, ws_connected, ws_pending, ws_on_ws_state_closures)
                 })))
             });
 
             ws_on_close.set_value({
                 let url = url.clone();
+                let ws_connected = ws_connected.clone();
                 Some(Rc::new(Closure::<dyn FnMut()>::new(move || {
-                    Self::ws_on_close(ws, &url, ws_on_ws_state_closures)
+                    Self::ws_on_close(ws, &url, ws_connected, ws_on_ws_state_closures)
                 })))
             });
 
@@ -328,6 +333,7 @@ impl<
         
     }
 
+    
    
 
     pub fn create_singleton(&self) -> WsResource<TempKeyType, PermKeyType, ServerMsg, ClientMsg> {
@@ -342,11 +348,12 @@ impl<
     fn ws_on_open(
         ws: StoredValue<Option<WebSocket>>,
         url: &str,
+        connected: RwSignal<bool>,
         socket_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
         global_on_ws_state_callbacks: StoredValue<HashMap<TempKeyType, Rc<dyn Fn(bool)>>>,
     ) {
         info!("ws({})_global: connected, ws_on_closeclosures left {}", url, global_on_ws_state_callbacks.with_value(|c| c.len()));
-
+        connected.set(true);
         Self::run_on_ws_state_callbacks(ws, url, global_on_ws_state_callbacks);
         //Self::run_on_open_callbacks(url, global_on_open_callbacks);
         Self::flush_pending_client_msgs(
@@ -359,9 +366,11 @@ impl<
     fn ws_on_close(
         ws: StoredValue<Option<WebSocket>>,
         url: &str,
+        connected: RwSignal<bool>,
         global_on_ws_closure_callbacks: StoredValue<HashMap<TempKeyType, Rc<dyn Fn(bool)>>>,
     ) {
         info!("ws({})_global: disconnected", url);
+        connected.set(false);
         Self::run_on_ws_state_callbacks(ws, url, global_on_ws_closure_callbacks);
         //Self::run_on_ws_state_callbacks(ws, url, global_on_ws_closure_callbacks);
         trace!(

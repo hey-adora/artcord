@@ -24,6 +24,7 @@ use pages::user_gallery::UserGalleryPage;
 use tracing::{trace, error};
 use tracing::debug;
 use cfg_if::cfg_if;
+//use crate::app::utils::signal_switch::signal_switch_init;
 
 pub mod components;
 pub mod global_state;
@@ -41,7 +42,7 @@ pub mod utils;
 pub fn App() -> impl IntoView {
     provide_meta_context();
     provide_context(GlobalState::new());
-
+    //signal_switch_init();
    
     
     //let location = use_location();
@@ -87,32 +88,71 @@ pub fn App() -> impl IntoView {
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
     global_state.ws.connect(3420).unwrap();
 
-    view! {
-        <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-        <meta name="description" content="Art Community!"/>
-        <meta name="keywords" content="artcord,art,gallery,server,discord,community"/>
-        <meta name="twitter:title" content="ArtCord"/>
-        <meta name="twitter:description" content="Art Community!"/>
-        <meta name="twitter:image" content="/assets/overview.webp"/>
-        <meta name="twitter:card" content="summary_large_image"/>
-        <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
-        <meta http-equiv="Pragma" content="no-cache"/>
-        <meta http-equiv="Expires" content="0"/>
+    // ws.on_ws_state(move |is_connected| {
 
-        <Stylesheet id="leptos" href="/pkg/leptos_start5.css"/>
-        <Title text="ArtCord"/>
-        <Body  class=move || format!("text-low-purple    bg-fixed bg-sword-lady  bg-[right_65%_bottom_0] md:bg-center bg-cover bg-no-repeat  bg-dark-night2 {}", if global_state.nav_open.get() == true { "overflow-hidden w-screen h-[dvh]" } else { "" })  />
-        <Router>
-                <Routes>
-                    <Route path="" view=HomePage/>
-                    <Route path="/gallery" view=MainGalleryPage/>
-                    <Route path="/user/:id" view=UserGalleryPage/>
-                    <Route path="/account" view=Account/>
-                    <Route path="/admin" view=Admin/>
-                    <Route path="/*any" view=NotFound/>
-                    <ProtectedRoute condition=move || !global_state.auth_is_logged_out() redirect_path="/" path="/login" view=Login/>
-                    <ProtectedRoute condition=move || !global_state.auth_is_logged_out() redirect_path="/"  path="/register" view=Register/>
-                </Routes>
-        </Router>
+    //      if is_connected {
+    //      } else {
+    //      }
+    //  });
+
+    cfg_if! {
+        if #[cfg(feature = "beta")] {
+            view! {
+                <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+                <meta name="description" content="Art Community!"/>
+                <meta name="keywords" content="artcord,art,gallery,server,discord,community"/>
+                <meta name="twitter:title" content="ArtCord"/>
+                <meta name="twitter:description" content="Art Community!"/>
+                <meta name="twitter:image" content="/assets/overview.webp"/>
+                <meta name="twitter:card" content="summary_large_image"/>
+                <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+                <meta http-equiv="Pragma" content="no-cache"/>
+                <meta http-equiv="Expires" content="0"/>
+        
+                <Stylesheet id="leptos" href="/pkg/leptos_start5.css"/>
+                <Title text="ArtCord"/>
+                <Body  class=move || format!("text-low-purple    bg-fixed bg-sword-lady  bg-[right_65%_bottom_0] md:bg-center bg-cover bg-no-repeat  bg-dark-night2 {}", if global_state.nav_open.get() == true { "overflow-hidden w-screen h-[dvh]" } else { "" })  />
+                <Router>
+                        <Routes>
+                            <Route path="" view=HomePage/>
+                            <Route path="/gallery" view=MainGalleryPage/>
+                            <Route path="/user/:id" view=UserGalleryPage/>
+                            <Route path="/account" view=Account/>
+                            <Route path="/admin" view=Admin/>
+                            <Route path="/*any" view=NotFound/>
+                            <ProtectedRoute condition=move || !global_state.auth_is_logged_out() redirect_path="/" path="/login" view=Login/>
+                            <ProtectedRoute condition=move || !global_state.auth_is_logged_out() redirect_path="/"  path="/register" view=Register/>
+                        </Routes>
+                </Router>
+            }
+        } else {
+            view! {
+                <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+                <meta name="description" content="Art Community!"/>
+                <meta name="keywords" content="artcord,art,gallery,server,discord,community"/>
+                <meta name="twitter:title" content="ArtCord"/>
+                <meta name="twitter:description" content="Art Community!"/>
+                <meta name="twitter:image" content="/assets/overview.webp"/>
+                <meta name="twitter:card" content="summary_large_image"/>
+                <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+                <meta http-equiv="Pragma" content="no-cache"/>
+                <meta http-equiv="Expires" content="0"/>
+        
+                <Stylesheet id="leptos" href="/pkg/leptos_start5.css"/>
+                <Title text="ArtCord"/>
+                <Body  class=move || format!("text-low-purple    bg-fixed bg-sword-lady  bg-[right_65%_bottom_0] md:bg-center bg-cover bg-no-repeat  bg-dark-night2 {}", if global_state.nav_open.get() == true { "overflow-hidden w-screen h-[dvh]" } else { "" })  />
+                <Router>
+                        <Routes>
+                            <Route path="" view=HomePage/>
+                            <Route path="/gallery" view=MainGalleryPage/>
+                            <Route path="/user/:id" view=UserGalleryPage/>
+                            <Route path="/account" view=Account/>
+                            <Route path="/admin" view=Admin/>
+                            <Route path="/*any" view=NotFound/>
+                        </Routes>
+                </Router>
+            }
+        }
     }
+    
 }

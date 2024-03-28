@@ -48,10 +48,11 @@ pub fn UserGalleryPage() -> impl IntoView {
     let global_gallery_user = global_state.page_profile.user;
     let selected_img: RwSignal<Option<SelectedImg>> = create_rw_signal(None);
     let loaded_sig = global_state.page_profile.gallery_loaded;
+    let ws = global_state.ws;
     let location = use_location();
 
-    let ws_gallery = global_state.ws.create_singleton();
-    let ws_user = global_state.ws.create_singleton();
+    let ws_gallery = ws.create_singleton();
+    let ws_user = ws.create_singleton();
 
     let on_click = move |img: ServerMsgImgResized| {
         selected_img.set(Some(SelectedImg {
@@ -67,10 +68,10 @@ pub fn UserGalleryPage() -> impl IntoView {
     let on_fetch = move || {
         trace!("user_gallery: fetching started");
 
-        if loaded_sig.with(|v| *v == LoadingNotFound::Loading) {
-            trace!("user_gallery: returned: still loading");
-            return;
-        }
+        // if loaded_sig.with_untracked(|v| *v == LoadingNotFound::Loading || *v == LoadingNotFound::NotFound) {
+        //     trace!("user_gallery: returned: {:?}", loaded_sig.get_untracked());
+        //     return;
+        // }
 
         let Some(new_user) = params.with(|p| p.get("id").cloned()) else {
             trace!("user_gallery: returned: missing gallery section");
@@ -305,7 +306,7 @@ pub fn UserGalleryPage() -> impl IntoView {
                 }
             }
             <section id="user_gallery_section" on:scroll=section_scroll _ref=gallery_section class="relative content-start overflow-x-hidden overflow-y-scroll h-full" >
-                <Show when=move|| global_state.socket_connected.get() fallback=move || { "Connecting..." }>
+                <Show when=move|| ws.connected.get() fallback=move || { "Connecting..." }>
                     <Show when=move||loaded_sig.with(|state| *state == LoadingNotFound::NotLoaded || *state == LoadingNotFound::Loading) >
                     <div>"LOADING..."</div>
                     </Show>

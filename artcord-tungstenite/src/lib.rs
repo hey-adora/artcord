@@ -38,6 +38,7 @@ use ws_route::ws_main_gallery::WsHandleMainGalleryError;
 use ws_route::ws_user::WsHandleUserError;
 use ws_route::ws_user_gallery::WsHandleUserGalleryError;
 use tokio::time::Instant;
+use cfg_if::cfg_if;
 
 use crate::ws_route::ws_main_gallery::ws_handle_main_gallery;
 use crate::ws_route::ws_user::ws_handle_user;
@@ -160,9 +161,19 @@ async fn accept_connection(user_throttle_task: Arc<ThrottleStats>, addr: SocketA
             let db = db.clone();
             let user_throttle_task = user_throttle_task.clone();
             async move {
-                let _ = response_handler(user_throttle_task, db, send, client_msg)
-                    .await
-                    .inspect_err(|err| error!("reponse handler error: {:#?}", err));
+                cfg_if! {
+                    if #[cfg(feature = "beta")] {
+                        let _ = response_handler_beta(user_throttle_task, db, send, client_msg)
+                        .await
+                        .inspect_err(|err| error!("reponse handler error: {:#?}", err));
+                    } else {
+                        let _ = response_handler(user_throttle_task, db, send, client_msg)
+                        .await
+                        .inspect_err(|err| error!("reponse handler error: {:#?}", err));
+                    }
+                }
+
+               
                 Ok(())
             }
         }
@@ -193,6 +204,138 @@ async fn accept_connection(user_throttle_task: Arc<ThrottleStats>, addr: SocketA
    
     trace!("disconnected: {}", *user_throttle_task.ws_connection_count.read().await);
 }
+
+async fn response_handler_beta(
+    user_throttle_task: Arc<ThrottleStats>,
+    db: Arc<DB>,
+    send: mpsc::Sender<Message>,
+    client_msg: Message,
+) -> Result<(), WsResponseHandlerError> {
+    if let Message::Binary(msgclient_msg) = client_msg {
+        let client_msg = ClientMsg::from_bytes(&msgclient_msg)?;
+
+        trace!("received: {:?}", &client_msg);
+        let key: WsRouteKey<u128, ProdMsgPermKey> = client_msg.key;
+        let data = client_msg.data;
+        let ws_path: WsPath = WsPath::from(&data);
+
+        // let start = Instant::now();
+        // start.
+        //let elapsed = start.elapsed();
+
+        {
+            let mut ws_path_count = user_throttle_task.ws_path_count.write().await;
+            let (count, interval) = ws_path_count.entry(ws_path).or_insert((1, Instant::now()));
+            let (count_limit, interval_limit) = ws_path.get_throttle();
+            let elapsed = interval.elapsed();
+            if elapsed > interval_limit {
+                trace!("throttle: reset");
+                *count = 0;
+                *interval = Instant::now();
+            } else if *count > count_limit {
+                let left = interval_limit.checked_sub(elapsed);
+                if let Some(left) = left {
+                    trace!("throttle: sleeping for: {:?}", &left);
+                    sleep(left).await;
+                } else {
+                    error!("throttle: failed to get left time");
+                    sleep(interval_limit).await;
+                }
+                *count = 0;
+                *interval = Instant::now();
+                trace!("throttle: sleep completed");
+            } else {
+                trace!("throttle: all good: state: {} {:?}", &count, &elapsed);
+                *count += 1;
+            }
+        }
+     
+
+        // if interval > TimeDelta::from() {
+
+        // }
+        // let ws_path_count = {
+        //     let ws_path_count = ;
+        //     // ws_path_count.en
+        //     // //.get(&ws_path).cloned()
+        //     // let result = match result {
+        //     //     Some(a) => a,
+        //     //     None => {
+        //     //         let new_path_stats = (1, Utc::now());
+        //     //         ws_path_count.insert(k, v)
+        //     //         new_path_stats
+        //     //     }
+        //     // }
+            
+
+
+        // };
+        //let ws_path_count = ws_path_count.get_mut(&ws_path).unwrap_or_else(|| {
+
+            
+       // });
+        // let ws_path_count = match ws_path_count.get_mut(&ws_path) {
+        //     Some(result) => {
+                
+        //     }
+        //     None => {
+
+        //     }
+        // };
+        //let ws_path_interval = &*user_throttle_task.ws_path_interval.read().await;
+        //return Ok(());
+
+       
+        
+
+        let server_msg: Result<ServerMsg, WsResponseHandlerError> = match data {
+            
+
+            ClientMsg::GalleryInit { amount, from } => ws_handle_main_gallery(db, amount, from)
+                .await
+                .map(ServerMsg::MainGallery)
+                .map_err(WsResponseHandlerError::MainGallery),
+            ClientMsg::UserGalleryInit {
+                amount,
+                from,
+                user_id,
+            } => ws_handle_user_gallery(db, amount, from, user_id)
+                .await
+                .map(ServerMsg::UserGallery)
+                .map_err(WsResponseHandlerError::UserGallery),
+            ClientMsg::User { user_id } => ws_handle_user(db, user_id)
+                .await
+                .map(ServerMsg::User)
+                .map_err(WsResponseHandlerError::User),
+            _ => Ok(ServerMsg::NotImplemented),
+        };
+
+        let server_msg = server_msg
+            .inspect_err(|err| {
+                error!("reponse error: {:#?}", err);
+            })
+            .unwrap_or(ServerMsg::Error);
+
+        let server_package = WsPackage::<u128, ProdMsgPermKey, ServerMsg> {
+            key,
+            data: server_msg,
+        };
+
+        #[cfg(feature = "development")]
+        {
+            let mut output = format!("{:?}", &server_package);
+            output.truncate(100);
+            trace!("sent: {}", output);
+        }
+
+        let bytes = ServerMsg::as_bytes(server_package)?;
+
+        let server_msg = Message::binary(bytes);
+        send.send(server_msg).await?;
+    }
+    Ok(())
+}
+
 
 async fn response_handler(
     user_throttle_task: Arc<ThrottleStats>,
@@ -273,6 +416,10 @@ async fn response_handler(
         // };
         //let ws_path_interval = &*user_throttle_task.ws_path_interval.read().await;
         //return Ok(());
+
+       
+        
+
         let server_msg: Result<ServerMsg, WsResponseHandlerError> = match data {
             
 

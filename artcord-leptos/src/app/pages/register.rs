@@ -2,6 +2,7 @@ use std::fmt::format;
 
 use crate::app::components::navbar::Navbar;
 use crate::app::global_state::GlobalState;
+//use crate::app::utils::signal_switch::signal_switch;
 
 use artcord_leptos_web_sockets::WsResourcSendResult;
 use artcord_state::message::prod_client_msg::ClientMsg;
@@ -27,7 +28,7 @@ impl GlobalAuthState {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum AuthLoadingState {
-    Connecting,
+ //   Connecting,
     Ready,
     Processing,
     Completed,
@@ -84,7 +85,9 @@ pub fn Register() -> impl IntoView {
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
     let ws = global_state.ws;
     let loading_state = global_state.pages.registration.loading_state;
-    let suspended_loading_state = RwSignal::new(loading_state.get_untracked());
+    //let suspended_loading_state = RwSignal::new(loading_state.get_untracked());
+
+    //signal_switch(false, &loading_state, AuthLoadingState::Connecting);
 
     let input_email: NodeRef<Input> = create_node_ref();
     let input_password: NodeRef<Input> = create_node_ref();
@@ -98,13 +101,14 @@ pub fn Register() -> impl IntoView {
     let ws_register = ws.create_singleton();
 
 
-    ws.on_ws_state(move |is_connected| {
-        if is_connected {
-            loading_state.set(AuthLoadingState::Ready);
-        } else {
-            loading_state.set(AuthLoadingState::Connecting);
-        }
-    });
+    // ws.on_ws_state(move |is_connected| {
+    //     if is_connected {
+    //         loading_state.set(AuthLoadingState::Ready);
+    //     } else {
+    //         loading_state.set(AuthLoadingState::Connecting);
+    //         suspended_loading_state
+    //     }
+    // });
 
     // ws.on_open(move || {
     //     loading_state.set(AuthLoadingState::Ready);
@@ -201,16 +205,23 @@ pub fn Register() -> impl IntoView {
     view! {
         <main class=move||format!("grid grid-rows-[1fr] place-items-center min-h-[100dvh] transition-all duration-300 pt-[4rem]")>
             <Navbar/>
-            <section class="text-center text-black flex flex-col justify-center max-w-[20rem] w-full min-h-[20rem] bg-white rounded-3xl p-5" style:display=move || if loading_state.get() == AuthLoadingState::Completed { "flex" } else {"none"} >
-                    "Registration Completed\nVerify Email."
-            </section>
-            <section class="text-center text-black flex flex-col justify-center max-w-[20rem] w-full min-h-[20rem] bg-white rounded-3xl p-5" style:display=move || if loading_state.get() == AuthLoadingState::Processing { "flex" } else {"none"} >
-                    "Processing..."
-            </section>
-            <section class="text-center text-black flex flex-col justify-center max-w-[20rem] w-full min-h-[20rem] bg-white rounded-3xl p-5" style:display=move || if loading_state.get() == AuthLoadingState::Connecting { "flex" } else {"none"} >
-                    "Connecting..."
-            </section>
-             <section class=" flex flex-col justify-center max-w-[20rem] w-full min-h-[20rem] bg-white rounded-3xl p-5" style:display=move || if match loading_state.get() { AuthLoadingState::Ready =>true, AuthLoadingState::Failed(_) => true, _ => false } { "flex" } else {"none"} >
+            <Show when=move || ws.connected.get() fallback=move || view! {
+                <section class="text-center text-black flex flex-col justify-center max-w-[20rem] w-full min-h-[20rem] bg-white rounded-3xl p-5 flex "  >
+                "Connecting..."
+                </section>
+            }>
+                <section class="text-center text-black flex flex-col justify-center max-w-[20rem] w-full min-h-[20rem] bg-white rounded-3xl p-5" style:display=move || if loading_state.get() == AuthLoadingState::Completed { "flex" } else {"none"} >
+                "Registration Completed\nVerify Email."
+                </section>
+                <section class="text-center text-black flex flex-col justify-center max-w-[20rem] w-full min-h-[20rem] bg-white rounded-3xl p-5" style:display=move || if loading_state.get() == AuthLoadingState::Processing { "flex" } else {"none"} >
+                        "Processing..."
+                </section>
+            </Show>
+            // <section class="text-center text-black flex flex-col justify-center max-w-[20rem] w-full min-h-[20rem] bg-white rounded-3xl p-5" style:display=move || if loading_state.get() == AuthLoadingState::Connecting { "flex" } else {"none"} >
+            // "Connecting..."
+            // </section>
+           
+             <section class=" flex flex-col justify-center max-w-[20rem] w-full min-h-[20rem] bg-white rounded-3xl p-5" style:display=move || if ws.connected.get() && match loading_state.get() { AuthLoadingState::Ready =>true, AuthLoadingState::Failed(_) => true, _ => false } { "flex" } else {"none"} >
                         <form class="text-black flex flex-col gap-5 " on:submit=on_submit>
                             <Show when=move || auth_input_show_error(input_general_error) >
                                     <div class="text-red-600 text-center">{input_general_error.get()}</div>

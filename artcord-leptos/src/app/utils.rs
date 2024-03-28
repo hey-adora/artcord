@@ -13,6 +13,7 @@ use self::img_resize::GalleryImg;
 
 pub mod img_resize;
 pub mod img_resized;
+pub mod signal_switch;
 
 
 #[derive(Clone, Copy, PartialEq, Debug)]
