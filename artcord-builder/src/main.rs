@@ -218,7 +218,7 @@ async fn sockets(
 ) {
     let connection_tasks = TaskTracker::new();
 
-    let addr = "0.0.0.0:3420";
+    let addr = "0.0.0.0:3001";
     let listener = TcpListener::bind(&addr)
         .await
         .expect("Failed to bind socket addr");
