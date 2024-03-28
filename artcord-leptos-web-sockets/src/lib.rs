@@ -362,6 +362,7 @@ impl<
         global_on_ws_closure_callbacks: StoredValue<HashMap<TempKeyType, Rc<dyn Fn(bool)>>>,
     ) {
         info!("ws({})_global: disconnected", url);
+        Self::run_on_ws_state_callbacks(ws, url, global_on_ws_closure_callbacks);
         //Self::run_on_ws_state_callbacks(ws, url, global_on_ws_closure_callbacks);
         trace!(
             "ws({})_global: disconnect: ws_on_closeclosures left: {}",
