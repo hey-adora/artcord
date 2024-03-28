@@ -3,7 +3,7 @@ use crate::app::global_state::GlobalState;
 use crate::app::pages::register::{auth_input_show_error, AuthLoadingState};
 use artcord_leptos_web_sockets::WsResourcSendResult;
 use artcord_state::message::prod_client_msg::ClientMsg;
-use artcord_state::misc::registration_invalid::MINIMUM_PASSWORD_LENGTH;
+use artcord_state::misc::registration_invalid::{RegistrationInvalidMsg, MINIMUM_PASSWORD_LENGTH};
 use leptos::html::Input;
 use leptos::leptos_dom::log;
 use leptos::*;
@@ -105,16 +105,18 @@ pub fn Login() -> impl IntoView {
         }) {
             Ok(result) => {
                 match result {
-                    WsResourcSendResult::Sent => {
+                    WsResourcSendResult::Sent | WsResourcSendResult::Queued => {
                         loading_state.set(AuthLoadingState::Processing);
                     }
-                    r => {
-                        warn!("login: ws unexpected result: {:?}", r);
+                    WsResourcSendResult::Skipped=> {
+                        warn!("login: ws unexpected result: tried to login twice");
+                        //loading_state.set(AuthLoadingState::Processing);
                     }
                 }
             }   
             Err(err) => {
                 error!("login: ws error: {}", err);
+                loading_state.set(AuthLoadingState::Failed(RegistrationInvalidMsg::new().general(format!("login: failed: {}", err))));
             }         
         }
         //global_state.socket_send(&msg); a

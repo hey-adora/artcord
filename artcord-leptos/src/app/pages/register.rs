@@ -1,12 +1,15 @@
+use std::fmt::format;
+
 use crate::app::components::navbar::Navbar;
 use crate::app::global_state::GlobalState;
 
+use artcord_leptos_web_sockets::WsResourcSendResult;
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::misc::registration_invalid::{RegistrationInvalidMsg, MINIMUM_PASSWORD_LENGTH};
 use leptos::html::Input;
 use leptos::logging::log;
 use leptos::*;
-use tracing::debug;
+use tracing::{debug, error};
 use web_sys::SubmitEvent;
 
 #[derive(Copy, Clone, Debug)]
@@ -92,6 +95,9 @@ pub fn Register() -> impl IntoView {
     let input_password_error: RwSignal<Option<String>> = RwSignal::new(None);
 
 
+    let ws_register = ws.create_singleton();
+
+
     ws.on_ws_state(move |is_connected| {
         if is_connected {
             loading_state.set(AuthLoadingState::Ready);
@@ -140,11 +146,35 @@ pub fn Register() -> impl IntoView {
 
         log!("Submit: '{}' '{}' '{}'", email, password, password_confirm);
 
-        let _msg = ClientMsg::Register { password, email };
+        let msg = ClientMsg::Register { password, email };
+
+
 
         //global_state.socket_send(&msg);
+        let on_recv = move |msg| {
+            loading_state.set(AuthLoadingState::Completed);
+        };
+        match ws_register.send_or_skip(msg, on_recv) {
+            Ok(result) => {
+                match result {
+                    WsResourcSendResult::Sent | WsResourcSendResult::Queued => {
+                        loading_state.set(AuthLoadingState::Processing);
+                    }
+                    WsResourcSendResult::Skipped => {
+                        error!("register: error: tried to register twice");
+                        //loading_state.set(AuthLoadingState::Processing);
+                        //loading_state.set(AuthLoadingState::Failed(RegistrationInvalidMsg::new().general(format!("register: failed: tried to register twice", err))));
+                    }
+                }
+            }
+            Err(err) => {
+                error!("register: error: {}", err);
+                loading_state.set(AuthLoadingState::Failed(RegistrationInvalidMsg::new().general(format!("register: failed: {}", err))));
+            }
+        }
+        
 
-        loading_state.set(AuthLoadingState::Processing);
+        
     };
 
     // create_effect(move |_| {
