@@ -1,8 +1,11 @@
+use crate::database::query::user::COLLECTION_USER_NAME;
 use crate::database::DB;
-use artcord_state::{aggregation::server_msg_img::{AggImg, AggImgFieldName}, model::{img::ImgFieldName, user::UserFieldName}};
+use artcord_state::{
+    aggregation::server_msg_img::{AggImg, AggImgFieldName},
+    model::{img::ImgFieldName, user::UserFieldName},
+};
 use bson::doc;
 use futures::TryStreamExt;
-use crate::database::query::user::COLLECTION_USER_NAME;
 
 impl DB {
     pub async fn img_aggregate_gallery(
@@ -14,7 +17,7 @@ impl DB {
             doc! { "$sort": doc! { ImgFieldName::CreatedAt.name(): -1 } },
             doc! { "$match": doc! { ImgFieldName::CreatedAt.name(): { "$lt": from }, ImgFieldName::Show.name(): true } },
             doc! { "$limit": Some( amount.clamp(25, 10000) as i64) },
-            doc! { "$lookup": doc! { "from": COLLECTION_USER_NAME, "localField": ImgFieldName::UserId.name(), "foreignField": UserFieldName::Id.name(), "as": AggImgFieldName::User.name()} },
+            doc! { "$lookup": doc! { "from": COLLECTION_USER_NAME, "localField": ImgFieldName::UserId.name(), "foreignField": UserFieldName::AuthorId.name(), "as": AggImgFieldName::User.name()} },
             doc! { "$unwind": format!("${}", AggImgFieldName::User.name()) },
         ];
         // println!("{:#?}", pipeline);
@@ -33,3 +36,4 @@ impl DB {
         Ok(send_this)
     }
 }
+

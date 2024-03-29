@@ -1,17 +1,23 @@
+use std::collections::HashMap;
+
 use crate::app::components::navbar::shrink_nav;
 use crate::app::components::navbar::Navbar;
 
 use leptos::html::Main;
 
+use crate::app::global_state::GlobalState;
 use leptos::*;
 use web_sys::Event;
-use crate::app::global_state::GlobalState;
+
+fn testt(a: u32, b: u32, c: u32) {}
 
 #[component]
 pub fn HomePage() -> impl IntoView {
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
     let scroll_el = create_node_ref::<Main>();
     let nav_tran = global_state.nav_tran;
+
+    // testt(a, b, c) ;
 
     let on_scroll = move |_: Event| {
         let Some(scroll_el) = scroll_el.get() else {
@@ -21,10 +27,9 @@ pub fn HomePage() -> impl IntoView {
         shrink_nav(nav_tran, y as u32);
     };
 
-
     view! {
         <main  on:scroll=on_scroll _ref=scroll_el class="flex flex-col ">
-           
+
             <Navbar/>
             <section id="home" class=" px-6 py-6 2xl:px-[6rem] desktop:px-[16rem]  grid grid-rows-[auto_auto_1fr] grid-cols-[1fr]  min-h-[100svh] " >
                 <div class="h-[4rem] md:h-[6rem]"></div>

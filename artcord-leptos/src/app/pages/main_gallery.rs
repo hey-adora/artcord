@@ -2,13 +2,13 @@ use crate::app::components::navbar::{shrink_nav, Navbar};
 use crate::app::global_state::GlobalState;
 use crate::app::utils::img_resize::{calc_fit_count, resize_imgs, NEW_IMG_HEIGHT};
 use crate::app::utils::img_resized::ServerMsgImgResized;
-use crate::app::utils::{
-    LoadingNotFound, SelectedImg, 
-};
+use crate::app::utils::{LoadingNotFound, SelectedImg};
 use artcord_leptos_web_sockets::{WsResourceResult, WsRuntime};
 use artcord_state::aggregation::server_msg_img::AggImg;
 use artcord_state::message::prod_client_msg::ClientMsg;
-use artcord_state::message::prod_server_msg::{MainGalleryResponse, ServerMsg, UserGalleryResponse};
+use artcord_state::message::prod_server_msg::{
+    MainGalleryResponse, ServerMsg, UserGalleryResponse,
+};
 use chrono::Utc;
 use leptos::ev::resize;
 use leptos::html::Section;
@@ -18,7 +18,6 @@ use leptos_router::use_location;
 use leptos_use::{use_event_listener, use_window};
 use tracing::{debug, error, trace};
 use web_sys::Event;
-
 
 #[derive(Copy, Clone, Debug)]
 pub struct GalleryPageState {
@@ -52,10 +51,11 @@ pub fn MainGalleryPage() -> impl IntoView {
             return;
         };
 
-        let last = imgs.with_untracked(|imgs| imgs.last().map(|img|img.created_at)).unwrap_or(Utc::now().timestamp_millis());
+        let last = imgs
+            .with_untracked(|imgs| imgs.last().map(|img| img.created_at))
+            .unwrap_or(Utc::now().timestamp_millis());
         let client_height = section.client_height();
         let client_width = section.client_width();
-
 
         let msg = ClientMsg::GalleryInit {
             amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
@@ -69,14 +69,16 @@ pub fn MainGalleryPage() -> impl IntoView {
                         ServerMsg::MainGallery(response) => {
                             match response {
                                 MainGalleryResponse::Imgs(new_imgs) => {
-                                    if new_imgs.is_empty() && loaded_sig.get_untracked() == LoadingNotFound::Loading {
+                                    if new_imgs.is_empty()
+                                        && loaded_sig.get_untracked() == LoadingNotFound::Loading
+                                    {
                                         loaded_sig.set(LoadingNotFound::NotFound);
                                     } else {
                                         let new_imgs = new_imgs
                                             .iter()
                                             .map(|img| ServerMsgImgResized::from(img.to_owned()))
                                             .collect::<Vec<ServerMsgImgResized>>();
-                            
+
                                         imgs.update(|imgs| {
                                             imgs.extend(new_imgs);
                                             let document = document();
@@ -88,7 +90,7 @@ pub fn MainGalleryPage() -> impl IntoView {
                                             let width = gallery_section.client_width() as u32;
                                             resize_imgs(NEW_IMG_HEIGHT, width, imgs);
                                         });
-                            
+
                                         if loaded_sig.get_untracked() != LoadingNotFound::Loaded {
                                             loaded_sig.set(LoadingNotFound::Loaded);
                                         }
@@ -99,10 +101,10 @@ pub fn MainGalleryPage() -> impl IntoView {
                         ServerMsg::Error => {
                             error!("main_gallery: internal server error");
                             loaded_sig.set(LoadingNotFound::Error);
-                        },
+                        }
                         msg => {
                             error!("main_gallery: received wrong msg: {:#?}", msg);
-                                loaded_sig.set(LoadingNotFound::Error);
+                            loaded_sig.set(LoadingNotFound::Error);
                         }
                     }
                 }
@@ -126,7 +128,7 @@ pub fn MainGalleryPage() -> impl IntoView {
         selected_img.set(Some(SelectedImg {
             org_url: img.display_high.clone(),
             author_name: img.user.name.clone(),
-            author_pfp: format!("/assets/gallery/pfp_{}.webp", img.user.id.clone()),
+            author_pfp: format!("/assets/gallery/pfp_{}.webp", img.user.author_id.clone()),
             author_id: img.user_id.clone(),
             width: img.width,
             height: img.height,
@@ -134,7 +136,6 @@ pub fn MainGalleryPage() -> impl IntoView {
     };
 
     let section_scroll = move |_: Event| {
-
         let Some(last) = imgs.with_untracked(|imgs| match imgs.last() {
             Some(l) => Some(l.created_at),
             None => None,

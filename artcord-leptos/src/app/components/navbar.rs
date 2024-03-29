@@ -1,11 +1,11 @@
 use crate::app::global_state::{AuthState, GlobalState};
 use crate::app::pages::register::AuthLoadingState;
+use cfg_if::cfg_if;
 use gloo_net::http::Request;
 use leptos::leptos_dom::log;
 use leptos::*;
 use leptos_router::use_location;
 use web_sys::MouseEvent;
-use cfg_if::cfg_if;
 
 use crate::app::utils::{LoadingNotFound, ScrollSection};
 
@@ -57,7 +57,7 @@ pub fn Navbar() -> impl IntoView {
             && global_state.page_profile.gallery_loaded.get() == LoadingNotFound::Loaded
         {
             if let Some(user) = global_state.page_profile.user.get() {
-                let pfp_url = format!("/assets/gallery/pfp_{}.webp", user.id.clone());
+                let pfp_url = format!("/assets/gallery/pfp_{}.webp", user.author_id.clone());
                 //  log!("wow1");
                 return view! {
                     <div class="flex gap-4">
@@ -134,8 +134,8 @@ pub fn Navbar() -> impl IntoView {
                             <li><a on:click=move |_| { global_state.nav_open.set(false); } href="/gallery" class=move || { format!( " w-[3.5rem] cursor-pointer border-b-[0.30rem] transition duration-300 font-bold {} ", if section.get() == ScrollSection::Gallery || section.get() == ScrollSection::UserProfile { "border-low-purple font-bold" } else { "border-transparent hover:border-low-purple/40 text-low-purple/60 hover:text-low-purple " } ) } >"Gallery"</a></li>
                         </ul>
                     </div>
-        
-                   
+
+
                     {
                         move || {
                             if global_state.nav_open.get() == false {
@@ -155,14 +155,14 @@ pub fn Navbar() -> impl IntoView {
                                                 "Register"
                                             </a>
                                         }>
-                                            <a href=move || format!("/user/{}", global_state.page_profile.user.get().and_then(|u|Some(u.id)).unwrap_or_default()) class="hidden h-12 sm:flex gap-2 items-center text-[1rem] font-black bg-gradient-to-br from-first-one to-second-one hover:to-dark-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] transition-colors duration-300 " >
+                                            <a href=move || format!("/user/{}", global_state.page_profile.user.get().and_then(|u|Some(u.author_id)).unwrap_or_default()) class="hidden h-12 sm:flex gap-2 items-center text-[1rem] font-black bg-gradient-to-br from-first-one to-second-one hover:to-dark-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] transition-colors duration-300 " >
                                                 "Profile"
                                             </a>
                                             <button href="/profile" on:click=logout class="hidden h-12 sm:flex gap-2 items-center text-[1rem] font-black bg-gradient-to-br from-first-one to-second-one hover:to-dark-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] transition-colors duration-300 " >
                                                 "Logout"
                                             </button>
                                         </Show>
-        
+
                                         <button class="block sm:hidden h-[48px]" on:click=on_nav_click >
                                             <img class="    " src="/assets/burger.svg" alt=""/>
                                         </button>
@@ -174,7 +174,7 @@ pub fn Navbar() -> impl IntoView {
                             }
                         }
                     }
-        
+
                 </nav>
             }
         } else {
@@ -205,8 +205,8 @@ pub fn Navbar() -> impl IntoView {
                             <li><a on:click=move |_| { global_state.nav_open.set(false); } href="/gallery" class=move || { format!( " w-[3.5rem] cursor-pointer border-b-[0.30rem] transition duration-300 font-bold {} ", if section.get() == ScrollSection::Gallery || section.get() == ScrollSection::UserProfile { "border-low-purple font-bold" } else { "border-transparent hover:border-low-purple/40 text-low-purple/60 hover:text-low-purple " } ) } >"Gallery"</a></li>
                         </ul>
                     </div>
-        
-                   
+
+
                     {
                         move || {
                             if global_state.nav_open.get() == false {
@@ -218,7 +218,7 @@ pub fn Navbar() -> impl IntoView {
                                             <img class="h-8" src="/assets/discord.svg"/>
                                             "Join"
                                         </a>
-        
+
                                         <button class="block sm:hidden h-[48px]" on:click=on_nav_click >
                                             <img class="    " src="/assets/burger.svg" alt=""/>
                                         </button>
@@ -230,11 +230,9 @@ pub fn Navbar() -> impl IntoView {
                             }
                         }
                     }
-        
+
                 </nav>
             }
         }
     }
-
-   
 }

@@ -2,13 +2,27 @@ use crate::database::DB;
 use artcord_state::model::allowed_guild::{AllowedGuild, AllowedGuildFieldName};
 use bson::doc;
 use futures::TryStreamExt;
-use mongodb::{Collection, Database};
+use mongodb::{options::IndexOptions, Collection, Database, IndexModel};
 
 const COLLECTION_ALLOWED_GUILD_NAME: &'static str = "allowed_guild";
 
 impl DB {
     pub async fn init_allowed_guild(database: &Database) -> Collection<AllowedGuild> {
-        database.collection::<AllowedGuild>(COLLECTION_ALLOWED_GUILD_NAME)
+        let opts = IndexOptions::builder().unique(true).build();
+        let index = IndexModel::builder()
+            .keys(doc! { AllowedGuildFieldName::GuildId.name(): -1, AllowedGuildFieldName::Name.name(): -1 })
+            .options(opts)
+            .build();
+
+        let collection = database.collection::<AllowedGuild>(COLLECTION_ALLOWED_GUILD_NAME);
+
+        collection
+            .create_index(index, None)
+            .await
+            .expect("Failed to create collection index.");
+
+
+        collection
     }
 }
 

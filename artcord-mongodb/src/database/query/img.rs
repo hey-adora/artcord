@@ -3,13 +3,26 @@ use std::sync::Arc;
 use crate::database::DB;
 use artcord_state::model::img::{Img, ImgFieldName};
 use bson::{doc, Document};
-use mongodb::{Collection, Database};
+use mongodb::{options::IndexOptions, Collection, Database, IndexModel};
 
 const COLLECTION_IMG_NAME: &'static str = "img";
 
 impl DB {
     pub async fn init_img(database: &Database) -> Collection<Img> {
-        database.collection::<Img>(COLLECTION_IMG_NAME)
+        let opts = IndexOptions::builder().unique(true).build();
+        let index = IndexModel::builder()
+            .keys(doc! { ImgFieldName::Id.name(): -1 })
+            .options(opts)
+            .build();
+
+        let collection = database.collection::<Img>(COLLECTION_IMG_NAME);
+
+        collection
+        .create_index(index, None)
+        .await
+        .expect("Failed to create collection index.");
+
+        collection
     }
 }
 

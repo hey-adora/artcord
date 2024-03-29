@@ -5,9 +5,9 @@ use chrono::Utc;
 use leptos::*;
 use leptos::{window, RwSignal, SignalGetUntracked};
 use std::fmt::Debug;
+use tracing::{debug, trace};
 use wasm_bindgen::JsValue;
 use web_sys::Location;
-use tracing::{trace, debug};
 
 use super::img_resize::GalleryImg;
 
@@ -47,7 +47,7 @@ impl Default for ServerMsgImgResized {
             ),
             display_high: String::from("/assets/gallery/org_2552bd2db66978a9b3675721e95d1cbd.png"),
             user: User {
-                id: String::from("id"),
+                author_id: String::from("id"),
                 guild_id: String::from("1159766826620817419"),
                 name: String::from("name"),
                 pfp_hash: Some(String::from("pfp_hash")),
@@ -73,7 +73,6 @@ impl Default for ServerMsgImgResized {
 }
 
 impl GalleryImg for ServerMsgImgResized {
- 
     fn set_pos(&mut self, left: f32, top: f32, new_width: f32, new_height: f32) {
         self.left.set(left);
         self.top.set(top);

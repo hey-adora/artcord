@@ -35,7 +35,5 @@ impl DB {
 
         Ok(acc.inserted_id.to_string())
     }
-
-  
-
 }
+

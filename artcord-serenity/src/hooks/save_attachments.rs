@@ -291,7 +291,7 @@ pub async fn save_user(
         }
     } else {
         let user = User {
-            id: format!("{}", user_id),
+            author_id: format!("{}", user_id),
             guild_id: guild_id.to_string(),
             name,
             pfp_hash,

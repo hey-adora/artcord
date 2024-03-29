@@ -1,7 +1,10 @@
-use artcord_state::{aggregation::server_msg_img::{AggImg, AggImgFieldName}, model::{img::ImgFieldName, user::UserFieldName}};
+use crate::database::query::user::COLLECTION_USER_NAME;
+use artcord_state::{
+    aggregation::server_msg_img::{AggImg, AggImgFieldName},
+    model::{img::ImgFieldName, user::UserFieldName},
+};
 use bson::doc;
 use futures::TryStreamExt;
-use crate::database::query::user::COLLECTION_USER_NAME;
 
 use crate::database::DB;
 
@@ -14,7 +17,7 @@ impl DB {
     ) -> Result<Option<Vec<AggImg>>, mongodb::error::Error> {
         let user = self
             .collection_user
-            .find_one(doc! {UserFieldName::Id.name(): user_id}, None)
+            .find_one(doc! {UserFieldName::AuthorId.name(): user_id}, None)
             .await?;
         if let None = user {
             return Ok(None);
@@ -24,7 +27,7 @@ impl DB {
             doc! { "$sort": doc! { ImgFieldName::CreatedAt.name(): -1 } },
             doc! { "$match": doc! { ImgFieldName::CreatedAt.name(): { "$lt": from }, ImgFieldName::Show.name(): true, ImgFieldName::UserId.name(): user_id } },
             doc! { "$limit": Some( amount.clamp(25, 10000) as i64) },
-            doc! { "$lookup": doc! { "from": COLLECTION_USER_NAME, "localField": ImgFieldName::UserId.name(), "foreignField": UserFieldName::Id.name(), "as": AggImgFieldName::User.name()} },
+            doc! { "$lookup": doc! { "from": COLLECTION_USER_NAME, "localField": ImgFieldName::UserId.name(), "foreignField": UserFieldName::AuthorId.name(), "as": AggImgFieldName::User.name()} },
             doc! { "$unwind": format!("${}", AggImgFieldName::User.name()) },
         ];
         // println!("{:#?}", pipeline);
@@ -49,3 +52,4 @@ impl DB {
         Ok(Some(send_this))
     }
 }
+

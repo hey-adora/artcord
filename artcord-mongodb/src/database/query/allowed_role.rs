@@ -2,13 +2,26 @@ use crate::database::DB;
 use artcord_state::model::allowed_role::{AllowedRole, AllowedRoleFieldName};
 use bson::doc;
 use futures::TryStreamExt;
-use mongodb::{Collection, Database};
+use mongodb::{options::IndexOptions, Collection, Database, IndexModel};
 
 const COLLECTION_ALLOWED_ROLE_NAME: &'static str = "allowed_role";
 
 impl DB {
     pub async fn init_allowed_role(database: &Database) -> Collection<AllowedRole> {
-        database.collection::<AllowedRole>(COLLECTION_ALLOWED_ROLE_NAME)
+        let opts = IndexOptions::builder().unique(true).build();
+        let index = IndexModel::builder()
+            .keys(doc! { AllowedRoleFieldName::GuildId.name(): -1, AllowedRoleFieldName::RoleId.name(): -1, AllowedRoleFieldName::Feature.name(): -1 })
+            .options(opts)
+            .build();
+
+        let collection = database.collection::<AllowedRole>(COLLECTION_ALLOWED_ROLE_NAME);
+
+        collection
+        .create_index(index, None)
+        .await
+        .expect("Failed to create collection index.");
+
+        collection
     }
 }
 

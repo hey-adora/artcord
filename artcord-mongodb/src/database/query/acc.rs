@@ -12,7 +12,7 @@ impl DB {
             .keys(doc! { AccFieldName::Email.name(): -1 })
             .options(opts)
             .build();
-        
+
         let collection_acc = database.collection::<Acc>(COLLECTION_ACC_NAME);
         collection_acc
             .create_index(index, None)
@@ -59,3 +59,4 @@ impl DB {
         Ok(result.inserted_id.to_string())
     }
 }
+

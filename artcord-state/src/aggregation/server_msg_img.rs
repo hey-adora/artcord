@@ -3,7 +3,6 @@
 use chrono::Utc;
 use field_types::FieldName;
 
-
 use crate::{misc::img_quality::ImgQuality, model::user::User};
 
 #[derive(Debug, PartialEq, Clone, serde::Serialize, serde::Deserialize, FieldName)]
@@ -27,7 +26,7 @@ impl Default for AggImg {
     fn default() -> Self {
         Self {
             user: User {
-                id: String::from("id"),
+                author_id: String::from("id"),
                 guild_id: String::from("1159766826620817419"),
                 name: String::from("name"),
                 pfp_hash: Some(String::from("pfp_hash")),

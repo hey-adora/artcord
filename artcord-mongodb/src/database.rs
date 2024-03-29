@@ -1,4 +1,3 @@
-
 use artcord_state::model::acc::Acc;
 use artcord_state::model::acc_session::AccSession;
 use artcord_state::model::allowed_channel::AllowedChannel;
@@ -6,13 +5,13 @@ use artcord_state::model::allowed_guild::AllowedGuild;
 use artcord_state::model::allowed_role::AllowedRole;
 use artcord_state::model::auto_reaction::AutoReaction;
 use artcord_state::model::img::Img;
+use artcord_state::model::migration::Migration;
 use artcord_state::model::user::User;
 use cfg_if::cfg_if;
 
+use mongodb::options::ClientOptions;
 
-use mongodb::options::{ClientOptions};
-
-use mongodb::{Client};
+use mongodb::Client;
 
 use thiserror::Error;
 use tracing::{info, trace};
@@ -31,13 +30,11 @@ pub struct DB {
     collection_auto_reaction: mongodb::Collection<AutoReaction>,
     collection_acc: mongodb::Collection<Acc>,
     collection_acc_session: mongodb::Collection<AccSession>,
+    collection_migration: mongodb::Collection<Migration>,
 }
 
-
-
-
 const DATABASE_NAME: &'static str = "artcord";
- 
+
 impl DB {
     pub async fn new(mongo_url: impl AsRef<str>) -> Self {
         cfg_if! {
@@ -46,16 +43,23 @@ impl DB {
             } else {
                 info!("Connecting to database...");
             }
-        } 
-        
+        }
 
         let mut client_options = ClientOptions::parse(mongo_url).await.unwrap();
         client_options.app_name = Some("My App".to_string());
         let client = Client::with_options(client_options).unwrap();
-    
+
         let database = client.database(DATABASE_NAME);
-        let collection_img = DB::init_img(&database).await;
+        let collection_migration = DB::init_migration(&database).await;
         let collection_user = DB::init_user(&database).await;
+
+        Self::migrate(&database).await.expect("migration failed");
+
+        DB::init_migration_index(&collection_migration).await;
+        DB::init_user_index(&collection_user).await;
+
+        panic!("STOP");
+        let collection_img = DB::init_img(&database).await;
         let collection_allowed_role = DB::init_allowed_role(&database).await;
         let collection_allowed_channel = DB::init_allowed_channel(&database).await;
         let collection_allowed_guild = DB::init_allowed_guild(&database).await;
@@ -74,6 +78,7 @@ impl DB {
             collection_auto_reaction,
             collection_acc,
             collection_acc_session,
+            collection_migration,
         }
     }
 }

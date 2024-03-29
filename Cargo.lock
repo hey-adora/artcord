@@ -707,6 +707,7 @@ dependencies = [
  "serenity",
  "thiserror",
  "tokio",
+ "tracing",
  "webp",
 ]
 

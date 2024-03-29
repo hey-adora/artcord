@@ -1,7 +1,7 @@
 use artcord_state::model::allowed_channel::{AllowedChannel, AllowedChannelFieldName};
 use bson::doc;
 use futures::TryStreamExt;
-use mongodb::{Collection, Database};
+use mongodb::{options::IndexOptions, Collection, Database, IndexModel};
 
 use crate::database::DB;
 
@@ -9,8 +9,21 @@ const COLLECTION_ALLOWED_CHANNEL_NAME: &'static str = "allowed_channel";
 
 impl DB {
     pub async fn init_allowed_channel(database: &Database) -> Collection<AllowedChannel> {
-        database.collection::<AllowedChannel>(COLLECTION_ALLOWED_CHANNEL_NAME)
-   }
+        let opts = IndexOptions::builder().unique(true).build();
+        let index = IndexModel::builder()
+            .keys(doc! { AllowedChannelFieldName::GuildId.name(): -1, AllowedChannelFieldName::ChannelId.name(): -1, AllowedChannelFieldName::ChannelId.name(): -1 })
+            .options(opts)
+            .build();
+
+        let collection = database.collection::<AllowedChannel>(COLLECTION_ALLOWED_CHANNEL_NAME);
+
+        collection
+            .create_index(index, None)
+            .await
+            .expect("Failed to create collection index.");
+
+        collection
+    }
 }
 
 impl DB {
@@ -41,7 +54,7 @@ impl DB {
 
         Ok(result.inserted_id.to_string())
     }
-  
+
     pub async fn allowed_channel_find_all(
         &self,
         guild_id: &str,
@@ -71,3 +84,4 @@ impl DB {
         Ok(result.deleted_count)
     }
 }
+
