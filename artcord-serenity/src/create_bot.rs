@@ -8,6 +8,7 @@ use serenity::model::id::{ChannelId, GuildId, MessageId};
 use serenity::model::prelude::Interaction;
 use serenity::prelude::{GatewayIntents, TypeMapKey};
 use serenity::{async_trait, Client};
+use tracing::error;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -98,13 +99,20 @@ impl TypeMapKey for ReactionQueue {
 }
 
 
-pub async fn create_bot(db: Arc<DB>, token: &str, gallery_root_dir: &str) -> serenity::Client {
+pub async fn create_bot(db: Arc<DB>, token: &str, gallery_root_dir: &str, default_guild: Option<String>) -> serenity::Client {
+    if let Some(default_guild) = default_guild{
+        db.allowed_guild_insert_default(default_guild).await.expect("Failed to insert default guild");
+    } else {
+        error!("discord bot: missing DISCORD_DEFAULT_GUILD id in .env, bot will ignore all commands that are not included in database.");
+    }
+
     let framework = StandardFramework::new();
 
     let intents = GatewayIntents::GUILD_MESSAGES
         | GatewayIntents::DIRECT_MESSAGES
         | GatewayIntents::GUILD_MESSAGE_REACTIONS
         | GatewayIntents::MESSAGE_CONTENT;
+
     let client = Client::builder(token, intents)
         .event_handler(BotHandler)
         .framework(framework)
@@ -112,6 +120,7 @@ pub async fn create_bot(db: Arc<DB>, token: &str, gallery_root_dir: &str) -> ser
         .expect("Error creating client");
 
     let reaction_queue = Arc::new(RwLock::new(HashMap::new()));
+
     {
         let mut data = client.data.write().await;
         data.insert::<ArcDB>(db);
