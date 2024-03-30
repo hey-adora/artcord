@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, FieldName)]
 pub struct AllowedChannel {
+    pub id: String,
     pub guild_id: String,
     pub name: String,
     pub channel_id: String,

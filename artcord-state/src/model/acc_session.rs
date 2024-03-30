@@ -1,5 +1,5 @@
 // use crate::message::server_msg::ServerMsg;
-use bson::oid::ObjectId;
+use bson::{oid::ObjectId, Uuid};
 use chrono::Utc;
 use field_types::FieldName;
 use serde::{Deserialize, Serialize};
@@ -20,7 +20,7 @@ pub struct AccSession {
 impl AccSession {
     pub fn new(acc_id: String, ip: String, agent: String, token: String) -> Self {
         Self {
-            id: ObjectId::new().to_hex(),
+            id: uuid::Uuid::new_v4().to_string(),
             acc_id,
             ip,
             agent,

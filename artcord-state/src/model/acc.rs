@@ -1,5 +1,5 @@
 // use crate::message::server_msg::ServerMsg;
-use bson::oid::ObjectId;
+use bson::{oid::ObjectId, Uuid};
 use chrono::Utc;
 use field_types::FieldName;
 use serde::{Deserialize, Serialize};
@@ -49,7 +49,7 @@ impl Display for Role {
 impl Acc {
     pub fn new(email: &str, password: &str, email_verification_code: &str) -> Acc {
         Acc {
-            id: ObjectId::new().to_hex(),
+            id: uuid::Uuid::new_v4().to_string(),
             email: email.to_string(),
             verified_email: false,
             email_verification_code: email_verification_code.to_string(),

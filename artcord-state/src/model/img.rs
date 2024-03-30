@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize, Clone, FieldName)]
 pub struct Img {
     pub id: String,
+    pub msg_id: String,
     pub show: bool,
     pub guild_id: String,
     pub user_id: String,

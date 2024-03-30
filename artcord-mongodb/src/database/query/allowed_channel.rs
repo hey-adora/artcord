@@ -11,7 +11,7 @@ impl DB {
     pub async fn init_allowed_channel(database: &Database) -> Collection<AllowedChannel> {
         let opts = IndexOptions::builder().unique(true).build();
         let index = IndexModel::builder()
-            .keys(doc! { AllowedChannelFieldName::GuildId.name(): -1, AllowedChannelFieldName::ChannelId.name(): -1, AllowedChannelFieldName::ChannelId.name(): -1 })
+            .keys(doc! { AllowedChannelFieldName::GuildId.name(): -1, AllowedChannelFieldName::ChannelId.name(): -1, AllowedChannelFieldName::Feature.name(): -1 })
             .options(opts)
             .build();
 
@@ -84,4 +84,3 @@ impl DB {
         Ok(result.deleted_count)
     }
 }
-

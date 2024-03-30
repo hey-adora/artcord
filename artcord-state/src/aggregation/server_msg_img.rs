@@ -1,3 +1,4 @@
+use bson::Uuid;
 // use crate::img_quality::ImgQuality;
 // use artcord_state::model::user::User;
 use chrono::Utc;
@@ -26,6 +27,7 @@ impl Default for AggImg {
     fn default() -> Self {
         Self {
             user: User {
+                id: uuid::Uuid::new_v4().to_string(),
                 author_id: String::from("id"),
                 guild_id: String::from("1159766826620817419"),
                 name: String::from("name"),

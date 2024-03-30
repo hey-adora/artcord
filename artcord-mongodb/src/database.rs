@@ -50,15 +50,12 @@ impl DB {
         let client = Client::with_options(client_options).unwrap();
 
         let database = client.database(DATABASE_NAME);
-        let collection_migration = DB::init_migration(&database).await;
-        let collection_user = DB::init_user(&database).await;
 
         Self::migrate(&database).await.expect("migration failed");
 
-        DB::init_migration_index(&collection_migration).await;
-        DB::init_user_index(&collection_user).await;
-
-        panic!("STOP");
+        // panic!("STOP");
+        let collection_migration = DB::init_migration(&database).await;
+        let collection_user = DB::init_user(&database).await;
         let collection_img = DB::init_img(&database).await;
         let collection_allowed_role = DB::init_allowed_role(&database).await;
         let collection_allowed_channel = DB::init_allowed_channel(&database).await;

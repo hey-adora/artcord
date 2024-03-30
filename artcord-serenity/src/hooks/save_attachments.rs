@@ -291,6 +291,7 @@ pub async fn save_user(
         }
     } else {
         let user = User {
+            id: uuid::Uuid::new_v4().to_string(),
             author_id: format!("{}", user_id),
             guild_id: guild_id.to_string(),
             name,
@@ -387,8 +388,8 @@ pub async fn save_attachment(
         }
 
         let msg_id = msg_id.to_string();
-        if found_img.id != msg_id {
-            update.insert(ImgFieldName::Id.name(), msg_id);
+        if found_img.msg_id != msg_id {
+            update.insert(ImgFieldName::MsgId.name(), msg_id);
         }
 
         // if !found_img.show {
@@ -423,7 +424,8 @@ pub async fn save_attachment(
             .decode()?;
 
         let img = Img {
-            id: format!("{}", msg_id),
+            id: uuid::Uuid::new_v4().to_string(),
+            msg_id: format!("{}", msg_id),
             show: true,
             guild_id: guild_id.to_string(),
             channel_id: channel_id.to_string(),

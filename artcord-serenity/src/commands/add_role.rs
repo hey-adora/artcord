@@ -38,14 +38,12 @@ pub async fn run(
 
     is_valid_role_feature(feature_option)?;
 
-    let allowed_role = AllowedRole {
-        role_id: role_option.id.to_string(),
-        guild_id: guild_id.to_string(),
-        name: role_option.name.clone(),
-        feature: (*feature_option).clone(),
-        created_at: Utc::now().timestamp_millis(),
-        modified_at: Utc::now().timestamp_millis(),
-    };
+    let allowed_role = AllowedRole::new(
+        role_option.id.to_string(),
+        guild_id.to_string(),
+        role_option.name.clone(),
+        (*feature_option).clone(),
+    );
 
     db.allowed_role_insert_one(allowed_role).await?;
 

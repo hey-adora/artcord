@@ -6,6 +6,7 @@ use leptos::*;
 use leptos::{window, RwSignal, SignalGetUntracked};
 use std::fmt::Debug;
 use tracing::{debug, trace};
+use uuid::Uuid;
 use wasm_bindgen::JsValue;
 use web_sys::Location;
 
@@ -47,6 +48,7 @@ impl Default for ServerMsgImgResized {
             ),
             display_high: String::from("/assets/gallery/org_2552bd2db66978a9b3675721e95d1cbd.png"),
             user: User {
+                id: Uuid::new_v4().to_string(),
                 author_id: String::from("id"),
                 guild_id: String::from("1159766826620817419"),
                 name: String::from("name"),

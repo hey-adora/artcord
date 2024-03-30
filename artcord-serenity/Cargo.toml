@@ -20,3 +20,4 @@ rand = "0.8.5"
 thiserror = "1.0.58"
 serenity = "0.11.7"
 tracing = { version = "0.1.40" }
+uuid = { version = "1.8.0", features = ["v4"] }

@@ -7,20 +7,31 @@ pub const COLLECTION_USER_NAME: &'static str = "user";
 
 impl DB {
     pub async fn init_user(database: &Database) -> Collection<User> {
-        database.collection::<User>(COLLECTION_USER_NAME)
-    }
+        let (index1, index2) = (
+            {
+                let opts = IndexOptions::builder().unique(true).build();
+                IndexModel::builder()
+                    .keys(doc! { UserFieldName::Id.name(): -1 })
+                    .options(opts)
+                    .build()
+            },
+            {
+                let opts = IndexOptions::builder().unique(true).build();
+                IndexModel::builder()
+                    .keys(doc! { UserFieldName::AuthorId.name(): -1 })
+                    .options(opts)
+                    .build()
+            },
+        );
 
-    pub async fn init_user_index(collection: &Collection<User>) {
-        let opts = IndexOptions::builder().unique(true).build();
-        let index = IndexModel::builder()
-            .keys(doc! { UserFieldName::AuthorId.name(): -1 })
-            .options(opts)
-            .build();
+        let collection = database.collection::<User>(COLLECTION_USER_NAME);
 
         collection
-            .create_index(index, None)
+            .create_indexes([index1, index2], None)
             .await
             .expect("Failed to create collection index.");
+
+        collection
     }
 }
 
@@ -62,4 +73,3 @@ impl DB {
         Ok(result)
     }
 }
-

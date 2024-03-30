@@ -23,6 +23,7 @@ pub async fn run(
     is_valid_channel_feature(feature_option)?;
 
     let allowed_channel = AllowedChannel {
+        id: uuid::Uuid::new_v4().to_string(),
         channel_id: channel_option.id.to_string(),
         guild_id: guild_id.to_string(),
         name: channel_option.name.clone().unwrap_or(String::from("none")),

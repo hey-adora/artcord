@@ -2,11 +2,15 @@ use std::num::ParseIntError;
 
 use artcord_state::model::auto_reaction::AutoReaction;
 use chrono::Utc;
-use serenity::model::{channel::ReactionType, id::EmojiId, prelude::{
-    application_command::{CommandDataOption, CommandDataOptionValue},
-    channel::PartialChannel,
-    guild::Role,
-}};
+use serenity::model::{
+    channel::ReactionType,
+    id::EmojiId,
+    prelude::{
+        application_command::{CommandDataOption, CommandDataOptionValue},
+        channel::PartialChannel,
+        guild::Role,
+    },
+};
 use thiserror::Error;
 
 use super::hooks::save_attachments::SaveAttachmentsError;
@@ -28,8 +32,8 @@ pub mod show_guilds;
 pub mod show_roles;
 pub mod sync;
 pub mod test;
-pub mod who;
 pub mod verify;
+pub mod who;
 
 pub const FEATURE_GALLERY: &str = "gallery";
 pub const FEATURE_COMMANDER: &str = "commander";
@@ -112,7 +116,6 @@ pub enum CommandError {
     Request(#[from] reqwest::Error),
 }
 
-
 macro_rules! get_option {
     ($kind:ident, $rt:ty, $name: ident, $err: expr) => {
         pub fn $name(option: Option<&CommandDataOption>) -> Result<&$rt, CommandError> {
@@ -161,7 +164,6 @@ get_option!(
     String::from("Role option was not provided.")
 );
 
-
 pub fn to_reaction_type(auto_reaction: AutoReaction) -> Result<ReactionType, ToReactionTypeError> {
     let reaction: ReactionType = if let Some(unicode) = auto_reaction.unicode {
         ReactionType::Unicode(unicode)
@@ -190,28 +192,18 @@ pub fn from_reaction_type(
 ) -> Result<AutoReaction, FromReactionTypeError> {
     let auto_reaction = match reaction_type {
         serenity::model::prelude::ReactionType::Unicode(s) => {
-            let auto_reaction = AutoReaction {
-                guild_id: guild_id.to_string(),
-                unicode: Some(s),
-                emoji_id: None,
-                name: None,
-                animated: false,
-                modified_at: Utc::now().timestamp_millis(),
-                created_at: Utc::now().timestamp_millis(),
-            };
+            let auto_reaction = AutoReaction::new(guild_id.to_string(), Some(s), None, None, false);
 
             Ok(auto_reaction)
         }
         serenity::model::prelude::ReactionType::Custom { animated, id, name } => {
-            let auto_reaction = AutoReaction {
-                guild_id: guild_id.to_string(),
-                unicode: None,
-                emoji_id: Some(id.0.to_string()),
+            let auto_reaction = AutoReaction::new(
+                guild_id.to_string(),
+                None,
+                Some(id.0.to_string()),
                 name,
                 animated,
-                modified_at: Utc::now().timestamp_millis(),
-                created_at: Utc::now().timestamp_millis(),
-            };
+            );
 
             Ok(auto_reaction)
         }
@@ -228,28 +220,19 @@ pub fn from_reaction_type_vec(
     for reaction in reaction_types {
         let auto_reaction = match reaction {
             serenity::model::prelude::ReactionType::Unicode(s) => {
-                let auto_reaction = AutoReaction {
-                    guild_id: guild_id.to_string(),
-                    unicode: Some(s),
-                    emoji_id: None,
-                    name: None,
-                    animated: false,
-                    modified_at: Utc::now().timestamp_millis(),
-                    created_at: Utc::now().timestamp_millis(),
-                };
+                let auto_reaction =
+                    AutoReaction::new(guild_id.to_string(), Some(s), None, None, false);
 
                 Ok(auto_reaction)
             }
             serenity::model::prelude::ReactionType::Custom { animated, id, name } => {
-                let auto_reaction = AutoReaction {
-                    guild_id: guild_id.to_string(),
-                    unicode: None,
-                    emoji_id: Some(id.0.to_string()),
+                let auto_reaction = AutoReaction::new(
+                    guild_id.to_string(),
+                    None,
+                    Some(id.0.to_string()),
                     name,
                     animated,
-                    modified_at: Utc::now().timestamp_millis(),
-                    created_at: Utc::now().timestamp_millis(),
-                };
+                );
 
                 Ok(auto_reaction)
             }
@@ -288,4 +271,3 @@ pub enum ToReactionTypeError {
     #[error("Failed to parse id: {0}")]
     ParseNumber(#[from] ParseIntError),
 }
-

@@ -18,9 +18,9 @@ impl DB {
         let collection = database.collection::<Img>(COLLECTION_IMG_NAME);
 
         collection
-        .create_index(index, None)
-        .await
-        .expect("Failed to create collection index.");
+            .create_index(index, None)
+            .await
+            .expect("Failed to create collection index.");
 
         collection
     }
@@ -53,7 +53,7 @@ impl DB {
         let result = self
             .collection_img
             .update_one(
-                doc! { ImgFieldName::GuildId.name(): guild_id.to_string(), ImgFieldName::Id.name(): msg_id.to_string() },
+                doc! { ImgFieldName::GuildId.name(): guild_id.to_string(), ImgFieldName::MsgId.name(): msg_id.to_string() },
                 doc! { "$set": { ImgFieldName::Show.name(): false } },
                 None,
             )

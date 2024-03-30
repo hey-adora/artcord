@@ -14,20 +14,20 @@ const COLLECTION_MIGRATION_NAME: &'static str = "migration";
 
 impl DB {
     pub async fn init_migration(database: &Database) -> Collection<Migration> {
-        database.collection::<Migration>(COLLECTION_MIGRATION_NAME)
-    }
-
-    pub async fn init_migration_index(collection: &Collection<Migration>) {
         let opts = IndexOptions::builder().unique(true).build();
         let index = IndexModel::builder()
             .keys(doc! { MigrationFieldName::Name.name(): -1 })
             .options(opts)
             .build();
 
+        let collection = database.collection::<Migration>(COLLECTION_MIGRATION_NAME);
+
         collection
             .create_index(index, None)
             .await
             .expect("Failed to create collection index.");
+
+        collection
     }
 }
 
@@ -100,43 +100,312 @@ impl DB {
     }
 
     pub async fn migration_0(database: &Database) -> Result<(), MigrationError> {
-        let collection_user: Collection<Document> = database.collection("user");
-        let mut cursor_user = collection_user.find(doc! {}, None).await?;
+        {
+            let collection: Collection<Document> = database.collection("user");
+            let mut cursor = collection.find(doc! {}, None).await?;
 
-        while let Some(user) = cursor_user.try_next().await? {
-            // let user: User = user.into();
-            let _id = user.get("_id").expect("migration failed");
-            let created_at = user
-                .get("created_at")
-                .expect("migration failed")
-                .as_datetime()
-                .expect("migration failed");
+            while let Some(document) = cursor.try_next().await? {
+                // let user: User = user.into();
+                let _id = document.get("_id").expect("migration: failed to get _id");
+                let created_at = document
+                    .get("created_at")
+                    .expect("migration: failed to get field")
+                    .as_datetime()
+                    .expect("migration: failed to get field");
 
-            let modified_at = user
-                .get("modified_at")
-                .expect("migration failed")
-                .as_datetime()
-                .expect("migration failed");
+                let modified_at = document
+                    .get("modified_at")
+                    .expect("migration: failed to get field")
+                    .as_datetime()
+                    .expect("migration: failed to get field");
 
-            let new_created_at = created_at.timestamp_millis();
-            let new_modified_at = modified_at.timestamp_millis();
+                let new_created_at = created_at.timestamp_millis();
+                let new_modified_at = modified_at.timestamp_millis();
 
-            collection_user
-                .update_one(
-                    doc! { "_id": _id },
-                    doc! {
-                        "$set": {
-                            "created_at": new_created_at,
-                            "modified_at": new_modified_at
+                collection
+                    .update_one(
+                        doc! { "_id": _id },
+                        doc! {
+                            "$rename": {
+                                "id": "author_id"
+                            },
                         },
-                        "$rename": {
-                            "id": "author_id"
-                        }
-                    },
-                    None,
-                )
-                .await
-                .expect("migration failed");
+                        None,
+                    )
+                    .await
+                    .expect("migration failed");
+                collection
+                    .update_one(
+                        doc! { "_id": _id },
+                        doc! {
+                            "$set": {
+                                "id": uuid::Uuid::new_v4().to_string(),
+                                "created_at": new_created_at,
+                                "modified_at": new_modified_at
+                            },
+                        },
+                        None,
+                    )
+                    .await
+                    .expect("migration failed");
+            }
+        }
+
+        {
+            let collection: Collection<Document> = database.collection("img");
+            let mut cursor = collection.find(doc! {}, None).await?;
+
+            while let Some(document) = cursor.try_next().await? {
+                // let user: User = user.into();
+                let _id = document.get("_id").expect("migration: failed to get _id");
+                let created_at = document
+                    .get("created_at")
+                    .expect("migration: failed to get field")
+                    .as_datetime()
+                    .expect("migration: failed to get field");
+
+                let modified_at = document
+                    .get("modified_at")
+                    .expect("migration: failed to get field")
+                    .as_datetime()
+                    .expect("migration: failed to get field");
+
+                let new_created_at = created_at.timestamp_millis();
+                let new_modified_at = modified_at.timestamp_millis();
+
+                collection
+                    .update_one(
+                        doc! { "_id": _id },
+                        doc! {
+                           "$rename": {
+                                "id": "msg_id"
+                            },
+                        },
+                        None,
+                    )
+                    .await
+                    .expect("migration failed");
+
+                collection
+                    .update_one(
+                        doc! { "_id": _id },
+                        doc! {
+                            "$set": {
+                                "id": uuid::Uuid::new_v4().to_string(),
+                                "created_at": new_created_at,
+                                "modified_at": new_modified_at
+                            },
+                        },
+                        None,
+                    )
+                    .await
+                    .expect("migration failed");
+            }
+        }
+
+        {
+            let collection: Collection<Document> = database.collection("auto_reaction");
+            let mut cursor = collection.find(doc! {}, None).await?;
+
+            while let Some(document) = cursor.try_next().await? {
+                // let user: User = user.into();
+                let _id = document.get("_id").expect("migration: failed to get _id");
+                let created_at = document
+                    .get("created_at")
+                    .expect("migration: failed to get field")
+                    .as_datetime()
+                    .expect("migration: failed to get field");
+
+                let modified_at = document
+                    .get("modified_at")
+                    .expect("migration: failed to get field")
+                    .as_datetime()
+                    .expect("migration: failed to get field");
+
+                let new_created_at = created_at.timestamp_millis();
+                let new_modified_at = modified_at.timestamp_millis();
+
+                collection
+                    .update_one(
+                        doc! { "_id": _id },
+                        doc! {
+                           "$rename": {
+                                "id": "emoji_id"
+                            },
+                        },
+                        None,
+                    )
+                    .await
+                    .expect("migration failed");
+
+                collection
+                    .update_one(
+                        doc! { "_id": _id },
+                        doc! {
+                            "$set": {
+                                "id": uuid::Uuid::new_v4().to_string(),
+                                "created_at": new_created_at,
+                                "modified_at": new_modified_at
+                            },
+                        },
+                        None,
+                    )
+                    .await
+                    .expect("migration failed");
+            }
+        }
+        {
+            let collection: Collection<Document> = database.collection("allowed_role");
+            let mut cursor = collection.find(doc! {}, None).await?;
+
+            while let Some(document) = cursor.try_next().await? {
+                // let user: User = user.into();
+                let _id = document.get("_id").expect("migration: failed to get _id");
+                let created_at = document
+                    .get("created_at")
+                    .expect("migration: failed to get field")
+                    .as_datetime()
+                    .expect("migration: failed to get field");
+
+                let modified_at = document
+                    .get("modified_at")
+                    .expect("migration: failed to get field")
+                    .as_datetime()
+                    .expect("migration: failed to get field");
+
+                let new_created_at = created_at.timestamp_millis();
+                let new_modified_at = modified_at.timestamp_millis();
+
+                collection
+                    .update_one(
+                        doc! { "_id": _id },
+                        doc! {
+                           "$rename": {
+                                "id": "role_id"
+                            },
+                        },
+                        None,
+                    )
+                    .await
+                    .expect("migration failed");
+
+                collection
+                    .update_one(
+                        doc! { "_id": _id },
+                        doc! {
+                            "$set": {
+                                "id": uuid::Uuid::new_v4().to_string(),
+                                "created_at": new_created_at,
+                                "modified_at": new_modified_at
+                            },
+                        },
+                        None,
+                    )
+                    .await
+                    .expect("migration failed");
+            }
+        }
+        {
+            let collection: Collection<Document> = database.collection("allowed_guild");
+            let mut cursor = collection.find(doc! {}, None).await?;
+
+            while let Some(document) = cursor.try_next().await? {
+                // let user: User = user.into();
+                let _id = document.get("_id").expect("migration: failed to get _id");
+                let created_at = document
+                    .get("created_at")
+                    .expect("migration: failed to get field")
+                    .as_datetime()
+                    .expect("migration: failed to get field");
+
+                let modified_at = document
+                    .get("modified_at")
+                    .expect("migration: failed to get field")
+                    .as_datetime()
+                    .expect("migration: failed to get field");
+
+                let new_created_at = created_at.timestamp_millis();
+                let new_modified_at = modified_at.timestamp_millis();
+
+                collection
+                    .update_one(
+                        doc! { "_id": _id },
+                        doc! {
+                           "$rename": {
+                                "id": "guild_id"
+                            },
+                        },
+                        None,
+                    )
+                    .await
+                    .expect("migration failed");
+
+                collection
+                    .update_one(
+                        doc! { "_id": _id },
+                        doc! {
+                            "$set": {
+                                "id": uuid::Uuid::new_v4().to_string(),
+                                "created_at": new_created_at,
+                                "modified_at": new_modified_at
+                            },
+                        },
+                        None,
+                    )
+                    .await
+                    .expect("migration failed");
+            }
+        }
+        {
+            let collection: Collection<Document> = database.collection("allowed_channel");
+            let mut cursor = collection.find(doc! {}, None).await?;
+
+            while let Some(document) = cursor.try_next().await? {
+                // let user: User = user.into();
+                let _id = document.get("_id").expect("migration: failed to get _id");
+                let created_at = document
+                    .get("created_at")
+                    .expect("migration: failed to get field")
+                    .as_datetime()
+                    .expect("migration: failed to get field");
+
+                let modified_at = document
+                    .get("modified_at")
+                    .expect("migration: failed to get field")
+                    .as_datetime()
+                    .expect("migration: failed to get field");
+
+                let new_created_at = created_at.timestamp_millis();
+                let new_modified_at = modified_at.timestamp_millis();
+
+                collection
+                    .update_one(
+                        doc! { "_id": _id },
+                        doc! {
+                           "$rename": {
+                                "id": "channel_id"
+                            },
+                        },
+                        None,
+                    )
+                    .await
+                    .expect("migration failed");
+
+                collection
+                    .update_one(
+                        doc! { "_id": _id },
+                        doc! {
+                            "$set": {
+                                "id": uuid::Uuid::new_v4().to_string(),
+                                "created_at": new_created_at,
+                                "modified_at": new_modified_at
+                            },
+                        },
+                        None,
+                    )
+                    .await
+                    .expect("migration failed");
+            }
         }
 
         Ok(())
