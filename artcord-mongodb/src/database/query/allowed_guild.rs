@@ -8,19 +8,29 @@ const COLLECTION_ALLOWED_GUILD_NAME: &'static str = "allowed_guild";
 
 impl DB {
     pub async fn init_allowed_guild(database: &Database) -> Collection<AllowedGuild> {
-        let opts = IndexOptions::builder().unique(true).build();
-        let index = IndexModel::builder()
-            .keys(doc! { AllowedGuildFieldName::GuildId.name(): -1, AllowedGuildFieldName::Name.name(): -1 })
-            .options(opts)
-            .build();
+        let (index1, index2) = (
+            {
+                let opts = IndexOptions::builder().unique(true).build();
+                IndexModel::builder()
+                    .keys(doc! { AllowedGuildFieldName::GuildId.name(): -1 })
+                    .options(opts)
+                    .build()
+            },
+            {
+                let opts = IndexOptions::builder().unique(true).build();
+                IndexModel::builder()
+                    .keys(doc! {  AllowedGuildFieldName::Name.name(): -1 })
+                    .options(opts)
+                    .build()
+            },
+        );
 
         let collection = database.collection::<AllowedGuild>(COLLECTION_ALLOWED_GUILD_NAME);
 
         collection
-            .create_index(index, None)
+            .create_indexes([index1, index2], None)
             .await
             .expect("Failed to create collection index.");
-
 
         collection
     }
@@ -34,7 +44,7 @@ impl DB {
         let name = String::from("DEFAULT");
         let allowed_guild = self
             .collection_allowed_guild
-            .find_one(doc! { AllowedGuildFieldName::GuildId.name(): &guild_id, AllowedGuildFieldName::Name.name(): &name}, None)
+            .find_one(doc! { AllowedGuildFieldName::Name.name(): &name}, None)
             .await?;
         if allowed_guild.is_none() {
             let allowed_guild = self
@@ -101,3 +111,4 @@ impl DB {
         Ok(result > 0)
     }
 }
+
