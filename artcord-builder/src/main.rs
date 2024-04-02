@@ -163,7 +163,11 @@ async fn main() {
     let runtime_fut = runtime(recv_runtime_restart_event);
     futs.push(runtime_fut.boxed());
 
-    let socket_fut = sockets(recv_exit.clone(), recv_browser_event, send_manager_event.clone());
+    let socket_fut = sockets(
+        recv_exit.clone(),
+        recv_browser_event,
+        send_manager_event.clone(),
+    );
     futs.push(socket_fut.boxed());
 
     let handle_exit = handle_exit(
@@ -224,10 +228,8 @@ async fn sockets(
         .expect("Failed to bind socket addr");
     info!("socket: restart socket listening on: ws://{}", &addr);
 
-    
-
     // while  {
-        
+
     // }
 
     let handle_connections = async {
@@ -239,16 +241,16 @@ async fn sockets(
                     continue;
                 }
             };
-    
+
             let peer = stream.peer_addr().expect("Failed to get peer addr");
             trace!("socket: connected: {}", peer);
-    
+
             connection_tasks.spawn(sockets_accept_connection(
                 peer,
                 stream,
                 recv_exit.clone(),
                 recv_browser_event.resubscribe(),
-                send_manager_event.clone()
+                send_manager_event.clone(),
             ));
         }
     };
@@ -293,7 +295,15 @@ async fn sockets_accept_connection(
     recv_browser_event: broadcast::Receiver<BrowserEvent>,
     send_manager_event: mpsc::Sender<ManagerEventKind>,
 ) {
-    if let Err(e) = sockets_handle_connection(peer, stream, recv_exit, recv_browser_event, send_manager_event.clone()).await {
+    if let Err(e) = sockets_handle_connection(
+        peer,
+        stream,
+        recv_exit,
+        recv_browser_event,
+        send_manager_event.clone(),
+    )
+    .await
+    {
         match e {
             tokio_tungstenite::tungstenite::Error::ConnectionClosed
             | tokio_tungstenite::tungstenite::Error::Protocol(_)
@@ -388,10 +398,14 @@ async fn sockets_handle_connection(
                         let client_msg = client_msg.data;
                         let send_result = match client_msg {
                             DebugClientMsg::BrowserReady => {
-                                send_manager_event.send(ManagerEventKind::BrowserReady).await
+                                send_manager_event
+                                    .send(ManagerEventKind::BrowserReady)
+                                    .await
                             }
                             DebugClientMsg::RuntimeReady => {
-                                send_manager_event.send(ManagerEventKind::RuntimeReady).await
+                                send_manager_event
+                                    .send(ManagerEventKind::RuntimeReady)
+                                    .await
                             }
                         };
 
@@ -687,6 +701,15 @@ async fn compiler(
         vec!["mkdir", "./target/site/pkg"],
         vec!["cp", "-r", "./assets/.", "./target/site/"],
         vec![
+            "tailwindcss",
+            "-i",
+            "./input.css",
+            "-o",
+            "./style/output.css",
+            "-c",
+            "./tailwind.config.js",
+        ],
+        vec![
             "cp",
             "./style/output.css",
             "./target/site/pkg/leptos_start5.css",
@@ -720,6 +743,15 @@ async fn compiler(
         vec!["mkdir", "./target/site"],
         vec!["mkdir", "./target/site/pkg"],
         vec!["cp", "-r", "./assets/.", "./target/site/"],
+        vec![
+            "tailwindcss",
+            "-i",
+            "./input.css",
+            "-o",
+            "./style/output.css",
+            "-c",
+            "./tailwind.config.js",
+        ],
         vec![
             "cp",
             "./style/output.css",
@@ -866,8 +898,7 @@ async fn compiler_on_finish(
     } else {
         error!(
             "Compiler(COMMAND-{:?}): sent: CompilerFailed({:?})",
-            project_kind,
-            project_kind
+            project_kind, project_kind
         );
         let send_result = send_manager_event
             .send(ManagerEventKind::CompilerFailed(project_kind))
@@ -1476,13 +1507,13 @@ async fn manager(
                 // if browser_needs_restart {
                 //     // trace!("Manager: set: compiler state to Ready");
                 //     // compiler_state = CompilerState::Ready;
-                    
+
                 // }
             }
             ManagerEventKind::RuntimeReady => {
                 trace!("Manager: sending browser restart event");
                 let send_result = send_browser_event.send(BrowserEvent::Restart);
-                    // let send_result = send_runtime_restart_event.send(RuntimeEvent::Restart);
+                // let send_result = send_runtime_restart_event.send(RuntimeEvent::Restart);
                 if let Err(e) = send_result {
                     error!("Manager: sent browser restart event: error: {}", e);
                     continue;
