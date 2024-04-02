@@ -3,7 +3,7 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: {
-    files: ["*.html", "./src/**/*.rs"],
+    files: ["*.html", "./artcord-leptos/**/*.rs"],
   },
   theme: {
     extend: {
@@ -20,22 +20,21 @@ module.exports = {
         "first-one": "#41355E",
       },
       backgroundImage: {
-        'line-pattern': "url('/assets/bg.svg')",
-        'the-star': "url('/assets/star.svg')",
-        'sword-lady': "url('/assets/sword_lady.webp')",
-        'sword-ico': "url('/assets/sword.svg')",
+        "line-pattern": "url('/assets/bg.svg')",
+        "the-star": "url('/assets/star.svg')",
+        "sword-lady": "url('/assets/sword_lady.webp')",
+        "sword-ico": "url('/assets/sword.svg')",
       },
       boxShadow: {
-        'glowy': '0px 0px 15px 2px #ECCEFF',
+        glowy: "0px 0px 15px 2px #ECCEFF",
       },
       fontFamily: {
-        'barcode': ['\"Libre Barcode 128 Text\"'],
+        barcode: ['"Libre Barcode 128 Text"'],
       },
       screens: {
-        'desktop': '1700px',
+        desktop: "1700px",
       },
     },
-
   },
   plugins: [],
-}
+};
