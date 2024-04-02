@@ -1,11 +1,16 @@
+use crate::{
+    aggregation::server_msg_img::AggImg,
+    misc::registration_invalid::RegistrationInvalidMsg,
+    model::{statistics::Statistic, user::User},
+};
 use artcord_leptos_web_sockets::WsRouteKey;
 use serde::{Deserialize, Serialize};
-use crate::{aggregation::server_msg_img::AggImg, misc::registration_invalid::RegistrationInvalidMsg, model::user::User};
 
 use super::prod_perm_key::ProdMsgPermKey;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub enum ServerMsg {
+    Statistics(Vec<Statistic>),
     MainGallery(MainGalleryResponse),
     UserGallery(UserGalleryResponse),
     User(UserResponse),
@@ -36,28 +41,28 @@ pub enum ServerMsg {
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub enum MainGalleryResponse {
     Imgs(Vec<AggImg>),
-
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub enum UserGalleryResponse {
     Imgs(Vec<AggImg>),
-    UserNotFound
+    UserNotFound,
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub enum UserResponse {
     User(User),
-    UserNotFound
+    UserNotFound,
 }
 
 impl artcord_leptos_web_sockets::Receive<u128, ProdMsgPermKey> for ServerMsg {
     fn recv_from_vec(
-            bytes: &[u8],
-        ) -> Result<artcord_leptos_web_sockets::WsPackage<u128, ProdMsgPermKey, Self>, String>
-        where
-            Self: std::marker::Sized + Clone {
-                ServerMsg::from_bytes(bytes).map_err(|e| e.to_string())
+        bytes: &[u8],
+    ) -> Result<artcord_leptos_web_sockets::WsPackage<u128, ProdMsgPermKey, Self>, String>
+    where
+        Self: std::marker::Sized + Clone,
+    {
+        ServerMsg::from_bytes(bytes).map_err(|e| e.to_string())
     }
 }
 
@@ -90,11 +95,20 @@ impl artcord_leptos_web_sockets::Receive<u128, ProdMsgPermKey> for ServerMsg {
 // }
 
 impl ServerMsg {
-    pub fn from_bytes(bytes: &[u8]) -> Result<artcord_leptos_web_sockets::WsPackage<u128, ProdMsgPermKey, Self>, bincode::Error> {
-        bincode::deserialize::<artcord_leptos_web_sockets::WsPackage<u128, ProdMsgPermKey, Self>>(bytes)
+    pub fn from_bytes(
+        bytes: &[u8],
+    ) -> Result<artcord_leptos_web_sockets::WsPackage<u128, ProdMsgPermKey, Self>, bincode::Error>
+    {
+        bincode::deserialize::<artcord_leptos_web_sockets::WsPackage<u128, ProdMsgPermKey, Self>>(
+            bytes,
+        )
     }
 
-    pub fn as_bytes(package: artcord_leptos_web_sockets::WsPackage<u128, ProdMsgPermKey, Self>) -> Result<Vec<u8>, bincode::Error> {
-        bincode::serialize::<artcord_leptos_web_sockets::WsPackage<u128, ProdMsgPermKey, Self>>(&package)
+    pub fn as_bytes(
+        package: artcord_leptos_web_sockets::WsPackage<u128, ProdMsgPermKey, Self>,
+    ) -> Result<Vec<u8>, bincode::Error> {
+        bincode::serialize::<artcord_leptos_web_sockets::WsPackage<u128, ProdMsgPermKey, Self>>(
+            &package,
+        )
     }
 }

@@ -4,7 +4,6 @@
 //     SERVER_MSG_REGISTRATION,
 // };
 
-
 use artcord_leptos_web_sockets::{WsPackage, WsRouteKey};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -13,7 +12,6 @@ use std::net::IpAddr;
 use std::time::Duration;
 
 use super::prod_perm_key::ProdMsgPermKey;
-
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub enum ClientMsg {
@@ -44,14 +42,15 @@ pub enum ClientMsg {
         email: String,
         password: String,
     },
+    Statistics,
 }
 
 impl artcord_leptos_web_sockets::Send<u128, ProdMsgPermKey> for ClientMsg {
-    fn send_as_vec(
-            package: &WsPackage<u128, ProdMsgPermKey, Self>,
-        ) -> Result<Vec<u8>, String> where
-        Self: Clone {
-            Self::as_vec(package).map_err(|e| e.to_string())
+    fn send_as_vec(package: &WsPackage<u128, ProdMsgPermKey, Self>) -> Result<Vec<u8>, String>
+    where
+        Self: Clone,
+    {
+        Self::as_vec(package).map_err(|e| e.to_string())
     }
 }
 
@@ -71,13 +70,17 @@ impl ClientMsg {
     //     }
     // }
 
-    pub fn as_vec(package: &WsPackage<u128, ProdMsgPermKey, Self>) -> Result<Vec<u8>, bincode::Error> {
+    pub fn as_vec(
+        package: &WsPackage<u128, ProdMsgPermKey, Self>,
+    ) -> Result<Vec<u8>, bincode::Error> {
         let a = bincode::serialize::<WsPackage<u128, ProdMsgPermKey, Self>>(package);
         //log!("SERIALIZE {:?} {:?}", self, a);
         a
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<WsPackage<u128, ProdMsgPermKey, Self>, bincode::Error> {
+    pub fn from_bytes(
+        bytes: &[u8],
+    ) -> Result<WsPackage<u128, ProdMsgPermKey, Self>, bincode::Error> {
         //log!("DESERIALIZE {:?}", bytes);
         let a = bincode::deserialize::<WsPackage<u128, ProdMsgPermKey, Self>>(bytes);
         a
@@ -134,6 +137,7 @@ pub enum WsPath {
     Login,
     Register,
     Logout,
+    Statistics,
 }
 
 // #[derive(Clone, PartialEq, Eq, Debug, Hash)]
@@ -151,14 +155,25 @@ pub enum WsPath {
 impl WsPath {
     pub fn get_throttle(&self) -> (u64, Duration) {
         match self {
-            WsPath::Gallery => (100, Duration::from_secs(1)),
-            WsPath::UserGallery => (100, Duration::from_secs(1)),
-            WsPath::User => (100, Duration::from_secs(1)),
-            WsPath::Login => (100, Duration::from_secs(1)),
-            WsPath::Register => (100, Duration::from_secs(1)),
+            WsPath::Gallery => (1, Duration::from_secs(5)),
+            WsPath::UserGallery => (1, Duration::from_secs(5)),
+            WsPath::User => (1, Duration::from_secs(5)),
+            WsPath::Login => (1, Duration::from_secs(5)),
+            WsPath::Register => (1, Duration::from_secs(5)),
             WsPath::Logout => (1, Duration::from_secs(30)),
+            WsPath::Statistics => (1, Duration::from_secs(1)),
         }
     }
+    // pub fn get_throttle(&self) -> (u64, Duration) {
+    //     match self {
+    //         WsPath::Gallery => (100, Duration::from_secs(1)),
+    //         WsPath::UserGallery => (100, Duration::from_secs(1)),
+    //         WsPath::User => (100, Duration::from_secs(1)),
+    //         WsPath::Login => (100, Duration::from_secs(1)),
+    //         WsPath::Register => (100, Duration::from_secs(1)),
+    //         WsPath::Logout => (1, Duration::from_secs(30)),
+    //     }
+    // }
 
     // pub fn to_ms(&self) -> Duration {
     //     match self {
@@ -207,16 +222,23 @@ impl From<&ClientMsg> for WsPath {
                 user_id: _,
             } => WsPath::UserGallery,
             ClientMsg::User { user_id: _ } => WsPath::User,
-            ClientMsg::Login { email: _, password: _ } => WsPath::Login,
-            ClientMsg::Register { email: _, password: _ } => WsPath::Register,
+            ClientMsg::Login {
+                email: _,
+                password: _,
+            } => WsPath::Login,
+            ClientMsg::Register {
+                email: _,
+                password: _,
+            } => WsPath::Register,
             ClientMsg::Logout => WsPath::Logout,
+            ClientMsg::Statistics => WsPath::Statistics,
         }
     }
 }
 
 #[cfg(test)]
 mod client_msg_tests {
-    
+
     use chrono::Utc;
     use std::cell::RefCell;
     use std::collections::HashMap;

@@ -4,18 +4,19 @@ use artcord_leptos_web_sockets::WsRuntime;
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_perm_key::ProdMsgPermKey;
 use artcord_state::message::prod_server_msg::ServerMsg;
-use leptos::{
-    create_rw_signal, RwSignal, SignalWith,
-    StoredValue,
-};
+use leptos::{create_rw_signal, RwSignal, SignalWith, StoredValue};
 use std::collections::HashMap;
 use std::rc::Rc;
 use wasm_bindgen::closure::Closure;
 use web_sys::{ErrorEvent, MessageEvent, WebSocket};
 // use crate::app::utils::server_msg_wrap::ServerMsgWrap;
 
-use super::{pages::{main_gallery::GalleryPageState, user_gallery::PageUserGalleryState}, utils::ScrollSection};
-
+use super::{
+    pages::{
+        admin::AdminPageState, main_gallery::GalleryPageState, user_gallery::PageUserGalleryState,
+    },
+    utils::ScrollSection,
+};
 
 #[derive(Copy, Clone, Debug)]
 pub struct GlobalState {
@@ -29,7 +30,7 @@ pub struct GlobalState {
     pub socket_connected: RwSignal<bool>,
     pub socket_closures: StoredValue<HashMap<u128, Rc<dyn Fn(ServerMsg)>>>,
     pub socket_pending_client_msgs: StoredValue<Vec<u8>>,
-    pub ws: WsRuntime<u128, ProdMsgPermKey, ServerMsg, ClientMsg>
+    pub ws: WsRuntime<u128, ProdMsgPermKey, ServerMsg, ClientMsg>,
 }
 
 #[derive(Clone, Debug)]
@@ -44,6 +45,7 @@ pub struct Pages {
     pub registration: GlobalAuthState,
     pub login: GlobalAuthState,
     pub gallery: GalleryPageState,
+    pub admin: AdminPageState,
 }
 
 impl Pages {
@@ -52,6 +54,7 @@ impl Pages {
             registration: GlobalAuthState::new(),
             login: GlobalAuthState::new(),
             gallery: GalleryPageState::new(),
+            admin: AdminPageState::new(),
         }
     }
 }
@@ -93,5 +96,4 @@ impl GlobalState {
             _ => false,
         })
     }
-
 }

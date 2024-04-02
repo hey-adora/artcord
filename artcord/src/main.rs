@@ -56,23 +56,34 @@ async fn main() {
     let web_sockets = create_websockets(db.clone());
 
     if let Some(discord_bot_token) = discord_bot_token {
-        let mut discord_bot = create_bot(db.clone(), &discord_bot_token, &gallery_root_dir, discord_bot_default_guild).await;
+        let mut discord_bot = create_bot(
+            db.clone(),
+            &discord_bot_token,
+            &gallery_root_dir,
+            discord_bot_default_guild,
+        )
+        .await;
 
         let r = try_join!(
             async { web_server.await.or_else(|e| Err(e.to_string())) },
-            async { web_sockets.await.or_else(|e| Err(e.to_string())) },
+            async {
+                web_sockets.await;
+                Ok(())
+            },
             async {
                 discord_bot.start().await;
                 Ok(())
             },
         );
         r.unwrap();
-        
     } else {
         error!("DISCORD_BOT_TOKEN in .env is missing, bot will not start.");
         let r = try_join!(
             async { web_server.await.or_else(|e| Err(e.to_string())) },
-            async { web_sockets.await.or_else(|e| Err(e.to_string())) },
+            async {
+                web_sockets.await;
+                Ok(())
+            },
         );
 
         r.unwrap();

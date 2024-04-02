@@ -15,6 +15,8 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{ErrorEvent, MessageEvent, WebSocket};
 
+const TIMEOUT_SECS: i64 = 30;
+
 #[derive(Deserialize, Serialize, Debug, Eq, PartialEq, Clone, Hash)]
 pub enum WsRouteKey<
     TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
@@ -77,8 +79,15 @@ type WsCallback<T> = StoredValue<Option<Rc<Closure<T>>>>;
 type GlobalMsgCallbacksMulti<TempKeyType, PermKeyType, ServerMsg> = StoredValue<
     HashMap<WsRouteKey<TempKeyType, PermKeyType>, HashMap<TempKeyType, Rc<dyn Fn(&ServerMsg)>>>,
 >;
-type GlobalMsgCallbacksSingle<TempKeyType, PermKeyType, ServerMsg> =
-    StoredValue<HashMap<WsRouteKey<TempKeyType, PermKeyType>, (DateTime<chrono::Utc>, Rc<dyn Fn(WsResourceResult<ServerMsg>)>)>>;
+type GlobalMsgCallbacksSingle<TempKeyType, PermKeyType, ServerMsg> = StoredValue<
+    HashMap<
+        WsRouteKey<TempKeyType, PermKeyType>,
+        (
+            DateTime<chrono::Utc>,
+            Rc<dyn Fn(WsResourceResult<ServerMsg>)>,
+        ),
+    >,
+>;
 
 macro_rules! console_log {
     ($($t:tt)*) => (log(&format_args!($($t)*).to_string()))
@@ -89,7 +98,6 @@ extern "C" {
     #[wasm_bindgen(js_namespace = console)]
     fn log(s: &str);
 }
-
 
 #[derive(Clone, Debug)]
 pub struct WsRuntime<
@@ -291,8 +299,8 @@ impl<
                             // }
                             //trace!("ws({}): timeout: total callback count: {}", url, callbacks.len());
                             for (i, (key, (time, callback))) in callbacks.iter().enumerate() {
-                                trace!("ws({}): timedout: comparing time: {:?} > {:?}", url,  Utc::now() - *time, TimeDelta::microseconds(10 * 1000));
-                                if Utc::now() - *time > TimeDelta::microseconds(10 * 1000 * 1000) {
+                                trace!("ws({}): timedout: comparing time: {:?} > {:?}", url,  Utc::now() - *time, TimeDelta::microseconds(TIMEOUT_SECS * 1000 * 1000));
+                                if Utc::now() - *time > TimeDelta::microseconds(TIMEOUT_SECS * 1000 * 1000) {
                                     trace!("ws({}): timedout: found callback: {:?}", url, key);
                                     output.push((key.clone(), callback.clone()));
                                 } else {
@@ -314,7 +322,7 @@ impl<
                         for (key, callback) in callbacks {
                             trace!("ws({}): timeout: running callback: {:?}", url, &key);
                             callback(WsResourceResult::TimeOut);
-                            
+
                             ws_callbacks_single.update_value(|ws| {
                                 let result = ws.remove(&key);
                                 if let Some(result) = result {
@@ -324,17 +332,12 @@ impl<
                                 }
                             });
                         }
-                        
                     }
                 },
                 1000,
             );
         }
-        
     }
-
-    
-   
 
     pub fn create_singleton(&self) -> WsResource<TempKeyType, PermKeyType, ServerMsg, ClientMsg> {
         WsResource::<TempKeyType, PermKeyType, ServerMsg, ClientMsg>::new(
@@ -352,15 +355,15 @@ impl<
         socket_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
         global_on_ws_state_callbacks: StoredValue<HashMap<TempKeyType, Rc<dyn Fn(bool)>>>,
     ) {
-        info!("ws({})_global: connected, ws_on_closeclosures left {}", url, global_on_ws_state_callbacks.with_value(|c| c.len()));
+        info!(
+            "ws({})_global: connected, ws_on_closeclosures left {}",
+            url,
+            global_on_ws_state_callbacks.with_value(|c| c.len())
+        );
         connected.set(true);
         Self::run_on_ws_state_callbacks(ws, url, global_on_ws_state_callbacks);
         //Self::run_on_open_callbacks(url, global_on_open_callbacks);
-        Self::flush_pending_client_msgs(
-            ws,
-            url,
-            socket_pending_client_msgs,
-        );
+        Self::flush_pending_client_msgs(ws, url, socket_pending_client_msgs);
     }
 
     fn ws_on_close(
@@ -476,12 +479,18 @@ impl<
         //debug!("3420 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
 
         let is_connected = ws.with_value(|ws| {
-            ws.as_ref().map(|ws|ws.ready_state() == WebSocket::OPEN).unwrap_or(false)
+            ws.as_ref()
+                .map(|ws| ws.ready_state() == WebSocket::OPEN)
+                .unwrap_or(false)
         });
 
         let callbacks = global_on_ws_state_callbacks.get_value();
         for (key, callback) in callbacks {
-            trace!("ws({})_global: running on_ws_state callback: {:#?}", url, key);
+            trace!(
+                "ws({})_global: running on_ws_state callback: {:#?}",
+                url,
+                key
+            );
             callback(is_connected);
         }
     }
@@ -557,11 +566,13 @@ impl<
     ) {
         let key: WsRouteKey<TempKeyType, PermKeyType> = package.key.clone();
 
-        let callback: Option<(DateTime<chrono::Utc>, Rc<dyn Fn(WsResourceResult<ServerMsg>)>)> = callbacks_single.with_value({
+        let callback: Option<(
+            DateTime<chrono::Utc>,
+            Rc<dyn Fn(WsResourceResult<ServerMsg>)>,
+        )> = callbacks_single.with_value({
             let key = key.clone();
 
             move |socket_closures| {
-
                 let Some(f) = socket_closures.get(&key) else {
                     warn!("ws({})_global: Fn not found for {:?}", url, &key);
                     return None;
@@ -596,8 +607,6 @@ impl<
                 warn!("ws({})_global: Wrong key was selected: {:?}", url, &key);
             }
         }
-
-
     }
 
     pub fn send(
@@ -630,6 +639,11 @@ impl<
                         .send_with_u8_array(&bytes)
                         .map(|_| SendResult::Sent)
                         .map_err(|err| {
+                            error!(
+                                "ws({}): failed to send: {:?}",
+                                self.ws_url.get_value().unwrap_or("error".to_string()),
+                                &err
+                            );
                             WsError::SendError(
                                 err.as_string()
                                     .unwrap_or(String::from("Failed to send web-socket package")),
@@ -658,7 +672,9 @@ impl<
         let temp_key = TempKeyType::generate_key();
 
         let is_connected = self.ws.with_value(|ws| {
-            ws.as_ref().map(|ws|ws.ready_state() == WebSocket::OPEN).unwrap_or(false)
+            ws.as_ref()
+                .map(|ws| ws.ready_state() == WebSocket::OPEN)
+                .unwrap_or(false)
         });
 
         callback(is_connected);
@@ -812,7 +828,6 @@ impl<
                             &perm_key
                         );
                         callback_cluster.remove(&temp_key);
-                        
                     }
                 });
             }
@@ -845,9 +860,6 @@ pub fn get_ws_url(port: u32) -> Result<String, GetUrlError> {
     Ok(output)
 }
 use wasm_bindgen::prelude::wasm_bindgen;
-
-
-
 
 #[derive(Clone, Debug)]
 pub struct WsResource<
@@ -920,91 +932,93 @@ impl<
         client_msg: ClientMsg,
         on_receive: impl Fn(WsResourceResult<ServerMsg>) + 'static,
     ) -> Result<WsResourcSendResult, WsError> {
-        self.ws.with_value(|ws| -> Result<WsResourcSendResult, WsError> {
-            let exists: Option<bool> = self.global_msgs_closures.try_update_value({
-                move |global_msgs_closures| {
-                    self.key.with_value(|key| {
-                        global_msgs_closures
-                            .get(key)
-                            .map(|_| true)
-                            .unwrap_or_else(|| {
-                                trace!(
+        self.ws
+            .with_value(|ws| -> Result<WsResourcSendResult, WsError> {
+                let exists: Option<bool> = self.global_msgs_closures.try_update_value({
+                    move |global_msgs_closures| {
+                        self.key.with_value(|key| {
+                            global_msgs_closures
+                                .get(key)
+                                .map(|_| true)
+                                .unwrap_or_else(|| {
+                                    trace!(
                                     "ws({})_global: adding global_msgs_closures callback: {:#?}",
                                     self.ws_url.get_value().unwrap_or("error".to_string()),
                                     &key
                                 );
-                                global_msgs_closures.insert(key.clone(), (Utc::now(), Rc::new(on_receive)));
-                                false
-                            })
-                    })
-                }
-            });
-
-            if exists.unwrap_or(false) {
-                trace!(
-                    "ws({}): skipping: callback already exists: {:?}",
-                    self.ws_url.get_value().unwrap_or("error".to_string()),
-                    self.key.get_value()
-                );
-                return Ok(WsResourcSendResult::Skipped);
-            }
-
-            let package = WsPackage::<TempKeyType, PermKeyType, ClientMsg> {
-                data: client_msg,
-                key: self.key.get_value(),
-            };
-
-            let bytes = ClientMsg::send_as_vec(&package).map_err(|err| {
-                self.remove_callback();
-                WsError::Serializatoin(err)
-            })?;
-
-            if let Some(ws) = ws {
-                let is_open = self.ws.with_value(move |ws| {
-                    ws.as_ref()
-                        .map(|ws| ws.ready_state() == WebSocket::OPEN)
-                        .unwrap_or(false)
+                                    global_msgs_closures
+                                        .insert(key.clone(), (Utc::now(), Rc::new(on_receive)));
+                                    false
+                                })
+                        })
+                    }
                 });
 
-                if is_open {
+                if exists.unwrap_or(false) {
                     trace!(
-                        "ws({}): sending msg: {:?}",
+                        "ws({}): skipping: callback already exists: {:?}",
                         self.ws_url.get_value().unwrap_or("error".to_string()),
-                        &package
+                        self.key.get_value()
                     );
-                    return ws
-                        .send_with_u8_array(&bytes)
-                        .map(|_| WsResourcSendResult::Sent)
-                        .map_err(|err| {
-                            self.remove_callback();
-                            WsError::SendError(
-                                err.as_string()
-                                    .unwrap_or(String::from("Failed to send web-socket package")),
-                            )
-                        });
+                    return Ok(WsResourcSendResult::Skipped);
                 }
-            }
 
-            trace!(
-                "ws({}): msg \"{:?}\" pushed to queue",
-                self.ws_url.get_value().unwrap_or("error".to_string()),
-                &package
-            );
+                let package = WsPackage::<TempKeyType, PermKeyType, ClientMsg> {
+                    data: client_msg,
+                    key: self.key.get_value(),
+                };
 
-            self.global_pending_client_msgs
-                .update_value(|pending| pending.push(bytes));
+                let bytes = ClientMsg::send_as_vec(&package).map_err(|err| {
+                    self.remove_callback();
+                    WsError::Serializatoin(err)
+                })?;
 
-            Ok(WsResourcSendResult::Queued)
-        })
+                if let Some(ws) = ws {
+                    let is_open = self.ws.with_value(move |ws| {
+                        ws.as_ref()
+                            .map(|ws| ws.ready_state() == WebSocket::OPEN)
+                            .unwrap_or(false)
+                    });
+
+                    if is_open {
+                        trace!(
+                            "ws({}): sending msg: {:?}",
+                            self.ws_url.get_value().unwrap_or("error".to_string()),
+                            &package
+                        );
+                        return ws
+                            .send_with_u8_array(&bytes)
+                            .map(|_| WsResourcSendResult::Sent)
+                            .map_err(|err| {
+                                self.remove_callback();
+                                WsError::SendError(
+                                    err.as_string().unwrap_or(String::from(
+                                        "Failed to send web-socket package",
+                                    )),
+                                )
+                            });
+                    }
+                }
+
+                trace!(
+                    "ws({}): msg \"{:?}\" pushed to queue",
+                    self.ws_url.get_value().unwrap_or("error".to_string()),
+                    &package
+                );
+
+                self.global_pending_client_msgs
+                    .update_value(|pending| pending.push(bytes));
+
+                Ok(WsResourcSendResult::Queued)
+            })
     }
 
     fn remove_callback(&self) -> bool {
-
         // let a = async {
 
         // };
         // let b = tokio::spawn(a);
-        
+
         self.key.with_value(|key| {
             let mut output = false;
             self.global_msgs_closures.update_value({
