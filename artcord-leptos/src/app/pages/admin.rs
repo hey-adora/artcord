@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use artcord_leptos_web_sockets::WsResourceResult;
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_server_msg::ServerMsg;
@@ -5,6 +7,7 @@ use artcord_state::model::statistics::Statistic;
 use leptos::*;
 use leptos_router::use_params_map;
 use leptos_use::use_interval_fn;
+use tracing::debug;
 use tracing::error;
 use tracing::trace;
 
@@ -40,40 +43,56 @@ pub fn Admin() -> impl IntoView {
         nav_tran.set(true);
     });
 
-    create_effect(move |_| {
-        use_interval_fn(
-            move || {
-                let result = ws_statistics.send_or_skip(
-                    ClientMsg::Statistics,
-                    move |server_msg: WsResourceResult<ServerMsg>| {
-                        trace!("statistics: msg: {:?}", &server_msg);
-                        match server_msg {
-                            WsResourceResult::Ok(server_msg) => match server_msg {
-                                ServerMsg::Statistics(stats) => {
-                                    page.statistics.set(stats);
-                                }
-                                server_msg => {
-                                    error!("statistics: wrong server response: {:?}", server_msg);
-                                }
-                            },
-                            WsResourceResult::TimeOut => {
-                                error!("statistics: timeout");
-                            }
-                        }
-                    },
-                );
-                match result {
-                    Ok(result) => {
-                        trace!("statistics: send_result: {:?}", &result);
-                    }
-                    Err(err) => {
-                        error!("statistics: {}", err);
-                    }
-                }
-            },
-            1000,
-        );
+    spawn_local(async {
+        debug!("ONE");
+        async_std::task::sleep(Duration::from_secs(5)).await;
+        debug!("TWO");
     });
+
+    create_effect(move |_| {
+        trace!("admin: sending to open admin throttle sender");
+        ws_statistics.send_or_skip(ClientMsg::AdminThrottleListenerToggle(true), |res| {});
+    });
+
+    on_cleanup(move || {
+        trace!("admin: sending to close admin throttle sender");
+        ws_statistics.send_or_skip(ClientMsg::AdminThrottleListenerToggle(false), |res| {});
+    });
+
+    // create_effect(move |_| {
+    //     use_interval_fn(
+    //         move || {
+    //             let result = ws_statistics.send_or_skip(
+    //                 ClientMsg::Statistics,
+    //                 move |server_msg: WsResourceResult<ServerMsg>| {
+    //                     trace!("statistics: msg: {:?}", &server_msg);
+    //                     match server_msg {
+    //                         WsResourceResult::Ok(server_msg) => match server_msg {
+    //                             ServerMsg::Statistics(stats) => {
+    //                                 page.statistics.set(stats);
+    //                             }
+    //                             server_msg => {
+    //                                 error!("statistics: wrong server response: {:?}", server_msg);
+    //                             }
+    //                         },
+    //                         WsResourceResult::TimeOut => {
+    //                             error!("statistics: timeout");
+    //                         }
+    //                     }
+    //                 },
+    //             );
+    //             match result {
+    //                 Ok(result) => {
+    //                     trace!("statistics: send_result: {:?}", &result);
+    //                 }
+    //                 Err(err) => {
+    //                     error!("statistics: {}", err);
+    //                 }
+    //             }
+    //         },
+    //         1000,
+    //     );
+    // });
 
     view! {
         <main class=move||format!("grid grid-rows-[1fr] min-h-[100dvh] transition-all duration-300 {}", if nav_tran.get() {"pt-[4rem]"} else {"pt-[0rem]"})>

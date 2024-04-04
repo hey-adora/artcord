@@ -27,6 +27,7 @@ console_log = { version = "1.0.0" }
 log = "0.4.21"
 tracing-wasm = "0.2.1"
 tracing = { version = "0.1.40", features = ["release_max_level_warn"] }
+async-std = "1.12.0"
 
 [features]
 default = []

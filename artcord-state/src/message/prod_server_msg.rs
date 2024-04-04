@@ -10,6 +10,7 @@ use super::prod_perm_key::ProdMsgPermKey;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub enum ServerMsg {
+    AdminThrottle(AdminThrottleResponse),
     Statistics(Vec<Statistic>),
     MainGallery(MainGalleryResponse),
     UserGallery(UserGalleryResponse),
@@ -37,6 +38,14 @@ pub enum ServerMsg {
 //     DatabaseError,
 //     Uknown
 // }
+
+#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub enum AdminThrottleResponse {
+    Started,
+    Stopped,
+    AlreadyStarted,
+    AlreadyStopped,
+}
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub enum MainGalleryResponse {

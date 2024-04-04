@@ -20,12 +20,16 @@ use chrono::Months;
 use chrono::TimeDelta;
 use chrono::Utc;
 use futures::pin_mut;
+use futures::FutureExt;
 use futures::TryStreamExt;
 use thiserror::Error;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 use tokio::net::TcpStream;
 use tokio::select;
+use tokio::sync::broadcast;
+use tokio::sync::oneshot;
+use tokio::sync::Mutex;
 use tokio::sync::RwLock;
 use tokio::task;
 
@@ -34,19 +38,23 @@ use futures::future;
 use futures::SinkExt;
 use futures::StreamExt;
 use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tokio::time::Instant;
 use tokio_tungstenite::tungstenite::Message;
+use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use tracing::debug;
 use tracing::instrument;
 use tracing::Instrument;
 use tracing::{error, trace};
+use ws_route::ws_admin_throttle::WsHandleAdminThrottleError;
 use ws_route::ws_main_gallery::WsHandleMainGalleryError;
 use ws_route::ws_statistics::WsStatisticsError;
 use ws_route::ws_user::WsHandleUserError;
 use ws_route::ws_user_gallery::WsHandleUserGalleryError;
 
+use crate::ws_route::ws_admin_throttle::ws_hadnle_admin_throttle;
 use crate::ws_route::ws_main_gallery::ws_handle_main_gallery;
 use crate::ws_route::ws_statistics;
 use crate::ws_route::ws_statistics::ws_statistics;
@@ -79,6 +87,39 @@ impl ThrottleStats {
             ws_red_flag: RwLock::new(None),
             ws_banned_until: RwLock::new(None),
             //   ws_path_interval: RwLock::new(Utc::now())
+        }
+    }
+
+    pub async fn maybe_sleep(&self, ws_path: &WsPath) {
+        let mut ws_path_count_guard = self.ws_path_count.write().await;
+        // let (count, interval) = ws_path_count.entry(ws_path).or_insert((1, Instant::now()));
+        let ws_path_count = ws_path_count_guard.get_mut(ws_path);
+        if let Some((count, interval)) = ws_path_count {
+            let (count_limit, interval_limit) = ws_path.get_throttle();
+            let elapsed = interval.elapsed();
+            if elapsed > interval_limit {
+                trace!("throttle: reset");
+                *count = 0;
+                *interval = Instant::now();
+            } else if *count > count_limit {
+                let left = interval_limit.checked_sub(elapsed);
+                if let Some(left) = left {
+                    trace!("throttle: sleeping for: {:?}", &left);
+                    sleep(left).await;
+                } else {
+                    error!("throttle: failed to get left time");
+                    sleep(interval_limit).await;
+                }
+                *count = 0;
+                *interval = Instant::now();
+                trace!("throttle: sleep completed");
+            } else {
+                trace!("throttle: all good: state: {} {:?}", &count, &elapsed);
+                *count += 1;
+            }
+        } else {
+            let new_ws_path_count = (1_u64, Instant::now());
+            ws_path_count_guard.insert(ws_path.clone(), new_ws_path_count);
         }
     }
 
@@ -365,7 +406,11 @@ async fn accept_connection(
 
     let (send, mut recv) = mpsc::channel::<Message>(10);
     let (mut write, mut read) = ws_stream.split();
-    let handler_tasks = TaskTracker::new();
+    let task_tracker = TaskTracker::new();
+    let is_admin_throttle_listener_active: Arc<Mutex<Option<JoinHandle<()>>>> =
+        Arc::new(Mutex::new(None));
+    let (admin_cancel_send, admin_cancel_recv) = broadcast::channel::<bool>(1);
+    // let adming_throttle_listener_is_closed = oneshot::channel();
     // let
 
     let read = async {
@@ -379,8 +424,8 @@ async fn accept_connection(
                 Ok(client_msg) => {
                     // tokio::spawn(future)
 
-                    debug!("proccesing request count: {}", handler_tasks.len());
-                    if handler_tasks.len() > 2 {
+                    debug!("proccesing request count: {}", task_tracker.len());
+                    if task_tracker.len() > 2 {
                         debug!("WS REQUEST LIMIT REACHED");
                         user_throttle_task.maybe_ban().await;
                         // *user_throttle_task.ws_red_flag.write().await += 1;
@@ -392,12 +437,31 @@ async fn accept_connection(
                     let db = db.clone();
                     // handler_tasks.len();
                     let user_throttle_task = user_throttle_task.clone();
-                    let handle_task = async move {
-                        let _ = response_handler_beta(user_throttle_task, db, send, client_msg)
+                    let is_admin_throttle_listener_active =
+                        is_admin_throttle_listener_active.clone();
+                    let handle_task = {
+                        let task_tracker = task_tracker.clone();
+                        let admin_cancel_recv = admin_cancel_recv.resubscribe();
+                        let admin_cancel_send = admin_cancel_send.clone();
+
+                        // let admin_throttle_listener_close_token =
+                        //     admin_throttle_listener_close_token.clone();
+                        async move {
+                            let _ = response_handler_beta(
+                                user_throttle_task,
+                                db,
+                                send,
+                                client_msg,
+                                task_tracker,
+                                is_admin_throttle_listener_active,
+                                admin_cancel_recv,
+                                admin_cancel_send,
+                            )
                             .await
                             .inspect_err(|err| error!("reponse handler error: {:#?}", err));
+                        }
                     };
-                    handler_tasks.spawn(handle_task);
+                    task_tracker.spawn(handle_task);
                 }
                 Err(err) => {
                     error!("error receiving message: {}", err);
@@ -445,8 +509,8 @@ async fn accept_connection(
         }
     }
 
-    handler_tasks.close();
-    handler_tasks.wait().await;
+    task_tracker.close();
+    task_tracker.wait().await;
     // future::select(read, write).await;
 
     //*user_throttle_task.ws_connection_count.write().await -= 1;
@@ -473,6 +537,10 @@ async fn response_handler_beta(
     db: Arc<DB>,
     send: mpsc::Sender<Message>,
     client_msg: Message,
+    task_tracker: TaskTracker,
+    is_admin_throttle_listener_active: Arc<Mutex<Option<JoinHandle<()>>>>,
+    admin_cancel_recv: broadcast::Receiver<bool>,
+    admin_cancel_send: broadcast::Sender<bool>,
 ) -> Result<(), WsResponseHandlerError> {
     if let Message::Binary(msgclient_msg) = client_msg {
         let client_msg = ClientMsg::from_bytes(&msgclient_msg)?;
@@ -486,37 +554,9 @@ async fn response_handler_beta(
         // start.
         //let elapsed = start.elapsed();
 
-        {
-            let mut ws_path_count = user_throttle_task.ws_path_count.write().await;
-            // let (count, interval) = ws_path_count.entry(ws_path).or_insert((1, Instant::now()));
-            let ws_path_count = ws_path_count.get_mut(&ws_path);
-            if let Some((count, interval)) = ws_path_count {
-                let (count_limit, interval_limit) = ws_path.get_throttle();
-                let elapsed = interval.elapsed();
-                if elapsed > interval_limit {
-                    trace!("throttle: reset");
-                    *count = 0;
-                    *interval = Instant::now();
-                } else if *count > count_limit {
-                    let left = interval_limit.checked_sub(elapsed);
-                    if let Some(left) = left {
-                        trace!("throttle: sleeping for: {:?}", &left);
-                        sleep(left).await;
-                    } else {
-                        error!("throttle: failed to get left time");
-                        sleep(interval_limit).await;
-                    }
-                    *count = 0;
-                    *interval = Instant::now();
-                    trace!("throttle: sleep completed");
-                } else {
-                    trace!("throttle: all good: state: {} {:?}", &count, &elapsed);
-                    *count += 1;
-                }
-            }
-        }
+        user_throttle_task.maybe_sleep(&ws_path).await;
 
-        sleep(Duration::from_secs(10)).await;
+        // sleep(Duration::from_secs(10)).await;
 
         // if interval > TimeDelta::from() {
 
@@ -570,6 +610,17 @@ async fn response_handler_beta(
                 .await
                 .map(ServerMsg::Statistics)
                 .map_err(WsResponseHandlerError::Statistics),
+            ClientMsg::AdminThrottleListenerToggle(state) => ws_hadnle_admin_throttle(
+                db,
+                state,
+                task_tracker,
+                is_admin_throttle_listener_active,
+                admin_cancel_recv,
+                admin_cancel_send,
+            )
+            .await
+            .map(ServerMsg::AdminThrottle)
+            .map_err(WsResponseHandlerError::AdminThrottle),
             _ => Ok(ServerMsg::NotImplemented),
         };
 
@@ -723,6 +774,9 @@ async fn response_handler(
 
 #[derive(Error, Debug)]
 pub enum WsResponseHandlerError {
+    #[error("Statistics error: {0}")]
+    AdminThrottle(#[from] WsHandleAdminThrottleError),
+
     #[error("Statistics error: {0}")]
     Statistics(#[from] WsStatisticsError),
 

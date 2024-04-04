@@ -43,6 +43,7 @@ pub enum ClientMsg {
         password: String,
     },
     Statistics,
+    AdminThrottleListenerToggle(bool),
 }
 
 impl artcord_leptos_web_sockets::Send<u128, ProdMsgPermKey> for ClientMsg {
@@ -138,6 +139,7 @@ pub enum WsPath {
     Register,
     Logout,
     Statistics,
+    AdminThrottleListener,
 }
 
 // #[derive(Clone, PartialEq, Eq, Debug, Hash)]
@@ -162,6 +164,7 @@ impl WsPath {
             WsPath::Register => (1, Duration::from_secs(5)),
             WsPath::Logout => (1, Duration::from_secs(30)),
             WsPath::Statistics => (1, Duration::from_secs(1)),
+            WsPath::AdminThrottleListener => (1, Duration::from_secs(1)),
         }
     }
     // pub fn get_throttle(&self) -> (u64, Duration) {
@@ -232,6 +235,7 @@ impl From<&ClientMsg> for WsPath {
             } => WsPath::Register,
             ClientMsg::Logout => WsPath::Logout,
             ClientMsg::Statistics => WsPath::Statistics,
+            ClientMsg::AdminThrottleListenerToggle(_) => WsPath::AdminThrottleListener,
         }
     }
 }
