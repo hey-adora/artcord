@@ -10,7 +10,7 @@ use super::prod_perm_key::ProdMsgPermKey;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub enum ServerMsg {
-    AdminThrottle(AdminThrottleResponse),
+    AdminThrottle(UserTaskState),
     Statistics(Vec<Statistic>),
     MainGallery(MainGalleryResponse),
     UserGallery(UserGalleryResponse),
@@ -40,11 +40,12 @@ pub enum ServerMsg {
 // }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
-pub enum AdminThrottleResponse {
+pub enum UserTaskState {
     Started,
     Stopped,
     AlreadyStarted,
     AlreadyStopped,
+    TaskIsNotSet,
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]

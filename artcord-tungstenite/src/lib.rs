@@ -39,6 +39,7 @@ use futures::SinkExt;
 use futures::StreamExt;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
+use tokio::time;
 use tokio::time::sleep;
 use tokio::time::Instant;
 use tokio_tungstenite::tungstenite::Message;
@@ -54,6 +55,7 @@ use ws_route::ws_statistics::WsStatisticsError;
 use ws_route::ws_user::WsHandleUserError;
 use ws_route::ws_user_gallery::WsHandleUserGalleryError;
 
+use crate::user_task::UserTask;
 use crate::ws_route::ws_admin_throttle::ws_hadnle_admin_throttle;
 use crate::ws_route::ws_main_gallery::ws_handle_main_gallery;
 use crate::ws_route::ws_statistics;
@@ -61,6 +63,7 @@ use crate::ws_route::ws_statistics::ws_statistics;
 use crate::ws_route::ws_user::ws_handle_user;
 use crate::ws_route::ws_user_gallery::ws_handle_user_gallery;
 
+pub mod user_task;
 pub mod ws_route;
 
 const WS_LIMIT_MAX_CONNECTIONS: u64 = 10;
@@ -407,64 +410,73 @@ async fn accept_connection(
     let (send, mut recv) = mpsc::channel::<Message>(10);
     let (mut write, mut read) = ws_stream.split();
     let task_tracker = TaskTracker::new();
-    let is_admin_throttle_listener_active: Arc<Mutex<Option<JoinHandle<()>>>> =
-        Arc::new(Mutex::new(None));
-    let (admin_cancel_send, admin_cancel_recv) = broadcast::channel::<bool>(1);
+    let mut admin_task_handle = UserTask::<()>::new(task_tracker.clone());
+    let i = time::interval(Duration::from_secs(5));
+    // let is_admin_throttle_listener_active: Arc<Mutex<Option<JoinHandle<()>>>> =
+    //     Arc::new(Mutex::new(None));
+    // let (admin_cancel_send, admin_cancel_recv) = broadcast::channel::<bool>(1);
     // let adming_throttle_listener_is_closed = oneshot::channel();
     // let
 
-    let read = async {
-        loop {
-            let result = read.next().await;
-            let Some(result) = result else {
-                trace!("read.next() returned None");
-                break;
-            };
-            match result {
-                Ok(client_msg) => {
-                    // tokio::spawn(future)
+    let read = {
+        let admin_task_handle = admin_task_handle.clone();
+        let user_throttle_task = &user_throttle_task;
+        let task_tracker = &task_tracker;
+        async move {
+            loop {
+                let result = read.next().await;
+                let Some(result) = result else {
+                    trace!("read.next() returned None");
+                    break;
+                };
+                match result {
+                    Ok(client_msg) => {
+                        // tokio::spawn(future)
 
-                    debug!("proccesing request count: {}", task_tracker.len());
-                    if task_tracker.len() > 2 {
-                        debug!("WS REQUEST LIMIT REACHED");
-                        user_throttle_task.maybe_ban().await;
-                        // *user_throttle_task.ws_red_flag.write().await += 1;
-                        // *red_flag += 1;
-                        break;
-                    }
-
-                    let send = send.clone();
-                    let db = db.clone();
-                    // handler_tasks.len();
-                    let user_throttle_task = user_throttle_task.clone();
-                    let is_admin_throttle_listener_active =
-                        is_admin_throttle_listener_active.clone();
-                    let handle_task = {
-                        let task_tracker = task_tracker.clone();
-                        let admin_cancel_recv = admin_cancel_recv.resubscribe();
-                        let admin_cancel_send = admin_cancel_send.clone();
-
-                        // let admin_throttle_listener_close_token =
-                        //     admin_throttle_listener_close_token.clone();
-                        async move {
-                            let _ = response_handler_beta(
-                                user_throttle_task,
-                                db,
-                                send,
-                                client_msg,
-                                task_tracker,
-                                is_admin_throttle_listener_active,
-                                admin_cancel_recv,
-                                admin_cancel_send,
-                            )
-                            .await
-                            .inspect_err(|err| error!("reponse handler error: {:#?}", err));
+                        debug!("proccesing request count: {}", task_tracker.len());
+                        if task_tracker.len() > 2 {
+                            debug!("WS REQUEST LIMIT REACHED");
+                            user_throttle_task.maybe_ban().await;
+                            // *user_throttle_task.ws_red_flag.write().await += 1;
+                            // *red_flag += 1;
+                            break;
                         }
-                    };
-                    task_tracker.spawn(handle_task);
-                }
-                Err(err) => {
-                    error!("error receiving message: {}", err);
+
+                        let send = send.clone();
+                        let db = db.clone();
+                        // handler_tasks.len();
+                        let user_throttle_task = user_throttle_task.clone();
+                        let admin_task_handle = admin_task_handle.clone();
+                        // let is_admin_throttle_listener_active =
+                        //     is_admin_throttle_listener_active.clone();
+                        let handle_task = {
+                            // let task_tracker = task_tracker.clone();
+                            // let admin_cancel_recv = admin_cancel_recv.resubscribe();
+                            // let admin_cancel_send = admin_cancel_send.clone();
+
+                            // let admin_throttle_listener_close_token =
+                            //     admin_throttle_listener_close_token.clone();
+                            async move {
+                                let _ = response_handler_beta(
+                                    user_throttle_task,
+                                    db,
+                                    send,
+                                    client_msg,
+                                    admin_task_handle,
+                                    // task_tracker,
+                                    // is_admin_throttle_listener_active,
+                                    // admin_cancel_recv,
+                                    // admin_cancel_send,
+                                )
+                                .await
+                                .inspect_err(|err| error!("reponse handler error: {:#?}", err));
+                            }
+                        };
+                        task_tracker.spawn(handle_task);
+                    }
+                    Err(err) => {
+                        error!("error receiving message: {}", err);
+                    }
                 }
             }
         }
@@ -509,6 +521,7 @@ async fn accept_connection(
         }
     }
 
+    admin_task_handle.stop().await;
     task_tracker.close();
     task_tracker.wait().await;
     // future::select(read, write).await;
@@ -537,10 +550,11 @@ async fn response_handler_beta(
     db: Arc<DB>,
     send: mpsc::Sender<Message>,
     client_msg: Message,
-    task_tracker: TaskTracker,
-    is_admin_throttle_listener_active: Arc<Mutex<Option<JoinHandle<()>>>>,
-    admin_cancel_recv: broadcast::Receiver<bool>,
-    admin_cancel_send: broadcast::Sender<bool>,
+    admin_task: UserTask<()>,
+    // task_tracker: TaskTracker,
+    // is_admin_throttle_listener_active: Arc<Mutex<Option<JoinHandle<()>>>>,
+    // admin_cancel_recv: broadcast::Receiver<bool>,
+    // admin_cancel_send: broadcast::Sender<bool>,
 ) -> Result<(), WsResponseHandlerError> {
     if let Message::Binary(msgclient_msg) = client_msg {
         let client_msg = ClientMsg::from_bytes(&msgclient_msg)?;
@@ -611,12 +625,12 @@ async fn response_handler_beta(
                 .map(ServerMsg::Statistics)
                 .map_err(WsResponseHandlerError::Statistics),
             ClientMsg::AdminThrottleListenerToggle(state) => ws_hadnle_admin_throttle(
-                db,
-                state,
-                task_tracker,
-                is_admin_throttle_listener_active,
-                admin_cancel_recv,
-                admin_cancel_send,
+                db, state,
+                admin_task,
+                // task_tracker,
+                // is_admin_throttle_listener_active,
+                // admin_cancel_recv,
+                // admin_cancel_send,
             )
             .await
             .map(ServerMsg::AdminThrottle)
