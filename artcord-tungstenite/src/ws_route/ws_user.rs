@@ -2,27 +2,32 @@ use std::sync::Arc;
 
 use artcord_leptos_web_sockets::{WsPackage, WsRouteKey};
 use artcord_mongodb::database::DB;
-use artcord_state::message::{prod_perm_key::ProdMsgPermKey, prod_server_msg::ServerMsg};
+use artcord_state::message::{
+    prod_perm_key::ProdMsgPermKey,
+    prod_server_msg::{ServerMsg, UserResponse},
+};
 use thiserror::Error;
 
-pub async fn ws_handle_user(
-    db: Arc<DB>,
-    user_id: String,
-) -> Result<artcord_state::message::prod_server_msg::UserResponse, WsHandleUserError> {
+use crate::ws_app::WsResError;
+
+pub async fn ws_handle_user(db: Arc<DB>, user_id: String) -> Result<ServerMsg, WsResError> {
     let result = db.user_find_one(&user_id).await?;
 
     let Some(result) = result else {
-        return Ok(artcord_state::message::prod_server_msg::UserResponse::UserNotFound);
+        let res = UserResponse::UserNotFound;
+        let res = ServerMsg::User(res);
+        return Ok(res);
     };
-
-    Ok(artcord_state::message::prod_server_msg::UserResponse::User(result))
+    let res = UserResponse::User(result);
+    let res = ServerMsg::User(res);
+    Ok(res)
 }
 
-#[derive(Error, Debug)]
-pub enum WsHandleUserError {
-    #[error("Mongodb error: {0}")]
-    MongoDB(#[from] mongodb::error::Error),
-}
+// #[derive(Error, Debug)]
+// pub enum WsHandleUserError {
+//     #[error("Mongodb error: {0}")]
+//     MongoDB(#[from] mongodb::error::Error),
+// }
 
 // enum User {
 //     Stuff

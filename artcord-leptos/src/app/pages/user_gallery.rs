@@ -309,6 +309,9 @@ pub fn UserGalleryPage() -> impl IntoView {
                     <Show when=move||loaded_sig.with(|state| *state == LoadingNotFound::NotFound) >
                     <div>"No Images Found."</div>
                     </Show>
+                    <Show when=move||loaded_sig.with(|state| *state == LoadingNotFound::Error) >
+                    <div>"Error loading."</div>
+                    </Show>
                 </Show>
 
                 <For each=move || global_gallery_imgs.get().into_iter().enumerate()  key=|state| state.1.id.clone() let:data > {

@@ -50,9 +50,7 @@ use tracing::instrument;
 use tracing::Instrument;
 use tracing::{error, trace};
 use ws_route::ws_admin_throttle::WsHandleAdminThrottleError;
-use ws_route::ws_main_gallery::WsHandleMainGalleryError;
 use ws_route::ws_statistics::WsStatisticsError;
-use ws_route::ws_user::WsHandleUserError;
 use ws_route::ws_user_gallery::WsHandleUserGalleryError;
 
 use crate::user_task::UserTask;

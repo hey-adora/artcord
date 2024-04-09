@@ -108,6 +108,7 @@ pub async fn create_ws(
         let task_tracker = task_tracker.clone();
 
         async move {
+            // run taks
             loop {
                 // let handle_con = async {};
                 //
@@ -325,7 +326,7 @@ pub async fn request_read_task(
     let client_msg = match result {
         Ok(result) => result,
         Err(err) => {
-            error!("recv msg error: {}", err);
+            debug!("recv msg error: {}", err);
             return false;
         }
     };
@@ -357,7 +358,15 @@ pub async fn request_handle_task(
         let key: WsRouteKey<u128, ProdMsgPermKey> = client_msg.key;
         let data = client_msg.data;
 
+        // sleep(Duration::from_secs(5)).await;
+
         let response_data: Result<ServerMsg, WsResError> = match data {
+            ClientMsg::User { user_id } => ws_handle_user(db, user_id).await,
+            ClientMsg::UserGalleryInit {
+                amount,
+                from,
+                user_id,
+            } => ws_handle_user_gallery(db, amount, from, user_id).await,
             ClientMsg::GalleryInit { amount, from } => {
                 ws_handle_main_gallery(db, amount, from).await
             }

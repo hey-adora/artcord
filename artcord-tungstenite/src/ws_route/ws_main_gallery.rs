@@ -27,16 +27,16 @@ pub async fn ws_handle_main_gallery(
     Ok(res)
 }
 
-#[derive(Error, Debug)]
-pub enum WsHandleMainGalleryError {
-    #[error("Mongodb error: {0}")]
-    MongoDB(#[from] mongodb::error::Error),
-    // #[error("Bcrypt error: {0}")]
-    // Bcrypt(#[from] bcrypt::BcryptError),
-
-    // #[error("JWT error: {0}")]
-    // JWT(#[from] jsonwebtoken::errors::Error),
-
-    // #[error("RwLock error: {0}")]
-    // RwLock(String),
-}
+// #[derive(Error, Debug)]
+// pub enum WsHandleMainGalleryError {
+//     #[error("Mongodb error: {0}")]
+//     MongoDB(#[from] mongodb::error::Error),
+//     // #[error("Bcrypt error: {0}")]
+//     // Bcrypt(#[from] bcrypt::BcryptError),
+//
+//     // #[error("JWT error: {0}")]
+//     // JWT(#[from] jsonwebtoken::errors::Error),
+//
+//     // #[error("RwLock error: {0}")]
+//     // RwLock(String),
+// }

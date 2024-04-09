@@ -2,25 +2,33 @@ use std::sync::Arc;
 
 use artcord_leptos_web_sockets::{WsPackage, WsRouteKey};
 use artcord_mongodb::database::DB;
-use artcord_state::message::{prod_perm_key::ProdMsgPermKey, prod_server_msg::ServerMsg};
+use artcord_state::message::{
+    prod_perm_key::ProdMsgPermKey,
+    prod_server_msg::{ServerMsg, UserGalleryResponse},
+};
 use thiserror::Error;
+
+use crate::ws_app::WsResError;
 
 pub async fn ws_handle_user_gallery(
     db: Arc<DB>,
     amount: u32,
     from: i64,
     user_id: String,
-) -> Result<artcord_state::message::prod_server_msg::UserGalleryResponse, WsHandleUserGalleryError>
-{
+) -> Result<ServerMsg, WsResError> {
     let result = db
         .img_aggregate_user_gallery(amount, from, &user_id)
         .await?;
 
     let Some(result) = result else {
-        return Ok(artcord_state::message::prod_server_msg::UserGalleryResponse::UserNotFound);
+        let res = UserGalleryResponse::UserNotFound;
+        let res = ServerMsg::UserGallery(res);
+        return Ok(res);
     };
 
-    Ok(artcord_state::message::prod_server_msg::UserGalleryResponse::Imgs(result))
+    let res = UserGalleryResponse::Imgs(result);
+    let res = ServerMsg::UserGallery(res);
+    Ok(res)
 }
 
 #[derive(Error, Debug)]
@@ -37,7 +45,7 @@ pub enum WsHandleUserGalleryError {
 //     User(User)
 // }
 
-
 // fn test () {
 //     let wow = Req::User(User::Stuff);
 // }
+
