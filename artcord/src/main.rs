@@ -1,11 +1,15 @@
 use artcord_actix::server::create_server;
 use artcord_mongodb::database::DB;
 use artcord_serenity::create_bot::create_bot;
-use artcord_tungstenite::create_websockets;
+use artcord_tungstenite::ws_app::create_ws;
 use cfg_if::cfg_if;
 use dotenv::dotenv;
 use futures::try_join;
 use std::{env, sync::Arc};
+use tokio::select;
+use tokio::signal;
+use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
 use tracing::error;
 use tracing::info;
 use tracing::trace;
@@ -52,8 +56,17 @@ async fn main() {
     let db = DB::new(mongodb_url).await;
     let db = Arc::new(db);
 
+    let task_tracker = TaskTracker::new();
+    let cancelation_token = CancellationToken::new();
+
     let web_server = create_server(&gallery_root_dir, &assets_root_dir).await;
-    let web_sockets = create_websockets(db.clone());
+    let (web_sockets_handle, web_sockets_channel) = create_ws(
+        task_tracker.clone(),
+        cancelation_token.clone(),
+        "0.0.0.0:3420",
+        db.clone(),
+    )
+    .await;
 
     if let Some(discord_bot_token) = discord_bot_token {
         let mut discord_bot = create_bot(
@@ -64,28 +77,45 @@ async fn main() {
         )
         .await;
 
-        let r = try_join!(
-            async { web_server.await.or_else(|e| Err(e.to_string())) },
-            async {
-                web_sockets.await;
-                Ok(())
-            },
-            async {
-                discord_bot.start().await;
-                Ok(())
-            },
-        );
-        r.unwrap();
+        select! {
+            _ = discord_bot.start() => {},
+            _ = web_sockets_handle => {},
+            _ = web_server => {},
+            _ = signal::ctrl_c() => {},
+        }
+
+        // let r = try_join!(
+        //     async { web_server.await.or_else(|e| Err(e.to_string())) },
+        //     async {
+        //         web_sockets_handle.await;
+        //         Ok(())
+        //     },
+        //     async {
+        //         discord_bot.start().await;
+        //         Ok(())
+        //     },
+        // );
+        // r.unwrap();
     } else {
         error!("DISCORD_BOT_TOKEN in .env is missing, bot will not start.");
-        let r = try_join!(
-            async { web_server.await.or_else(|e| Err(e.to_string())) },
-            async {
-                web_sockets.await;
-                Ok(())
-            },
-        );
+        select! {
+            _ = web_sockets_handle => {},
+            _ = web_server => {},
+            _ = signal::ctrl_c() => {},
+        }
+        // let r = try_join!(
+        //     async { web_server.await.or_else(|e| Err(e.to_string())) },
+        //     async {
+        //         web_sockets_handle.await;
+        //         Ok(())
+        //     },
+        // );
 
-        r.unwrap();
+        // r.unwrap();
     }
+
+    info!("exiting...");
+    cancelation_token.cancel();
+    task_tracker.close();
+    task_tracker.wait();
 }

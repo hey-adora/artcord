@@ -18,7 +18,8 @@ actix-web = { version = "4.5.1", features = ["macros"] }
 futures = "0.3.30"
 cfg-if = "1"
 tracing = { version = "0.1.40", features = ["release_max_level_warn"] }
-tracing-subscriber = {version ="0.3.18", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+tokio-util = { version = "0.7.10", features = ["full"] }
 #artcord-leptos = { path = "../artcord-actix" }
 # actix-files = { version = "0.6.5", optional = true }
 # actix-web = { version = "4.5.1", optional = true, features = ["macros"] }
@@ -197,4 +198,9 @@ tracing-subscriber = {version ="0.3.18", features = ["env-filter"] }
 # # Defines a size-optimized profile for the WASM bundle in release mode
 
 [features]
-development = ["artcord-actix/development", "artcord-tungstenite/development", "artcord-mongodb/development"]
+development = [
+  "artcord-actix/development",
+  "artcord-tungstenite/development",
+  "artcord-mongodb/development",
+]
+

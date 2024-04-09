@@ -22,7 +22,7 @@ use crate::user_task::UserTask;
 pub async fn ws_hadnle_admin_throttle(
     db: Arc<DB>,
     listener_state: bool,
-    mut admin_task: UserTask<()>,
+    mut admin_task: UserTask,
     // task_tracker: TaskTracker,
     // is_admin_throttle_listener_active: Arc<Mutex<Option<JoinHandle<()>>>>,
     // mut cancel_recv: broadcast::Receiver<bool>,
@@ -35,13 +35,13 @@ pub async fn ws_hadnle_admin_throttle(
     //     return Ok(artcord_state::message::prod_server_msg::UserResponse::UserNotFound);
     // };
     //Ok(artcord_state::message::prod_server_msg::UserTaskState::AlreadyStopped)
-    admin_task
-        .set_output_task(move |_| {
-            Box::pin(async move {
-                debug!("YO YO YO MF ");
-            })
-        })
-        .await;
+    // admin_task
+    //     .set_output_task(move |_| {
+    //         Box::pin(async move {
+    //             debug!("YO YO YO MF ");
+    //         })
+    //     })
+    //     .await;
 
     Ok(UserTaskState::Started)
 }
