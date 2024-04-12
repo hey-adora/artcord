@@ -130,7 +130,7 @@ impl ClientMsg {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+#[derive(Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum WsPath {
     Gallery,
     UserGallery,

@@ -301,7 +301,7 @@ impl WsThrottle {
 }
 
 #[derive(Error, Debug)]
-pub enum ThrottleListenerMsgError {
+pub enum AdminMsgErr {
     // #[error("Statistics error: {0}")]
     // AdminThrottle(#[from] WsHandleAdminThrottleError),
     //

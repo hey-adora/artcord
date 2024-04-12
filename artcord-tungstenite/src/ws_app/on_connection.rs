@@ -9,7 +9,7 @@ use tracing::{debug, Instrument};
 
 use self::con_task::con_task;
 
-use super::{ws_statistic::WsThrottleListenerMsg, ws_throttle::WsThrottle, WsAppMsg};
+use super::{ws_statistic::AdminConStatMsg, ws_throttle::WsThrottle, WsAppMsg};
 
 pub async fn on_connection(
     // listener: TcpListener,
@@ -21,7 +21,7 @@ pub async fn on_connection(
     task_tracker: &TaskTracker,
     ws_addr: &str,
     ws_tx: &mpsc::Sender<WsAppMsg>,
-    throttle_tx: &mpsc::Sender<WsThrottleListenerMsg>,
+    throttle_tx: &mpsc::Sender<AdminConStatMsg>,
 ) {
     // debug!("HELLO ONE");
     // let Some(user_throttle_stats) = throttle.maybe_connect_to_ws(user_addr.ip()).await

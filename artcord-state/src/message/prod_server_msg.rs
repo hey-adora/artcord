@@ -1,3 +1,5 @@
+use std::{collections::HashMap, net::SocketAddr};
+
 use crate::{
     aggregation::server_msg_img::AggImg,
     misc::registration_invalid::RegistrationInvalidMsg,
@@ -6,7 +8,7 @@ use crate::{
 use artcord_leptos_web_sockets::WsRouteKey;
 use serde::{Deserialize, Serialize};
 
-use super::prod_perm_key::ProdMsgPermKey;
+use super::{prod_client_msg::WsPath, prod_perm_key::ProdMsgPermKey};
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub enum ServerMsg {
@@ -61,8 +63,26 @@ pub enum LoginRes {
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct AdminStat {
+    pub addr: String,
+    pub is_connected: bool,
+    pub count: HashMap<WsPath, u64>,
+}
+
+impl AdminStat {
+    pub fn new(addr: String, is_connected: bool, count: HashMap<WsPath, u64>) -> Self {
+        Self {
+            addr,
+            is_connected,
+            count,
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub enum AdminStatsRes {
-    Started(Vec<Statistic>),
+    Started(HashMap<String, AdminStat>),
+    UpdateAddedNew { con_key: String, stat: AdminStat },
     Stopped,
     AlreadyStarted,
     AlreadyStopped,

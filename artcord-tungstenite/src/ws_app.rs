@@ -65,11 +65,11 @@ use tracing::{error, trace};
 
 use crate::ws_app::on_connection::on_connection;
 use crate::ws_app::on_msg::on_ws_msg;
-use crate::ws_app::ws_statistic::create_throttle_listener_task;
+use crate::ws_app::ws_statistic::create_admin_con_stat_task;
 use crate::ws_app::ws_throttle::WsThrottle;
 
 use self::on_connection::con_task::ConMsg;
-use self::ws_statistic::WsThrottleListenerMsg;
+use self::ws_statistic::AdminConStatMsg;
 
 pub mod on_connection;
 mod on_msg;
@@ -140,7 +140,7 @@ pub async fn create_ws(
 //             // }
 //         }
 
-        let (listener_task, throttle_tx) = create_throttle_listener_task(&task_tracker, &cancellation_token).await;
+        let (listener_task, throttle_tx) = create_admin_con_stat_task(&task_tracker, &cancellation_token).await;
 
         let con_task = async move {
             // run taks
@@ -465,7 +465,7 @@ pub enum WsResError {
     ConnectionSend(#[from] tokio::sync::mpsc::error::SendError<ConMsg>),
 
     #[error("Send error: {0}")]
-    ThrottleSend(#[from] tokio::sync::mpsc::error::SendError<WsThrottleListenerMsg>),
+    ThrottleSend(#[from] tokio::sync::mpsc::error::SendError<AdminConStatMsg>),
     // tokio::sync::mpsc::error::SendError<tokio_tungstenite::tungstenite::Message>>>
     #[error("Mongodb error: {0}")]
     MongoDB(#[from] mongodb::error::Error),

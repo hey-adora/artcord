@@ -1,7 +1,10 @@
+use std::collections::HashMap;
 use std::time::Duration;
 
 use artcord_leptos_web_sockets::WsResourceResult;
 use artcord_state::message::prod_client_msg::ClientMsg;
+use artcord_state::message::prod_client_msg::WsPath;
+use artcord_state::message::prod_server_msg::AdminStat;
 use artcord_state::message::prod_server_msg::AdminStatsRes;
 use artcord_state::message::prod_server_msg::ServerMsg;
 use artcord_state::model::statistics;
@@ -19,13 +22,13 @@ use crate::app::global_state::GlobalState;
 
 #[derive(Copy, Clone, Debug)]
 pub struct AdminPageState {
-    pub statistics: RwSignal<Vec<Statistic>>,
+    pub statistics: RwSignal<HashMap<String, AdminStat>>,
 }
 
 impl AdminPageState {
     pub fn new() -> Self {
         Self {
-            statistics: RwSignal::new(Vec::new()),
+            statistics: RwSignal::new(HashMap::new()),
         }
     }
 }
@@ -60,6 +63,11 @@ pub fn Admin() -> impl IntoView {
                     ServerMsg::AdminStats(msg) => match msg {
                         AdminStatsRes::Started(stats) => {
                             statistics.set(stats);
+                        }
+                        AdminStatsRes::UpdateAddedNew { con_key, stat } => {
+                            statistics.update(move |stats| {
+                                stats.insert(con_key, stat);
+                            });
                         }
                         _ => {}
                     },
@@ -139,7 +147,7 @@ pub fn Admin() -> impl IntoView {
                             move || {
 
 
-                                statistics.get().into_iter().map(|stat: Statistic| view! {
+                                statistics.get().into_iter().map(|(key, stat)| view! {
                                     <tr>
                                         <td>{stat.addr}</td>
                                         <td>"item"</td>

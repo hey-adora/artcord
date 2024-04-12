@@ -14,7 +14,7 @@ use tokio_tungstenite::tungstenite::Message;
 use tracing::{debug, error, trace};
 
 use crate::ws_app::on_connection::con_task::ConMsg;
-use crate::ws_app::ws_statistic::WsThrottleListenerMsg;
+use crate::ws_app::ws_statistic::AdminConStatMsg;
 use crate::ws_app::WsResError;
 
 use self::res::admin_statistics::ws_hadnle_admin_throttle;
@@ -28,8 +28,8 @@ pub async fn req_task(
     client_msg: Message,
     db: Arc<DB>,
     connection_task_tx: mpsc::Sender<ConMsg>,
-    throttle_tx: mpsc::Sender<WsThrottleListenerMsg>,
-    connection_key: uuid::Uuid,
+    throttle_tx: mpsc::Sender<AdminConStatMsg>,
+    connection_key: String,
     addr: SocketAddr,
 ) {
     let user_task_result = async {

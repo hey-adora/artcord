@@ -7,7 +7,7 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_util::task::TaskTracker;
 use tracing::{debug, trace};
 
-use crate::ws_app::ws_statistic::WsThrottleListenerMsg;
+use crate::ws_app::ws_statistic::AdminConStatMsg;
 
 use self::req_task::req_task;
 
@@ -21,8 +21,8 @@ pub async fn on_req(
     user_task_tracker: &TaskTracker,
     db: &Arc<DB>,
     connection_task_tx: &mpsc::Sender<ConMsg>,
-    throttle_tx: &mpsc::Sender<WsThrottleListenerMsg>,
-    connection_key: &uuid::Uuid,
+    throttle_tx: &mpsc::Sender<AdminConStatMsg>,
+    connection_key: &String,
     addr: &SocketAddr,
 ) -> bool {
     let Some(result) = result else {

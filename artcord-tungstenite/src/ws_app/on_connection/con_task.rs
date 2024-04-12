@@ -1,6 +1,6 @@
 use crate::ws_app::on_connection::con_task::on_msg::on_msg;
 use crate::ws_app::on_connection::con_task::on_req::on_req;
-use crate::ws_app::ws_statistic::WsThrottleListenerMsg;
+use crate::ws_app::ws_statistic::AdminConStatMsg;
 use crate::ws_app::WsAppMsg;
 use artcord_mongodb::database::DB;
 use futures::StreamExt;
@@ -29,7 +29,7 @@ pub async fn con_task(
     ws_tx: mpsc::Sender<WsAppMsg>,
     ip: IpAddr,
     addr: SocketAddr,
-    throttle_tx: mpsc::Sender<WsThrottleListenerMsg>,
+    throttle_tx: mpsc::Sender<AdminConStatMsg>,
 ) {
     trace!("task spawned!");
     let ws_stream = tokio_tungstenite::accept_async(stream).await;
@@ -43,7 +43,7 @@ pub async fn con_task(
     };
     // ws_stream.
     trace!("con accepted");
-    let con_id = uuid::Uuid::new_v4();
+    let con_id = uuid::Uuid::new_v4().to_string();
     // let Ok(ws_stream) = ws_stream else {
     //     return;
     // };

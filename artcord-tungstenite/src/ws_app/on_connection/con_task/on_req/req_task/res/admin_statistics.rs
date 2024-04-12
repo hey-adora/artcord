@@ -18,16 +18,16 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::{debug, trace};
 
-use crate::ws_app::{ws_statistic::WsThrottleListenerMsg, ConMsg, WsResError};
+use crate::ws_app::{ws_statistic::AdminConStatMsg, ConMsg, WsResError};
 
 pub async fn ws_hadnle_admin_throttle(
     db: Arc<DB>,
     listener_state: bool,
-    connection_key: uuid::Uuid,
+    connection_key: String,
     ws_key: WsRouteKey<u128, ProdMsgPermKey>,
     addr: SocketAddr,
     connection_tx: &mpsc::Sender<ConMsg>,
-    throttle_tx: mpsc::Sender<WsThrottleListenerMsg>,
+    throttle_tx: mpsc::Sender<AdminConStatMsg>,
     // mut admin_task: UserTask,
 
     // task_tracker: TaskTracker,
@@ -37,10 +37,10 @@ pub async fn ws_hadnle_admin_throttle(
     // admin_throttle_listener_recv_close: oneshot::Receiver<bool>,
 ) -> Result<Option<ServerMsg>, WsResError> {
     throttle_tx
-        .send(WsThrottleListenerMsg::Add {
+        .send(AdminConStatMsg::Add {
             connection_key,
             tx: connection_tx.clone(),
-            addr,
+            addr: addr.to_string(),
             ws_key,
         })
         .await?;
