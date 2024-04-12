@@ -6,9 +6,7 @@ use crate::app::utils::{LoadingNotFound, SelectedImg};
 use artcord_leptos_web_sockets::{WsResourceResult, WsRuntime};
 use artcord_state::aggregation::server_msg_img::AggImg;
 use artcord_state::message::prod_client_msg::ClientMsg;
-use artcord_state::message::prod_server_msg::{
-    MainGalleryResponse, ServerMsg, UserGalleryResponse,
-};
+use artcord_state::message::prod_server_msg::{MainGalleryRes, ServerMsg, UserGalleryRes};
 use chrono::Utc;
 use leptos::ev::resize;
 use leptos::html::Section;
@@ -68,7 +66,7 @@ pub fn MainGalleryPage() -> impl IntoView {
                     match server_msg {
                         ServerMsg::MainGallery(response) => {
                             match response {
-                                MainGalleryResponse::Imgs(new_imgs) => {
+                                MainGalleryRes::Imgs(new_imgs) => {
                                     if new_imgs.is_empty()
                                         && loaded_sig.get_untracked() == LoadingNotFound::Loading
                                     {

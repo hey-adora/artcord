@@ -2,7 +2,9 @@ use std::time::Duration;
 
 use artcord_leptos_web_sockets::WsResourceResult;
 use artcord_state::message::prod_client_msg::ClientMsg;
+use artcord_state::message::prod_server_msg::AdminStatsRes;
 use artcord_state::message::prod_server_msg::ServerMsg;
+use artcord_state::model::statistics;
 use artcord_state::model::statistics::Statistic;
 use leptos::*;
 use leptos_router::use_params_map;
@@ -35,6 +37,7 @@ pub fn Admin() -> impl IntoView {
     let nav_tran = global_state.nav_tran;
     let ws = global_state.ws;
     let page = global_state.pages.admin;
+    let statistics = page.statistics;
 
     let ws_statistics = ws.create_singleton();
 
@@ -43,20 +46,36 @@ pub fn Admin() -> impl IntoView {
         nav_tran.set(true);
     });
 
-    spawn_local(async {
-        debug!("ONE");
-        async_std::task::sleep(Duration::from_secs(5)).await;
-        debug!("TWO");
-    });
+    // spawn_local(async {
+    //     debug!("ONE");
+    //     async_std::task::sleep(Duration::from_secs(5)).await;
+    //     debug!("TWO");
+    // });
 
     create_effect(move |_| {
         trace!("admin: sending to open admin throttle sender");
-        ws_statistics.send_or_skip(ClientMsg::AdminThrottleListenerToggle(true), |res| {});
+        ws_statistics.send_or_skip(ClientMsg::AdminThrottleListenerToggle(true), move |res| {
+            match res {
+                WsResourceResult::Ok(server_msg) => match server_msg {
+                    ServerMsg::AdminStats(msg) => match msg {
+                        AdminStatsRes::Started(stats) => {
+                            statistics.set(stats);
+                        }
+                        _ => {}
+                    },
+                    _ => {}
+                },
+                WsResourceResult::TimeOut => {}
+            }
+            // trace!("admin: received: {:?}", res);
+        });
     });
 
     on_cleanup(move || {
         trace!("admin: sending to close admin throttle sender");
-        ws_statistics.send_or_skip(ClientMsg::AdminThrottleListenerToggle(false), |res| {});
+        ws_statistics.send_or_skip(ClientMsg::AdminThrottleListenerToggle(false), |res| {
+            trace!("admin: received: {:?}", res);
+        });
     });
 
     // create_effect(move |_| {
@@ -120,9 +139,9 @@ pub fn Admin() -> impl IntoView {
                             move || {
 
 
-                                page.statistics.get().into_iter().map(|stat: Statistic| view! {
+                                statistics.get().into_iter().map(|stat: Statistic| view! {
                                     <tr>
-                                        <td>{stat.ip}</td>
+                                        <td>{stat.addr}</td>
                                         <td>"item"</td>
                                         <td>"item"</td>
                                     </tr>

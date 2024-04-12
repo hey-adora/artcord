@@ -49,27 +49,13 @@ use tracing::debug;
 use tracing::instrument;
 use tracing::Instrument;
 use tracing::{error, trace};
-use ws_route::ws_admin_throttle::WsHandleAdminThrottleError;
-use ws_route::ws_statistics::WsStatisticsError;
-use ws_route::ws_user_gallery::WsHandleUserGalleryError;
 
-use crate::user_task::UserTask;
-use crate::ws_route::ws_admin_throttle::ws_hadnle_admin_throttle;
-use crate::ws_route::ws_main_gallery::ws_handle_main_gallery;
-use crate::ws_route::ws_statistics;
-use crate::ws_route::ws_statistics::ws_statistics;
-use crate::ws_route::ws_user::ws_handle_user;
-use crate::ws_route::ws_user_gallery::ws_handle_user_gallery;
-
-pub mod user_task;
 pub mod ws_app;
-pub mod ws_route;
-pub mod ws_throttle;
 
 const WS_LIMIT_MAX_CONNECTIONS: u64 = 10;
 const WS_LIMIT_MAX_RED_FLAGS: u64 = 2;
 const WS_EXPIRE_RED_FLAGS_DAYS: u64 = 30;
 const WS_BAN_UNTIL_DAYS: u64 = 30;
+const WS_TOKEN_SIZE: u64 = 256;
 //const WS_LIMIT_THROTTLE: u64 = 10;
-
 // pub async fn create_websockets(db: Arc<DB>) {}

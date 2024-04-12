@@ -18,8 +18,8 @@ pub async fn ws_statistics(db: Arc<DB>) -> Result<Vec<Statistic>, WsStatisticsEr
     // Ok(artcord_state::message::prod_server_msg::UserResponse::User(
     //     result,
     // ))
-    let a = Statistic::new("127.0.0.1".to_string());
-    Ok(vec![a])
+    // let a = Statistic::new("127.0.0.1".to_string());
+    Ok(vec![])
 }
 
 #[derive(Error, Debug)]

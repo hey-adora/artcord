@@ -8,7 +8,7 @@ use crate::app::utils::img_resized::ServerMsgImgResized;
 use crate::app::utils::{LoadingNotFound, SelectedImg};
 use artcord_leptos_web_sockets::WsResourceResult;
 use artcord_state::message::prod_client_msg::ClientMsg;
-use artcord_state::message::prod_server_msg::{ServerMsg, UserGalleryResponse, UserResponse};
+use artcord_state::message::prod_server_msg::{ServerMsg, UserGalleryRes, UserRes};
 use artcord_state::model::user::User;
 use chrono::Utc;
 use leptos::ev::resize;
@@ -19,6 +19,64 @@ use leptos_router::{use_location, use_params_map};
 use leptos_use::{use_event_listener, use_window};
 use tracing::{debug, error, trace};
 use web_sys::Event;
+
+// enum MainEvent {
+//     HomePage(HomePageEvent)
+// }
+//
+// enum HomePageEvent {
+//     Increment
+// }
+//
+// async fn main() {
+//     let dom = create_dom();
+//     let (main_tx, main_rx) = mpsc::channel();
+//     let page_home = RwSignal::new(view!{});
+//     let counter = RwSignal::new(0);
+//     // let (page_home_tx, page_home_rx) = mpsc::channel();
+//     // let (counter_tx, counter_rx) = mpsc::channel();
+//
+//     loop {
+//         select! {
+//           dom_event = dom.rev() => {
+//             match dom_event {
+//               //fires only once
+//               DomEvent::Load => {
+//                 dom.setBody(view! {
+//                   <div>"example"</div>
+//                   {page_home.get()}
+//                 });
+//               }
+//               //the router
+//               DomEvent::UrlChange(url) => {
+//                 match url {
+//                   //home page
+//                   "/" => {
+//                     page_home.set(view! {
+//                       <div>{counter.get()}</div>
+//                       <button on:click=|_| {  } >increment</button>
+//                     });
+//                   },
+//                   _ => {
+//                     page_home(view!{"404"});
+//                  },
+//                 }
+//               }
+//             }
+//           },
+//           // logic lives here
+//           main_event = main_rx.recv() => {
+//                 match main_event {
+//                     MainEvent::HomePage(page) => match page {
+//                         HomePageEvent::Increment => {
+//                             counter.update(|count| *count += 1);
+//                         }
+//                     }
+//                 }
+//           }
+//         }
+//     }
+// }
 
 #[derive(Copy, Clone, Debug)]
 pub struct PageUserGalleryState {
@@ -119,7 +177,7 @@ pub fn UserGalleryPage() -> impl IntoView {
                 match ws_gallery.send_or_skip(msg, move |server_msg| match server_msg {
                     WsResourceResult::Ok(server_msg) => match server_msg {
                         ServerMsg::UserGallery(response) => match response {
-                            UserGalleryResponse::Imgs(new_imgs) => {
+                            UserGalleryRes::Imgs(new_imgs) => {
                                 let new_imgs = new_imgs
                                     .iter()
                                     .map(|img| ServerMsgImgResized::from(img.to_owned()))
@@ -137,7 +195,7 @@ pub fn UserGalleryPage() -> impl IntoView {
                                 trace!("user_gallery: loadeding state set to: Loaded");
                                 loaded_sig.set(LoadingNotFound::Loaded);
                             }
-                            UserGalleryResponse::UserNotFound => {
+                            UserGalleryRes::UserNotFound => {
                                 trace!("user_gallery: loadeding state set to: NotFound");
                                 loaded_sig.set(LoadingNotFound::NotFound);
                             }
@@ -184,13 +242,13 @@ pub fn UserGalleryPage() -> impl IntoView {
             match ws_user.send_or_skip(msg, move |server_msg| match server_msg {
                 WsResourceResult::Ok(server_msg) => match server_msg {
                     ServerMsg::User(response) => match response {
-                        UserResponse::User(user) => {
+                        UserRes::User(user) => {
                             let user_id = user.author_id.clone();
                             global_gallery_user.set(Some(user));
                             trace!("user_gallery: user received '{}', fetching imgs", &user_id);
                             fetch(user_id);
                         }
-                        UserResponse::UserNotFound => {
+                        UserRes::UserNotFound => {
                             trace!("user_gallery: loadeding state set to: NotFound");
                             loaded_sig.set(LoadingNotFound::NotFound);
                         }

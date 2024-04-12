@@ -4,7 +4,7 @@ use artcord_leptos_web_sockets::{WsPackage, WsRouteKey};
 use artcord_mongodb::database::DB;
 use artcord_state::message::{
     prod_perm_key::ProdMsgPermKey,
-    prod_server_msg::{MainGalleryResponse, ServerMsg},
+    prod_server_msg::{MainGalleryRes, ServerMsg},
 };
 use thiserror::Error;
 
@@ -14,7 +14,7 @@ pub async fn ws_handle_main_gallery(
     db: Arc<DB>,
     amount: u32,
     from: i64,
-) -> Result<ServerMsg, WsResError> {
+) -> Result<Option<ServerMsg>, WsResError> {
     let result = db.img_aggregate_gallery(amount, from).await?;
 
     // let server_package = WsPackage::<u128, ProdMsgPermKey, ServerMsg> {
@@ -22,9 +22,9 @@ pub async fn ws_handle_main_gallery(
     //     data: ServerMsg::MainGallery(artcord_state::message::prod_server_msg::MainGalleryResponse::Imgs(result)),
     // };
     // Ok(server_package)
-    let res = MainGalleryResponse::Imgs(result);
+    let res = MainGalleryRes::Imgs(result);
     let res = ServerMsg::MainGallery(res);
-    Ok(res)
+    Ok(Some(res))
 }
 
 // #[derive(Error, Debug)]

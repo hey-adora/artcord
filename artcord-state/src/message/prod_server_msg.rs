@@ -10,11 +10,14 @@ use super::prod_perm_key::ProdMsgPermKey;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub enum ServerMsg {
-    AdminThrottle(UserTaskState),
+    AdminStats(AdminStatsRes),
     Statistics(Vec<Statistic>),
-    MainGallery(MainGalleryResponse),
-    UserGallery(UserGalleryResponse),
-    User(UserResponse),
+    MainGallery(MainGalleryRes),
+    UserGallery(UserGalleryRes),
+    User(UserRes),
+    Login(LoginRes),
+    Registration(RegistrationRes),
+    LoggedOut,
 
     // Imgs(Vec<AggImg>),
     // ProfileImgs(Option<Vec<AggImg>>),
@@ -39,9 +42,27 @@ pub enum ServerMsg {
 //     Uknown
 // }
 
+// #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
+// pub enum RegistrationRes {
+//     Success,
+//     Err(RegistrationInvalidMsg),
+// }
+
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
-pub enum UserTaskState {
-    Started,
+pub enum RegistrationRes {
+    Success,
+    Err(RegistrationInvalidMsg),
+}
+
+#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub enum LoginRes {
+    Success { user_id: String, token: String },
+    Err(String),
+}
+
+#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub enum AdminStatsRes {
+    Started(Vec<Statistic>),
     Stopped,
     AlreadyStarted,
     AlreadyStopped,
@@ -49,18 +70,18 @@ pub enum UserTaskState {
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
-pub enum MainGalleryResponse {
+pub enum MainGalleryRes {
     Imgs(Vec<AggImg>),
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
-pub enum UserGalleryResponse {
+pub enum UserGalleryRes {
     Imgs(Vec<AggImg>),
     UserNotFound,
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
-pub enum UserResponse {
+pub enum UserRes {
     User(User),
     UserNotFound,
 }

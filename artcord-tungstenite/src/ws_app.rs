@@ -13,7 +13,11 @@ use artcord_mongodb::database::DB;
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_client_msg::WsPath;
 use artcord_state::message::prod_perm_key::ProdMsgPermKey;
+use artcord_state::message::prod_server_msg::AdminStatsRes;
 use artcord_state::message::prod_server_msg::ServerMsg;
+use artcord_state::model::statistics;
+use artcord_state::model::statistics::Statistic;
+use artcord_state::shared_global::throttle;
 use artcord_state::util::time::time_is_past;
 use artcord_state::util::time::time_passed_days;
 use chrono::DateTime;
@@ -21,6 +25,7 @@ use chrono::Month;
 use chrono::Months;
 use chrono::TimeDelta;
 use chrono::Utc;
+use futures::join;
 use futures::pin_mut;
 use futures::stream::SplitSink;
 use futures::stream::SplitStream;
@@ -58,16 +63,22 @@ use tracing::instrument;
 use tracing::Instrument;
 use tracing::{error, trace};
 
-use crate::user_task::UserTask;
-use crate::ws_route::ws_admin_throttle::ws_hadnle_admin_throttle;
-use crate::ws_route::ws_main_gallery::ws_handle_main_gallery;
-use crate::ws_route::ws_statistics;
-use crate::ws_route::ws_statistics::ws_statistics;
-use crate::ws_route::ws_user::ws_handle_user;
-use crate::ws_route::ws_user_gallery::ws_handle_user_gallery;
+use crate::ws_app::on_connection::on_connection;
+use crate::ws_app::on_msg::on_ws_msg;
+use crate::ws_app::ws_statistic::create_throttle_listener_task;
+use crate::ws_app::ws_throttle::WsThrottle;
+
+use self::on_connection::con_task::ConMsg;
+use self::ws_statistic::WsThrottleListenerMsg;
+
+pub mod on_connection;
+mod on_msg;
+pub mod ws_statistic;
+pub mod ws_throttle;
 
 pub enum WsAppMsg {
     Stop,
+    Disconnected(IpAddr),
 }
 
 // pub struct WsAppDTO {
@@ -91,6 +102,15 @@ pub enum WsAppMsg {
 
 pub struct WsApp {}
 // "0.0.0.0:3420"
+
+// pub struct WsThrottleListenerKey {
+//     tx:
+// }
+//
+//
+//
+//
+
 pub async fn create_ws(
     task_tracker: TaskTracker,
     cancellation_token: CancellationToken,
@@ -102,12 +122,27 @@ pub async fn create_ws(
     let listener = try_socket.expect("Failed to bind");
     trace!("ws({}): started", &ws_addr);
 
-    let (ws_send, mut ws_recv) = mpsc::channel::<WsAppMsg>(1);
+    let (ws_tx, mut ws_recv) = mpsc::channel::<WsAppMsg>(1);
 
     let handle: JoinHandle<()> = task_tracker.spawn({
         let task_tracker = task_tracker.clone();
+        let ws_tx = ws_tx.clone();
+        let mut throttle = WsThrottle::new();
+        // let mut statistics
 
-        async move {
+//         let (test1, test2) = mpsc::channel::<u32>(1);
+//         let aa =move || {            let a = test2;
+// };
+//         loop {
+//
+//             // select! {
+//             //
+//             // }
+//         }
+
+        let (listener_task, throttle_tx) = create_throttle_listener_task(&task_tracker, &cancellation_token).await;
+
+        let con_task = async move {
             // run taks
             loop {
                 // let handle_con = async {};
@@ -124,14 +159,13 @@ pub async fn create_ws(
                 //         return;
                 //     }
                 // };
-
                 select! {
                     con = listener.accept() => {
-                        on_connection(con, &cancellation_token, &db, &task_tracker, &ws_addr).await;
+                        on_connection(con, &mut throttle, &cancellation_token, &db, &task_tracker, &ws_addr, &ws_tx, &throttle_tx).await;
                     },
 
                     ws_msg = ws_recv.recv() => {
-                        let exit = on_ws_msg(ws_msg).await;
+                        let exit = on_ws_msg(ws_msg, &mut throttle).await;
                         if exit {
                             break;
                         }
@@ -142,287 +176,37 @@ pub async fn create_ws(
                     }
                 }
             }
+        };
+
+        async move {
+            let result = join!(listener_task, con_task);
+            if let Err(err) = result.0 {
+                error!("ws: join error: {}", err);
+            }
         }
     });
 
-    (handle, ws_send)
+    (handle, ws_tx)
     // let mut throttle = Throttle::new();
 }
 
-pub async fn on_connection(
-    // listener: TcpListener,
-    // ws_addr: &str,
-    con: Result<(TcpStream, SocketAddr), io::Error>,
-    cancellation_token: &CancellationToken,
-    db: &Arc<DB>,
-    task_tracker: &TaskTracker,
-    ws_addr: &str,
-) {
-    // debug!("HELLO ONE");
-    // let Some(user_throttle_stats) = throttle.maybe_connect_to_ws(user_addr.ip()).await
-    // else {
-    //     debug!("HELLO TWO");
-    //     continue;
-    // };
-    // let ws_connection_count = *user_throttle_stats.ws_connection_count.read().await;
-
-    // debug!("con count: {}", ws_connection_count);
-
-    // task_tracker.spawn(accept_connection(user_addr, stream, db.clone()).instrument(
-    //     tracing::trace_span!("ws", "{}-{}", ws_addr, user_addr.to_string()),
-    // ));
-    let (stream, user_addr) = match con {
-        Ok(result) => result,
-        Err(err) => {
-            trace!("ws({}): error accepting connection: {}", &ws_addr, err);
-            return;
-        }
-    };
-    task_tracker.spawn(
-        connection_task(stream, cancellation_token.clone(), db.clone()).instrument(
-            tracing::trace_span!("ws", "{}-{}", ws_addr, user_addr.to_string()),
-        ),
-    );
-}
-
-pub async fn on_ws_msg(msg: Option<WsAppMsg>) -> bool {
-    let Some(msg) = msg else {
-        trace!("ws_recv channel closed");
-        return true;
-    };
-    match msg {
-        WsAppMsg::Stop => {
-            return true;
-        }
-    }
-    false
-}
-
-pub enum WsConnectionMsg {
-    Stop,
-}
-
-pub async fn connection_task(
-    stream: TcpStream,
-    cancellation_token: CancellationToken,
-    db: Arc<DB>,
-) {
-    trace!("task spawned!");
-    let ws_stream = tokio_tungstenite::accept_async(stream).await;
-    // .expect("Error during the websocket handshake occurred.");
-    let ws_stream = match ws_stream {
-        Ok(ws_stream) => ws_stream,
-        Err(err) => {
-            trace!("ws_error: {}", err);
-            return;
-        }
-    };
-    trace!("con accepted");
-    // let Ok(ws_stream) = ws_stream else {
-    //     return;
-    // };
-
-    let (connection_task_tx, mut connection_task_rx) = mpsc::channel::<WsConnectionMsg>(1);
-    let (client_out_handler, mut client_out_handle) = mpsc::channel::<Message>(10);
-    let (mut client_out, mut client_in) = ws_stream.split();
-    let user_task_tracker = TaskTracker::new();
-
-    // let read = async {};
-
-    // let write = async {
-    //     while let Some(msg) = .await {
-    //         let send_result = client_out.send(msg).await;
-    //         if let Err(send_result) = send_result {
-    //             error!("send error: {}", send_result);
-    //             return;
-    //         }
-    //     }
-    // };
-
-    // pin_mut!(read, write);
-
-    loop {
-        select! {
-            result = client_in.next() => {
-                trace!("read finished");
-                let exit = request_read_task(result, &user_task_tracker, &db, &client_out_handler, &connection_task_tx).await;
-                if exit {
-                    break;
-                }
-            },
-
-            result = client_out_handle.recv() => {
-                trace!("write finished");
-                let exit = request_write_task(&mut client_out, result).await;
-                if exit {
-                    break;
-                }
-            },
-
-            result = connection_task_rx.recv() => {
-                let exit = on_connection_msg(result).await;
-                if exit {
-                    break;
-                }
-            },
-
-            _ = cancellation_token.cancelled() => {
-                break;
-            }
-        }
-    }
-
-    user_task_tracker.close();
-    user_task_tracker.wait().await;
-    trace!("disconnected");
-}
-
-pub async fn on_connection_msg(msg: Option<WsConnectionMsg>) -> bool {
-    let Some(msg) = msg else {
-        trace!("connection msg channel closed");
-        return true;
-    };
-
-    match msg {
-        WsConnectionMsg::Stop => {
-            return true;
-        }
-    }
-
-    false
-}
-
-pub async fn request_write_task(
-    client_out: &mut SplitSink<WebSocketStream<TcpStream>, Message>,
-    msg: Option<Message>,
-) -> bool {
-    let Some(msg) = msg else {
-        trace!("write task channel closed");
-        return true;
-    };
-
-    let send_result = client_out.send(msg).await;
-    if let Err(send_result) = send_result {
-        error!("send error: {}", send_result);
-        return false;
-    }
-
-    false
-}
-
-pub async fn request_read_task(
-    result: Option<Result<Message, tokio_tungstenite::tungstenite::error::Error>>,
-    // mut client_in: SplitStream<WebSocketStream<TcpStream>>,
-    user_task_tracker: &TaskTracker,
-    db: &Arc<DB>,
-    client_out_handler: &mpsc::Sender<Message>,
-    connection_task_tx: &mpsc::Sender<WsConnectionMsg>,
-) -> bool {
-    let Some(result) = result else {
-        trace!("read.next() returned None");
-        return true;
-    };
-
-    let client_msg = match result {
-        Ok(result) => result,
-        Err(err) => {
-            debug!("recv msg error: {}", err);
-            return false;
-        }
-    };
-
-    user_task_tracker.spawn(request_handle_task(
-        client_msg,
-        db.clone(),
-        client_out_handler.clone(),
-        connection_task_tx.clone(),
-    ));
-
-    false
-}
-
-pub async fn request_handle_task(
-    client_msg: Message,
-    db: Arc<DB>,
-    client_out_handler: mpsc::Sender<Message>,
-    connection_task_tx: mpsc::Sender<WsConnectionMsg>,
-) {
-    let user_task_result = async {
-        // let client_msg = client_msg?;
-        let client_msg: Result<Vec<u8>, WsResError> = match client_msg {
-            Message::Binary(client_msg) => Ok(client_msg),
-            client_msg => Err(WsResError::InvalidClientMsg),
-        };
-
-        let client_msg = ClientMsg::from_bytes(&client_msg?)?;
-        let key: WsRouteKey<u128, ProdMsgPermKey> = client_msg.key;
-        let data = client_msg.data;
-
-        // sleep(Duration::from_secs(5)).await;
-
-        let response_data: Result<ServerMsg, WsResError> = match data {
-            ClientMsg::User { user_id } => ws_handle_user(db, user_id).await,
-            ClientMsg::UserGalleryInit {
-                amount,
-                from,
-                user_id,
-            } => ws_handle_user_gallery(db, amount, from, user_id).await,
-            ClientMsg::GalleryInit { amount, from } => {
-                ws_handle_main_gallery(db, amount, from).await
-            }
-            _ => Ok(ServerMsg::NotImplemented),
-        };
-        let response_data = response_data
-            .inspect_err(|err| error!("reponse error: {:#?}", err))
-            .unwrap_or(ServerMsg::Error);
-        let response = WsPackage::<u128, ProdMsgPermKey, ServerMsg> {
-            key,
-            data: response_data,
-        };
-        #[cfg(feature = "development")]
-        {
-            let mut output = format!("{:?}", &response);
-            output.truncate(100);
-            trace!("sent: {}", output);
-        }
-        let response = ServerMsg::as_bytes(response)?;
-        let response = Message::Binary(response);
-        client_out_handler.send(response).await?;
-
-        // Ok::<Message, WsUserTaskError>(Message::Binary(bytes))
-        Ok::<(), WsResError>(())
-    }
-    .await;
-    if let Err(err) = user_task_result {
-        debug!("res error: {}", &err);
-        let send_result = client_out_handler
-            .send(Message::Close(Some(CloseFrame {
-                code: CloseCode::Error,
-                reason: Cow::from("corrupted"),
-            })))
-            .await;
-        if let Err(err) = send_result {
-            error!("failed to send close signal: {}", err);
-        }
-        // connection_task_tx.send(WsConnectionMsg::Stop);
-    }
-    // match user_task_result {
-    //     Ok(response) => {
-    //         // let send_result = send.send(response).await;
-    //         // if let Err(err) = send_result {
-    //         //     trace!("sending to client err: {}", err);
-    //         // }
-    //     }
-    //     Err(err) => {
-    //         debug!("res error: {}", &err);
-    //         // let error_response = ServerMsg::NotImplemented
-    //         // let send_result = send.send(response).await;
-    //         // if let Err(err) = send_result {
-    //         //     trace!("sending to client err: {}", err);
-    //         // }
-    //     }
-    // }
-}
+// pub async fn request_write_task(
+//     client_out: &mut SplitSink<WebSocketStream<TcpStream>, Message>,
+//     msg: Option<Message>,
+// ) -> bool {
+//     let Some(msg) = msg else {
+//         trace!("write task channel closed");
+//         return true;
+//     };
+//
+//     let send_result = client_out.send(msg).await;
+//     if let Err(send_result) = send_result {
+//         error!("send error: {}", send_result);
+//         return false;
+//     }
+//
+//     false
+// }
 
 // pub async fn start(&self) {
 // }
@@ -668,20 +452,26 @@ pub enum WsResError {
     //
     // #[error("User error: {0}")]
     // User(#[from] WsHandleUserError),
-    #[error("Invalid client msg error")]
-    InvalidClientMsg,
+    #[error("Invalid client msg error: {0}")]
+    InvalidClientMsg(Message),
 
     #[error("MainGallery error: {0}")]
     Serialization(#[from] bincode::Error),
 
     #[error("Send error: {0}")]
     Send(#[from] tokio::sync::mpsc::error::SendError<tokio_tungstenite::tungstenite::Message>),
+
+    #[error("Send error: {0}")]
+    ConnectionSend(#[from] tokio::sync::mpsc::error::SendError<ConMsg>),
+
+    #[error("Send error: {0}")]
+    ThrottleSend(#[from] tokio::sync::mpsc::error::SendError<WsThrottleListenerMsg>),
     // tokio::sync::mpsc::error::SendError<tokio_tungstenite::tungstenite::Message>>>
     #[error("Mongodb error: {0}")]
     MongoDB(#[from] mongodb::error::Error),
 
-    // #[error("Bcrypt error: {0}")]
-    // Bcrypt(#[from] bcrypt::BcryptError),
+    #[error("Bcrypt error: {0}")]
+    Bcrypt(#[from] bcrypt::BcryptError),
     //
     // #[error("JWT error: {0}")]
     // JWT(#[from] jsonwebtoken::errors::Error),
