@@ -42,7 +42,7 @@ pub fn Admin() -> impl IntoView {
     let page = global_state.pages.admin;
     let statistics = page.statistics;
 
-    let ws_statistics = ws.create_singleton();
+    let ws_statistics = ws.builder().portal().stream().build();
 
     // ws_statistics.send_or_skip(Vgc, on_receive)
     create_effect(move |_| {

@@ -31,7 +31,7 @@ pub fn HomePage() -> impl IntoView {
         shrink_nav(nav_tran, y as u32);
     };
 
-    let ws_test = ws.create_singleton();
+    let ws_test = ws.builder().portal().build();
     let test_click = move |_| {
         let msg = ClientMsg::Statistics;
         ws.send(ProdMsgPermKey::Login, msg);

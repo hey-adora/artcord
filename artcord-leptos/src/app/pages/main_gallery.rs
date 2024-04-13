@@ -41,8 +41,9 @@ pub fn MainGalleryPage() -> impl IntoView {
     let gallery_section = create_node_ref::<Section>();
     let loaded_sig = global_state.pages.gallery.gallery_loaded;
     let location = use_location();
+    let ws = global_state.ws;
 
-    let ws_gallery = global_state.ws.create_singleton();
+    let ws_gallery = ws.builder().portal().build();
 
     let on_fetch = move || {
         let Some(section) = gallery_section.get_untracked() else {

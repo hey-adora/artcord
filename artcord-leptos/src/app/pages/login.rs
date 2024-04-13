@@ -53,13 +53,13 @@ pub fn Login() -> impl IntoView {
     let input_email_error: RwSignal<Option<String>> = RwSignal::new(None);
     let input_password_error: RwSignal<Option<String>> = RwSignal::new(None);
 
-    let ws_login = ws.create_singleton();
+    let ws_login = ws.builder().portal().build();
 
     // ws_login.send_or_skip(ClientMsg::Logout, |msg| {
     //     debug!("hellllooo");
     // });
 
-   // #[cfg(target_arch = "wasm32")]
+    // #[cfg(target_arch = "wasm32")]
     // ws.on_ws_state(move |is_connected| {
     //    // debug!("AAAAAAAAAAAAAAAAAAAAAAAAAAA: {}", is_connected);
     //     debug!("login: running on_ws_state: {}", is_connected);
@@ -71,7 +71,6 @@ pub fn Login() -> impl IntoView {
     //         loading_state.set(AuthLoadingState::Connecting);
     //     }
     // });
-   
 
     let on_submit = move |ev: SubmitEvent| {
         ev.prevent_default();
@@ -102,7 +101,6 @@ pub fn Login() -> impl IntoView {
 
         let msg = ClientMsg::Login { password, email };
 
-
         match ws_login.send_or_skip(msg, move |msg| {
             debug!("login: RECEIVED: {:?}", msg);
             loading_state.set(AuthLoadingState::Completed);
@@ -112,20 +110,20 @@ pub fn Login() -> impl IntoView {
                     WsResourcSendResult::Sent | WsResourcSendResult::Queued => {
                         loading_state.set(AuthLoadingState::Processing);
                     }
-                    WsResourcSendResult::Skipped=> {
+                    WsResourcSendResult::Skipped => {
                         warn!("login: ws unexpected result: tried to login twice");
                         //loading_state.set(AuthLoadingState::Processing);
                     }
                 }
-            }   
+            }
             Err(err) => {
                 error!("login: ws error: {}", err);
-                loading_state.set(AuthLoadingState::Failed(RegistrationInvalidMsg::new().general(format!("login: failed: {}", err))));
-            }         
+                loading_state.set(AuthLoadingState::Failed(
+                    RegistrationInvalidMsg::new().general(format!("login: failed: {}", err)),
+                ));
+            }
         }
         //global_state.socket_send(&msg); a
-
-        
     };
 
     // create_effect(move |_| {
@@ -171,9 +169,9 @@ pub fn Login() -> impl IntoView {
                         "Processing..."
                 </section>
             </Show>
-            
-            
-            
+
+
+
              <section class=" flex flex-col justify-center max-w-[20rem] w-full min-h-[20rem] bg-white rounded-3xl p-5" style:display=move || if ws.connected.get() && match loading_state.get() { AuthLoadingState::Ready =>true, AuthLoadingState::Failed(_) => true, _ => false } { "flex" } else {"none"} >
                         <form class="text-black flex flex-col gap-5 " on:submit=on_submit>
                             <Show when=move || auth_input_show_error(input_general_error) >

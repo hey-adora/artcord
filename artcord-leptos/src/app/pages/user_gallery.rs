@@ -109,8 +109,8 @@ pub fn UserGalleryPage() -> impl IntoView {
     let ws = global_state.ws;
     let location = use_location();
 
-    let ws_gallery = ws.create_singleton();
-    let ws_user = ws.create_singleton();
+    let ws_gallery = ws.builder().portal().build();
+    let ws_user = ws.builder().portal().build();
 
     let on_click = move |img: ServerMsgImgResized| {
         selected_img.set(Some(SelectedImg {

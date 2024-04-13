@@ -23,6 +23,7 @@ pub enum WsRouteKey<
     PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
 > {
     Perm(PermKeyType),
+    GenPerm(TempKeyType),
     TempSingle(TempKeyType),
 }
 
@@ -339,14 +340,23 @@ impl<
         }
     }
 
-    pub fn create_singleton(&self) -> WsResource<TempKeyType, PermKeyType, ServerMsg, ClientMsg> {
-        WsResource::<TempKeyType, PermKeyType, ServerMsg, ClientMsg>::new(
+    pub fn builder(&self) -> WsBuilder<TempKeyType, PermKeyType, ServerMsg, ClientMsg> {
+        WsBuilder::new(
             self.ws_url,
             self.global_msgs_callbacks_single,
             self.ws,
             self.global_pending_client_msgs,
         )
     }
+
+    // pub fn create_node(&self) -> WsPortal<TempKeyType, PermKeyType, ServerMsg, ClientMsg> {
+    //     WsPortal::<TempKeyType, PermKeyType, ServerMsg, ClientMsg>::new(
+    //         self.ws_url,
+    //         self.global_msgs_callbacks_single,
+    //         self.ws,
+    //         self.global_pending_client_msgs,
+    //     )
+    // }
 
     fn ws_on_open(
         ws: StoredValue<Option<WebSocket>>,
@@ -421,7 +431,8 @@ impl<
             WsRouteKey::Perm(_) => {
                 Self::execute_multi(url, callbacks_multi, server_msg);
             }
-            WsRouteKey::TempSingle(_) => {
+
+            WsRouteKey::TempSingle(_) | WsRouteKey::GenPerm(_) => {
                 Self::execute_single(url, callbacks_single, server_msg);
             }
         }
@@ -602,6 +613,14 @@ impl<
                         warn!("ws({})_global: execute_single failed to remove callback: current_key: {:?}, current callbacks: {:#?}", url, &key, callbacks_single.get_value().keys());
                     }
                 });
+            }
+            WsRouteKey::GenPerm(_) => {
+                trace!(
+                    "ws({})_global: running(execute_single) callback: {:#?}",
+                    url,
+                    key
+                );
+                callback(WsResourceResult::Ok(package.data));
             }
             _ => {
                 warn!("ws({})_global: Wrong key was selected: {:?}", url, &key);
@@ -861,8 +880,93 @@ pub fn get_ws_url(port: u32) -> Result<String, GetUrlError> {
 }
 use wasm_bindgen::prelude::wasm_bindgen;
 
+#[derive(Clone, Debug, Copy)]
+pub struct WsBuilder<
+    TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
+    PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
+    ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
+    ClientMsg: Clone + Send<TempKeyType, PermKeyType> + Debug + 'static,
+> {
+    ws_url: StoredValue<Option<String>>,
+    global_msgs_closures: GlobalMsgCallbacksSingle<TempKeyType, PermKeyType, ServerMsg>,
+    ws: StoredValue<Option<WebSocket>>,
+    global_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
+    phantom: PhantomData<ClientMsg>,
+}
+
+impl<
+        TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
+        PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
+        ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
+        ClientMsg: Clone + Send<TempKeyType, PermKeyType> + Debug + 'static,
+    > WsBuilder<TempKeyType, PermKeyType, ServerMsg, ClientMsg>
+{
+    pub fn new(
+        ws_url: StoredValue<Option<String>>,
+        global_msgs_closures: GlobalMsgCallbacksSingle<TempKeyType, PermKeyType, ServerMsg>,
+        ws: StoredValue<Option<WebSocket>>,
+        global_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
+    ) -> Self {
+        Self {
+            ws_url,
+            global_msgs_closures,
+            ws,
+            global_pending_client_msgs,
+            phantom: PhantomData,
+        }
+    }
+
+    pub fn portal(self) -> PortalBuilder<TempKeyType, PermKeyType, ServerMsg, ClientMsg> {
+        PortalBuilder {
+            ws_builder: self,
+            single_use: true,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Copy)]
+pub struct PortalBuilder<
+    TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
+    PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
+    ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
+    ClientMsg: Clone + Send<TempKeyType, PermKeyType> + Debug + 'static,
+> {
+    ws_builder: WsBuilder<TempKeyType, PermKeyType, ServerMsg, ClientMsg>,
+    single_use: bool,
+}
+
+impl<
+        TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
+        PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
+        ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
+        ClientMsg: Clone + Send<TempKeyType, PermKeyType> + Debug + 'static,
+    > PortalBuilder<TempKeyType, PermKeyType, ServerMsg, ClientMsg>
+{
+    pub fn stream(mut self) -> Self {
+        self.single_use = false;
+        self
+    }
+
+    pub fn build(self) -> WsPortal<TempKeyType, PermKeyType, ServerMsg, ClientMsg> {
+        WsPortal::new(
+            self.ws_builder.ws_url,
+            self.ws_builder.global_msgs_closures,
+            self.ws_builder.ws,
+            self.ws_builder.global_pending_client_msgs,
+            self.single_use,
+        )
+    }
+}
+
+// #[derive(Clone, Debug, Copy)]
+// pub struct WsBuilder {
+//     settings: WsResourceSettings
+// }
+//
+// pub fn
+
 #[derive(Clone, Debug)]
-pub struct WsResource<
+pub struct WsPortal<
     TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
     PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
     ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
@@ -875,6 +979,8 @@ pub struct WsResource<
     ws_url: StoredValue<Option<String>>,
     key: StoredValue<WsRouteKey<TempKeyType, PermKeyType>>,
     phantom: PhantomData<ClientMsg>,
+    single_use: bool,
+    // settings: WsBuilder,
 }
 
 impl<
@@ -882,7 +988,7 @@ impl<
         PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
         ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
         ClientMsg: Clone + Send<TempKeyType, PermKeyType> + Debug + 'static,
-    > Copy for WsResource<TempKeyType, PermKeyType, ServerMsg, ClientMsg>
+    > Copy for WsPortal<TempKeyType, PermKeyType, ServerMsg, ClientMsg>
 {
 }
 
@@ -891,16 +997,22 @@ impl<
         PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
         ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
         ClientMsg: Clone + Send<TempKeyType, PermKeyType> + Debug + 'static,
-    > WsResource<TempKeyType, PermKeyType, ServerMsg, ClientMsg>
+    > WsPortal<TempKeyType, PermKeyType, ServerMsg, ClientMsg>
 {
     pub fn new(
         ws_url: StoredValue<Option<String>>,
         global_msgs_closures: GlobalMsgCallbacksSingle<TempKeyType, PermKeyType, ServerMsg>,
         ws: StoredValue<Option<WebSocket>>,
         global_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
+        single_use: bool,
+        // settings: WsBuilder,
     ) -> Self {
-        let ws_round_kind =
-            WsRouteKey::<TempKeyType, PermKeyType>::TempSingle(TempKeyType::generate_key());
+        let ws_round_kind = if single_use {
+            WsRouteKey::<TempKeyType, PermKeyType>::TempSingle(TempKeyType::generate_key())
+        } else {
+            WsRouteKey::<TempKeyType, PermKeyType>::GenPerm(TempKeyType::generate_key())
+        };
+
         on_cleanup({
             let key = ws_round_kind.clone();
             move || {
@@ -924,6 +1036,8 @@ impl<
             ws_url,
             key: StoredValue::new(ws_round_kind),
             phantom: PhantomData,
+            single_use,
+            // settings,
         }
     }
 
