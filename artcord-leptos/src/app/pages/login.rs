@@ -101,7 +101,7 @@ pub fn Login() -> impl IntoView {
 
         let msg = ClientMsg::Login { password, email };
 
-        match ws_login.send_or_skip(msg, move |msg| {
+        match ws_login.send_and_recv(msg, move |msg| {
             debug!("login: RECEIVED: {:?}", msg);
             loading_state.set(AuthLoadingState::Completed);
         }) {

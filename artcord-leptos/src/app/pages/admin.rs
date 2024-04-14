@@ -57,7 +57,7 @@ pub fn Admin() -> impl IntoView {
 
     create_effect(move |_| {
         trace!("admin: sending to open admin throttle sender");
-        ws_statistics.send_or_skip(ClientMsg::AdminThrottleListenerToggle(true), move |res| {
+        ws_statistics.send_and_recv(ClientMsg::AdminThrottleListenerToggle(true), move |res| {
             match res {
                 WsResourceResult::Ok(server_msg) => match server_msg {
                     ServerMsg::AdminStats(msg) => match msg {
@@ -81,7 +81,7 @@ pub fn Admin() -> impl IntoView {
 
     on_cleanup(move || {
         trace!("admin: sending to close admin throttle sender");
-        ws_statistics.send_or_skip(ClientMsg::AdminThrottleListenerToggle(false), |res| {
+        ws_statistics.send_and_recv(ClientMsg::AdminThrottleListenerToggle(false), |res| {
             trace!("admin: received: {:?}", res);
         });
     });

@@ -17,6 +17,38 @@ use web_sys::{ErrorEvent, MessageEvent, WebSocket};
 
 const TIMEOUT_SECS: i64 = 30;
 
+#[derive(Clone)]
+pub struct  WsPortalCallback <
+
+    TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+    PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+    ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
+    >{
+    pub stream: bool,
+    pub time: Option<(DateTime<chrono::Utc>, TimeDelta)>,
+    pub callback: Rc<dyn Fn(WsResourceResult<ServerMsg>)>,
+    pub phantom_temp_key: PhantomData<TempKeyType>,
+    pub phantom_perm_key: PhantomData<PermKeyType>,
+}
+
+impl <
+
+    TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+    PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+    ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
+    > WsPortalCallback<TempKeyType, PermKeyType, ServerMsg> {
+
+    pub fn new(auto_remove: bool, time: Option<(DateTime<chrono::Utc>, TimeDelta)>, callback: Rc<dyn Fn(WsResourceResult<ServerMsg>)>) -> Self {
+        Self {
+            stream: auto_remove,
+            time,
+            callback,
+            phantom_temp_key: PhantomData,
+            phantom_perm_key: PhantomData,
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize, Debug, Eq, PartialEq, Clone, Hash)]
 pub enum WsRouteKey<
     TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
@@ -76,17 +108,14 @@ pub trait Receive<
         Self: std::marker::Sized + Clone;
 }
 
-type WsCallback<T> = StoredValue<Option<Rc<Closure<T>>>>;
+type WsCallbackType<T> = StoredValue<Option<Rc<Closure<T>>>>;
 type GlobalMsgCallbacksMulti<TempKeyType, PermKeyType, ServerMsg> = StoredValue<
     HashMap<WsRouteKey<TempKeyType, PermKeyType>, HashMap<TempKeyType, Rc<dyn Fn(&ServerMsg)>>>,
 >;
 type GlobalMsgCallbacksSingle<TempKeyType, PermKeyType, ServerMsg> = StoredValue<
     HashMap<
         WsRouteKey<TempKeyType, PermKeyType>,
-        (
-            DateTime<chrono::Utc>,
-            Rc<dyn Fn(WsResourceResult<ServerMsg>)>,
-        ),
+WsPortalCallback<TempKeyType, PermKeyType, ServerMsg>
     >,
 >;
 
@@ -116,10 +145,10 @@ pub struct WsRuntime<
     pub connected: RwSignal<bool>,
     pub ws: StoredValue<Option<WebSocket>>,
     pub ws_url: StoredValue<Option<String>>,
-    pub ws_on_msg: WsCallback<dyn FnMut(MessageEvent)>,
-    pub ws_on_err: WsCallback<dyn FnMut(ErrorEvent)>,
-    pub ws_on_open: WsCallback<dyn FnMut()>,
-    pub ws_on_close: WsCallback<dyn FnMut()>,
+    pub ws_on_msg: WsCallbackType<dyn FnMut(MessageEvent)>,
+    pub ws_on_err: WsCallbackType<dyn FnMut(ErrorEvent)>,
+    pub ws_on_open: WsCallbackType<dyn FnMut()>,
+    pub ws_on_close: WsCallbackType<dyn FnMut()>,
     phantom: PhantomData<ClientMsg>,
 }
 
@@ -182,8 +211,7 @@ impl<
     }
 
     pub fn connect_to(&self, url: &str) {
-        #[cfg(target_arch = "wasm32")]
-        {
+        let connect = || {
             let url = String::from(url);
 
             let ws_on_msg = self.ws_on_msg;
@@ -290,7 +318,7 @@ impl<
                 {
                     let url = url.clone();
                     move || {
-                        let callbacks: Vec<(WsRouteKey<TempKeyType, PermKeyType>, Rc<dyn Fn(WsResourceResult<ServerMsg>)>)> = ws_callbacks_single.with_value(|callbacks: &HashMap<WsRouteKey<TempKeyType, PermKeyType>, (DateTime<Utc>, Rc<dyn Fn(WsResourceResult<ServerMsg>)>)>| {
+                        let callbacks: Vec<(WsRouteKey<TempKeyType, PermKeyType>, Rc<dyn Fn(WsResourceResult<ServerMsg>)>)> = ws_callbacks_single.with_value(|callbacks: &HashMap<WsRouteKey<TempKeyType, PermKeyType>, WsPortalCallback<TempKeyType, PermKeyType, ServerMsg>>| {
                             let mut output: Vec<(WsRouteKey<TempKeyType, PermKeyType>, Rc<dyn Fn(WsResourceResult<ServerMsg>)>)> = Vec::new();
 
                             // for i in 0..callbacks.len() {
@@ -299,14 +327,17 @@ impl<
                             //     };
                             // }
                             //trace!("ws({}): timeout: total callback count: {}", url, callbacks.len());
-                            for (i, (key, (time, callback))) in callbacks.iter().enumerate() {
-                                trace!("ws({}): timedout: comparing time: {:?} > {:?}", url,  Utc::now() - *time, TimeDelta::microseconds(TIMEOUT_SECS * 1000 * 1000));
-                                if Utc::now() - *time > TimeDelta::microseconds(TIMEOUT_SECS * 1000 * 1000) {
-                                    trace!("ws({}): timedout: found callback: {:?}", url, key);
-                                    output.push((key.clone(), callback.clone()));
-                                } else {
-                                    trace!("ws({}): timeout: finished looking for callbacks at: {}", url, i);
-                                    break;
+                            for (i, (key, ws_callback)) in callbacks.iter().enumerate() {
+                        
+                                if let Some((time, delta)) = ws_callback.time {
+                                    trace!("ws({}): timedout: comparing time: {:?} > {:?}", url,  Utc::now() - time, delta);
+                                    if Utc::now() - time > TimeDelta::microseconds(TIMEOUT_SECS * 1000 * 1000) {
+                                        trace!("ws({}): timedout: found callback: {:?}", url, key);
+                                        output.push((key.clone(), ws_callback.callback.clone()));
+                                    } else {
+                                        trace!("ws({}): timeout: finished looking for callbacks at: {}", url, i);
+                                        break;
+                                    }
                                 }
                             }
 
@@ -337,6 +368,11 @@ impl<
                 },
                 1000,
             );
+
+        };
+        #[cfg(target_arch = "wasm32")]
+        {
+            connect();
         }
     }
 
@@ -577,10 +613,7 @@ impl<
     ) {
         let key: WsRouteKey<TempKeyType, PermKeyType> = package.key.clone();
 
-        let callback: Option<(
-            DateTime<chrono::Utc>,
-            Rc<dyn Fn(WsResourceResult<ServerMsg>)>,
-        )> = callbacks_single.with_value({
+        let callback: Option<WsPortalCallback<TempKeyType, PermKeyType, ServerMsg>> = callbacks_single.with_value({
             let key = key.clone();
 
             move |socket_closures| {
@@ -593,7 +626,7 @@ impl<
             }
         });
 
-        let Some((_, callback)) = callback else {
+        let Some(ws_callback) = callback else {
             return;
         };
 
@@ -604,7 +637,7 @@ impl<
                     url,
                     key
                 );
-                callback(WsResourceResult::Ok(package.data));
+                (ws_callback.callback)(WsResourceResult::Ok(package.data));
                 callbacks_single.update_value(|callbacks| {
                     let result = callbacks.remove(&key);
                     if let Some(result) = result {
@@ -620,7 +653,17 @@ impl<
                     url,
                     key
                 );
-                callback(WsResourceResult::Ok(package.data));
+                (ws_callback.callback)(WsResourceResult::Ok(package.data));
+                callbacks_single.update_value(|callbacks| {
+                    let result = callbacks.get_mut(&key);
+                    if let Some(result) = result {
+                        result.time = None;
+                        trace!("ws({})_global: execute_single timeout was removed: {:?}", url, &key);
+                    } else {
+                        warn!("ws({})_global: execute_single failed to remove timeout: current_key: {:?}, current callbacks: {:#?}", url, &key, callbacks_single.get_value().keys());
+                    }
+                });
+
             }
             _ => {
                 warn!("ws({})_global: Wrong key was selected: {:?}", url, &key);
@@ -1041,7 +1084,7 @@ impl<
         }
     }
 
-    pub fn send_or_skip(
+    pub fn send_and_recv(
         &self,
         client_msg: ClientMsg,
         on_receive: impl Fn(WsResourceResult<ServerMsg>) + 'static,
@@ -1060,8 +1103,18 @@ impl<
                                     self.ws_url.get_value().unwrap_or("error".to_string()),
                                     &key
                                 );
-                                    global_msgs_closures
-                                        .insert(key.clone(), (Utc::now(), Rc::new(on_receive)));
+                                    global_msgs_closures.insert(
+                                        key.clone(),
+                                        WsPortalCallback::new
+                                        (
+                                                self.single_use,
+                                            Some((
+                                                Utc::now(),
+                                                TimeDelta::microseconds(TIMEOUT_SECS * 1000 * 1000),
+                                            )),
+                                            Rc::new(on_receive),
+                                        ),
+                                    );
                                     false
                                 })
                         })

@@ -61,7 +61,7 @@ pub fn MainGalleryPage() -> impl IntoView {
             from: last,
         };
 
-        match ws_gallery.send_or_skip(msg, move |server_msg| {
+        match ws_gallery.send_and_recv(msg, move |server_msg| {
             match server_msg {
                 WsResourceResult::Ok(server_msg) => {
                     match server_msg {

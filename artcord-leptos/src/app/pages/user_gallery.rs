@@ -174,7 +174,7 @@ pub fn UserGalleryPage() -> impl IntoView {
                     user_id,
                 };
 
-                match ws_gallery.send_or_skip(msg, move |server_msg| match server_msg {
+                match ws_gallery.send_and_recv(msg, move |server_msg| match server_msg {
                     WsResourceResult::Ok(server_msg) => match server_msg {
                         ServerMsg::UserGallery(response) => match response {
                             UserGalleryRes::Imgs(new_imgs) => {
@@ -239,7 +239,7 @@ pub fn UserGalleryPage() -> impl IntoView {
             global_gallery_imgs.set(Vec::new());
 
             let msg = ClientMsg::User { user_id: new_user };
-            match ws_user.send_or_skip(msg, move |server_msg| match server_msg {
+            match ws_user.send_and_recv(msg, move |server_msg| match server_msg {
                 WsResourceResult::Ok(server_msg) => match server_msg {
                     ServerMsg::User(response) => match response {
                         UserRes::User(user) => {

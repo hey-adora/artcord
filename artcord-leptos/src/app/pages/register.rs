@@ -154,7 +154,7 @@ pub fn Register() -> impl IntoView {
         let on_recv = move |msg| {
             loading_state.set(AuthLoadingState::Completed);
         };
-        match ws_register.send_or_skip(msg, on_recv) {
+        match ws_register.send_and_recv(msg, on_recv) {
             Ok(result) => {
                 match result {
                     WsResourcSendResult::Sent | WsResourcSendResult::Queued => {
