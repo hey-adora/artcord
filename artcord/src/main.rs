@@ -67,7 +67,7 @@ async fn main() {
         db.clone(),
     )
     .await;
-
+    //aaa
     if let Some(discord_bot_token) = discord_bot_token {
         let mut discord_bot = create_bot(
             db.clone(),

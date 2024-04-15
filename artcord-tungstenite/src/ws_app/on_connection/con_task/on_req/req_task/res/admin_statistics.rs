@@ -24,7 +24,7 @@ pub async fn ws_hadnle_admin_throttle(
     db: Arc<DB>,
     listener_state: bool,
     connection_key: String,
-    ws_key: WsRouteKey<u128, ProdMsgPermKey>,
+    ws_key: WsRouteKey,
     addr: SocketAddr,
     connection_tx: &mpsc::Sender<ConMsg>,
     throttle_tx: mpsc::Sender<AdminConStatMsg>,

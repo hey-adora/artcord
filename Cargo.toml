@@ -1,16 +1,16 @@
 [workspace]
 resolver = "2"
 members = [
-    "artcord",
-    "artcord-actix", 
-    "artcord-builder",
-    "artcord-leptos",
-    "artcord-leptos-web-sockets",
-    "artcord-mongodb",
-    "artcord-serenity",
-    "artcord-state",
-    "artcord-tungstenite",
-    "artcord-benchmark",
+  "artcord",
+  "artcord-actix",
+  "artcord-builder",
+  "artcord-leptos",
+  "artcord-leptos-web-sockets",
+  "artcord-mongodb",
+  "artcord-serenity",
+  "artcord-state",
+  "artcord-tungstenite",
+  "artcord-benchmark",
 ]
 
 [profile.dev]
@@ -28,8 +28,6 @@ opt-level = 'z'
 lto = true
 codegen-units = 1
 panic = "abort"
-
-
 
 
 [[workspace.metadata.leptos]]
@@ -50,6 +48,6 @@ watch = true
 env = "DEV"
 lib-profile-release = "wasm-release"
 bin-features = []
-lib-features = [ "hydrate" ]
+lib-features = ["hydrate"]
 bin-default-features = false
 lib-default-features = false

@@ -97,7 +97,7 @@ pub fn Register() -> impl IntoView {
     let input_email_error: RwSignal<Option<String>> = RwSignal::new(None);
     let input_password_error: RwSignal<Option<String>> = RwSignal::new(None);
 
-    let ws_register = ws.builder().portal().build();
+    // let ws_register = ws.builder().portal().build();
 
     // ws.on_ws_state(move |is_connected| {
     //     if is_connected {
@@ -151,29 +151,29 @@ pub fn Register() -> impl IntoView {
         let msg = ClientMsg::Register { password, email };
 
         //global_state.socket_send(&msg);
-        let on_recv = move |msg| {
-            loading_state.set(AuthLoadingState::Completed);
-        };
-        match ws_register.send_and_recv(msg, on_recv) {
-            Ok(result) => {
-                match result {
-                    WsResourcSendResult::Sent | WsResourcSendResult::Queued => {
-                        loading_state.set(AuthLoadingState::Processing);
-                    }
-                    WsResourcSendResult::Skipped => {
-                        error!("register: error: tried to register twice");
-                        //loading_state.set(AuthLoadingState::Processing);
-                        //loading_state.set(AuthLoadingState::Failed(RegistrationInvalidMsg::new().general(format!("register: failed: tried to register twice", err))));
-                    }
-                }
-            }
-            Err(err) => {
-                error!("register: error: {}", err);
-                loading_state.set(AuthLoadingState::Failed(
-                    RegistrationInvalidMsg::new().general(format!("register: failed: {}", err)),
-                ));
-            }
-        }
+        // let on_recv = move |msg| {
+        //     loading_state.set(AuthLoadingState::Completed);
+        // };
+        // match ws_register.send_and_recv(msg, on_recv) {
+        //     Ok(result) => {
+        //         match result {
+        //             WsResourcSendResult::Sent | WsResourcSendResult::Queued => {
+        //                 loading_state.set(AuthLoadingState::Processing);
+        //             }
+        //             WsResourcSendResult::Skipped => {
+        //                 error!("register: error: tried to register twice");
+        //                 //loading_state.set(AuthLoadingState::Processing);
+        //                 //loading_state.set(AuthLoadingState::Failed(RegistrationInvalidMsg::new().general(format!("register: failed: tried to register twice", err))));
+        //             }
+        //         }
+        //     }
+        //     Err(err) => {
+        //         error!("register: error: {}", err);
+        //         loading_state.set(AuthLoadingState::Failed(
+        //             RegistrationInvalidMsg::new().general(format!("register: failed: {}", err)),
+        //         ));
+        //     }
+        // }
     };
 
     // create_effect(move |_| {

@@ -40,8 +40,8 @@ pub async fn req_task(
         };
 
         let client_msg = ClientMsg::from_bytes(&client_msg?)?;
-        let res_key: WsRouteKey<u128, ProdMsgPermKey> = client_msg.key;
-        let data = client_msg.data;
+        let res_key: WsRouteKey = client_msg.0;
+        let data = client_msg.1;
 
         // sleep(Duration::from_secs(5)).await;
 
@@ -76,10 +76,7 @@ pub async fn req_task(
             trace!("not sending anything back from request handle task");
             return Ok(());
         };
-        let response = WsPackage::<u128, ProdMsgPermKey, ServerMsg> {
-            key: res_key,
-            data: response_data,
-        };
+        let response: WsPackage<ServerMsg> = (res_key, response_data);
         #[cfg(feature = "development")]
         {
             let mut output = format!("{:?}", &response);

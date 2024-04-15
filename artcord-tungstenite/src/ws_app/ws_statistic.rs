@@ -21,7 +21,7 @@ pub enum AdminConStatMsg {
         connection_key: String,
         tx: mpsc::Sender<ConMsg>,
         addr: String,
-        ws_key: WsRouteKey<u128, ProdMsgPermKey>,
+        ws_key: WsRouteKey,
     },
 
     Remove {
@@ -42,10 +42,7 @@ pub async fn admin_stat_task(
     mut rx: mpsc::Receiver<AdminConStatMsg>,
     cancelation_token: CancellationToken,
 ) {
-    let mut listener_list: HashMap<
-        String,
-        (WsRouteKey<u128, ProdMsgPermKey>, mpsc::Sender<ConMsg>),
-    > = HashMap::new();
+    let mut listener_list: HashMap<String, (WsRouteKey, mpsc::Sender<ConMsg>)> = HashMap::new();
     let mut stats: HashMap<String, AdminStat> = HashMap::new();
 
     loop {
@@ -73,7 +70,7 @@ pub async fn admin_stat_task(
 
 pub async fn on_msg(
     msg: Option<AdminConStatMsg>,
-    list: &mut HashMap<String, (WsRouteKey<u128, ProdMsgPermKey>, mpsc::Sender<ConMsg>)>,
+    list: &mut HashMap<String, (WsRouteKey, mpsc::Sender<ConMsg>)>,
     stats: &mut HashMap<String, AdminStat>,
 ) -> Result<bool, AdminMsgErr> {
     let Some(msg) = msg else {
@@ -95,10 +92,7 @@ pub async fn on_msg(
                 .clone();
 
             let msg = ServerMsg::AdminStats(AdminStatsRes::Started(stats.clone()));
-            let msg = WsPackage::<u128, ProdMsgPermKey, ServerMsg> {
-                key: ws_key.clone(),
-                data: msg,
-            };
+            let msg: WsPackage<ServerMsg> = (ws_key.clone(), msg);
             trace!("admin stats: sending: {:?}", &msg);
             let msg = ServerMsg::as_bytes(msg)?;
             let msg = Message::binary(msg);
@@ -110,10 +104,7 @@ pub async fn on_msg(
                 stat: current_con_stats,
             });
             for (con_key, (ws_key, tx)) in list {
-                let update_msg = WsPackage {
-                    key: ws_key.clone(),
-                    data: update_msg.clone(),
-                };
+                let update_msg: WsPackage<ServerMsg> = (ws_key.clone(), update_msg.clone());
                 let update_msg = ServerMsg::as_bytes(update_msg)?;
                 let update_msg = Message::binary(update_msg);
                 tx.send(ConMsg::Send(update_msg.clone())).await;

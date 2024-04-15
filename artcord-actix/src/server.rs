@@ -4,15 +4,12 @@ use actix_web::dev::Server;
 
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 
-
-
-
 use futures::StreamExt;
 use leptos::logging::warn;
 use leptos_actix::{generate_route_list, LeptosRoutes};
 
-use tracing::{error, info, trace};
 use std::fs::read_to_string;
+use tracing::{error, info, trace};
 
 use cfg_if::cfg_if;
 
@@ -402,7 +399,7 @@ pub async fn hello() -> impl Responder {
     // ")
 }
 
-use leptos::{get_configuration};
+use leptos::get_configuration;
 
 pub async fn create_server(galley_root_dir: &str, assets_root_dir: &str) -> Server {
     let conf = get_configuration(Some("Cargo.toml")).await.unwrap();
@@ -428,7 +425,7 @@ pub async fn create_server(galley_root_dir: &str, assets_root_dir: &str) -> Serv
     //let sessions = Arc::new(RwLock::new(HashMap::<uuid::Uuid, Addr<WsConnection>>::new()));
 
     let galley_root_dir = galley_root_dir.to_string();
-    let assets_root_dir = assets_root_dir.to_string(); 
+    let assets_root_dir = assets_root_dir.to_string();
     let server = HttpServer::new(move || {
         let leptos_options = &conf.leptos_options;
         // let site_root = &leptos_options.site_root;
@@ -436,12 +433,11 @@ pub async fn create_server(galley_root_dir: &str, assets_root_dir: &str) -> Serv
         let pkg_url = format!("{}/pkg", &*assets_root_dir);
         //println!("pkg dir: {}", pkg_url);
 
-
         let mut app = App::new()
-        .route("/favicon.ico", web::get().to(favicon))
-        .service(Files::new("/assets/gallery", &galley_root_dir))
-        .service(Files::new("/assets", &assets_root_dir))
-        .service(Files::new("/pkg", pkg_url));
+            .route("/favicon.ico", web::get().to(favicon))
+            .service(Files::new("/assets/gallery", &galley_root_dir))
+            .service(Files::new("/assets", &assets_root_dir))
+            .service(Files::new("/pkg", pkg_url));
 
         cfg_if! {
             if #[cfg(feature = "development")] {
@@ -456,19 +452,13 @@ pub async fn create_server(galley_root_dir: &str, assets_root_dir: &str) -> Serv
             }
         };
 
-
-        
-        
-
-        
-
         // let create_prodution_app =  || {
-            
+
         // };
         // let app = create_prodution_app();
 
         // let create_debug_app =  || {
-            
+
         // };
 
         app
@@ -487,32 +477,23 @@ pub async fn create_server(galley_root_dir: &str, assets_root_dir: &str) -> Serv
 
     #[cfg(feature = "development")]
     {
-        use tokio_tungstenite::connect_async;
-        use tokio::sync::mpsc;
-        use artcord_state::message::debug_client_msg::DebugClientMsg;
-        use futures::SinkExt;
-        use tokio_tungstenite::tungstenite::Message;
         use artcord_leptos_web_sockets::WsPackage;
+        use artcord_leptos_web_sockets::WsRouteKey;
+        use artcord_state::message::debug_client_msg::DebugClientMsg;
         use artcord_state::message::debug_msg_key::DebugMsgPermKey;
         use artcord_state::message::debug_server_msg::DebugServerMsg;
-        use artcord_leptos_web_sockets::WsRouteKey;
         use futures::future;
         use futures::pin_mut;
-
-        
-
-        
-
-        
+        use futures::SinkExt;
+        use tokio::sync::mpsc;
+        use tokio_tungstenite::connect_async;
+        use tokio_tungstenite::tungstenite::Message;
 
         let url = url::Url::parse("ws://localhost:3001").unwrap();
 
         let (send, mut recv) = mpsc::channel::<Message>(1);
 
-        let ready_package = WsPackage::<u128, DebugMsgPermKey, DebugClientMsg> {
-            key: WsRouteKey::Perm(DebugMsgPermKey::Debug),
-            data: DebugClientMsg::RuntimeReady,
-        };
+        let ready_package: WsPackage<DebugClientMsg> = (0, DebugClientMsg::RuntimeReady);
 
         let ready_package = DebugClientMsg::as_vec(&ready_package);
 
@@ -530,31 +511,28 @@ pub async fn create_server(galley_root_dir: &str, assets_root_dir: &str) -> Serv
             }
         }
 
-
         let (ws_stream, _) = connect_async(url).await.unwrap();
         let (mut write, read) = ws_stream.split();
-        
+
         let read = {
             read.for_each_concurrent(100, |server_msg| async {
                 match server_msg {
-                    Ok(server_msg) => {
-                        match server_msg {
-                            tokio_tungstenite::tungstenite::Message::Binary(client_msg) => {
-                                let client_msg = DebugServerMsg::from_bytes(&client_msg);
-                                match client_msg {
-                                    Ok(client_msg) => {
-                                        trace!("ws: recv client msg: {:?}", client_msg);
-                                    }
-                                    Err(err) => {
-                                        error!("ws: failed to deserialize client msg: {}", err);
-                                    }
+                    Ok(server_msg) => match server_msg {
+                        tokio_tungstenite::tungstenite::Message::Binary(client_msg) => {
+                            let client_msg = DebugServerMsg::from_bytes(&client_msg);
+                            match client_msg {
+                                Ok(client_msg) => {
+                                    trace!("ws: recv client msg: {:?}", client_msg);
+                                }
+                                Err(err) => {
+                                    error!("ws: failed to deserialize client msg: {}", err);
                                 }
                             }
-                            _ => {
-                                warn!("ws: recv uwknown msg");
-                            }
                         }
-                    }
+                        _ => {
+                            warn!("ws: recv uwknown msg");
+                        }
+                    },
                     Err(err) => {
                         error!("ws: error on recv: {}", err);
                     }
@@ -568,14 +546,11 @@ pub async fn create_server(galley_root_dir: &str, assets_root_dir: &str) -> Serv
             }
         };
 
-        
-
         tokio::spawn(async move {
             pin_mut!(read, write);
             future::select(read, write).await;
         });
     }
-
 
     server
 }

@@ -3,7 +3,7 @@ use crate::app::global_state::GlobalState;
 use crate::app::utils::img_resize::{calc_fit_count, resize_imgs, NEW_IMG_HEIGHT};
 use crate::app::utils::img_resized::ServerMsgImgResized;
 use crate::app::utils::{LoadingNotFound, SelectedImg};
-use artcord_leptos_web_sockets::{WsResourceResult, WsRuntime};
+use artcord_leptos_web_sockets::{WsRecvResult, WsRuntime};
 use artcord_state::aggregation::server_msg_img::AggImg;
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_server_msg::{MainGalleryRes, ServerMsg, UserGalleryRes};
@@ -43,7 +43,7 @@ pub fn MainGalleryPage() -> impl IntoView {
     let location = use_location();
     let ws = global_state.ws;
 
-    let ws_gallery = ws.builder().portal().build();
+    // let ws_gallery = ws.builder().portal().build();
 
     let on_fetch = move || {
         let Some(section) = gallery_section.get_untracked() else {
@@ -61,66 +61,66 @@ pub fn MainGalleryPage() -> impl IntoView {
             from: last,
         };
 
-        match ws_gallery.send_and_recv(msg, move |server_msg| {
-            match server_msg {
-                WsResourceResult::Ok(server_msg) => {
-                    match server_msg {
-                        ServerMsg::MainGallery(response) => {
-                            match response {
-                                MainGalleryRes::Imgs(new_imgs) => {
-                                    if new_imgs.is_empty()
-                                        && loaded_sig.get_untracked() == LoadingNotFound::Loading
-                                    {
-                                        loaded_sig.set(LoadingNotFound::NotFound);
-                                    } else {
-                                        let new_imgs = new_imgs
-                                            .iter()
-                                            .map(|img| ServerMsgImgResized::from(img.to_owned()))
-                                            .collect::<Vec<ServerMsgImgResized>>();
-
-                                        imgs.update(|imgs| {
-                                            imgs.extend(new_imgs);
-                                            let document = document();
-                                            //let gallery_section = document.get_element_by_id("gallery_section");
-                                            let gallery_section = gallery_section.get_untracked();
-                                            let Some(gallery_section) = gallery_section else {
-                                                return;
-                                            };
-                                            let width = gallery_section.client_width() as u32;
-                                            resize_imgs(NEW_IMG_HEIGHT, width, imgs);
-                                        });
-
-                                        if loaded_sig.get_untracked() != LoadingNotFound::Loaded {
-                                            loaded_sig.set(LoadingNotFound::Loaded);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        ServerMsg::Error => {
-                            error!("main_gallery: internal server error");
-                            loaded_sig.set(LoadingNotFound::Error);
-                        }
-                        msg => {
-                            error!("main_gallery: received wrong msg: {:#?}", msg);
-                            loaded_sig.set(LoadingNotFound::Error);
-                        }
-                    }
-                }
-                WsResourceResult::TimeOut => {
-                    trace!("main_gallery: timeout: loadeding state set to: Error");
-                    loaded_sig.set(LoadingNotFound::Error);
-                }
-            }
-        }) {
-            Ok(result) => {
-                trace!("main_gallery: fetch_imgs returned: {:?}", result);
-            }
-            Err(err) => {
-                error!("main_gallery: send error: {}", err);
-                loaded_sig.set(LoadingNotFound::Error);
-            }
-        };
+        // match ws_gallery.send_and_recv(msg, move |server_msg| {
+        //     match server_msg {
+        //         WsRecvResult::Ok(server_msg) => {
+        //             match server_msg {
+        //                 ServerMsg::MainGallery(response) => {
+        //                     match response {
+        //                         MainGalleryRes::Imgs(new_imgs) => {
+        //                             if new_imgs.is_empty()
+        //                                 && loaded_sig.get_untracked() == LoadingNotFound::Loading
+        //                             {
+        //                                 loaded_sig.set(LoadingNotFound::NotFound);
+        //                             } else {
+        //                                 let new_imgs = new_imgs
+        //                                     .iter()
+        //                                     .map(|img| ServerMsgImgResized::from(img.to_owned()))
+        //                                     .collect::<Vec<ServerMsgImgResized>>();
+        //
+        //                                 imgs.update(|imgs| {
+        //                                     imgs.extend(new_imgs);
+        //                                     let document = document();
+        //                                     //let gallery_section = document.get_element_by_id("gallery_section");
+        //                                     let gallery_section = gallery_section.get_untracked();
+        //                                     let Some(gallery_section) = gallery_section else {
+        //                                         return;
+        //                                     };
+        //                                     let width = gallery_section.client_width() as u32;
+        //                                     resize_imgs(NEW_IMG_HEIGHT, width, imgs);
+        //                                 });
+        //
+        //                                 if loaded_sig.get_untracked() != LoadingNotFound::Loaded {
+        //                                     loaded_sig.set(LoadingNotFound::Loaded);
+        //                                 }
+        //                             }
+        //                         }
+        //                     }
+        //                 }
+        //                 ServerMsg::Error => {
+        //                     error!("main_gallery: internal server error");
+        //                     loaded_sig.set(LoadingNotFound::Error);
+        //                 }
+        //                 msg => {
+        //                     error!("main_gallery: received wrong msg: {:#?}", msg);
+        //                     loaded_sig.set(LoadingNotFound::Error);
+        //                 }
+        //             }
+        //         }
+        //         WsRecvResult::TimeOut => {
+        //             trace!("main_gallery: timeout: loadeding state set to: Error");
+        //             loaded_sig.set(LoadingNotFound::Error);
+        //         }
+        //     }
+        // }) {
+        //     Ok(result) => {
+        //         trace!("main_gallery: fetch_imgs returned: {:?}", result);
+        //     }
+        //     Err(err) => {
+        //         error!("main_gallery: send error: {}", err);
+        //         loaded_sig.set(LoadingNotFound::Error);
+        //     }
+        // };
     };
 
     let select_click_img = move |img: ServerMsgImgResized| {

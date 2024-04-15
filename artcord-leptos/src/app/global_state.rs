@@ -30,7 +30,7 @@ pub struct GlobalState {
     pub socket_connected: RwSignal<bool>,
     pub socket_closures: StoredValue<HashMap<u128, Rc<dyn Fn(ServerMsg)>>>,
     pub socket_pending_client_msgs: StoredValue<Vec<u8>>,
-    pub ws: WsRuntime<u128, ProdMsgPermKey, ServerMsg, ClientMsg>,
+    pub ws: WsRuntime<ServerMsg, ClientMsg>,
 }
 
 #[derive(Clone, Debug)]
@@ -72,7 +72,7 @@ impl GlobalState {
             socket_timestamps: create_rw_signal(HashMap::new()),
             socket_closures: StoredValue::new(HashMap::new()),
             socket_pending_client_msgs: StoredValue::new(Vec::new()),
-            ws: WsRuntime::<u128, ProdMsgPermKey, ServerMsg, ClientMsg>::new(),
+            ws: WsRuntime::<ServerMsg, ClientMsg>::new(),
         }
     }
 

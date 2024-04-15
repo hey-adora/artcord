@@ -46,8 +46,8 @@ pub enum ClientMsg {
     AdminThrottleListenerToggle(bool),
 }
 
-impl artcord_leptos_web_sockets::Send<u128, ProdMsgPermKey> for ClientMsg {
-    fn send_as_vec(package: &WsPackage<u128, ProdMsgPermKey, Self>) -> Result<Vec<u8>, String>
+impl artcord_leptos_web_sockets::Send for ClientMsg {
+    fn send_as_vec(package: &WsPackage<Self>) -> Result<Vec<u8>, String>
     where
         Self: Clone,
     {
@@ -71,19 +71,15 @@ impl ClientMsg {
     //     }
     // }
 
-    pub fn as_vec(
-        package: &WsPackage<u128, ProdMsgPermKey, Self>,
-    ) -> Result<Vec<u8>, bincode::Error> {
-        let a = bincode::serialize::<WsPackage<u128, ProdMsgPermKey, Self>>(package);
+    pub fn as_vec(package: &WsPackage<Self>) -> Result<Vec<u8>, bincode::Error> {
+        let a = bincode::serialize::<WsPackage<Self>>(package);
         //log!("SERIALIZE {:?} {:?}", self, a);
         a
     }
 
-    pub fn from_bytes(
-        bytes: &[u8],
-    ) -> Result<WsPackage<u128, ProdMsgPermKey, Self>, bincode::Error> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<WsPackage<Self>, bincode::Error> {
         //log!("DESERIALIZE {:?}", bytes);
-        let a = bincode::deserialize::<WsPackage<u128, ProdMsgPermKey, Self>>(bytes);
+        let a = bincode::deserialize::<WsPackage<Self>>(bytes);
         a
     }
 

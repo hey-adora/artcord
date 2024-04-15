@@ -31,10 +31,10 @@ pub fn HomePage() -> impl IntoView {
         shrink_nav(nav_tran, y as u32);
     };
 
-    let ws_test = ws.builder().portal().build();
+    let ws_test = ws.builder().channel_with_timeout(30).build();
     let test_click = move |_| {
         let msg = ClientMsg::Statistics;
-        ws.send(ProdMsgPermKey::Login, msg);
+        ws_test.send(msg);
         // ws_test
         //     .send_or_skip(msg, |res| {
         //         trace!("test hello");

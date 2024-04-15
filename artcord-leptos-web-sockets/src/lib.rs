@@ -1,4 +1,5 @@
 use std::marker::PhantomData;
+use std::num::{NonZeroU16, NonZeroU64};
 use std::rc::Rc;
 use std::time::Duration;
 use std::{collections::HashMap, fmt::Debug};
@@ -17,57 +18,69 @@ use web_sys::{ErrorEvent, MessageEvent, WebSocket};
 
 const TIMEOUT_SECS: i64 = 30;
 
-#[derive(Clone)]
-pub struct  WsPortalCallback <
+#[derive(Clone, Copy, Debug)]
+pub enum WsOnRecvAction {
+    RemoveCallback,
+    RemoveTimeout,
+    None,
+}
 
-    TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
-    PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
-    ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
+#[derive(Clone)]
+pub struct  WsChannelType <
+
+    // TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+    // PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+    ServerMsg: Clone + Receive + Debug + 'static,
     >{
-    pub stream: bool,
+    pub waiting_for_response: bool,
+    // pub action: WsOnRecvAction,
     pub time: Option<(DateTime<chrono::Utc>, TimeDelta)>,
-    pub callback: Rc<dyn Fn(WsResourceResult<ServerMsg>)>,
-    pub phantom_temp_key: PhantomData<TempKeyType>,
-    pub phantom_perm_key: PhantomData<PermKeyType>,
+    pub callbacks: WsChannelCallbacksType<ServerMsg>,
+    // pub phantom_temp_key: PhantomData<TempKeyType>,
+    // pub phantom_perm_key: PhantomData<PermKeyType>,
 }
 
 impl <
 
-    TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
-    PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
-    ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
-    > WsPortalCallback<TempKeyType, PermKeyType, ServerMsg> {
+    // TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+    // PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+    ServerMsg: Clone + Receive + Debug + 'static,
+    > WsChannelType<ServerMsg> {
 
-    pub fn new(auto_remove: bool, time: Option<(DateTime<chrono::Utc>, TimeDelta)>, callback: Rc<dyn Fn(WsResourceResult<ServerMsg>)>) -> Self {
+    pub fn new(time: Option<(DateTime<chrono::Utc>, TimeDelta)>, callbacks: WsChannelCallbacksType<ServerMsg>) -> Self {
         Self {
-            stream: auto_remove,
+            // action,
             time,
-            callback,
-            phantom_temp_key: PhantomData,
-            phantom_perm_key: PhantomData,
+            callbacks,
+            waiting_for_response: false,
+            // phantom_temp_key: PhantomData,
+            // phantom_perm_key: PhantomData,
         }
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Eq, PartialEq, Clone, Hash)]
-pub enum WsRouteKey<
-    TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
-    PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
-> {
-    Perm(PermKeyType),
-    GenPerm(TempKeyType),
-    TempSingle(TempKeyType),
-}
+pub type WsRouteKey = u128;
+pub type WsPackage<ServerMsgType: Clone + 'static> = (WsRouteKey, ServerMsgType);
+pub type WsChannelCallbacksType<ServerMsgType: Clone + 'static> = HashMap<WsRouteKey, Rc<dyn Fn(&WsRecvResult<ServerMsgType>) -> bool>>;
+// #[derive(Deserialize, Serialize, Debug, Eq, PartialEq, Clone, Hash)]
+// pub enum WsRouteKey<
+//     TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+//     PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+// > {
+//     Perm(PermKeyType),
+//     GenPerm(TempKeyType),
+//     TempSingle(TempKeyType),
+// }
 
-#[derive(Deserialize, Serialize, Debug, Eq, PartialEq, Clone, Hash)]
-pub struct WsPackage<
-    TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
-    PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
-    Data: Clone + 'static,
-> {
-    pub key: WsRouteKey<TempKeyType, PermKeyType>,
-    pub data: Data,
-}
+// #[derive(Deserialize, Serialize, Debug, Eq, PartialEq, Clone, Hash)]
+// pub struct WsPackage<
+//     // TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+//     // PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+//     Data: Clone + 'static,
+// > {
+//     pub key: WsRouteKey<TempKeyType, PermKeyType>,
+//     pub data: Data,
+// }
 
 impl KeyGen for u128 {
     fn generate_key() -> Self {
@@ -89,33 +102,33 @@ where
 }
 
 pub trait Send<
-    TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
-    PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+    // TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+    // PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
 >
 {
-    fn send_as_vec(package: &WsPackage<TempKeyType, PermKeyType, Self>) -> Result<Vec<u8>, String>
+    fn send_as_vec(package: &WsPackage<Self>) -> Result<Vec<u8>, String>
     where
         Self: Clone;
 }
 
 pub trait Receive<
-    TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
-    PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+    // TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+    // PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
 >
 {
-    fn recv_from_vec(bytes: &[u8]) -> Result<WsPackage<TempKeyType, PermKeyType, Self>, String>
+    fn recv_from_vec(bytes: &[u8]) -> Result<WsPackage<Self>, String>
     where
         Self: std::marker::Sized + Clone;
 }
 
 type WsCallbackType<T> = StoredValue<Option<Rc<Closure<T>>>>;
-type GlobalMsgCallbacksMulti<TempKeyType, PermKeyType, ServerMsg> = StoredValue<
-    HashMap<WsRouteKey<TempKeyType, PermKeyType>, HashMap<TempKeyType, Rc<dyn Fn(&ServerMsg)>>>,
->;
-type GlobalMsgCallbacksSingle<TempKeyType, PermKeyType, ServerMsg> = StoredValue<
+// type GlobalMsgCallbacksMulti<ServerMsg> = StoredValue<
+//     HashMap<WsRouteKey, HashMap<WsRouteKey, Rc<dyn Fn(&ServerMsg)>>>,
+// >;
+type WsChannelsType<ServerMsg> = StoredValue<
     HashMap<
-        WsRouteKey<TempKeyType, PermKeyType>,
-WsPortalCallback<TempKeyType, PermKeyType, ServerMsg>
+        WsRouteKey,
+WsChannelType<ServerMsg>
     >,
 >;
 
@@ -131,16 +144,16 @@ extern "C" {
 
 #[derive(Clone, Debug)]
 pub struct WsRuntime<
-    TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
-    PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
-    ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
-    ClientMsg: Clone + Send<TempKeyType, PermKeyType> + Debug + 'static,
+    // TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
+    // PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
+    ServerMsg: Clone + Receive + Debug + 'static,
+    ClientMsg: Clone + Send + Debug + 'static,
 > {
-    pub global_msgs_callbacks_multi: GlobalMsgCallbacksMulti<TempKeyType, PermKeyType, ServerMsg>,
-    pub global_msgs_callbacks_single: GlobalMsgCallbacksSingle<TempKeyType, PermKeyType, ServerMsg>,
-    pub global_on_open_callbacks: StoredValue<HashMap<TempKeyType, Rc<dyn Fn()>>>,
-    pub global_on_close_callbacks: StoredValue<HashMap<TempKeyType, Rc<dyn Fn()>>>,
-    pub global_on_ws_state_change_callbacks: StoredValue<HashMap<TempKeyType, Rc<dyn Fn(bool)>>>,
+    // pub global_msgs_callbacks_multi: GlobalMsgCallbacksMulti<TempKeyType, PermKeyType, ServerMsg>,
+    pub channels: WsChannelsType<ServerMsg>,
+    pub global_on_open_callbacks: StoredValue<HashMap<WsRouteKey, Rc<dyn Fn()>>>,
+    pub global_on_close_callbacks: StoredValue<HashMap<WsRouteKey, Rc<dyn Fn()>>>,
+    pub global_on_ws_state_change_callbacks: StoredValue<HashMap<WsRouteKey, Rc<dyn Fn(bool)>>>,
     pub global_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
     pub connected: RwSignal<bool>,
     pub ws: StoredValue<Option<WebSocket>>,
@@ -153,25 +166,25 @@ pub struct WsRuntime<
 }
 
 impl<
-        TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
-        PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
-        ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
-        ClientMsg: Clone + Send<TempKeyType, PermKeyType> + Debug + 'static,
-    > Copy for WsRuntime<TempKeyType, PermKeyType, ServerMsg, ClientMsg>
+        // TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+        // PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+        ServerMsg: Clone + Receive + Debug + 'static,
+        ClientMsg: Clone + Send + Debug + 'static,
+    > Copy for WsRuntime<ServerMsg, ClientMsg>
 {
 }
 
 impl<
-        TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
-        PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
-        ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
-        ClientMsg: Clone + Send<TempKeyType, PermKeyType> + Debug + 'static,
-    > Default for WsRuntime<TempKeyType, PermKeyType, ServerMsg, ClientMsg>
+        // TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+        // PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+        ServerMsg: Clone + Receive + Debug + 'static,
+        ClientMsg: Clone + Send + Debug + 'static,
+    > Default for WsRuntime<ServerMsg, ClientMsg>
 {
     fn default() -> Self {
         Self {
-            global_msgs_callbacks_multi: StoredValue::new(HashMap::new()),
-            global_msgs_callbacks_single: StoredValue::new(HashMap::new()),
+            // global_msgs_callbacks_multi: StoredValue::new(HashMap::new()),
+            channels: StoredValue::new(HashMap::new()),
             global_on_open_callbacks: StoredValue::new(HashMap::new()),
             global_on_close_callbacks: StoredValue::new(HashMap::new()),
             global_on_ws_state_change_callbacks: StoredValue::new(HashMap::new()),
@@ -189,11 +202,11 @@ impl<
 }
 
 impl<
-        TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
-        PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
-        ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
-        ClientMsg: Clone + Send<TempKeyType, PermKeyType> + Debug + 'static,
-    > WsRuntime<TempKeyType, PermKeyType, ServerMsg, ClientMsg>
+        // TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
+        // PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
+        ServerMsg: Clone + Receive + Debug + 'static,
+        ClientMsg: Clone + Send + Debug + 'static,
+    > WsRuntime<ServerMsg, ClientMsg>
 {
     pub fn new() -> Self {
         Self::default()
@@ -218,8 +231,8 @@ impl<
             let ws_on_err = self.ws_on_err;
             let ws_on_open = self.ws_on_open;
             let ws_on_close = self.ws_on_close;
-            let ws_callbacks_multi = self.global_msgs_callbacks_multi;
-            let ws_callbacks_single = self.global_msgs_callbacks_single;
+            // let ws_callbacks_multi = self.global_msgs_callbacks_multi;
+            let channels = self.channels;
             let ws_connected = self.connected;
             //let ws_on_open_closures = self.global_on_open_callbacks;
             //let ws_on_close_closures = self.global_on_close_callbacks;
@@ -231,7 +244,7 @@ impl<
                 let url = url.clone();
                 Some(Rc::new(Closure::<dyn FnMut(_)>::new(
                     move |e: MessageEvent| {
-                        Self::ws_on_msg(&url, ws_callbacks_multi, ws_callbacks_single, e)
+                        Self::ws_on_msg(&url, channels, e)
                     },
                 )))
             });
@@ -318,8 +331,8 @@ impl<
                 {
                     let url = url.clone();
                     move || {
-                        let callbacks: Vec<(WsRouteKey<TempKeyType, PermKeyType>, Rc<dyn Fn(WsResourceResult<ServerMsg>)>)> = ws_callbacks_single.with_value(|callbacks: &HashMap<WsRouteKey<TempKeyType, PermKeyType>, WsPortalCallback<TempKeyType, PermKeyType, ServerMsg>>| {
-                            let mut output: Vec<(WsRouteKey<TempKeyType, PermKeyType>, Rc<dyn Fn(WsResourceResult<ServerMsg>)>)> = Vec::new();
+                        let callbacks: Vec<(WsRouteKey, WsChannelCallbacksType<ServerMsg>)> = channels.with_value(|channels| {
+                            let mut output: Vec<(WsRouteKey, WsChannelCallbacksType<ServerMsg>)> = Vec::new();
 
                             // for i in 0..callbacks.len() {
                             //     let Some(item) = callbacks.get(i) else {
@@ -327,13 +340,17 @@ impl<
                             //     };
                             // }
                             //trace!("ws({}): timeout: total callback count: {}", url, callbacks.len());
-                            for (i, (key, ws_callback)) in callbacks.iter().enumerate() {
+                            for (i, (channel_key, channel)) in channels.iter().enumerate() {
+                                if !channel.waiting_for_response {
+                                    continue;
+                                }
                         
-                                if let Some((time, delta)) = ws_callback.time {
-                                    trace!("ws({}): timedout: comparing time: {:?} > {:?}", url,  Utc::now() - time, delta);
+                                if let Some((time, delta)) = channel.time {
+                                    trace!("ws({}): timedout: comparing time: {:?} > {:?} & {}", url,  Utc::now() - time, delta, channel.waiting_for_response);
                                     if Utc::now() - time > TimeDelta::microseconds(TIMEOUT_SECS * 1000 * 1000) {
-                                        trace!("ws({}): timedout: found callback: {:?}", url, key);
-                                        output.push((key.clone(), ws_callback.callback.clone()));
+                                        trace!("ws({}): timedout: found callback: {:?}", url, channel_key);
+                                        output.push((channel_key.clone(), channel.callbacks.clone()));
+
                                     } else {
                                         trace!("ws({}): timeout: finished looking for callbacks at: {}", url, i);
                                         break;
@@ -351,18 +368,16 @@ impl<
 
                         //trace!("ws({}): timeout: timedout callback count: {}", url, callbacks.len());
 
-                        for (key, callback) in callbacks {
-                            trace!("ws({}): timeout: running callback: {:?}", url, &key);
-                            callback(WsResourceResult::TimeOut);
+                        for (channel_key, callbacks) in callbacks {
+                            trace!("ws({}): timeout: running callback: {:?}", url, &channel_key);
+                            for (callback_key, callback) in callbacks {
+                                trace!("1111111111wtf, run run run!");
+                                let keep_open = callback(&WsRecvResult::TimeOut);
 
-                            ws_callbacks_single.update_value(|ws| {
-                                let result = ws.remove(&key);
-                                if let Some(result) = result {
-                                    trace!("ws({}): timeout: removed callback: {:?}", url, &key);
-                                } else {
-                                    trace!("ws({}): timeout: callback not found: {:?}", url, &key);
-                                }
-                            });
+                                trace!("wtf, run run run!");
+                                Self::update_callback_after_recv(channels, &url, channel_key, callback_key, keep_open);
+                            }
+                            Self::update_channel_after_recv(channels, &url, channel_key);
                         }
                     }
                 },
@@ -376,10 +391,51 @@ impl<
         }
     }
 
-    pub fn builder(&self) -> WsBuilder<TempKeyType, PermKeyType, ServerMsg, ClientMsg> {
+    fn update_callback_after_recv(channels: WsChannelsType<ServerMsg>, url: &str, channel_key: WsRouteKey, callback_key: WsRouteKey, keep_open: bool) {
+        trace!("ws({}): updating channel after recv...: {:?}", url, &channel_key);
+        channels.update_value(|channels| {
+            let Some(channel) = channels.get_mut(&channel_key) else {
+                warn!("ws({}): channel after recv not found: {:?}", url, &channel_key);
+                return;
+            };
+
+            if !keep_open {
+                let result = channel.callbacks.remove(&callback_key);
+                if let Some(result) = result {
+                    trace!("ws({}): removed callback: {:?}", url, &callback_key);
+                } else {
+                    warn!("ws({}): callback not found: {:?}", url, &callback_key);
+                }
+            }
+
+            trace!("ws({}): waiting_for_response set to false: {:?}", url, &callback_key);
+            channel.waiting_for_response = false;
+
+
+        });
+
+    }
+
+    fn update_channel_after_recv(channels: WsChannelsType<ServerMsg>, url: &str, channel_key: WsRouteKey) {
+        trace!("ws({}): updating channel after recv...{}", url, channel_key);
+        channels.update_value(|channels| {
+            let Some(channel) = channels.get_mut(&channel_key) else {
+                warn!("ws({}): channel after recv not found: {:?}", url, &channel_key);
+                return;
+            };
+
+            trace!("ws({}): waiting_for_response set to false", url);
+            channel.waiting_for_response = false;
+        });
+
+    }
+
+    // fn update_channel_after_recv()
+
+    pub fn builder(&self) -> WsBuilder<ServerMsg, ClientMsg> {
         WsBuilder::new(
             self.ws_url,
-            self.global_msgs_callbacks_single,
+            self.channels,
             self.ws,
             self.global_pending_client_msgs,
         )
@@ -399,7 +455,7 @@ impl<
         url: &str,
         connected: RwSignal<bool>,
         socket_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
-        global_on_ws_state_callbacks: StoredValue<HashMap<TempKeyType, Rc<dyn Fn(bool)>>>,
+        global_on_ws_state_callbacks: StoredValue<HashMap<WsRouteKey, Rc<dyn Fn(bool)>>>,
     ) {
         info!(
             "ws({})_global: connected, ws_on_closeclosures left {}",
@@ -416,7 +472,7 @@ impl<
         ws: StoredValue<Option<WebSocket>>,
         url: &str,
         connected: RwSignal<bool>,
-        global_on_ws_closure_callbacks: StoredValue<HashMap<TempKeyType, Rc<dyn Fn(bool)>>>,
+        global_on_ws_closure_callbacks: StoredValue<HashMap<WsRouteKey, Rc<dyn Fn(bool)>>>,
     ) {
         info!("ws({})_global: disconnected", url);
         connected.set(false);
@@ -435,8 +491,8 @@ impl<
 
     fn ws_on_msg(
         url: &str,
-        callbacks_multi: GlobalMsgCallbacksMulti<TempKeyType, PermKeyType, ServerMsg>,
-        callbacks_single: GlobalMsgCallbacksSingle<TempKeyType, PermKeyType, ServerMsg>,
+        // callbacks_multi: GlobalMsgCallbacksMulti<TempKeyType, PermKeyType, ServerMsg>,
+        callbacks_single: WsChannelsType<ServerMsg>,
         e: MessageEvent,
     ) {
         let data = e.data().dyn_into::<js_sys::ArrayBuffer>();
@@ -461,17 +517,19 @@ impl<
             return;
         };
 
+        debug!("ONE ONE ONE ");
         trace!("ws({})_global: recved msg: {:#?}", url, &server_msg);
 
-        match &server_msg.key {
-            WsRouteKey::Perm(_) => {
-                Self::execute_multi(url, callbacks_multi, server_msg);
-            }
-
-            WsRouteKey::TempSingle(_) | WsRouteKey::GenPerm(_) => {
-                Self::execute_single(url, callbacks_single, server_msg);
-            }
-        }
+        Self::execute(url, callbacks_single, server_msg);
+        debug!("TWO TWO TWO ");
+        // match &server_msg.key {
+        //     WsRouteKey::Perm(_) => {
+        //         Self::execute_multi(url, callbacks_multi, server_msg);
+        //     }
+        //
+        //     WsRouteKey::TempSingle(_) | WsRouteKey::GenPerm(_) => {
+        //     }
+        // }
     }
 
     fn flush_pending_client_msgs(
@@ -521,7 +579,7 @@ impl<
     fn run_on_ws_state_callbacks(
         ws: StoredValue<Option<WebSocket>>,
         url: &str,
-        global_on_ws_state_callbacks: StoredValue<HashMap<TempKeyType, Rc<dyn Fn(bool)>>>,
+        global_on_ws_state_callbacks: StoredValue<HashMap<WsRouteKey, Rc<dyn Fn(bool)>>>,
     ) {
         //debug!("3420 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
 
@@ -564,166 +622,199 @@ impl<
     //     }
     // }
 
-    fn execute_multi(
+    // fn execute_multi(
+    //     url: &str,
+    //     callbacks_multi: GlobalMsgCallbacks<ServerMsg>,
+    //     package: WsPackage<ServerMsg>,
+    // ) {
+    //     let key: WsRouteKey = package.0.clone();
+    //
+    //     let callback_cluster: Option<HashMap<TempKeyType, Rc<dyn Fn(&ServerMsg)>>> =
+    //         callbacks_multi.with_value({
+    //             let key = key.clone();
+    //
+    //             move |socket_closures| {
+    //                 let Some(f) = socket_closures.get(&key) else {
+    //                     warn!("ws({})_global: Fn not found for {:?}", url, &key);
+    //                     return None;
+    //                 };
+    //
+    //                 Some(f.clone())
+    //             }
+    //         });
+    //
+    //     let Some(callback_cluster) = callback_cluster else {
+    //         return;
+    //     };
+    //
+    //     match &key {
+    //         WsRouteKey::Perm(_) => {
+    //             for (key, callback) in callback_cluster {
+    //                 trace!(
+    //                     "ws({})_global: running(execute_multi) callback: {:#?}",
+    //                     url,
+    //                     key
+    //                 );
+    //                 callback(&package.data);
+    //             }
+    //         }
+    //         _ => {
+    //             warn!("ws({})_global: Wrong key was selected: {:?}", url, &key);
+    //         }
+    //     }
+    // }
+
+    fn execute(
         url: &str,
-        callbacks_multi: GlobalMsgCallbacksMulti<TempKeyType, PermKeyType, ServerMsg>,
-        package: WsPackage<TempKeyType, PermKeyType, ServerMsg>,
+        channels: WsChannelsType<ServerMsg>,
+        package: WsPackage<ServerMsg>,
     ) {
-        let key: WsRouteKey<TempKeyType, PermKeyType> = package.key.clone();
+        let channel_key: WsRouteKey = package.0;
+        let server_msg = WsRecvResult::Ok(package.1);
 
-        let callback_cluster: Option<HashMap<TempKeyType, Rc<dyn Fn(&ServerMsg)>>> =
-            callbacks_multi.with_value({
-                let key = key.clone();
-
-                move |socket_closures| {
-                    let Some(f) = socket_closures.get(&key) else {
-                        warn!("ws({})_global: Fn not found for {:?}", url, &key);
-                        return None;
-                    };
-
-                    Some(f.clone())
-                }
-            });
-
-        let Some(callback_cluster) = callback_cluster else {
-            return;
-        };
-
-        match &key {
-            WsRouteKey::Perm(_) => {
-                for (key, callback) in callback_cluster {
-                    trace!(
-                        "ws({})_global: running(execute_multi) callback: {:#?}",
-                        url,
-                        key
-                    );
-                    callback(&package.data);
-                }
-            }
-            _ => {
-                warn!("ws({})_global: Wrong key was selected: {:?}", url, &key);
-            }
-        }
-    }
-
-    fn execute_single(
-        url: &str,
-        callbacks_single: GlobalMsgCallbacksSingle<TempKeyType, PermKeyType, ServerMsg>,
-        package: WsPackage<TempKeyType, PermKeyType, ServerMsg>,
-    ) {
-        let key: WsRouteKey<TempKeyType, PermKeyType> = package.key.clone();
-
-        let callback: Option<WsPortalCallback<TempKeyType, PermKeyType, ServerMsg>> = callbacks_single.with_value({
-            let key = key.clone();
-
-            move |socket_closures| {
-                let Some(f) = socket_closures.get(&key) else {
-                    warn!("ws({})_global: Fn not found for {:?}", url, &key);
+        let channel: Option<WsChannelType<ServerMsg>> = channels.with_value(
+            move |channels| {
+                let Some(f) = channels.get(&channel_key) else {
+                    warn!("ws({})_global: channel not found {:?}", url, &channel_key);
                     return None;
                 };
 
                 Some(f.clone())
             }
-        });
+);
 
-        let Some(ws_callback) = callback else {
+        let Some(channel) = channel else {
             return;
         };
 
-        match &key {
-            WsRouteKey::TempSingle(_) => {
-                trace!(
-                    "ws({})_global: running(execute_single) callback: {:#?}",
-                    url,
-                    key
-                );
-                (ws_callback.callback)(WsResourceResult::Ok(package.data));
-                callbacks_single.update_value(|callbacks| {
-                    let result = callbacks.remove(&key);
-                    if let Some(result) = result {
-                        trace!("ws({})_global: execute_single callback was removed: {:?}", url, &key);
-                    } else {
-                        warn!("ws({})_global: execute_single failed to remove callback: current_key: {:?}, current callbacks: {:#?}", url, &key, callbacks_single.get_value().keys());
-                    }
-                });
-            }
-            WsRouteKey::GenPerm(_) => {
-                trace!(
-                    "ws({})_global: running(execute_single) callback: {:#?}",
-                    url,
-                    key
-                );
-                (ws_callback.callback)(WsResourceResult::Ok(package.data));
-                callbacks_single.update_value(|callbacks| {
-                    let result = callbacks.get_mut(&key);
-                    if let Some(result) = result {
-                        result.time = None;
-                        trace!("ws({})_global: execute_single timeout was removed: {:?}", url, &key);
-                    } else {
-                        warn!("ws({})_global: execute_single failed to remove timeout: current_key: {:?}, current callbacks: {:#?}", url, &key, callbacks_single.get_value().keys());
-                    }
-                });
 
-            }
-            _ => {
-                warn!("ws({})_global: Wrong key was selected: {:?}", url, &key);
-            }
-        }
-    }
+        debug!("THREE THREE");
 
-    pub fn send(
-        &self,
-        perm_key: PermKeyType,
-        client_msg: ClientMsg,
-    ) -> Result<SendResult, WsError> {
-        self.ws.with_value(|ws| -> Result<SendResult, WsError> {
-            let package = WsPackage::<TempKeyType, PermKeyType, ClientMsg> {
-                data: client_msg,
-                key: WsRouteKey::Perm(perm_key),
-            };
-            let bytes = ClientMsg::send_as_vec(&package).map_err(WsError::Serializatoin)?;
-
-            if let Some(ws) = ws {
-                let is_open = self.ws.with_value(move |ws| {
-                    ws.as_ref()
-                        .map(|ws| ws.ready_state() == WebSocket::OPEN)
-                        .unwrap_or(false)
-                });
-
-                if is_open {
-                    trace!(
-                        "ws({})_global: msg \"{:?}\" sending",
-                        self.ws_url.get_value().unwrap_or("error".to_string()),
-                        &package
-                    );
-
-                    return ws
-                        .send_with_u8_array(&bytes)
-                        .map(|_| SendResult::Sent)
-                        .map_err(|err| {
-                            error!(
-                                "ws({}): failed to send: {:?}",
-                                self.ws_url.get_value().unwrap_or("error".to_string()),
-                                &err
-                            );
-                            WsError::SendError(
-                                err.as_string()
-                                    .unwrap_or(String::from("Failed to send web-socket package")),
-                            )
-                        });
-                }
-            }
-
+        for (callback_key, callback) in channel.callbacks {
             trace!(
-                "ws({})_global: msg \"{:?}\" pushed to queue",
-                self.ws_url.get_value().unwrap_or("error".to_string()),
-                &package
+                "ws({})_global: running(execute_single) callback: {:#?}",
+                url, channel_key
             );
-            self.global_pending_client_msgs
-                .update_value(|pending| pending.push(bytes));
-            Ok(SendResult::Queued)
-        })
+
+            debug!("FOUR FOUR");
+            let keep_open = callback(&server_msg);
+            debug!("FIVE FIVE");
+            Self::update_callback_after_recv(channels, &url, channel_key, callback_key, keep_open);
+            debug!("SIX SIX");
+            // channels.update_value(|channels| {
+            //     let Some(channel) = channels.get_mut(&channel_key) else {
+            //         warn!("ws({}): cleanup fail: channel not found: {}", url, channel_key);
+            //         return;
+            //     };
+            //
+            //     if !keep_open {
+            //         let removed = channel.callbacks.remove(&callback_key).is_some();
+            //         if !removed {
+            //             warn!("ws({}): cleanup fail: callback not found: {}", url, callback_key);
+            //         } else {}
+            //     }
+            // });
+        }
+        Self::update_channel_after_recv(channels, &url, channel_key);
+
+
+
+
+        // match &key {
+        //     WsRouteKey::TempSingle(_) => {
+        //         trace!(
+        //             "ws({})_global: running(execute_single) callback: {:#?}",
+        //             url,
+        //             key
+        //         );
+        //         (ws_callback.callback)(WsResourceResult::Ok(package.data));
+        //         callbacks_single.update_value(|callbacks| {
+        //             let result = callbacks.remove(&key);
+        //             if let Some(result) = result {
+        //                 trace!("ws({})_global: execute_single callback was removed: {:?}", url, &key);
+        //             } else {
+        //                 warn!("ws({})_global: execute_single failed to remove callback: current_key: {:?}, current callbacks: {:#?}", url, &key, callbacks_single.get_value().keys());
+        //             }
+        //         });
+        //     }
+        //     WsRouteKey::GenPerm(_) => {
+        //         trace!(
+        //             "ws({})_global: running(execute_single) callback: {:#?}",
+        //             url,
+        //             key
+        //         );
+        //         (ws_callback.callback)(WsResourceResult::Ok(package.data));
+        //         callbacks_single.update_value(|callbacks| {
+        //             let result = callbacks.get_mut(&key);
+        //             if let Some(result) = result {
+        //                 result.time = None;
+        //                 trace!("ws({})_global: execute_single timeout was removed: {:?}", url, &key);
+        //             } else {
+        //                 warn!("ws({})_global: execute_single failed to remove timeout: current_key: {:?}, current callbacks: {:#?}", url, &key, callbacks_single.get_value().keys());
+        //             }
+        //         });
+        //
+        //     }
+        //     _ => {
+        //         warn!("ws({})_global: Wrong key was selected: {:?}", url, &key);
+        //     }
+        // }
     }
+
+    // reimplement in protal
+    // pub fn send(
+    //     &self,
+    //     perm_key: PermKeyType,
+    //     client_msg: ClientMsg,
+    // ) -> Result<SendResult, WsError> {
+    //     self.ws.with_value(|ws| -> Result<SendResult, WsError> {
+    //         let package = WsPackage::<TempKeyType, PermKeyType, ClientMsg> {
+    //             data: client_msg,
+    //             key: WsRouteKey::Perm(perm_key),
+    //         };
+    //         let bytes = ClientMsg::send_as_vec(&package).map_err(WsError::Serializatoin)?;
+    //
+    //         if let Some(ws) = ws {
+    //             let is_open = self.ws.with_value(move |ws| {
+    //                 ws.as_ref()
+    //                     .map(|ws| ws.ready_state() == WebSocket::OPEN)
+    //                     .unwrap_or(false)
+    //             });
+    //
+    //             if is_open {
+    //                 trace!(
+    //                     "ws({})_global: msg \"{:?}\" sending",
+    //                     self.ws_url.get_value().unwrap_or("error".to_string()),
+    //                     &package
+    //                 );
+    //
+    //                 return ws
+    //                     .send_with_u8_array(&bytes)
+    //                     .map(|_| SendResult::Sent)
+    //                     .map_err(|err| {
+    //                         error!(
+    //                             "ws({}): failed to send: {:?}",
+    //                             self.ws_url.get_value().unwrap_or("error".to_string()),
+    //                             &err
+    //                         );
+    //                         WsError::SendError(
+    //                             err.as_string()
+    //                                 .unwrap_or(String::from("Failed to send web-socket package")),
+    //                         )
+    //                     });
+    //             }
+    //         }
+    //
+    //         trace!(
+    //             "ws({})_global: msg \"{:?}\" pushed to queue",
+    //             self.ws_url.get_value().unwrap_or("error".to_string()),
+    //             &package
+    //         );
+    //         self.global_pending_client_msgs
+    //             .update_value(|pending| pending.push(bytes));
+    //         Ok(SendResult::Queued)
+    //     })
+    // }
 
     // pub fn on_ws_state() {
 
@@ -731,7 +822,7 @@ impl<
 
     pub fn on_ws_state(&self, callback: impl Fn(bool) + 'static) {
         //console_log!("3420 count this");
-        let temp_key = TempKeyType::generate_key();
+        let temp_key: WsRouteKey = u128::generate_key();
 
         let is_connected = self.ws.with_value(|ws| {
             ws.as_ref()
@@ -837,66 +928,68 @@ impl<
     //     });
     // }
 
-    pub fn on(&self, perm_key: PermKeyType, on_receive: impl Fn(&ServerMsg) + 'static) {
-        let perm_key = WsRouteKey::<TempKeyType, PermKeyType>::Perm(perm_key);
-        let temp_key = TempKeyType::generate_key();
-        self.global_msgs_callbacks_multi.update_value({
-            let temp_key = temp_key.clone();
-            let perm_key = perm_key.clone();
-            move |global_msgs_callbacks| {
-                let current_callback_cluster = global_msgs_callbacks.get_mut(&perm_key);
 
-                match current_callback_cluster {
-                    Some(current_callback_cluster) => {
-                        trace!(
-                            "ws({})_global: adding global_msgs_closures callback: {:#?}",
-                            self.ws_url.get_value().unwrap_or("error".to_string()),
-                            temp_key
-                        );
-                        current_callback_cluster.insert(temp_key, Rc::new(on_receive));
-                    }
-                    None => {
-                        let mut callback_cluster: HashMap<TempKeyType, Rc<dyn Fn(&ServerMsg)>> =
-                            HashMap::new();
-                        trace!(
-                            "ws({})_global: adding global_msgs_closures callback: {:#?}",
-                            self.ws_url.get_value().unwrap_or("error".to_string()),
-                            temp_key
-                        );
-                        callback_cluster.insert(temp_key, Rc::new(on_receive));
-                        global_msgs_callbacks.insert(perm_key, callback_cluster);
-                    }
-                }
-            }
-        });
-        on_cleanup({
-            let callbacks = self.global_msgs_callbacks_multi;
-            let ws_url = self.ws_url;
-            move || {
-                callbacks.update_value({
-                    move |callbacks| {
-                        let callback_cluster = callbacks.get_mut(&perm_key);
-                        let Some(callback_cluster) = callback_cluster else {
-                            trace!(
-                                "ws({})_global: cleanup: closure not found: {:?}",
-                                ws_url.get_value().unwrap_or("error".to_string()),
-                                &perm_key
-                            );
-                            return;
-                        };
-                        trace!(
-                            "ws({})_global: cleanup: removed: {:?}",
-                            ws_url.get_value().unwrap_or("error".to_string()),
-                            &perm_key
-                        );
-                        callback_cluster.remove(&temp_key);
-                    }
-                });
-            }
-        });
-    }
+    // re-implement in portal
+//     pub fn on(&self, perm_key: PermKeyType, on_receive: impl Fn(&ServerMsg) + 'static) {
+//         let perm_key = WsRouteKey::<TempKeyType, PermKeyType>::Perm(perm_key);
+//         let temp_key = TempKeyType::generate_key();
+//         self.global_msgs_callbacks_multi.update_value({
+//             let temp_key = temp_key.clone();
+//             let perm_key = perm_key.clone();
+//             move |global_msgs_callbacks| {
+//                 let current_callback_cluster = global_msgs_callbacks.get_mut(&perm_key);
+//
+//                 match current_callback_cluster {
+//                     Some(current_callback_cluster) => {
+//                         trace!(
+//                             "ws({})_global: adding global_msgs_closures callback: {:#?}",
+//                             self.ws_url.get_value().unwrap_or("error".to_string()),
+//                             temp_key
+//                         );
+//                         current_callback_cluster.insert(temp_key, Rc::new(on_receive));
+//                     }
+//                     None => {
+//                         let mut callback_cluster: HashMap<TempKeyType, Rc<dyn Fn(&ServerMsg)>> =
+//                             HashMap::new();
+//                         trace!(
+//                             "ws({})_global: adding global_msgs_closures callback: {:#?}",
+//                             self.ws_url.get_value().unwrap_or("error".to_string()),
+//                             temp_key
+//                         );
+//                         callback_cluster.insert(temp_key, Rc::new(on_receive));
+//                         global_msgs_callbacks.insert(perm_key, callback_cluster);
+//                     }
+//                 }
+//             }
+//         });
+//         on_cleanup({
+//             let callbacks = self.global_msgs_callbacks_multi;
+//             let ws_url = self.ws_url;
+//             move || {
+//                 callbacks.update_value({
+//                     move |callbacks| {
+//                         let callback_cluster = callbacks.get_mut(&perm_key);
+//                         let Some(callback_cluster) = callback_cluster else {
+//                             trace!(
+//                                 "ws({})_global: cleanup: closure not found: {:?}",
+//                                 ws_url.get_value().unwrap_or("error".to_string()),
+//                                 &perm_key
+//                             );
+//                             return;
+//                         };
+//                         trace!(
+//                             "ws({})_global: cleanup: removed: {:?}",
+//                             ws_url.get_value().unwrap_or("error".to_string()),
+//                             &perm_key
+//                         );
+//                         callback_cluster.remove(&temp_key);
+//                     }
+//                 });
+//             }
+//         });
+//     }
+// }
 }
-
 pub fn get_ws_url(port: u32) -> Result<String, GetUrlError> {
     let mut output = String::new();
     let window = use_window();
@@ -925,28 +1018,28 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 #[derive(Clone, Debug, Copy)]
 pub struct WsBuilder<
-    TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
-    PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
-    ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
-    ClientMsg: Clone + Send<TempKeyType, PermKeyType> + Debug + 'static,
+    // TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
+    // PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
+    ServerMsg: Clone + Receive + Debug + 'static,
+    ClientMsg: Clone + Send + Debug + 'static,
 > {
     ws_url: StoredValue<Option<String>>,
-    global_msgs_closures: GlobalMsgCallbacksSingle<TempKeyType, PermKeyType, ServerMsg>,
+    global_msgs_closures: WsChannelsType<ServerMsg>,
     ws: StoredValue<Option<WebSocket>>,
     global_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
     phantom: PhantomData<ClientMsg>,
 }
 
 impl<
-        TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
-        PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
-        ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
-        ClientMsg: Clone + Send<TempKeyType, PermKeyType> + Debug + 'static,
-    > WsBuilder<TempKeyType, PermKeyType, ServerMsg, ClientMsg>
+        // TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
+        // PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
+        ServerMsg: Clone + Receive + Debug + 'static,
+        ClientMsg: Clone + Send + Debug + 'static,
+    > WsBuilder<ServerMsg, ClientMsg>
 {
     pub fn new(
         ws_url: StoredValue<Option<String>>,
-        global_msgs_closures: GlobalMsgCallbacksSingle<TempKeyType, PermKeyType, ServerMsg>,
+        global_msgs_closures: WsChannelsType<ServerMsg>,
         ws: StoredValue<Option<WebSocket>>,
         global_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
     ) -> Self {
@@ -959,44 +1052,53 @@ impl<
         }
     }
 
-    pub fn portal(self) -> PortalBuilder<TempKeyType, PermKeyType, ServerMsg, ClientMsg> {
-        PortalBuilder {
+    pub fn channel_with_timeout(self, timeout_secs: i64) -> ChannelBuilder<ServerMsg, ClientMsg> {
+        ChannelBuilder {
             ws_builder: self,
-            single_use: true,
+            skip_if_awaiting_response: true,
+            timeout: Some(TimeDelta::microseconds(timeout_secs * 1000 * 1000)),
         }
     }
 }
-
+//TimeDelta::microseconds(TIMEOUT_SECS * 1000 * 1000)
 #[derive(Clone, Debug, Copy)]
-pub struct PortalBuilder<
-    TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
-    PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
-    ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
-    ClientMsg: Clone + Send<TempKeyType, PermKeyType> + Debug + 'static,
+pub struct ChannelBuilder<
+    // TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
+    // PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
+    ServerMsg: Clone + Receive + Debug + 'static,
+    ClientMsg: Clone + Send + Debug + 'static,
 > {
-    ws_builder: WsBuilder<TempKeyType, PermKeyType, ServerMsg, ClientMsg>,
-    single_use: bool,
+    ws_builder: WsBuilder<ServerMsg, ClientMsg>,
+    skip_if_awaiting_response: bool,
+    timeout: Option<TimeDelta>,
 }
 
 impl<
-        TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
-        PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
-        ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
-        ClientMsg: Clone + Send<TempKeyType, PermKeyType> + Debug + 'static,
-    > PortalBuilder<TempKeyType, PermKeyType, ServerMsg, ClientMsg>
+        // TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
+        // PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
+        ServerMsg: Clone + Receive + Debug + 'static,
+        ClientMsg: Clone + Send + Debug + 'static,
+    > ChannelBuilder<ServerMsg, ClientMsg>
 {
-    pub fn stream(mut self) -> Self {
-        self.single_use = false;
+    // pub fn stream(mut self) -> Self {
+    //     self.on_recv_action = WsOnRecvAction::None;
+    //     self
+    // }
+
+
+    pub fn multi(mut self) -> Self {
+        self.skip_if_awaiting_response = false;
         self
     }
 
-    pub fn build(self) -> WsPortal<TempKeyType, PermKeyType, ServerMsg, ClientMsg> {
-        WsPortal::new(
+    pub fn build(self) -> WsChannel<ServerMsg, ClientMsg> {
+        WsChannel::new(
             self.ws_builder.ws_url,
             self.ws_builder.global_msgs_closures,
             self.ws_builder.ws,
             self.ws_builder.global_pending_client_msgs,
-            self.single_use,
+            self.skip_if_awaiting_response,
+            self.timeout,
         )
     }
 }
@@ -1008,137 +1110,178 @@ impl<
 //
 // pub fn
 
+#[track_caller]
+fn location_hash() -> u128 {
+    xxhash_rust::xxh3::xxh3_128(std::panic::Location::caller().to_string().as_bytes())
+    // fasthash::spooky::hash128()
+}
+
 #[derive(Clone, Debug)]
-pub struct WsPortal<
-    TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
-    PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
-    ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
-    ClientMsg: Clone + Send<TempKeyType, PermKeyType> + Debug + 'static,
+pub struct WsChannel<
+    // TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
+    // PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug + 'static,
+    ServerMsg: Clone + Receive + Debug + 'static,
+    ClientMsg: Clone + Send + Debug + 'static,
 > {
-    global_msgs_closures: GlobalMsgCallbacksSingle<TempKeyType, PermKeyType, ServerMsg>,
+    channel: WsChannelsType<ServerMsg>,
     global_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
     //socket_send_fn: StoredValue<Rc<dyn Fn(Vec<u8>)>>,
     ws: StoredValue<Option<WebSocket>>,
     ws_url: StoredValue<Option<String>>,
-    key: StoredValue<WsRouteKey<TempKeyType, PermKeyType>>,
+    key: WsRouteKey,
     phantom: PhantomData<ClientMsg>,
-    single_use: bool,
+    skip_if_awaiting_response: bool,
+    timeout: Option<TimeDelta>,
     // settings: WsBuilder,
 }
 
+
+
 impl<
-        TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
-        PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
-        ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
-        ClientMsg: Clone + Send<TempKeyType, PermKeyType> + Debug + 'static,
-    > Copy for WsPortal<TempKeyType, PermKeyType, ServerMsg, ClientMsg>
+        // TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+        // PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+        ServerMsg: Clone + Receive + Debug + 'static,
+        ClientMsg: Clone + Send + Debug + 'static,
+    > Copy for WsChannel<ServerMsg, ClientMsg>
 {
 }
 
 impl<
-        TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
-        PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
-        ServerMsg: Clone + Receive<TempKeyType, PermKeyType> + Debug + 'static,
-        ClientMsg: Clone + Send<TempKeyType, PermKeyType> + Debug + 'static,
-    > WsPortal<TempKeyType, PermKeyType, ServerMsg, ClientMsg>
+        // TempKeyType: KeyGen + Default + Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+        // PermKeyType: Clone + Eq + PartialEq + std::hash::Hash + std::fmt::Debug,
+        ServerMsg: Clone + Receive + Debug + 'static,
+        ClientMsg: Clone + Send + Debug + 'static,
+    > WsChannel<ServerMsg, ClientMsg>
 {
     pub fn new(
         ws_url: StoredValue<Option<String>>,
-        global_msgs_closures: GlobalMsgCallbacksSingle<TempKeyType, PermKeyType, ServerMsg>,
+        global_msgs_closures: WsChannelsType<ServerMsg>,
         ws: StoredValue<Option<WebSocket>>,
         global_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
-        single_use: bool,
+        skip_if_awaiting_response: bool,
+        timeout: Option<TimeDelta>,
         // settings: WsBuilder,
     ) -> Self {
-        let ws_round_kind = if single_use {
-            WsRouteKey::<TempKeyType, PermKeyType>::TempSingle(TempKeyType::generate_key())
-        } else {
-            WsRouteKey::<TempKeyType, PermKeyType>::GenPerm(TempKeyType::generate_key())
-        };
+        // let ws_round_kind = if single_use {
+        //     WsRouteKey::<TempKeyType, PermKeyType>::TempSingle(TempKeyType::generate_key())
+        // } else {
+        //     WsRouteKey::<TempKeyType, PermKeyType>::GenPerm(TempKeyType::generate_key())
+        // };
+        let channel_key = WsRouteKey::generate_key();
 
-        on_cleanup({
-            let key = ws_round_kind.clone();
-            move || {
-                global_msgs_closures.update_value({
-                    move |socket_closures| {
-                        trace!(
-                            "ws({})_global: singletone: removed callback: {:?}",
-                            ws_url.get_value().unwrap_or("error".to_string()),
-                            &key
-                        );
-                        socket_closures.remove(&key);
-                    }
-                });
+        let create_channel = || global_msgs_closures.update_value({
+            move |channels| {
+                    let Some(channel) = channels.get_mut(&channel_key) else {
+                        let mut channel_callbacks: WsChannelCallbacksType<ServerMsg> = HashMap::new();
+                        let time = Some((
+                                        Utc::now(),
+                                        TimeDelta::microseconds(TIMEOUT_SECS * 1000 * 1000),
+                                    ));
+
+                        let channel = WsChannelType::new(time , channel_callbacks) ;
+                        channels.insert(channel_key, channel);
+                        return;
+                    };
+                    warn!("ws({}): channel already exists: {}", ws_url.get_value().unwrap_or("error".to_string()), channel_key);
             }
         });
 
+        #[cfg(target_arch = "wasm32")]
+        {
+            create_channel();
+        }
+
+        let detach = Owner::current().is_none();
+        if !detach {
+            on_cleanup({
+                // let key = ws_round_kind.clone();
+                move || {
+                    global_msgs_closures.update_value({
+                        move |socket_closures| {
+                            trace!(
+                                "ws({})_global: channel removed: {:?}",
+                                ws_url.get_value().unwrap_or("error".to_string()),
+                                &channel_key
+                            );
+                            socket_closures.remove(&channel_key);
+                        }
+                    });
+                }
+            });
+        }
+
         Self {
-            global_msgs_closures,
+            channel: global_msgs_closures,
             global_pending_client_msgs,
             ws,
             ws_url,
-            key: StoredValue::new(ws_round_kind),
+            key: channel_key,
             phantom: PhantomData,
-            single_use,
+            // on_recv_action,
+            // detach,
+            skip_if_awaiting_response,
+            timeout,
             // settings,
         }
     }
 
-    pub fn send_and_recv(
+    #[track_caller]
+    pub fn recv(
         &self,
-        client_msg: ClientMsg,
-        on_receive: impl Fn(WsResourceResult<ServerMsg>) + 'static,
-    ) -> Result<WsResourcSendResult, WsError> {
+        on_receive: impl Fn(&WsRecvResult<ServerMsg>) -> bool + 'static,
+
+    ) {
+
+        let channel_key = self.key;
+        let callback_key = location_hash();
+        // let action = self.on_recv_action;
+        self.ws.with_value(|ws| -> Result<(), WsError> {
+            self.channel.update_value({
+                move |channels| {
+                    let Some(channel) = channels.get_mut(&channel_key) else {
+                        trace!(
+                            "ws({}): channel was not created: {}",
+                            self.ws_url.get_value().unwrap_or("error".to_string()),
+                            &callback_key);
+                        return;
+                    };
+
+                        
+                    let contains = channel
+                            .callbacks.contains_key(&callback_key);
+                    if !contains {
+                        trace!(
+                            "ws({})_global: adding global_msgs_closures callback: {:#?}",
+                            self.ws_url.get_value().unwrap_or("error".to_string()),
+                            &callback_key);
+                        channel.callbacks.insert(channel_key, Rc::new(on_receive));
+
+                    } 
+                        
+                }
+            });
+
+            Ok(())
+        });
+    }
+
+    pub fn send(&self, client_msg: ClientMsg) {
+        let channel_key = self.key;
         self.ws
             .with_value(|ws| -> Result<WsResourcSendResult, WsError> {
-                let exists: Option<bool> = self.global_msgs_closures.try_update_value({
-                    move |global_msgs_closures| {
-                        self.key.with_value(|key| {
-                            global_msgs_closures
-                                .get(key)
-                                .map(|_| true)
-                                .unwrap_or_else(|| {
-                                    trace!(
-                                    "ws({})_global: adding global_msgs_closures callback: {:#?}",
-                                    self.ws_url.get_value().unwrap_or("error".to_string()),
-                                    &key
-                                );
-                                    global_msgs_closures.insert(
-                                        key.clone(),
-                                        WsPortalCallback::new
-                                        (
-                                                self.single_use,
-                                            Some((
-                                                Utc::now(),
-                                                TimeDelta::microseconds(TIMEOUT_SECS * 1000 * 1000),
-                                            )),
-                                            Rc::new(on_receive),
-                                        ),
-                                    );
-                                    false
-                                })
-                        })
+                if self.skip_if_awaiting_response {
+                    let waiting_for_response = self.channel.with_value(|channels| channels.get(&channel_key).map(|channel|channel.waiting_for_response).unwrap_or(false));
+                    if waiting_for_response {
+                        return Ok(WsResourcSendResult::Skipped);
                     }
-                });
-
-                if exists.unwrap_or(false) {
-                    trace!(
-                        "ws({}): skipping: callback already exists: {:?}",
-                        self.ws_url.get_value().unwrap_or("error".to_string()),
-                        self.key.get_value()
-                    );
-                    return Ok(WsResourcSendResult::Skipped);
                 }
+                let package: WsPackage<ClientMsg> = (channel_key, client_msg);
+                // {
+                //     data: client_msg,
+                //     key: self.key.get_value(),
+                // };
 
-                let package = WsPackage::<TempKeyType, PermKeyType, ClientMsg> {
-                    data: client_msg,
-                    key: self.key.get_value(),
-                };
-
-                let bytes = ClientMsg::send_as_vec(&package).map_err(|err| {
-                    self.remove_callback();
-                    WsError::Serializatoin(err)
-                })?;
+                let bytes = ClientMsg::send_as_vec(&package).map_err(WsError::Serializatoin)?;
 
                 if let Some(ws) = ws {
                     let is_open = self.ws.with_value(move |ws| {
@@ -1155,9 +1298,11 @@ impl<
                         );
                         return ws
                             .send_with_u8_array(&bytes)
-                            .map(|_| WsResourcSendResult::Sent)
+                            .map(|_| {
+                                self.set_is_waiting_for_response();
+                                WsResourcSendResult::Sent
+                            })
                             .map_err(|err| {
-                                self.remove_callback();
                                 WsError::SendError(
                                     err.as_string().unwrap_or(String::from(
                                         "Failed to send web-socket package",
@@ -1176,39 +1321,194 @@ impl<
                 self.global_pending_client_msgs
                     .update_value(|pending| pending.push(bytes));
 
+
+                self.set_is_waiting_for_response();
                 Ok(WsResourcSendResult::Queued)
-            })
+                // let waiting_for_response = self.channel.with_value(|callback| {
+                //     // callback.w
+                // });
+
+                // Ok(())
+                
+
+            });
+
     }
 
-    fn remove_callback(&self) -> bool {
+    fn set_is_waiting_for_response(&self) {
+        self.channel.update_value(|channels| {
+            let Some(channel) = channels.get_mut(&self.key) else {
+                warn!(
+                    "ws({}): cant set waiting for response, channel not found: {}",
+                    self.ws_url.get_value().unwrap_or("error".to_string()),
+                    &self.key
+                );
+                return;
+            };
+            trace!(
+                "ws({}): waiting for response enabled for: {}",
+                self.ws_url.get_value().unwrap_or("error".to_string()),
+                &self.key
+            );
+            channel.waiting_for_response = true;
+        });
+    }
+
+    // #[track_caller]
+    // pub fn send_and_recv(
+    //     &self,
+    //     client_msg: ClientMsg,
+    //     on_receive: impl Fn(&WsRecvResult<ServerMsg>) -> bool + 'static,
+    // ) -> Result<WsResourcSendResult, WsError> {
+    //     let channel_key = self.key;
+    //     let callback_key = location_hash();
+    //     let action = self.on_recv_action;
+    //     self.ws
+    //         .with_value(|ws| -> Result<WsResourcSendResult, WsError> {
+    //             let exists: Option<bool> = self.channel.try_update_value({
+    //                 move |channels| {
+    //
+    //
+    //                         let Some(channel) = channels.get_mut(&channel_key) else {
+    //                             let mut channel_callbacks: WsChannelCallbacksType<ServerMsg> = HashMap::new();
+    //                             channel_callbacks.insert(callback_key, Rc::new(on_receive));
+    //                             let time = Some((
+    //                                             Utc::now(),
+    //                                             TimeDelta::microseconds(TIMEOUT_SECS * 1000 * 1000),
+    //                                         ));
+    //
+    //                             let channel = WsChannelType::new(action, time , channel_callbacks) ;
+    //                             channels.insert(channel_key, channel);
+    //                             return false;
+    //                         };
+    //
+    //
+    //                     let contains = channel
+    //                             .callbacks.contains_key(&callback_key);
+    //                     if contains {
+    //                         trace!(
+    //                             "ws({})_global: adding global_msgs_closures callback: {:#?}",
+    //                             self.ws_url.get_value().unwrap_or("error".to_string()),
+    //                             &callback_key);
+    //                         channel.callbacks.insert(channel_key, Rc::new(on_receive));
+    //
+    //                     } 
+    //                     contains
+    //
+    //                 }
+    //             });
+    //
+    //             if exists.unwrap_or(false) {
+    //                 trace!(
+    //                     "ws({}): skipping: callback already exists: {:?}",
+    //                     self.ws_url.get_value().unwrap_or("error".to_string()),
+    //                     self.key
+    //                 );
+    //                 return Ok(WsResourcSendResult::Skipped);
+    //             }
+    //
+    //             let package: WsPackage<ClientMsg> = (channel_key, client_msg);
+    //             // {
+    //             //     data: client_msg,
+    //             //     key: self.key.get_value(),
+    //             // };
+    //
+    //             let bytes = ClientMsg::send_as_vec(&package).map_err(|err| {
+    //                 self.remove_callback(callback_key);
+    //                 WsError::Serializatoin(err)
+    //             })?;
+    //
+    //             if let Some(ws) = ws {
+    //                 let is_open = self.ws.with_value(move |ws| {
+    //                     ws.as_ref()
+    //                         .map(|ws| ws.ready_state() == WebSocket::OPEN)
+    //                         .unwrap_or(false)
+    //                 });
+    //
+    //                 if is_open {
+    //                     trace!(
+    //                         "ws({}): sending msg: {:?}",
+    //                         self.ws_url.get_value().unwrap_or("error".to_string()),
+    //                         &package
+    //                     );
+    //                     return ws
+    //                         .send_with_u8_array(&bytes)
+    //                         .map(|_| WsResourcSendResult::Sent)
+    //                         .map_err(|err| {
+    //                             self.remove_callback(callback_key);
+    //                             WsError::SendError(
+    //                                 err.as_string().unwrap_or(String::from(
+    //                                     "Failed to send web-socket package",
+    //                                 )),
+    //                             )
+    //                         });
+    //                 }
+    //             }
+    //
+    //             trace!(
+    //                 "ws({}): msg \"{:?}\" pushed to queue",
+    //                 self.ws_url.get_value().unwrap_or("error".to_string()),
+    //                 &package
+    //             );
+    //
+    //             self.global_pending_client_msgs
+    //                 .update_value(|pending| pending.push(bytes));
+    //
+    //             Ok(WsResourcSendResult::Queued)
+    //         })
+    // }
+
+    fn remove_callback(&self, callback_key: u128) -> bool {
+        let channel_key = self.key;
         // let a = async {
 
         // };
         // let b = tokio::spawn(a);
 
-        self.key.with_value(|key| {
-            let mut output = false;
-            self.global_msgs_closures.update_value({
-                |socket_closures| {
-                    let result = socket_closures.remove(key);
-                    if let Some(_) = result {
-                        trace!(
-                            "ws({}): WsSingleton: callback removed {:?}",
-                            self.ws_url.get_value().unwrap_or("error".to_string()),
-                            &key
-                        );
-                        output = true;
-                    } else {
-                        error!(
-                            "ws({}): error: cant find callback with key: {:?}",
-                            self.ws_url.get_value().unwrap_or("error".to_string()),
-                            &key
-                        );
-                    }
+        let mut output = false;
+        self.channel.update_value({
+            |socket_closures| {
+                let channel = socket_closures.get_mut(&channel_key);
+                let Some(channel) = channel else {
+
+                    error!(
+                        "ws({}): error: cant find channel with key: {:?}",
+                        self.ws_url.get_value().unwrap_or("error".to_string()),
+                        &channel_key
+                    );
+                    return;
+                };
+
+
+                output = channel.callbacks.remove(&callback_key).is_some();
+                if output {
+                    trace!(
+                        "ws({}): channel callback removed {:?}",
+                        self.ws_url.get_value().unwrap_or("error".to_string()),
+                        &callback_key
+                    );
+                 } else {
+                    error!(
+                        "ws({}): error: cant find callback with key: {:?}",
+                        self.ws_url.get_value().unwrap_or("error".to_string()),
+                        &callback_key
+                    );
+
                 }
-            });
-            output
-        })
+                    //                 error!(
+                    //     "ws({}): error: cant find callback with key: {:?}",
+                    //     self.ws_url.get_value().unwrap_or("error".to_string()),
+                    //     &channel_key
+                    // );
+
+                // if  {
+                //
+                //     output = true;
+                // } else {
+                // }
+            }
+        });
+        output
     }
 }
 
@@ -1253,7 +1553,7 @@ pub enum WsError {
 }
 
 #[derive(Debug, Clone)]
-pub enum WsResourceResult<T: Debug + Clone> {
+pub enum WsRecvResult<T: Debug + Clone> {
     Ok(T),
     TimeOut,
 }

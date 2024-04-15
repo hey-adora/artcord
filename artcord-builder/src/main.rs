@@ -380,10 +380,8 @@ async fn sockets_handle_connection(
 
                     // }
                     tokio_tungstenite::tungstenite::Message::Binary(client_msg_bytes) => {
-                        let client_msg: Result<
-                            WsPackage<u128, DebugMsgPermKey, DebugClientMsg>,
-                            _,
-                        > = DebugClientMsg::from_bytes(&client_msg_bytes);
+                        let client_msg: Result<WsPackage<DebugClientMsg>, _> =
+                            DebugClientMsg::from_bytes(&client_msg_bytes);
 
                         let Ok(client_msg) = client_msg.inspect_err(|err| {
                             error!(
@@ -394,8 +392,8 @@ async fn sockets_handle_connection(
                             return Ok(());
                         };
                         trace!("socekt: msg recv: {:?}", &client_msg);
-                        let key = client_msg.key;
-                        let client_msg = client_msg.data;
+                        let key = client_msg.0;
+                        let client_msg = client_msg.1;
                         let send_result = match client_msg {
                             DebugClientMsg::BrowserReady => {
                                 send_manager_event
@@ -506,11 +504,11 @@ async fn sockets_handle_connection(
                         match result {
                             BrowserEvent::Restart => {
                                 //trace!("socekt: msg recv: ({},{:?})", key, &client_msg);
-                                let restart_package =
-                                    WsPackage::<u128, DebugMsgPermKey, DebugServerMsg> {
-                                        key: WsRouteKey::Perm(DebugMsgPermKey::Debug),
-                                        data: DebugServerMsg::Restart,
-                                    };
+                                let restart_package: WsPackage<DebugServerMsg> = (
+                                    0,
+                                    // WsRouteKey::Perm(DebugMsgPermKey::Debug),
+                                    DebugServerMsg::Restart,
+                                );
                                 trace!("socekt_connection: send: {:?}", &restart_package);
                                 let server_msg = DebugServerMsg::as_bytes(&restart_package);
 

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use artcord_leptos_web_sockets::WsResourceResult;
+use artcord_leptos_web_sockets::WsRecvResult;
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_client_msg::WsPath;
 use artcord_state::message::prod_server_msg::AdminStat;
@@ -42,7 +42,8 @@ pub fn Admin() -> impl IntoView {
     let page = global_state.pages.admin;
     let statistics = page.statistics;
 
-    let ws_statistics = ws.builder().portal().stream().build();
+    // let ws_statistics = ws.builder().portal().stream().build();
+    let ws_statistics = ws.builder();
 
     // ws_statistics.send_or_skip(Vgc, on_receive)
     create_effect(move |_| {
@@ -55,36 +56,36 @@ pub fn Admin() -> impl IntoView {
     //     debug!("TWO");
     // });
 
-    create_effect(move |_| {
-        trace!("admin: sending to open admin throttle sender");
-        ws_statistics.send_and_recv(ClientMsg::AdminThrottleListenerToggle(true), move |res| {
-            match res {
-                WsResourceResult::Ok(server_msg) => match server_msg {
-                    ServerMsg::AdminStats(msg) => match msg {
-                        AdminStatsRes::Started(stats) => {
-                            statistics.set(stats);
-                        }
-                        AdminStatsRes::UpdateAddedNew { con_key, stat } => {
-                            statistics.update(move |stats| {
-                                stats.insert(con_key, stat);
-                            });
-                        }
-                        _ => {}
-                    },
-                    _ => {}
-                },
-                WsResourceResult::TimeOut => {}
-            }
-            // trace!("admin: received: {:?}", res);
-        });
-    });
+    // create_effect(move |_| {
+    //     trace!("admin: sending to open admin throttle sender");
+    //     ws_statistics.send_and_recv(ClientMsg::AdminThrottleListenerToggle(true), move |res| {
+    //         match res {
+    //             WsRecvResult::Ok(server_msg) => match server_msg {
+    //                 ServerMsg::AdminStats(msg) => match msg {
+    //                     AdminStatsRes::Started(stats) => {
+    //                         statistics.set(stats);
+    //                     }
+    //                     AdminStatsRes::UpdateAddedNew { con_key, stat } => {
+    //                         statistics.update(move |stats| {
+    //                             stats.insert(con_key, stat);
+    //                         });
+    //                     }
+    //                     _ => {}
+    //                 },
+    //                 _ => {}
+    //             },
+    //             WsRecvResult::TimeOut => {}
+    //         }
+    //         // trace!("admin: received: {:?}", res);
+    //     });
+    // });
 
-    on_cleanup(move || {
-        trace!("admin: sending to close admin throttle sender");
-        ws_statistics.send_and_recv(ClientMsg::AdminThrottleListenerToggle(false), |res| {
-            trace!("admin: received: {:?}", res);
-        });
-    });
+    // on_cleanup(move || {
+    //     trace!("admin: sending to close admin throttle sender");
+    //     ws_statistics.send_and_recv(ClientMsg::AdminThrottleListenerToggle(false), |res| {
+    //         trace!("admin: received: {:?}", res);
+    //     });
+    // });
 
     // create_effect(move |_| {
     //     use_interval_fn(

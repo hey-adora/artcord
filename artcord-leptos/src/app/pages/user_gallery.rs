@@ -6,7 +6,7 @@ use crate::app::utils::img_resize::resize_imgs;
 use crate::app::utils::img_resize::NEW_IMG_HEIGHT;
 use crate::app::utils::img_resized::ServerMsgImgResized;
 use crate::app::utils::{LoadingNotFound, SelectedImg};
-use artcord_leptos_web_sockets::WsResourceResult;
+use artcord_leptos_web_sockets::WsRecvResult;
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_server_msg::{ServerMsg, UserGalleryRes, UserRes};
 use artcord_state::model::user::User;
@@ -109,8 +109,8 @@ pub fn UserGalleryPage() -> impl IntoView {
     let ws = global_state.ws;
     let location = use_location();
 
-    let ws_gallery = ws.builder().portal().build();
-    let ws_user = ws.builder().portal().build();
+    // let ws_gallery = ws.builder().portal().build();
+    // let ws_user = ws.builder().portal().build();
 
     let on_click = move |img: ServerMsgImgResized| {
         selected_img.set(Some(SelectedImg {
@@ -174,54 +174,54 @@ pub fn UserGalleryPage() -> impl IntoView {
                     user_id,
                 };
 
-                match ws_gallery.send_and_recv(msg, move |server_msg| match server_msg {
-                    WsResourceResult::Ok(server_msg) => match server_msg {
-                        ServerMsg::UserGallery(response) => match response {
-                            UserGalleryRes::Imgs(new_imgs) => {
-                                let new_imgs = new_imgs
-                                    .iter()
-                                    .map(|img| ServerMsgImgResized::from(img.to_owned()))
-                                    .collect::<Vec<ServerMsgImgResized>>();
-
-                                global_gallery_imgs.update(|imgs| {
-                                    imgs.extend(new_imgs);
-                                    let gallery_section = gallery_section.get_untracked();
-                                    let Some(gallery_section) = gallery_section else {
-                                        return;
-                                    };
-                                    let width = gallery_section.client_width() as u32;
-                                    resize_imgs(NEW_IMG_HEIGHT, width, imgs);
-                                });
-                                trace!("user_gallery: loadeding state set to: Loaded");
-                                loaded_sig.set(LoadingNotFound::Loaded);
-                            }
-                            UserGalleryRes::UserNotFound => {
-                                trace!("user_gallery: loadeding state set to: NotFound");
-                                loaded_sig.set(LoadingNotFound::NotFound);
-                            }
-                        },
-                        ServerMsg::Error => {
-                            trace!("user_gallery: server error: loadeding state set to: Error");
-                            loaded_sig.set(LoadingNotFound::Error);
-                        }
-                        msg => {
-                            error!("user_gallery: received wrong msg: {:#?}", msg);
-                            loaded_sig.set(LoadingNotFound::Error);
-                        }
-                    },
-                    WsResourceResult::TimeOut => {
-                        trace!("user_gallery: timeout: loadeding state set to: Error");
-                        loaded_sig.set(LoadingNotFound::Error);
-                    }
-                }) {
-                    Ok(result) => {
-                        trace!("user_gallery: fetch_imgs returned: {:?}", result);
-                    }
-                    Err(err) => {
-                        error!("user_gallery: send error: {}", err);
-                        loaded_sig.set(LoadingNotFound::Error);
-                    }
-                };
+                // match ws_gallery.send_and_recv(msg, move |server_msg| match server_msg {
+                //     WsRecvResult::Ok(server_msg) => match server_msg {
+                //         ServerMsg::UserGallery(response) => match response {
+                //             UserGalleryRes::Imgs(new_imgs) => {
+                //                 let new_imgs = new_imgs
+                //                     .iter()
+                //                     .map(|img| ServerMsgImgResized::from(img.to_owned()))
+                //                     .collect::<Vec<ServerMsgImgResized>>();
+                //
+                //                 global_gallery_imgs.update(|imgs| {
+                //                     imgs.extend(new_imgs);
+                //                     let gallery_section = gallery_section.get_untracked();
+                //                     let Some(gallery_section) = gallery_section else {
+                //                         return;
+                //                     };
+                //                     let width = gallery_section.client_width() as u32;
+                //                     resize_imgs(NEW_IMG_HEIGHT, width, imgs);
+                //                 });
+                //                 trace!("user_gallery: loadeding state set to: Loaded");
+                //                 loaded_sig.set(LoadingNotFound::Loaded);
+                //             }
+                //             UserGalleryRes::UserNotFound => {
+                //                 trace!("user_gallery: loadeding state set to: NotFound");
+                //                 loaded_sig.set(LoadingNotFound::NotFound);
+                //             }
+                //         },
+                //         ServerMsg::Error => {
+                //             trace!("user_gallery: server error: loadeding state set to: Error");
+                //             loaded_sig.set(LoadingNotFound::Error);
+                //         }
+                //         msg => {
+                //             error!("user_gallery: received wrong msg: {:#?}", msg);
+                //             loaded_sig.set(LoadingNotFound::Error);
+                //         }
+                //     },
+                //     WsRecvResult::TimeOut => {
+                //         trace!("user_gallery: timeout: loadeding state set to: Error");
+                //         loaded_sig.set(LoadingNotFound::Error);
+                //     }
+                // }) {
+                //     Ok(result) => {
+                //         trace!("user_gallery: fetch_imgs returned: {:?}", result);
+                //     }
+                //     Err(err) => {
+                //         error!("user_gallery: send error: {}", err);
+                //         loaded_sig.set(LoadingNotFound::Error);
+                //     }
+                // };
             }
         };
 
@@ -239,42 +239,42 @@ pub fn UserGalleryPage() -> impl IntoView {
             global_gallery_imgs.set(Vec::new());
 
             let msg = ClientMsg::User { user_id: new_user };
-            match ws_user.send_and_recv(msg, move |server_msg| match server_msg {
-                WsResourceResult::Ok(server_msg) => match server_msg {
-                    ServerMsg::User(response) => match response {
-                        UserRes::User(user) => {
-                            let user_id = user.author_id.clone();
-                            global_gallery_user.set(Some(user));
-                            trace!("user_gallery: user received '{}', fetching imgs", &user_id);
-                            fetch(user_id);
-                        }
-                        UserRes::UserNotFound => {
-                            trace!("user_gallery: loadeding state set to: NotFound");
-                            loaded_sig.set(LoadingNotFound::NotFound);
-                        }
-                    },
-                    ServerMsg::Error => {
-                        trace!("user_gallery: server error:loadeding state set to: Error");
-                        loaded_sig.set(LoadingNotFound::Error);
-                    }
-                    msg => {
-                        error!("user_gallery: received wrong msg: {:#?}", msg);
-                        loaded_sig.set(LoadingNotFound::Error);
-                    }
-                },
-                WsResourceResult::TimeOut => {
-                    trace!("user_gallery: timeout: loadeding state set to: Error");
-                    loaded_sig.set(LoadingNotFound::Error);
-                }
-            }) {
-                Ok(result) => {
-                    trace!("user_gallery: fetch_user returned: {:?}", result);
-                }
-                Err(err) => {
-                    error!("user_gallery: send error: {}", err);
-                    loaded_sig.set(LoadingNotFound::Error);
-                }
-            };
+            // match ws_user.send_and_recv(msg, move |server_msg| match server_msg {
+            //     WsRecvResult::Ok(server_msg) => match server_msg {
+            //         ServerMsg::User(response) => match response {
+            //             UserRes::User(user) => {
+            //                 let user_id = user.author_id.clone();
+            //                 global_gallery_user.set(Some(user));
+            //                 trace!("user_gallery: user received '{}', fetching imgs", &user_id);
+            //                 fetch(user_id);
+            //             }
+            //             UserRes::UserNotFound => {
+            //                 trace!("user_gallery: loadeding state set to: NotFound");
+            //                 loaded_sig.set(LoadingNotFound::NotFound);
+            //             }
+            //         },
+            //         ServerMsg::Error => {
+            //             trace!("user_gallery: server error:loadeding state set to: Error");
+            //             loaded_sig.set(LoadingNotFound::Error);
+            //         }
+            //         msg => {
+            //             error!("user_gallery: received wrong msg: {:#?}", msg);
+            //             loaded_sig.set(LoadingNotFound::Error);
+            //         }
+            //     },
+            //     WsRecvResult::TimeOut => {
+            //         trace!("user_gallery: timeout: loadeding state set to: Error");
+            //         loaded_sig.set(LoadingNotFound::Error);
+            //     }
+            // }) {
+            //     Ok(result) => {
+            //         trace!("user_gallery: fetch_user returned: {:?}", result);
+            //     }
+            //     Err(err) => {
+            //         error!("user_gallery: send error: {}", err);
+            //         loaded_sig.set(LoadingNotFound::Error);
+            //     }
+            // };
         }
     };
 

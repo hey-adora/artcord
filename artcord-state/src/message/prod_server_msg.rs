@@ -106,10 +106,8 @@ pub enum UserRes {
     UserNotFound,
 }
 
-impl artcord_leptos_web_sockets::Receive<u128, ProdMsgPermKey> for ServerMsg {
-    fn recv_from_vec(
-        bytes: &[u8],
-    ) -> Result<artcord_leptos_web_sockets::WsPackage<u128, ProdMsgPermKey, Self>, String>
+impl artcord_leptos_web_sockets::Receive for ServerMsg {
+    fn recv_from_vec(bytes: &[u8]) -> Result<artcord_leptos_web_sockets::WsPackage<Self>, String>
     where
         Self: std::marker::Sized + Clone,
     {
@@ -148,18 +146,13 @@ impl artcord_leptos_web_sockets::Receive<u128, ProdMsgPermKey> for ServerMsg {
 impl ServerMsg {
     pub fn from_bytes(
         bytes: &[u8],
-    ) -> Result<artcord_leptos_web_sockets::WsPackage<u128, ProdMsgPermKey, Self>, bincode::Error>
-    {
-        bincode::deserialize::<artcord_leptos_web_sockets::WsPackage<u128, ProdMsgPermKey, Self>>(
-            bytes,
-        )
+    ) -> Result<artcord_leptos_web_sockets::WsPackage<Self>, bincode::Error> {
+        bincode::deserialize::<artcord_leptos_web_sockets::WsPackage<Self>>(bytes)
     }
 
     pub fn as_bytes(
-        package: artcord_leptos_web_sockets::WsPackage<u128, ProdMsgPermKey, Self>,
+        package: artcord_leptos_web_sockets::WsPackage<Self>,
     ) -> Result<Vec<u8>, bincode::Error> {
-        bincode::serialize::<artcord_leptos_web_sockets::WsPackage<u128, ProdMsgPermKey, Self>>(
-            &package,
-        )
+        bincode::serialize::<artcord_leptos_web_sockets::WsPackage<Self>>(&package)
     }
 }
