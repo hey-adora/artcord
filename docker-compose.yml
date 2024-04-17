@@ -1,4 +1,4 @@
-version: '3.1'
+version: "3.1"
 services:
   web:
     container_name: artcord_web
@@ -6,6 +6,7 @@ services:
       - ".:/app"
     depends_on:
       - mongo
+    entrypoint: /app/docker.sh
     working_dir: /app
     build: .
     ports:
@@ -13,27 +14,20 @@ services:
       - 3000:3000
       - 3001:3001
       - 8080:8080
-    command:
-      - /bin/bash
-      - -c
-      - |
-          source /usr/share/nvm/init-nvm.sh
-          PATH=$PATH:~/.cargo/bin/
-          cargo run --package artcord-builder & code-server /app
     environment:
       - CARGO_HOME=./cache
       - RUST_LOG=artcord=trace
     # extra_hosts:
     #   - "host.docker.internal:host-gateway"
   mongo:
-      image: mongo
-      container_name: artcord_mongo
-      volumes:
-        - "./mongo/db:/data/db"
-      ports:
-        - 27017:27017
-      # extra_hosts:
-      #   - "host.docker.internal:host-gateway"
+    image: mongo
+    container_name: artcord_mongo
+    volumes:
+      - "./mongo/db:/data/db"
+    ports:
+      - 27017:27017
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"
   # web:
   #   depends_on:
   #     - mongo
