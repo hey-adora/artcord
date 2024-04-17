@@ -6,6 +6,7 @@ use crate::app::components::navbar::Navbar;
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_perm_key::ProdMsgPermKey;
 use leptos::html::Main;
+use tracing::debug;
 use tracing::trace;
 
 use crate::app::global_state::GlobalState;
@@ -32,7 +33,22 @@ pub fn HomePage() -> impl IntoView {
     };
 
     let ws_test = ws.builder().channel_with_timeout(30).build();
+
+    ws_test.recv(|msg| {
+        debug!("ADMIN RECV: {:?}", msg);
+        true
+    });
+
+    // create_effect(|_| {
+    //     on_cleanup(|| {
+    //         debug!("CLEANING UP");
+    //     });
+    // });
+
     let test_click = move |_| {
+        // on_cleanup(|| {
+        //     debug!("CLEANING UP");
+        // });
         let msg = ClientMsg::Statistics;
         ws_test.send(msg);
         // ws_test
