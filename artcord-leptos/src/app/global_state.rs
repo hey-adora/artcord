@@ -1,6 +1,6 @@
 use crate::app::pages::register::GlobalAuthState;
 
-use artcord_leptos_web_sockets::WsRuntime;
+use artcord_leptos_web_sockets::runtime::WsRuntime;
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_perm_key::ProdMsgPermKey;
 use artcord_state::message::prod_server_msg::ServerMsg;

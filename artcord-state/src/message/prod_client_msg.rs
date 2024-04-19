@@ -4,7 +4,7 @@
 //     SERVER_MSG_REGISTRATION,
 // };
 
-use artcord_leptos_web_sockets::{WsPackage, WsRouteKey};
+use artcord_leptos_web_sockets::WsPackage;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

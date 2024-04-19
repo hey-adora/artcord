@@ -32,12 +32,16 @@ pub fn HomePage() -> impl IntoView {
         shrink_nav(nav_tran, y as u32);
     };
 
-    let ws_test = ws.builder().channel_with_timeout(30).build();
+    let ws_test = ws.channel().timeout(30).peresistant().start();
 
-    ws_test.recv(|msg| {
+    ws_test.recv().start(|msg| {
         debug!("ADMIN RECV: {:?}", msg);
         true
     });
+
+    let msg = ClientMsg::Statistics;
+    let msg2 = ClientMsg::Logout;
+    ws_test.sender().on_cleanup(msg2).send(msg);
 
     // create_effect(|_| {
     //     on_cleanup(|| {
@@ -49,8 +53,6 @@ pub fn HomePage() -> impl IntoView {
         // on_cleanup(|| {
         //     debug!("CLEANING UP");
         // });
-        let msg = ClientMsg::Statistics;
-        ws_test.send(msg);
         // ws_test
         //     .send_or_skip(msg, |res| {
         //         trace!("test hello");

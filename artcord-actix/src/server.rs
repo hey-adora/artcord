@@ -4,6 +4,7 @@ use actix_web::dev::Server;
 
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 
+use artcord_leptos_web_sockets::WsPackage;
 use futures::StreamExt;
 use leptos::logging::warn;
 use leptos_actix::{generate_route_list, LeptosRoutes};
@@ -477,8 +478,6 @@ pub async fn create_server(galley_root_dir: &str, assets_root_dir: &str) -> Serv
 
     #[cfg(feature = "development")]
     {
-        use artcord_leptos_web_sockets::WsPackage;
-        use artcord_leptos_web_sockets::WsRouteKey;
         use artcord_state::message::debug_client_msg::DebugClientMsg;
         use artcord_state::message::debug_msg_key::DebugMsgPermKey;
         use artcord_state::message::debug_server_msg::DebugServerMsg;

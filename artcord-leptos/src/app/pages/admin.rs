@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use artcord_leptos_web_sockets::WsRecvResult;
+use artcord_leptos_web_sockets::channel::WsRecvResult;
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_client_msg::WsPath;
 use artcord_state::message::prod_server_msg::AdminStat;
@@ -43,7 +43,14 @@ pub fn Admin() -> impl IntoView {
     let statistics = page.statistics;
 
     // let ws_statistics = ws.builder().portal().stream().build();
-    let ws_statistics = ws.builder();
+    let ws_statistics = ws.channel().timeout(30).start();
+
+    ws_statistics.recv().start(|server_msg| {});
+
+    ws_statistics
+        .sender()
+        .on_cleanup(ClientMsg::AdminThrottleListenerToggle(false))
+        .send(ClientMsg::AdminThrottleListenerToggle(true));
 
     // ws_statistics.send_or_skip(Vgc, on_receive)
     create_effect(move |_| {

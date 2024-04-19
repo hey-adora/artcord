@@ -3,18 +3,13 @@ use crate::app::global_state::GlobalState;
 use crate::app::utils::img_resize::{calc_fit_count, resize_imgs, NEW_IMG_HEIGHT};
 use crate::app::utils::img_resized::ServerMsgImgResized;
 use crate::app::utils::{LoadingNotFound, SelectedImg};
-use artcord_leptos_web_sockets::{WsRecvResult, WsRuntime};
-use artcord_state::aggregation::server_msg_img::AggImg;
 use artcord_state::message::prod_client_msg::ClientMsg;
-use artcord_state::message::prod_server_msg::{MainGalleryRes, ServerMsg, UserGalleryRes};
 use chrono::Utc;
 use leptos::ev::resize;
 use leptos::html::Section;
-use leptos::logging::log;
 use leptos::*;
 use leptos_router::use_location;
 use leptos_use::{use_event_listener, use_window};
-use tracing::{debug, error, trace};
 use web_sys::Event;
 
 #[derive(Copy, Clone, Debug)]

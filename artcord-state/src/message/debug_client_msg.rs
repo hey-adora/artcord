@@ -1,4 +1,4 @@
-use artcord_leptos_web_sockets::WsRouteKey;
+use artcord_leptos_web_sockets::WsPackage;
 use serde::{Deserialize, Serialize};
 use tracing::{error, info, trace, warn};
 
@@ -11,7 +11,7 @@ pub enum DebugClientMsg {
 }
 
 impl artcord_leptos_web_sockets::Send for DebugClientMsg {
-    fn send_as_vec(package: &artcord_leptos_web_sockets::WsPackage<Self>) -> Result<Vec<u8>, String>
+    fn send_as_vec(package: &WsPackage<Self>) -> Result<Vec<u8>, String>
     where
         Self: Clone,
     {
@@ -20,12 +20,10 @@ impl artcord_leptos_web_sockets::Send for DebugClientMsg {
 }
 
 impl DebugClientMsg {
-    pub fn as_vec(
-        package: &artcord_leptos_web_sockets::WsPackage<Self>,
-    ) -> Result<Vec<u8>, bincode::Error> {
+    pub fn as_vec(package: &WsPackage<Self>) -> Result<Vec<u8>, bincode::Error> {
         //let object = (id.clone(), *self);
         let result: Result<Vec<u8>, Box<bincode::ErrorKind>> =
-            bincode::serialize::<artcord_leptos_web_sockets::WsPackage<Self>>(package);
+            bincode::serialize::<WsPackage<Self>>(package);
         trace!(
             "debug client msg serialized from {:?} {:?}",
             package,
@@ -34,11 +32,9 @@ impl DebugClientMsg {
         result
     }
 
-    pub fn from_bytes(
-        bytes: &[u8],
-    ) -> Result<artcord_leptos_web_sockets::WsPackage<Self>, bincode::Error> {
-        let result: Result<artcord_leptos_web_sockets::WsPackage<Self>, Box<bincode::ErrorKind>> =
-            bincode::deserialize::<artcord_leptos_web_sockets::WsPackage<Self>>(bytes);
+    pub fn from_bytes(bytes: &[u8]) -> Result<WsPackage<Self>, bincode::Error> {
+        let result: Result<WsPackage<Self>, Box<bincode::ErrorKind>> =
+            bincode::deserialize::<WsPackage<Self>>(bytes);
         trace!(
             "debug client msg deserialized from {:?} to {:?}",
             bytes,
@@ -47,4 +43,3 @@ impl DebugClientMsg {
         result
     }
 }
-

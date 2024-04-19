@@ -12,8 +12,6 @@ use self::con_task::con_task;
 use super::{ws_statistic::AdminConStatMsg, ws_throttle::WsThrottle, WsAppMsg};
 
 pub async fn on_connection(
-    // listener: TcpListener,
-    // ws_addr: &str,
     con: Result<(TcpStream, SocketAddr), io::Error>,
     throttle: &mut WsThrottle,
     cancellation_token: &CancellationToken,
@@ -23,19 +21,6 @@ pub async fn on_connection(
     ws_tx: &mpsc::Sender<WsAppMsg>,
     throttle_tx: &mpsc::Sender<AdminConStatMsg>,
 ) {
-    // debug!("HELLO ONE");
-    // let Some(user_throttle_stats) = throttle.maybe_connect_to_ws(user_addr.ip()).await
-    // else {
-    //     debug!("HELLO TWO");
-    //     continue;
-    // };
-    // let ws_connection_count = *user_throttle_stats.ws_connection_count.read().await;
-
-    // debug!("con count: {}", ws_connection_count);
-
-    // task_tracker.spawn(accept_connection(user_addr, stream, db.clone()).instrument(
-    //     tracing::trace_span!("ws", "{}-{}", ws_addr, user_addr.to_string()),
-    // ));
     let (stream, user_addr) = match con {
         Ok(result) => result,
         Err(err) => {
@@ -50,7 +35,6 @@ pub async fn on_connection(
         return;
     }
 
-    // ws_addr.ip
     task_tracker.spawn(
         con_task(
             stream,

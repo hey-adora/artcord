@@ -6,7 +6,7 @@ use crate::app::utils::img_resize::resize_imgs;
 use crate::app::utils::img_resize::NEW_IMG_HEIGHT;
 use crate::app::utils::img_resized::ServerMsgImgResized;
 use crate::app::utils::{LoadingNotFound, SelectedImg};
-use artcord_leptos_web_sockets::WsRecvResult;
+use artcord_leptos_web_sockets::channel::WsRecvResult;
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_server_msg::{ServerMsg, UserGalleryRes, UserRes};
 use artcord_state::model::user::User;

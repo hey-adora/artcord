@@ -2,7 +2,7 @@ use crate::app::components::navbar::Navbar;
 use crate::app::global_state::GlobalState;
 use crate::app::pages::register::{auth_input_show_error, AuthLoadingState};
 //use crate::app::utils::signal_switch::signal_switch;
-use artcord_leptos_web_sockets::WsResourcSendResult;
+use artcord_leptos_web_sockets::channel::WsResourcSendResult;
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::misc::registration_invalid::{RegistrationInvalidMsg, MINIMUM_PASSWORD_LENGTH};
 use leptos::html::Input;

@@ -1,7 +1,7 @@
 use crate::app::pages::admin::Admin;
 use crate::app::pages::login::Login;
 use crate::app::pages::register::Register;
-use artcord_leptos_web_sockets::WsRuntime;
+use artcord_leptos_web_sockets::runtime::WsRuntime;
 use artcord_state::message::debug_client_msg::DebugClientMsg;
 use artcord_state::message::debug_msg_key::DebugMsgPermKey;
 use artcord_state::message::debug_server_msg::DebugServerMsg;
