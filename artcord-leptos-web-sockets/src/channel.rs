@@ -1,6 +1,6 @@
 use crate::{KeyGen, Receive, Send, WsError, TIMEOUT_SECS};
 use chrono::{DateTime, TimeDelta, Utc};
-use leptos::{on_cleanup, Owner, StoredValue};
+use leptos::{create_effect, on_cleanup, Owner, RwSignal, SignalGet, StoredValue};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -34,7 +34,7 @@ impl<ServerMsg: Clone + Receive + Debug + 'static> WsChannelType<ServerMsg> {
 }
 
 pub type WsChannelCallbacksType<ServerMsgType: Clone + 'static> =
-    HashMap<u128, Rc<dyn Fn(&WsRecvResult<ServerMsgType>) -> bool>>;
+    HashMap<u128, Rc<dyn Fn(&WsRecvResult<ServerMsgType>, &mut bool)>>;
 
 pub type WsCallbackType<T> = StoredValue<Option<Rc<Closure<T>>>>;
 pub type WsChannelsType<ServerMsg> = StoredValue<HashMap<u128, WsChannelType<ServerMsg>>>;
@@ -52,6 +52,7 @@ pub struct WsChannel<
     phantom: PhantomData<ClientMsg>,
     single_fire: bool,
     timeout: Option<TimeDelta>,
+    is_connected: RwSignal<bool>,
 }
 
 impl<
@@ -75,6 +76,7 @@ impl<
         single_fire: bool,
         timeout: Option<TimeDelta>,
         persistant: bool,
+        is_connected: RwSignal<bool>,
     ) -> Self {
         let channel_key = crate::location_hash();
 
@@ -140,13 +142,14 @@ impl<
             phantom: PhantomData,
             single_fire,
             timeout,
+            is_connected,
         }
     }
 
     #[track_caller]
     pub fn start_recv(
         &self,
-        on_receive: impl Fn(&WsRecvResult<ServerMsg>) -> bool + 'static,
+        on_receive: impl Fn(&WsRecvResult<ServerMsg>, &mut bool) + 'static,
         persistant: bool,
     ) {
         let channel_key = self.key;
@@ -215,17 +218,45 @@ impl<
         }
     }
 
+    #[track_caller]
     pub fn send(
         &self,
         client_msg: ClientMsg,
         on_cleanup_msg: Option<ClientMsg>,
+        resend_on_reconnect: bool,
     ) -> Result<WsResourcSendResult, WsError> {
+        let owner = Owner::current();
+        if owner.is_none() {
+            let mut errors: Option<String> = None;
+
+            let mut add_err = |err: &str| {
+                if let Some(errors) = &mut errors {
+                    errors.push_str(err);
+                } else {
+                    errors = Some(String::from(err));
+                }
+            };
+
+            if on_cleanup_msg.is_some() {
+                add_err("on_cleanup_msg cant run outside reactive system.\n");
+            }
+
+            if resend_on_reconnect {
+                add_err("on_cleanup_msg cant run outside reactive system.\n");
+            }
+
+            if let Some(errors) = errors {
+                let location = std::panic::Location::caller().to_string();
+                warn!("ws send error at {}\n{}", location, errors);
+            }
+        }
+
         let channel_key = self.key;
         if let Some(client_msg) = on_cleanup_msg {
             let channel = self.clone();
             // let send = self.send;
             on_cleanup(move || {
-                let result = channel.send(client_msg, None);
+                let result = channel.send(client_msg, None, false);
                 if let Err(err) = result {
                     warn!(
                         "ws({})_send: error on cleanup '{}' : {}",
@@ -236,6 +267,33 @@ impl<
                 }
             });
         }
+
+        if resend_on_reconnect {
+            let channel = self.clone();
+            // let client_msg = client_msg.clone();
+            // self.ws.with_value(|ws| {
+            //     if let Some(ws) = ws {
+            //         ws.stat
+            //     }
+            // });
+            create_effect(move |_| {
+                let is_connected = channel.is_connected.get();
+                if !is_connected {
+                    return;
+                }
+                let result = channel.send(client_msg.clone(), None, false);
+                if let Err(err) = result {
+                    warn!(
+                        "ws({})_send: error on connect '{}' : {}",
+                        channel.ws_url.get_value().unwrap_or("error".to_string()),
+                        &channel_key,
+                        err
+                    );
+                }
+            });
+            return Ok(WsResourcSendResult::EventAdded);
+        }
+
         self.ws
             .with_value(|ws| -> Result<WsResourcSendResult, WsError> {
                 if self.single_fire {
@@ -362,6 +420,7 @@ pub enum WsResourcSendResult {
     Sent,
     Skipped,
     Queued,
+    EventAdded,
 }
 
 #[derive(Debug, Clone)]

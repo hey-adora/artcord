@@ -138,7 +138,7 @@ pub async fn create_ws(
 //             // }
 //         }
 
-        let (listener_task, throttle_tx) = create_admin_con_stat_task(&task_tracker, &cancellation_token).await;
+        let (listener_task, admin_ws_stats_tx) = create_admin_con_stat_task(&task_tracker, &cancellation_token).await;
 
         let con_task = async move {
             // run taks
@@ -159,7 +159,7 @@ pub async fn create_ws(
                 // };
                 select! {
                     con = listener.accept() => {
-                        on_connection(con, &mut throttle, &cancellation_token, &db, &task_tracker, &ws_addr, &ws_tx, &throttle_tx).await;
+                        on_connection(con, &mut throttle, &cancellation_token, &db, &task_tracker, &ws_addr, &ws_tx, &admin_ws_stats_tx).await;
                     },
 
                     ws_msg = ws_recv.recv() => {

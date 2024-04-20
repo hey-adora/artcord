@@ -31,7 +31,7 @@ pub struct WsRuntime<
     pub global_on_open_callbacks: StoredValue<HashMap<WsRouteKey, Rc<dyn Fn()>>>,
     pub global_on_close_callbacks: StoredValue<HashMap<WsRouteKey, Rc<dyn Fn()>>>,
     pub global_on_ws_state_change_callbacks: StoredValue<HashMap<WsRouteKey, Rc<dyn Fn(bool)>>>,
-    pub global_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
+    pub pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
     pub connected: RwSignal<bool>,
     pub ws: StoredValue<Option<WebSocket>>,
     pub ws_url: StoredValue<Option<String>>,
@@ -57,7 +57,7 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
             global_on_open_callbacks: StoredValue::new(HashMap::new()),
             global_on_close_callbacks: StoredValue::new(HashMap::new()),
             global_on_ws_state_change_callbacks: StoredValue::new(HashMap::new()),
-            global_pending_client_msgs: StoredValue::new(Vec::new()),
+            pending_client_msgs: StoredValue::new(Vec::new()),
             connected: RwSignal::new(false),
             ws: StoredValue::new(None),
             ws_url: StoredValue::new(None),
@@ -106,7 +106,7 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
             let ws_on_open_closures = self.global_on_open_callbacks;
             let ws_on_close_closures = self.global_on_close_callbacks;
             let ws_on_ws_state_closures = self.global_on_ws_state_change_callbacks;
-            let ws_pending = self.global_pending_client_msgs;
+            let ws_pending = self.pending_client_msgs;
             let ws = self.ws;
 
             ws_on_msg.set_value({
@@ -269,7 +269,8 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
                             trace!("ws({}): timeout: running callback: {:?}", url, &channel_key);
                             for (callback_key, callback) in callbacks {
                                 // trace!("1111111111wtf, run run run!");
-                                let keep_open = callback(&WsRecvResult::TimeOut);
+                                let mut keep_open = true;
+                                callback(&WsRecvResult::TimeOut, &mut keep_open);
 
                                 // trace!("wtf, run run run!");
                                 Self::update_callback_after_recv(
@@ -379,7 +380,7 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
 
     pub fn update_timout(url: &str, channel: &mut WsChannelType<ServerMsg>) {
         let Some(value) = channel.waiting_for_response.checked_sub(1) else {
-            error!("failed to subtract response");
+            trace!("ws({}): received while not waiting", url);
             return;
         };
         channel.waiting_for_response = value;
@@ -402,7 +403,8 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
             self.ws_url,
             self.channels,
             self.ws,
-            self.global_pending_client_msgs,
+            self.pending_client_msgs,
+            self.connected,
         )
     }
 
@@ -571,7 +573,8 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
             );
 
             debug!("FOUR FOUR");
-            let keep_open = callback(&server_msg);
+            let mut keep_open = true;
+            callback(&server_msg, &mut keep_open);
             debug!("FIVE FIVE");
             Self::update_callback_after_recv(channels, &url, channel_key, callback_key, keep_open);
             debug!("SIX SIX");
@@ -579,9 +582,11 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
         Self::update_channel_after_recv(channels, &url, channel_key);
     }
 
+    #[track_caller]
     pub fn on_ws_state(&self, callback: impl Fn(bool) + 'static) {
         //console_log!("3420 count this");
-        let temp_key: WsRouteKey = u128::generate_key();
+        let temp_key = crate::location_hash();
+        // let temp_key: WsRouteKey = u128::generate_key();
 
         let is_connected = self.ws.with_value(|ws| {
             ws.as_ref()

@@ -29,7 +29,7 @@ pub async fn con_task(
     ws_tx: mpsc::Sender<WsAppMsg>,
     ip: IpAddr,
     addr: SocketAddr,
-    throttle_tx: mpsc::Sender<AdminConStatMsg>,
+    admin_ws_stats_tx: mpsc::Sender<AdminConStatMsg>,
 ) {
     trace!("task spawned!");
     let ws_stream = tokio_tungstenite::accept_async(stream).await;
@@ -53,6 +53,17 @@ pub async fn con_task(
     let (mut client_out, mut client_in) = ws_stream.split();
     let user_task_tracker = TaskTracker::new();
 
+    let send_result = admin_ws_stats_tx
+        .send(AdminConStatMsg::AddTrack {
+            connection_key: con_id.clone(),
+            tx: connection_task_tx.clone(),
+            addr: addr.to_string(),
+        })
+        .await;
+    if let Err(err) = send_result {
+        error!("error adding track: {}", err);
+    }
+
     // let read = async {};
 
     // let write = async {
@@ -71,7 +82,7 @@ pub async fn con_task(
         select! {
             result = client_in.next() => {
                 trace!("read finished");
-                let exit = on_req(result, &user_task_tracker, &db, &connection_task_tx, &throttle_tx, &con_id, &addr).await;
+                let exit = on_req(result, &user_task_tracker, &db, &connection_task_tx, &admin_ws_stats_tx, &con_id, &addr).await;
                 if exit {
                     break;
                 }
@@ -96,6 +107,15 @@ pub async fn con_task(
                 break;
             }
         }
+    }
+
+    let send_result = admin_ws_stats_tx
+        .send(AdminConStatMsg::RemoveRecv {
+            connection_key: con_id.clone(),
+        })
+        .await;
+    if let Err(err) = send_result {
+        error!("error removing recv: {}", err);
     }
 
     user_task_tracker.close();

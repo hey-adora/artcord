@@ -63,19 +63,21 @@ pub enum LoginRes {
     Err(String),
 }
 
+pub type AdminStatCountType = HashMap<WsPath, u64>;
+
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct AdminStat {
     pub addr: String,
     pub is_connected: bool,
-    pub count: HashMap<WsPath, u64>,
+    pub count: AdminStatCountType,
 }
 
 impl AdminStat {
-    pub fn new(addr: String, is_connected: bool, count: HashMap<WsPath, u64>) -> Self {
+    pub fn new(addr: String) -> Self {
         Self {
             addr,
-            is_connected,
-            count,
+            is_connected: true,
+            count: HashMap::new(),
         }
     }
 }
@@ -84,6 +86,7 @@ impl AdminStat {
 pub enum AdminStatsRes {
     Started(HashMap<String, AdminStat>),
     UpdateAddedNew { con_key: String, stat: AdminStat },
+    UpdateInc { con_key: String, path: WsPath },
     Stopped,
     AlreadyStarted,
     AlreadyStopped,

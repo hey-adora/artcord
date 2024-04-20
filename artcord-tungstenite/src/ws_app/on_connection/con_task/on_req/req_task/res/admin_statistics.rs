@@ -27,7 +27,7 @@ pub async fn ws_hadnle_admin_throttle(
     ws_key: WsRouteKey,
     addr: SocketAddr,
     connection_tx: &mpsc::Sender<ConMsg>,
-    throttle_tx: mpsc::Sender<AdminConStatMsg>,
+    admin_ws_stats_tx: mpsc::Sender<AdminConStatMsg>,
     // mut admin_task: UserTask,
 
     // task_tracker: TaskTracker,
@@ -36,8 +36,8 @@ pub async fn ws_hadnle_admin_throttle(
     // cancel_send: broadcast::Sender<bool>,
     // admin_throttle_listener_recv_close: oneshot::Receiver<bool>,
 ) -> Result<Option<ServerMsg>, WsResError> {
-    throttle_tx
-        .send(AdminConStatMsg::Add {
+    admin_ws_stats_tx
+        .send(AdminConStatMsg::AddRecv {
             connection_key,
             tx: connection_tx.clone(),
             addr: addr.to_string(),

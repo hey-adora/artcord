@@ -21,7 +21,7 @@ pub async fn on_req(
     user_task_tracker: &TaskTracker,
     db: &Arc<DB>,
     connection_task_tx: &mpsc::Sender<ConMsg>,
-    throttle_tx: &mpsc::Sender<AdminConStatMsg>,
+    admin_ws_stats_tx: &mpsc::Sender<AdminConStatMsg>,
     connection_key: &String,
     addr: &SocketAddr,
 ) -> bool {
@@ -42,7 +42,7 @@ pub async fn on_req(
         client_msg,
         db.clone(),
         connection_task_tx.clone(),
-        throttle_tx.clone(),
+        admin_ws_stats_tx.clone(),
         connection_key.clone(),
         addr.clone(),
     ));

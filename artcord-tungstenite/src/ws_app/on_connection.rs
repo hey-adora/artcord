@@ -19,7 +19,7 @@ pub async fn on_connection(
     task_tracker: &TaskTracker,
     ws_addr: &str,
     ws_tx: &mpsc::Sender<WsAppMsg>,
-    throttle_tx: &mpsc::Sender<AdminConStatMsg>,
+    admin_ws_stats_tx: &mpsc::Sender<AdminConStatMsg>,
 ) {
     let (stream, user_addr) = match con {
         Ok(result) => result,
@@ -43,7 +43,7 @@ pub async fn on_connection(
             ws_tx.clone(),
             ip,
             user_addr,
-            throttle_tx.clone(),
+            admin_ws_stats_tx.clone(),
         )
         .instrument(tracing::trace_span!(
             "ws",

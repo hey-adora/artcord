@@ -12,20 +12,36 @@ use artcord_state::{
 use tokio::{select, sync::mpsc, task::JoinHandle};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
-use tracing::{error, trace};
+use tracing::{error, trace, warn};
 
 use super::{ws_throttle::AdminMsgErr, ConMsg};
 
 pub enum AdminConStatMsg {
-    Add {
+    Inc {
+        connection_key: String,
+        path: WsPath,
+    },
+
+    AddTrack {
+        connection_key: String,
+        tx: mpsc::Sender<ConMsg>,
+        addr: String,
+        // ws_key: WsRouteKey,
+    },
+
+    AddRecv {
         connection_key: String,
         tx: mpsc::Sender<ConMsg>,
         addr: String,
         ws_key: WsRouteKey,
     },
 
-    Remove {
-        key: String,
+    RemoveRecv {
+        connection_key: String,
+    },
+
+    StopTrack {
+        connection_key: String,
     },
 }
 
@@ -78,26 +94,52 @@ pub async fn on_msg(
     };
 
     match msg {
-        AdminConStatMsg::Add {
+        AdminConStatMsg::Inc {
+            connection_key,
+            path,
+        } => {
+            // let entry = stats.entry(connection_key).or_insert(connection_key);
+            let stat = stats.get_mut(&connection_key);
+            let Some(stat) = stat else {
+                warn!("admin stats: missing connection entry: {}", &connection_key);
+                // stats.insert(connection_key, AdminStat::new(kj, is_connected, count))
+                return Ok(false);
+            };
+            let count = stat.count.entry(path).or_insert(0_u64);
+            *count += 1;
+
+            let update_msg = ServerMsg::AdminStats(AdminStatsRes::UpdateInc {
+                con_key: connection_key,
+                path,
+            });
+
+            for (con_key, (ws_key, tx)) in list {
+                let update_msg: WsPackage<ServerMsg> = (ws_key.clone(), update_msg.clone());
+                let update_msg = ServerMsg::as_bytes(update_msg)?;
+                let update_msg = Message::binary(update_msg);
+                tx.send(ConMsg::Send(update_msg.clone())).await?;
+            }
+        }
+        AdminConStatMsg::AddTrack {
             connection_key,
             tx,
             addr,
-            ws_key,
+            // ws_key,
         } => {
             // let statistics = vec![Statistic::new(addr.clone().to_string())];
 
             let current_con_stats: AdminStat = stats
                 .entry(connection_key.clone())
-                .or_insert(AdminStat::new(addr.clone(), false, HashMap::new()))
+                .or_insert(AdminStat::new(addr.clone()))
                 .clone();
 
-            let msg = ServerMsg::AdminStats(AdminStatsRes::Started(stats.clone()));
-            let msg: WsPackage<ServerMsg> = (ws_key.clone(), msg);
-            trace!("admin stats: sending: {:?}", &msg);
-            let msg = ServerMsg::as_bytes(msg)?;
-            let msg = Message::binary(msg);
-            tx.send(ConMsg::Send(msg)).await?;
-            list.insert(connection_key.clone(), (ws_key, tx));
+            // let msg = ServerMsg::AdminStats(AdminStatsRes::Started(stats.clone()));
+            // let msg: WsPackage<ServerMsg> = (ws_key.clone(), msg);
+            // trace!("admin stats: sending: {:?}", &msg);
+            // let msg = ServerMsg::as_bytes(msg)?;
+            // let msg = Message::binary(msg);
+            // tx.send(ConMsg::Send(msg)).await?;
+            // list.insert(connection_key.clone(), (ws_key, tx));
 
             let update_msg = ServerMsg::AdminStats(AdminStatsRes::UpdateAddedNew {
                 con_key: connection_key,
@@ -107,11 +149,58 @@ pub async fn on_msg(
                 let update_msg: WsPackage<ServerMsg> = (ws_key.clone(), update_msg.clone());
                 let update_msg = ServerMsg::as_bytes(update_msg)?;
                 let update_msg = Message::binary(update_msg);
-                tx.send(ConMsg::Send(update_msg.clone())).await;
+                tx.send(ConMsg::Send(update_msg.clone())).await?;
             }
         }
-        AdminConStatMsg::Remove { key } => {
+        AdminConStatMsg::AddRecv {
+            connection_key,
+            tx,
+            addr,
+            ws_key,
+        } => {
+            // let statistics = vec![Statistic::new(addr.clone().to_string())];
+
+            // let current_con_stats = stats.get(&connection_key);
+            // // .entry(connection_key.clone())
+            // // .or_insert(AdminStat::new(addr.clone(), false, HashMap::new()))
+            // // .clone();
+            //
+            // let Some(current_con_stats) = current_con_stats else {
+            //     return Ok(false);
+            // };
+
+            let msg = ServerMsg::AdminStats(AdminStatsRes::Started(stats.clone()));
+            let msg: WsPackage<ServerMsg> = (ws_key.clone(), msg);
+            trace!("admin stats: sending: {:?}", &msg);
+            let msg = ServerMsg::as_bytes(msg)?;
+            let msg = Message::binary(msg);
+            tx.send(ConMsg::Send(msg)).await?;
+            list.insert(connection_key.clone(), (ws_key, tx));
+
+            // let update_msg = ServerMsg::AdminStats(AdminStatsRes::UpdateAddedNew {
+            //     con_key: connection_key,
+            //     stat: current_con_stats,
+            // });
+            // for (con_key, (ws_key, tx)) in list {
+            //     let update_msg: WsPackage<ServerMsg> = (ws_key.clone(), update_msg.clone());
+            //     let update_msg = ServerMsg::as_bytes(update_msg)?;
+            //     let update_msg = Message::binary(update_msg);
+            //     tx.send(ConMsg::Send(update_msg.clone())).await;
+            // }
+        }
+        AdminConStatMsg::RemoveRecv {
+            connection_key: key,
+        } => {
             list.remove(&key);
+        }
+        AdminConStatMsg::StopTrack { connection_key } => {
+            let stat = stats.get_mut(&connection_key);
+            let Some(stat) = stat else {
+                warn!("admin stats: missing connection entry: {}", &connection_key);
+                // stats.insert(connection_key, AdminStat::new(kj, is_connected, count))
+                return Ok(false);
+            };
+            stat.is_connected = false;
         }
     }
 

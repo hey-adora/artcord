@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use chrono::TimeDelta;
-use leptos::StoredValue;
+use leptos::{RwSignal, StoredValue};
 use std::fmt::Debug;
 use web_sys::WebSocket;
 
@@ -19,6 +19,7 @@ pub struct ChannelBuilder<
     channels: WsChannelsType<ServerMsg>,
     ws: StoredValue<Option<WebSocket>>,
     pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
+    is_connected: RwSignal<bool>,
     phantom: PhantomData<ClientMsg>,
     prop_timeout: Option<TimeDelta>,
     prop_detach: bool,
@@ -35,6 +36,7 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
         channels: WsChannelsType<ServerMsg>,
         ws: StoredValue<Option<WebSocket>>,
         pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
+        is_connected: RwSignal<bool>,
     ) -> Self {
         Self {
             ws_url,
@@ -42,6 +44,7 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
             ws,
             pending_client_msgs,
             phantom: PhantomData,
+            is_connected,
             prop_timeout: None,
             prop_detach: false,
             // cancellable: false,
@@ -85,6 +88,7 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
             self.prop_single_fire,
             self.prop_timeout,
             self.prop_persistant,
+            self.is_connected,
         );
         ChannelInterface::new(channel)
     }
@@ -331,7 +335,7 @@ impl<
     // }
 
     #[track_caller]
-    pub fn start(&self, on_receive: impl Fn(&WsRecvResult<ServerMsg>) -> bool + 'static) {
+    pub fn start(&self, on_receive: impl Fn(&WsRecvResult<ServerMsg>, &mut bool) + 'static) {
         self.channel.start_recv(on_receive, self.persistant)
     }
 }
@@ -342,7 +346,8 @@ pub struct ChannelSendBuilder<
     ClientMsg: Clone + crate::Send + Debug + 'static,
 > {
     channel: WsChannel<ServerMsg, ClientMsg>,
-    farewell: Option<ClientMsg>,
+    prop_farewell: Option<ClientMsg>,
+    prop_resend_on_reconnect: bool,
     // detach: bool,
 }
 
@@ -354,13 +359,19 @@ impl<
     pub fn new(channel: WsChannel<ServerMsg, ClientMsg>) -> Self {
         Self {
             channel,
-            farewell: None,
+            prop_farewell: None,
+            prop_resend_on_reconnect: false,
             // detach: false,
         }
     }
 
     pub fn on_cleanup(mut self, msg: ClientMsg) -> Self {
-        self.farewell = Some(msg);
+        self.prop_farewell = Some(msg);
+        self
+    }
+
+    pub fn resend_on_reconnect(mut self) -> Self {
+        self.prop_resend_on_reconnect = true;
         self
     }
 
@@ -375,7 +386,8 @@ impl<
 
     #[track_caller]
     pub fn send(self, msg: ClientMsg) -> Result<WsResourcSendResult, WsError> {
-        self.channel.send(msg, self.farewell)
+        self.channel
+            .send(msg, self.prop_farewell, self.prop_resend_on_reconnect)
     }
 }
 //

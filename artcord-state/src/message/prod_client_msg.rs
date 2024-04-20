@@ -5,9 +5,12 @@
 // };
 
 use artcord_leptos_web_sockets::WsPackage;
+use field_types::FieldName;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use strum::{EnumIter, EnumString, VariantArray, VariantNames};
 
+use std::fmt::Display;
 use std::net::IpAddr;
 use std::time::Duration;
 
@@ -126,7 +129,20 @@ impl ClientMsg {
     }
 }
 
-#[derive(Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Debug, Hash)]
+#[derive(
+    Deserialize,
+    Serialize,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Debug,
+    Hash,
+    VariantNames,
+    EnumString,
+    EnumIter,
+)]
+#[strum(serialize_all = "snake_case")]
 pub enum WsPath {
     Gallery,
     UserGallery,
@@ -137,6 +153,12 @@ pub enum WsPath {
     Statistics,
     AdminThrottleListener,
 }
+
+// impl Display for WsPath {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "{:?}", self)
+//     }
+// }
 
 // #[derive(Clone, PartialEq, Eq, Debug, Hash)]
 // pub struct Throttle {

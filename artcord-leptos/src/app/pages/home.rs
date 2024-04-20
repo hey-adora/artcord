@@ -34,14 +34,11 @@ pub fn HomePage() -> impl IntoView {
 
     let ws_test = ws.channel().timeout(30).peresistant().start();
 
-    ws_test.recv().start(|msg| {
+    ws_test.recv().start(|msg, _| {
         debug!("ADMIN RECV: {:?}", msg);
-        true
     });
 
     let msg = ClientMsg::Statistics;
-    let msg2 = ClientMsg::Logout;
-    ws_test.sender().on_cleanup(msg2).send(msg);
 
     // create_effect(|_| {
     //     on_cleanup(|| {
@@ -50,6 +47,8 @@ pub fn HomePage() -> impl IntoView {
     // });
 
     let test_click = move |_| {
+        let msg2 = ClientMsg::Logout;
+        ws_test.sender().send(msg2);
         // on_cleanup(|| {
         //     debug!("CLEANING UP");
         // });

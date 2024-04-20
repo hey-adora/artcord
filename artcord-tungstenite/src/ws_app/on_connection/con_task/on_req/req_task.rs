@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use artcord_leptos_web_sockets::{WsPackage, WsRouteKey};
 use artcord_mongodb::database::DB;
-use artcord_state::message::prod_client_msg::ClientMsg;
+use artcord_state::message::prod_client_msg::{ClientMsg, WsPath};
 use artcord_state::message::prod_perm_key::ProdMsgPermKey;
 use artcord_state::message::prod_server_msg::ServerMsg;
 use tokio::sync::mpsc;
@@ -28,7 +28,7 @@ pub async fn req_task(
     client_msg: Message,
     db: Arc<DB>,
     connection_task_tx: mpsc::Sender<ConMsg>,
-    throttle_tx: mpsc::Sender<AdminConStatMsg>,
+    admin_ws_stats_tx: mpsc::Sender<AdminConStatMsg>,
     connection_key: String,
     addr: SocketAddr,
 ) {
@@ -43,6 +43,13 @@ pub async fn req_task(
         let res_key: WsRouteKey = client_msg.0;
         let data = client_msg.1;
 
+        admin_ws_stats_tx
+            .send(AdminConStatMsg::Inc {
+                connection_key: connection_key.clone(),
+                path: WsPath::from(&data),
+            })
+            .await?;
+
         // sleep(Duration::from_secs(5)).await;
 
         let response_data: Result<Option<ServerMsg>, WsResError> = match data {
@@ -54,7 +61,7 @@ pub async fn req_task(
                     res_key.clone(),
                     addr,
                     &connection_task_tx,
-                    throttle_tx,
+                    admin_ws_stats_tx,
                 )
                 .await
             }
