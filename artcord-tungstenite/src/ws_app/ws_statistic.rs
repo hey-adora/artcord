@@ -1,13 +1,14 @@
-use std::{collections::HashMap, net::SocketAddr};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 
 use artcord_leptos_web_sockets::{WsPackage, WsRouteKey};
+use artcord_mongodb::database::DB;
 use artcord_state::{
     message::{
         prod_client_msg::WsPath,
         prod_perm_key::ProdMsgPermKey,
-        prod_server_msg::{AdminStat, AdminStatsRes, ServerMsg},
+        prod_server_msg::{LiveWsStatsRes, ServerMsg, WsStatTemp},
     },
-    model::statistics::Statistic,
+    model::ws_statistics::WsStat,
 };
 use tokio::{select, sync::mpsc, task::JoinHandle};
 use tokio_tungstenite::tungstenite::Message;
@@ -48,23 +49,25 @@ pub enum AdminConStatMsg {
 pub async fn create_admin_con_stat_task(
     task_tracker: &TaskTracker,
     cancelation_token: &CancellationToken,
+    db: Arc<DB>,
 ) -> (JoinHandle<()>, mpsc::Sender<AdminConStatMsg>) {
     let (tx, rx) = mpsc::channel::<AdminConStatMsg>(100);
-    let listener_task = task_tracker.spawn(admin_stat_task(rx, cancelation_token.clone()));
+    let listener_task = task_tracker.spawn(admin_stat_task(rx, cancelation_token.clone(), db));
     (listener_task, tx)
 }
 
 pub async fn admin_stat_task(
     mut rx: mpsc::Receiver<AdminConStatMsg>,
     cancelation_token: CancellationToken,
+    db: Arc<DB>,
 ) {
     let mut listener_list: HashMap<String, (WsRouteKey, mpsc::Sender<ConMsg>)> = HashMap::new();
-    let mut stats: HashMap<String, AdminStat> = HashMap::new();
+    let mut stats: HashMap<String, WsStatTemp> = HashMap::new();
 
     loop {
         select! {
             msg = rx.recv() => {
-                let exit = on_msg(msg, &mut listener_list, &mut stats).await;
+                let exit = on_msg(msg, &mut listener_list, &mut stats, &*db).await;
                 match exit {
                     Ok(exit) => {
                         if exit {
@@ -82,12 +85,19 @@ pub async fn admin_stat_task(
             },
         }
     }
+
+    let unsaved_stats: Vec<WsStat> = WsStat::from_hashmap_temp_stats(stats);
+    let result = db.ws_statistic_insert_many(unsaved_stats).await;
+    if let Err(err) = result {
+        error!("ws_stats: saving unsaved_stats {}", err);
+    }
 }
 
 pub async fn on_msg(
     msg: Option<AdminConStatMsg>,
     list: &mut HashMap<String, (WsRouteKey, mpsc::Sender<ConMsg>)>,
-    stats: &mut HashMap<String, AdminStat>,
+    stats: &mut HashMap<String, WsStatTemp>,
+    db: &DB,
 ) -> Result<bool, AdminMsgErr> {
     let Some(msg) = msg else {
         return Ok(true);
@@ -108,7 +118,7 @@ pub async fn on_msg(
             let count = stat.count.entry(path).or_insert(0_u64);
             *count += 1;
 
-            let update_msg = ServerMsg::AdminStats(AdminStatsRes::UpdateInc {
+            let update_msg = ServerMsg::LiveWsStats(LiveWsStatsRes::UpdateInc {
                 con_key: connection_key,
                 path,
             });
@@ -128,9 +138,10 @@ pub async fn on_msg(
         } => {
             // let statistics = vec![Statistic::new(addr.clone().to_string())];
 
-            let current_con_stats: AdminStat = stats
+            trace!("admin stats: added to track: {}", &connection_key);
+            let current_con_stats: WsStatTemp = stats
                 .entry(connection_key.clone())
-                .or_insert(AdminStat::new(addr.clone()))
+                .or_insert(WsStatTemp::new(addr.clone()))
                 .clone();
 
             // let msg = ServerMsg::AdminStats(AdminStatsRes::Started(stats.clone()));
@@ -141,7 +152,7 @@ pub async fn on_msg(
             // tx.send(ConMsg::Send(msg)).await?;
             // list.insert(connection_key.clone(), (ws_key, tx));
 
-            let update_msg = ServerMsg::AdminStats(AdminStatsRes::UpdateAddedNew {
+            let update_msg = ServerMsg::LiveWsStats(LiveWsStatsRes::UpdateAddedStat {
                 con_key: connection_key,
                 stat: current_con_stats,
             });
@@ -169,7 +180,7 @@ pub async fn on_msg(
             //     return Ok(false);
             // };
 
-            let msg = ServerMsg::AdminStats(AdminStatsRes::Started(stats.clone()));
+            let msg = ServerMsg::LiveWsStats(LiveWsStatsRes::Started(stats.clone()));
             let msg: WsPackage<ServerMsg> = (ws_key.clone(), msg);
             trace!("admin stats: sending: {:?}", &msg);
             let msg = ServerMsg::as_bytes(msg)?;
@@ -188,19 +199,32 @@ pub async fn on_msg(
             //     tx.send(ConMsg::Send(update_msg.clone())).await;
             // }
         }
-        AdminConStatMsg::RemoveRecv {
-            connection_key: key,
-        } => {
-            list.remove(&key);
+        AdminConStatMsg::RemoveRecv { connection_key } => {
+            trace!("admin stats: removed from recv: {}", &connection_key);
+            list.remove(&connection_key);
         }
         AdminConStatMsg::StopTrack { connection_key } => {
-            let stat = stats.get_mut(&connection_key);
+            trace!("admin stats: removed from track: {}", &connection_key);
+            let stat = stats.get(&connection_key);
             let Some(stat) = stat else {
                 warn!("admin stats: missing connection entry: {}", &connection_key);
                 // stats.insert(connection_key, AdminStat::new(kj, is_connected, count))
                 return Ok(false);
             };
-            stat.is_connected = false;
+
+            let update_msg = ServerMsg::LiveWsStats(LiveWsStatsRes::UpdateRemoveStat {
+                con_key: connection_key.clone(),
+            });
+
+            db.ws_statistic_insert_one(stat.clone().into()).await?;
+            stats.remove(&connection_key);
+
+            for (con_key, (ws_key, tx)) in list {
+                let update_msg: WsPackage<ServerMsg> = (ws_key.clone(), update_msg.clone());
+                let update_msg = ServerMsg::as_bytes(update_msg)?;
+                let update_msg = Message::binary(update_msg);
+                tx.send(ConMsg::Send(update_msg.clone())).await?;
+            }
         }
     }
 

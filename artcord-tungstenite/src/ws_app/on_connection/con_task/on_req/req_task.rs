@@ -17,10 +17,11 @@ use crate::ws_app::on_connection::con_task::ConMsg;
 use crate::ws_app::ws_statistic::AdminConStatMsg;
 use crate::ws_app::WsResError;
 
-use self::res::admin_statistics::ws_hadnle_admin_throttle;
+use self::res::live_ws_stats::live_ws_stats;
 use self::res::main_gallery::ws_handle_main_gallery;
 use self::res::user::ws_handle_user;
 use self::res::user_gallery::ws_handle_user_gallery;
+use self::res::ws_stats::ws_stats;
 
 pub mod res;
 
@@ -43,39 +44,82 @@ pub async fn req_task(
         let res_key: WsRouteKey = client_msg.0;
         let data = client_msg.1;
 
-        admin_ws_stats_tx
-            .send(AdminConStatMsg::Inc {
-                connection_key: connection_key.clone(),
-                path: WsPath::from(&data),
-            })
-            .await?;
+        trace!("recv: {:#?}", data);
 
         // sleep(Duration::from_secs(5)).await;
 
-        let response_data: Result<Option<ServerMsg>, WsResError> = match data {
-            ClientMsg::AdminThrottleListenerToggle(listener_state) => {
-                ws_hadnle_admin_throttle(
+        let get_response_data = async {
+            if let ClientMsg::LiveWsStats(listener_state) = data {
+                return live_ws_stats(
                     db,
                     listener_state,
                     connection_key,
-                    res_key.clone(),
+                    res_key,
                     addr,
                     &connection_task_tx,
                     admin_ws_stats_tx,
                 )
-                .await
+                .await;
             }
-            ClientMsg::User { user_id } => ws_handle_user(db, user_id).await,
-            ClientMsg::UserGalleryInit {
-                amount,
-                from,
-                user_id,
-            } => ws_handle_user_gallery(db, amount, from, user_id).await,
-            ClientMsg::GalleryInit { amount, from } => {
-                ws_handle_main_gallery(db, amount, from).await
-            }
-            _ => Ok(Some(ServerMsg::NotImplemented)),
+            // let response_data: Option<Result<Option<ServerMsg>, WsResError>> = match data {
+            //     ClientMsg::LiveWsStats(listener_state) => Some(
+            //         live_ws_stats(
+            //             db.clone(),
+            //             listener_state,
+            //             connection_key.clone(),
+            //             res_key.clone(),
+            //             addr,
+            //             &connection_task_tx,
+            //             admin_ws_stats_tx.clone(),
+            //         )
+            //         .await,
+            //     ),
+            //     _ => None,
+            // };
+            //
+            // if let Some(res) = response_data {
+            //     return res;
+            // }
+
+            admin_ws_stats_tx
+                .send(AdminConStatMsg::Inc {
+                    connection_key: connection_key.clone(),
+                    path: WsPath::from(&data),
+                })
+                .await?;
+
+            let response_data: Result<Option<ServerMsg>, WsResError> = match data {
+                ClientMsg::WsStats => ws_stats(db).await,
+                ClientMsg::LiveWsStats(listener_state) => {
+                    live_ws_stats(
+                        db,
+                        listener_state,
+                        connection_key,
+                        res_key.clone(),
+                        addr,
+                        &connection_task_tx,
+                        admin_ws_stats_tx,
+                    )
+                    .await
+                }
+                ClientMsg::User { user_id } => ws_handle_user(db, user_id).await,
+                ClientMsg::UserGalleryInit {
+                    amount,
+                    from,
+                    user_id,
+                } => ws_handle_user_gallery(db, amount, from, user_id).await,
+                ClientMsg::GalleryInit { amount, from } => {
+                    ws_handle_main_gallery(db, amount, from).await
+                }
+                _ => Ok(Some(ServerMsg::NotImplemented)),
+            };
+            response_data
         };
+
+        // a
+
+        let response_data = get_response_data.await;
+
         let response_data = response_data
             .inspect_err(|err| error!("reponse error: {:#?}", err))
             .unwrap_or(Some(ServerMsg::Error));

@@ -4,7 +4,7 @@ use artcord_leptos_web_sockets::{WsError, WsPackage, WsRouteKey};
 use artcord_mongodb::database::DB;
 use artcord_state::message::{
     prod_perm_key::ProdMsgPermKey,
-    prod_server_msg::{AdminStatsRes, ServerMsg},
+    prod_server_msg::{LiveWsStatsRes, ServerMsg},
 };
 use futures::channel::oneshot::Cancellation;
 use thiserror::Error;
@@ -20,7 +20,7 @@ use tracing::{debug, trace};
 
 use crate::ws_app::{ws_statistic::AdminConStatMsg, ConMsg, WsResError};
 
-pub async fn ws_hadnle_admin_throttle(
+pub async fn live_ws_stats(
     db: Arc<DB>,
     listener_state: bool,
     connection_key: String,
@@ -36,14 +36,20 @@ pub async fn ws_hadnle_admin_throttle(
     // cancel_send: broadcast::Sender<bool>,
     // admin_throttle_listener_recv_close: oneshot::Receiver<bool>,
 ) -> Result<Option<ServerMsg>, WsResError> {
-    admin_ws_stats_tx
-        .send(AdminConStatMsg::AddRecv {
-            connection_key,
-            tx: connection_tx.clone(),
-            addr: addr.to_string(),
-            ws_key,
-        })
-        .await?;
+    if listener_state {
+        admin_ws_stats_tx
+            .send(AdminConStatMsg::AddRecv {
+                connection_key,
+                tx: connection_tx.clone(),
+                addr: addr.to_string(),
+                ws_key,
+            })
+            .await?;
+    } else {
+        admin_ws_stats_tx
+            .send(AdminConStatMsg::RemoveRecv { connection_key })
+            .await?;
+    }
     // let result = db.user_find_one(&user_id).await?;
     //
     // let Some(result) = result else {

@@ -118,6 +118,15 @@ pub async fn con_task(
         error!("error removing recv: {}", err);
     }
 
+    let send_result = admin_ws_stats_tx
+        .send(AdminConStatMsg::StopTrack {
+            connection_key: con_id.clone(),
+        })
+        .await;
+    if let Err(err) = send_result {
+        error!("error stoping track: {}", err);
+    }
+
     user_task_tracker.close();
     user_task_tracker.wait().await;
     let send_result = ws_tx.send(WsAppMsg::Disconnected(ip)).await;

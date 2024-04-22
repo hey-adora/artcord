@@ -4,12 +4,13 @@ use std::time::Duration;
 use artcord_leptos_web_sockets::channel::WsRecvResult;
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_client_msg::WsPath;
-use artcord_state::message::prod_server_msg::AdminStat;
 use artcord_state::message::prod_server_msg::AdminStatCountType;
-use artcord_state::message::prod_server_msg::AdminStatsRes;
+use artcord_state::message::prod_server_msg::LiveWsStatsRes;
 use artcord_state::message::prod_server_msg::ServerMsg;
-use artcord_state::model::statistics;
-use artcord_state::model::statistics::Statistic;
+use artcord_state::message::prod_server_msg::WsStatTemp;
+use artcord_state::model::ws_statistics;
+use artcord_state::model::ws_statistics::ReqCount;
+use artcord_state::model::ws_statistics::WsStat;
 use leptos::*;
 use leptos_router::use_params_map;
 use leptos_use::use_interval_fn;
@@ -29,14 +30,14 @@ use crate::app::global_state::GlobalState;
 pub type WebAdminStatCountType = HashMap<WsPath, RwSignal<u64>>;
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct WebAdminStat {
+pub struct WebWsStat {
     pub addr: String,
-    pub is_connected: RwSignal<bool>,
+    // pub is_connected: RwSignal<bool>,
     pub count: WebAdminStatCountType,
 }
 
-impl From<AdminStat> for WebAdminStat {
-    fn from(value: AdminStat) -> Self {
+impl From<WsStatTemp> for WebWsStat {
+    fn from(value: WsStatTemp) -> Self {
         let mut count_map: WebAdminStatCountType = HashMap::with_capacity(value.count.len());
         for path in WsPath::iter() {
             count_map.insert(
@@ -47,9 +48,9 @@ impl From<AdminStat> for WebAdminStat {
         // for (path, count) in value.count {
         //     count_map.insert(path, RwSignal::new(count));
         // }
-        WebAdminStat {
+        WebWsStat {
             addr: value.addr,
-            is_connected: RwSignal::new(value.is_connected),
+            // is_connected: RwSignal::new(true),
             count: count_map,
         }
     }
@@ -61,26 +62,42 @@ impl From<AdminStat> for WebAdminStat {
 
 #[derive(Copy, Clone, Debug)]
 pub struct AdminPageState {
-    pub statistics: RwSignal<HashMap<String, WebAdminStat>>,
+    pub live_connections: RwSignal<HashMap<String, WebWsStat>>,
+    pub old_connections: RwSignal<Vec<WsStat>>,
 }
 
 impl AdminPageState {
     pub fn new() -> Self {
         Self {
-            statistics: RwSignal::new(HashMap::new()),
+            live_connections: RwSignal::new(HashMap::new()),
+            old_connections: RwSignal::new(Vec::new()),
         }
     }
 
-    pub fn set_stats(&self, stats: HashMap<String, AdminStat>) {
-        let mut web_stats: HashMap<String, WebAdminStat> = HashMap::with_capacity(stats.len());
+    pub fn set_old_stats(&self, stats: Vec<WsStat>) {
+        // let mut web_stats: HashMap<String, WsStat> = HashMap::with_capacity(stats.len());
+        // for (path, stat) in stats {
+        //     web_stats.insert(path, stat.into());
+        // }
+        self.old_connections.set(stats);
+    }
+
+    pub fn set_live_stats(&self, stats: HashMap<String, WsStatTemp>) {
+        let mut web_stats: HashMap<String, WebWsStat> = HashMap::with_capacity(stats.len());
         for (path, stat) in stats {
             web_stats.insert(path, stat.into());
         }
-        self.statistics.set(web_stats);
+        self.live_connections.set(web_stats);
     }
 
-    pub fn inc_stat(&self, con_key: &str, path: &WsPath) {
-        self.statistics.with_untracked(|stats| {
+    pub fn add_live_stat(&self, con_key: String, stat: WebWsStat) {
+        self.live_connections.update(move |stats| {
+            stats.insert(con_key.clone(), stat.clone().into());
+        });
+    }
+
+    pub fn inc_live_stat(&self, con_key: &str, path: &WsPath) {
+        self.live_connections.with_untracked(|stats| {
             let stat = stats.get(con_key);
             let Some(stat) = stat else {
                 warn!("admin: con stat not found: {}", con_key);
@@ -96,6 +113,17 @@ impl AdminPageState {
             });
         });
     }
+
+    pub fn remove_live_stat(&self, con_key: &str) {
+        self.live_connections.update(|stats| {
+            let stat = stats.remove(con_key);
+            if stat.is_some() {
+                warn!("admin: live stat removed: {}", con_key);
+            } else {
+                warn!("admin: stat for removal not found: {}", con_key);
+            }
+        });
+    }
 }
 
 #[component]
@@ -105,39 +133,60 @@ pub fn Admin() -> impl IntoView {
     let nav_tran = global_state.nav_tran;
     let ws = global_state.ws;
     let page = global_state.pages.admin;
-    let statistics = page.statistics;
+    let live_ws_stats = page.live_connections;
+    let old_ws_stats = page.old_connections;
 
     // let ws_statistics = ws.builder().portal().stream().build();
-    let ws_statistics = ws.channel().timeout(30).start();
+    let ws_live_ws_stats = ws.channel().timeout(30).single_fire().start();
+    let ws_old_ws_stats = ws.channel().timeout(30).single_fire().start();
 
-    ws_statistics
+    ws_live_ws_stats
         .recv()
         .start(move |server_msg, _| match server_msg {
             WsRecvResult::Ok(server_msg) => match server_msg {
-                ServerMsg::AdminStats(msg) => match msg {
-                    AdminStatsRes::Started(stats) => {
-                        page.set_stats(stats.clone());
+                ServerMsg::LiveWsStats(msg) => match msg {
+                    LiveWsStatsRes::Started(stats) => {
+                        page.set_live_stats(stats.clone());
                     }
-                    AdminStatsRes::UpdateAddedNew { con_key, stat } => {
-                        statistics.update(move |stats| {
-                            stats.insert(con_key.clone(), stat.clone().into());
-                        });
+                    LiveWsStatsRes::UpdateAddedStat { con_key, stat } => {
+                        page.add_live_stat(con_key.clone(), stat.clone().into());
                     }
-                    AdminStatsRes::UpdateInc { con_key, path } => {
-                        page.inc_stat(con_key, path);
+                    LiveWsStatsRes::UpdateInc { con_key, path } => {
+                        page.inc_live_stat(con_key, path);
+                    }
+                    LiveWsStatsRes::UpdateRemoveStat { con_key } => {
+                        page.remove_live_stat(con_key);
                     }
                     _ => {}
                 },
+                ServerMsg::WsStats(stats) => {}
                 _ => {}
             },
             WsRecvResult::TimeOut => {}
         });
 
-    ws_statistics
+    ws_old_ws_stats
+        .recv()
+        .start(move |server_msg, _| match server_msg {
+            WsRecvResult::Ok(server_msg) => match server_msg {
+                ServerMsg::WsStats(stats) => {
+                    page.set_old_stats(stats.clone());
+                }
+                _ => {}
+            },
+            WsRecvResult::TimeOut => {}
+        });
+
+    ws_live_ws_stats
         .sender()
         .resend_on_reconnect()
-        .on_cleanup(ClientMsg::AdminThrottleListenerToggle(false))
-        .send(ClientMsg::AdminThrottleListenerToggle(true));
+        .on_cleanup(ClientMsg::LiveWsStats(false))
+        .send(ClientMsg::LiveWsStats(true));
+
+    ws_old_ws_stats
+        .sender()
+        .resend_on_reconnect()
+        .send(ClientMsg::WsStats);
 
     // ws_statistics.send_or_skip(Vgc, on_receive)
     create_effect(move |_| {
@@ -237,7 +286,7 @@ pub fn Admin() -> impl IntoView {
     //     stat.count.get(&path).cloned().unwrap_or(0_u64).to_string()
     // };
 
-    let table_body_paths_view = move |count: WebAdminStatCountType| {
+    let live_connection_count_view = move |count: WebAdminStatCountType| {
         WsPath::iter()
             .map(|path| {
                 let count = count.get(&path).cloned();
@@ -248,14 +297,65 @@ pub fn Admin() -> impl IntoView {
             .collect_view()
     };
 
-    let table_body_view = move || {
+    let live_connection_view = move || {
         view! {
-            <For each=move || statistics.get().into_iter() key=|item| item.0.clone() let:item>
+            <For each=move || live_ws_stats.get().into_iter() key=|item| item.0.clone() let:item>
                 <tr>
                     <td>{item.1.addr}</td>
-                    { table_body_paths_view(item.1.count) }
+                    { live_connection_count_view(item.1.count) }
                 </tr>
             </For>
+        }
+        // statistics
+        //     .get()
+        //     .into_iter()
+        //     .map(|(key, stat)| {
+        //     })
+        //     .collect_view()
+    };
+
+    let old_connections_count_view = move |count: Vec<ReqCount>| {
+        // let count_iter = count.into_iter();
+        <WsPath as VariantNames>::VARIANTS
+            .into_iter()
+            .map(|path| {
+                // let path_str = path.
+                let count = count
+                    .iter()
+                    .find(|v| v.path == *path)
+                    .map(|v| v.count)
+                    .unwrap_or(0_i64);
+                view! {
+                    <th>{count}</th>
+                }
+            })
+            .collect_view()
+    };
+
+    let old_connections_view = move || {
+        let list = old_ws_stats
+            .get()
+            .into_iter()
+            .map(|v| {
+                view! {
+                        <tr>
+                            <td>{v.addr}</td>
+                            { old_connections_count_view(v.req_count) }
+                            // { table_body_paths_view(item.1.count) }
+                        </tr>
+                }
+            })
+            .collect_view();
+        view! {
+            {
+                list
+            }
+            // <For each=move || live_ws_stats.get().into_iter() key=|item| item.0.clone() let:item>
+            //     <tr>
+            //         <td>{item.1.addr}</td>
+            //         { table_body_paths_view(item.1.count) }
+            //     </tr>
+            // </For>
         }
         // statistics
         //     .get()
@@ -278,20 +378,37 @@ pub fn Admin() -> impl IntoView {
                     </div>
                 </div>
                 <div class="w-full text-black py-4 gap-4 flex  flex-col  ">
-                    <div class="font-bold">"Activity"</div>
-                    <div>"Activity"</div>
-                    <table>
-                        <tr class="sticky top-[4rem] left-0 bg-light-flower ">
-                            <th>"ip"</th>
-                            {move || table_header_view()}
-                            // <th>"one"</th>
-                            // <th>"two"</th>
-                            // <th>"three"</th>
-                        </tr>
+                    <div class="font-bold">"Statistics"</div>
+                    <div>
+                        <div>"Live WebSocket Connections"</div>
+                        <table>
+                            <tr class="sticky top-[4rem] left-0 bg-light-flower ">
+                                <th>"ip"</th>
+                                {move || table_header_view()}
+                                // <th>"one"</th>
+                                // <th>"two"</th>
+                                // <th>"three"</th>
+                            </tr>
 
-                        {move || table_body_view()}
+                            {move || live_connection_view()}
 
-                    </table>
+                        </table>
+                    </div>
+                    <div>
+                        <div>"WebSocket Connection History"</div>
+                        <table>
+                            <tr class="sticky top-[4rem] left-0 bg-light-flower ">
+                                <th>"ip"</th>
+                                {move || table_header_view()}
+                                // <th>"one"</th>
+                                // <th>"two"</th>
+                                // <th>"three"</th>
+                            </tr>
+
+                            {move || old_connections_view()}
+
+                        </table>
+                    </div>
                 </div>
             </div>
         </main>

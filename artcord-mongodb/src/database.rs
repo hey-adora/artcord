@@ -1,4 +1,3 @@
-use artcord_state::model::acc::Acc;
 use artcord_state::model::acc_session::AccSession;
 use artcord_state::model::allowed_channel::AllowedChannel;
 use artcord_state::model::allowed_guild::AllowedGuild;
@@ -7,6 +6,7 @@ use artcord_state::model::auto_reaction::AutoReaction;
 use artcord_state::model::img::Img;
 use artcord_state::model::migration::Migration;
 use artcord_state::model::user::User;
+use artcord_state::model::{acc::Acc, ws_statistics::WsStat};
 use cfg_if::cfg_if;
 
 use mongodb::options::ClientOptions;
@@ -31,6 +31,7 @@ pub struct DB {
     collection_acc: mongodb::Collection<Acc>,
     collection_acc_session: mongodb::Collection<AccSession>,
     collection_migration: mongodb::Collection<Migration>,
+    collection_ws_statistic: mongodb::Collection<WsStat>,
 }
 
 const DATABASE_NAME: &'static str = "artcord";
@@ -63,6 +64,7 @@ impl DB {
         let collection_auto_reaction = DB::init_auto_reaction(&database).await;
         let collection_acc = DB::init_acc(&database).await;
         let collection_acc_session = DB::init_acc_session(&database).await;
+        let collection_ws_statistic = DB::init_ws_statistic(&database).await;
 
         Self {
             database,
@@ -76,6 +78,7 @@ impl DB {
             collection_acc,
             collection_acc_session,
             collection_migration,
+            collection_ws_statistic,
         }
     }
 }

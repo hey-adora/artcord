@@ -6,5 +6,5 @@ pub mod allowed_role;
 pub mod auto_reaction;
 pub mod img;
 pub mod migration;
-pub mod statistics;
 pub mod user;
+pub mod ws_statistics;

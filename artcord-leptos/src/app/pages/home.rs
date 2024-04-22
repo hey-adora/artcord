@@ -38,7 +38,7 @@ pub fn HomePage() -> impl IntoView {
         debug!("ADMIN RECV: {:?}", msg);
     });
 
-    let msg = ClientMsg::Statistics;
+    let msg = ClientMsg::WsStats;
 
     // create_effect(|_| {
     //     on_cleanup(|| {

@@ -1,20 +1,21 @@
-use std::{collections::HashMap, net::SocketAddr};
+use std::{collections::HashMap, net::SocketAddr, str::FromStr};
 
 use crate::{
     aggregation::server_msg_img::AggImg,
     misc::registration_invalid::RegistrationInvalidMsg,
-    model::{statistics::Statistic, user::User},
+    model::{user::User, ws_statistics::WsStat},
 };
 
 use artcord_leptos_web_sockets::WsPackage;
 use serde::{Deserialize, Serialize};
+use tracing::error;
 
 use super::{prod_client_msg::WsPath, prod_perm_key::ProdMsgPermKey};
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub enum ServerMsg {
-    AdminStats(AdminStatsRes),
-    Statistics(Vec<Statistic>),
+    LiveWsStats(LiveWsStatsRes),
+    WsStats(Vec<WsStat>),
     MainGallery(MainGalleryRes),
     UserGallery(UserGalleryRes),
     User(UserRes),
@@ -66,26 +67,46 @@ pub enum LoginRes {
 pub type AdminStatCountType = HashMap<WsPath, u64>;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
-pub struct AdminStat {
+pub struct WsStatTemp {
     pub addr: String,
-    pub is_connected: bool,
+    // pub is_connected: bool,
     pub count: AdminStatCountType,
 }
 
-impl AdminStat {
+impl WsStatTemp {
     pub fn new(addr: String) -> Self {
         Self {
             addr,
-            is_connected: true,
+            // is_connected: true,
             count: HashMap::new(),
         }
     }
 }
 
+impl From<WsStat> for WsStatTemp {
+    fn from(value: WsStat) -> Self {
+        let mut count = HashMap::<WsPath, u64>::with_capacity(value.req_count.len());
+        for req_count in value.req_count {
+            count.insert(
+                WsPath::from_str(&req_count.path)
+                    .inspect_err(|e| error!("ws_stat_temp invalid path: {}", e))
+                    .unwrap_or(WsPath::WsStats),
+                req_count.count as u64,
+            );
+        }
+
+        Self {
+            addr: value.addr,
+            count,
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
-pub enum AdminStatsRes {
-    Started(HashMap<String, AdminStat>),
-    UpdateAddedNew { con_key: String, stat: AdminStat },
+pub enum LiveWsStatsRes {
+    Started(HashMap<String, WsStatTemp>),
+    UpdateRemoveStat { con_key: String },
+    UpdateAddedStat { con_key: String, stat: WsStatTemp },
     UpdateInc { con_key: String, path: WsPath },
     Stopped,
     AlreadyStarted,

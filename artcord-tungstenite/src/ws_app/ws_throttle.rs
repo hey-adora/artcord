@@ -330,9 +330,8 @@ pub enum AdminMsgErr {
     // #[error("Send error: {0}")]
     // ThrottleSend(#[from] tokio::sync::mpsc::error::SendError<WsThrottleListenerMsg>),
     // // tokio::sync::mpsc::error::SendError<tokio_tungstenite::tungstenite::Message>>>
-    // #[error("Mongodb error: {0}")]
-    // MongoDB(#[from] mongodb::error::Error),
-
+    #[error("Mongodb error: {0}")]
+    MongoDB(#[from] mongodb::error::Error),
     // #[error("Bcrypt error: {0}")]
     // Bcrypt(#[from] bcrypt::BcryptError),
     //

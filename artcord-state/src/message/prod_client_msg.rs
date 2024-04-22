@@ -8,7 +8,7 @@ use artcord_leptos_web_sockets::WsPackage;
 use field_types::FieldName;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use strum::{EnumIter, EnumString, VariantArray, VariantNames};
+use strum::{EnumIter, EnumString, IntoStaticStr, VariantArray, VariantNames};
 
 use std::fmt::Display;
 use std::net::IpAddr;
@@ -45,8 +45,8 @@ pub enum ClientMsg {
         email: String,
         password: String,
     },
-    Statistics,
-    AdminThrottleListenerToggle(bool),
+    WsStats,
+    LiveWsStats(bool),
 }
 
 impl artcord_leptos_web_sockets::Send for ClientMsg {
@@ -141,6 +141,7 @@ impl ClientMsg {
     VariantNames,
     EnumString,
     EnumIter,
+    IntoStaticStr,
 )]
 #[strum(serialize_all = "snake_case")]
 pub enum WsPath {
@@ -150,8 +151,8 @@ pub enum WsPath {
     Login,
     Register,
     Logout,
-    Statistics,
-    AdminThrottleListener,
+    WsStats,
+    LiveWsStats,
 }
 
 // impl Display for WsPath {
@@ -181,8 +182,8 @@ impl WsPath {
             WsPath::Login => (1, Duration::from_secs(5)),
             WsPath::Register => (1, Duration::from_secs(5)),
             WsPath::Logout => (1, Duration::from_secs(30)),
-            WsPath::Statistics => (1, Duration::from_secs(1)),
-            WsPath::AdminThrottleListener => (1, Duration::from_secs(1)),
+            WsPath::WsStats => (1, Duration::from_secs(1)),
+            WsPath::LiveWsStats => (1, Duration::from_secs(1)),
         }
     }
     // pub fn get_throttle(&self) -> (u64, Duration) {
@@ -252,8 +253,8 @@ impl From<&ClientMsg> for WsPath {
                 password: _,
             } => WsPath::Register,
             ClientMsg::Logout => WsPath::Logout,
-            ClientMsg::Statistics => WsPath::Statistics,
-            ClientMsg::AdminThrottleListenerToggle(_) => WsPath::AdminThrottleListener,
+            ClientMsg::WsStats => WsPath::WsStats,
+            ClientMsg::LiveWsStats(_) => WsPath::LiveWsStats,
         }
     }
 }

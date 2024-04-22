@@ -224,6 +224,7 @@ impl<
         client_msg: ClientMsg,
         on_cleanup_msg: Option<ClientMsg>,
         resend_on_reconnect: bool,
+        // last_msg: bool
     ) -> Result<WsResourcSendResult, WsError> {
         let owner = Owner::current();
         if owner.is_none() {
@@ -357,7 +358,7 @@ impl<
     fn update_timeout(&self) {
         self.channels.update_value(|channels| {
             let Some(channel) = channels.get_mut(&self.key) else {
-                warn!(
+                trace!(
                     "ws({}): cant set waiting for response, channel not found: {}",
                     self.ws_url.get_value().unwrap_or("error".to_string()),
                     &self.key
