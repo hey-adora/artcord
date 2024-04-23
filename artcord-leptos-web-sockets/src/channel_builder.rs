@@ -26,6 +26,7 @@ pub struct ChannelBuilder<
     // cancellable: bool,
     prop_persistant: bool,
     prop_single_fire: bool,
+    key: Option<u128>,
 }
 
 impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Debug + 'static>
@@ -50,7 +51,13 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
             // cancellable: false,
             prop_persistant: false,
             prop_single_fire: false,
+            key: None,
         }
+    }
+
+    pub fn key(mut self, key: u128) -> Self {
+        self.key = Some(key);
+        self
     }
 
     pub fn timeout(mut self, timeout_secs: i64) -> Self {
@@ -89,6 +96,7 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
             self.prop_timeout,
             self.prop_persistant,
             self.is_connected,
+            self.key,
         );
         ChannelInterface::new(channel)
     }

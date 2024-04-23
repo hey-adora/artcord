@@ -1,4 +1,4 @@
-use crate::{KeyGen, Receive, Send, WsError, TIMEOUT_SECS};
+use crate::{KeyGen, Receive, Send, WsError, WsRouteKey, TIMEOUT_SECS};
 use chrono::{DateTime, TimeDelta, Utc};
 use leptos::{create_effect, on_cleanup, Owner, RwSignal, SignalGet, StoredValue};
 use std::collections::HashMap;
@@ -77,8 +77,13 @@ impl<
         timeout: Option<TimeDelta>,
         persistant: bool,
         is_connected: RwSignal<bool>,
+        key: Option<WsRouteKey>,
     ) -> Self {
-        let channel_key = crate::location_hash();
+        let channel_key = if let Some(key) = key {
+            key
+        } else {
+            crate::location_hash()
+        };
 
         let create_channel = || {
             channels.update_value({
@@ -151,6 +156,7 @@ impl<
         &self,
         on_receive: impl Fn(&WsRecvResult<ServerMsg>, &mut bool) + 'static,
         persistant: bool,
+        // key: Option<u128>,
     ) {
         let channel_key = self.key;
         let callback_key = crate::location_hash();
