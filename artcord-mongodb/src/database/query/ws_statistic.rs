@@ -95,6 +95,46 @@ impl DB {
         Ok(result)
     }
 
+    pub async fn ws_statistic_paged_latest(
+        &self,
+        page: u64,
+        amount: u64,
+    ) -> Result<Vec<WsStat>, mongodb::error::Error> {
+        let amount = amount.clamp(25, 10000);
+        let mut pipeline = vec![doc! { "$sort": doc! { WsStatFieldName::CreatedAt.name(): -1 } }];
+        if page > 0 {
+            let skip = (page * amount) as i64;
+
+            pipeline.push(doc! { "$skip": skip});
+        }
+        let limit = amount as i64;
+        pipeline.push(doc! { "$limit":  limit});
+        // println!("{:#?}", pipeline);
+
+        let mut stats = self
+            .collection_ws_statistic
+            .aggregate(pipeline, None)
+            .await?;
+
+        let mut output: Vec<WsStat> = Vec::new();
+
+        while let Some(result) = stats.try_next().await? {
+            let doc: WsStat = mongodb::bson::from_document(result)?;
+            //let a = doc.f
+            output.push(doc);
+            // println!("hh");
+        }
+
+        Ok(output)
+        // let opts = FindOptions::builder()
+        //     .sort(doc! { WsStatFieldName::CreatedAt.name(): -1 })
+        //     .build();
+        // let result = self.collection_ws_statistic.find(doc! {}, opts).await?;
+        // let result = result.try_collect().await.unwrap_or_else(|_| vec![]);
+        //
+        // Ok(result)
+    }
+
     // pub async fn user_find_one(
     //     &self,
     //     user_id: &str,

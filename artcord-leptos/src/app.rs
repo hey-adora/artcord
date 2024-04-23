@@ -41,6 +41,13 @@ pub fn App() -> impl IntoView {
     {
         let debug_ws = WsRuntime::<DebugServerMsg, DebugClientMsg>::new();
         debug_ws.connect(3001).unwrap();
+        let debug_ch = debug_ws.channel().key(0).start();
+        debug_ch.recv().start(|msg, _| {
+            window().location().reload().unwrap();
+        });
+
+        // a
+
         // let ready_channel = debug_ws.create_singleton();
 
         //let client_msg = DebugClientMsg::BrowserReady;

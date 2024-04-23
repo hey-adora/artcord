@@ -37,7 +37,7 @@ pub async fn ws_stats(
     // cancel_send: broadcast::Sender<bool>,
     // admin_throttle_listener_recv_close: oneshot::Receiver<bool>,
 ) -> Result<Option<ServerMsg>, WsResError> {
-    let result = db.ws_statistic_all_latest().await?;
+    let result = db.ws_statistic_paged_latest(0, 30).await?;
     // admin_ws_stats_tx
     //     .send(AdminConStatMsg::AddRecv {
     //         connection_key,

@@ -366,9 +366,11 @@ pub fn Admin() -> impl IntoView {
     };
 
     view! {
-        <main class=move||format!("grid grid-rows-[1fr] min-h-[100dvh] transition-all duration-300 {}", if nav_tran.get() {"pt-[4rem]"} else {"pt-[0rem]"})>
+        <main class=move||format!("grid grid-rows-[1fr] h-[100dvh] overflow-y-hidden top-0 transition-all duration-300 {}", if nav_tran.get() {"pt-[4rem]"} else {"pt-[0rem]"})
+            // style:max-height=move || format!("{}", if nav_tran.get() { "calc(100dvh - 4rem)" } else { "calc(100dvh" })
+        >
             <Navbar/>
-            <div class="flex gap-4 bg-white ">
+            <div class="flex gap-4 bg-white  ">
                 <div class="flex flex-col gap-4 bg-dark-night  px-6 py-4">
                     <div class="font-bold">"DASHBOARD"</div>
                     <div class="flex flex-col gap-2 ">
@@ -377,39 +379,54 @@ pub fn Admin() -> impl IntoView {
                         <div>"Users"</div>
                     </div>
                 </div>
-                <div class="w-full text-black py-4 gap-4 flex  flex-col  ">
-                    <div class="font-bold">"Statistics"</div>
-                    <div>
-                        <div>"Live WebSocket Connections"</div>
-                        <table>
-                            <tr class="sticky top-[4rem] left-0 bg-light-flower ">
-                                <th>"ip"</th>
-                                {move || table_header_view()}
-                                // <th>"one"</th>
-                                // <th>"two"</th>
-                                // <th>"three"</th>
-                            </tr>
+                <div class="h-full overflow-y-hidden grid grid-rows-[auto_minmax(0,1fr)_1fr] text-black"
+                    style:max-height="calc(100dvh - 4rem)"
+                    >
+                        <div class="font-bold">"Statistics"</div>
+                        <div class="grid overflow-y-hidden grid-rows-[auto_1fr]">
+                            <div>"Live WebSocket Connections"</div>
+                            <div class="overflow-y-scroll ">
+                                <table>
+                                    <tr class="sticky top-0 left-0 bg-light-flower ">
+                                        <th>"ip"</th>
+                                        {move || table_header_view()}
+                                        // <th>"one"</th>
+                                        // <th>"two"</th>
+                                        // <th>"three"</th>
+                                    </tr>
+                                    {move || live_connection_view()}
+                                </table>
 
-                            {move || live_connection_view()}
-
-                        </table>
+                            </div>
+                        </div>
+                        <div class="grid overflow-y-hidden grid-rows-[auto_1fr_auto] ">
+                            <div>"WebSocket Connection History"</div>
+                            <div class="overflow-y-scroll ">
+                                <table class="">
+                                    <tr class="sticky top-0 left-0 bg-light-flower ">
+                                        <th>"ip"</th>
+                                        {move || table_header_view()}
+                                        // <th>"one"</th>
+                                        // <th>"two"</th>
+                                        // <th>"three"</th>
+                                    </tr>
+                                    {move || old_connections_view()}
+                                </table>
+                            </div>
+                            <div class="flex gap-4">
+                                <div>"1"</div>
+                                <div>"2"</div>
+                                <div>"3"</div>
+                            </div>
+                        </div>
+                        // <div>"wowowowwowowowo"</div>
                     </div>
-                    <div>
-                        <div>"WebSocket Connection History"</div>
-                        <table>
-                            <tr class="sticky top-[4rem] left-0 bg-light-flower ">
-                                <th>"ip"</th>
-                                {move || table_header_view()}
-                                // <th>"one"</th>
-                                // <th>"two"</th>
-                                // <th>"three"</th>
-                            </tr>
 
-                            {move || old_connections_view()}
-
-                        </table>
-                    </div>
-                </div>
+                // <div class="w-full   text-black py-4 gap-4 grid grid-rows-[1fr] "
+                // style:max-height="calc(100dvh - 4rem)"
+                //
+                //     >
+                // </div>
             </div>
         </main>
     }
