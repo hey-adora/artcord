@@ -15,21 +15,22 @@ use super::{
     pages::{
         admin::AdminPageState, main_gallery::GalleryPageState, user_gallery::PageUserGalleryState,
     },
-    utils::ScrollSection,
+    utils::PageUrl,
 };
 
 #[derive(Copy, Clone, Debug)]
 pub struct GlobalState {
     pub auth: RwSignal<AuthState>,
-    pub section: RwSignal<ScrollSection>,
+    pub current_page_url: RwSignal<PageUrl>,
     pub nav_open: RwSignal<bool>,
     pub nav_tran: RwSignal<bool>,
     pub page_profile: PageUserGalleryState,
     pub pages: Pages,
-    pub socket_timestamps: RwSignal<HashMap<&'static str, i64>>,
-    pub socket_connected: RwSignal<bool>,
-    pub socket_closures: StoredValue<HashMap<u128, Rc<dyn Fn(ServerMsg)>>>,
-    pub socket_pending_client_msgs: StoredValue<Vec<u8>>,
+    // pub current_page_url: PageUrl,
+    // pub socket_timestamps: RwSignal<HashMap<&'static str, i64>>,
+    // pub socket_connected: RwSignal<bool>,
+    // pub socket_closures: StoredValue<HashMap<u128, Rc<dyn Fn(ServerMsg)>>>,
+    // pub socket_pending_client_msgs: StoredValue<Vec<u8>>,
     pub ws: WsRuntime<ServerMsg, ClientMsg>,
 }
 
@@ -63,15 +64,15 @@ impl GlobalState {
     pub fn new() -> Self {
         Self {
             auth: create_rw_signal(AuthState::Processing),
-            section: create_rw_signal(ScrollSection::Home),
+            current_page_url: create_rw_signal(PageUrl::Home),
             nav_open: create_rw_signal(false),
             nav_tran: create_rw_signal(true),
             page_profile: PageUserGalleryState::new(),
             pages: Pages::new(),
-            socket_connected: create_rw_signal(false),
-            socket_timestamps: create_rw_signal(HashMap::new()),
-            socket_closures: StoredValue::new(HashMap::new()),
-            socket_pending_client_msgs: StoredValue::new(Vec::new()),
+            // socket_connected: create_rw_signal(false),
+            // socket_timestamps: create_rw_signal(HashMap::new()),
+            // socket_closures: StoredValue::new(HashMap::new()),
+            // socket_pending_client_msgs: StoredValue::new(Vec::new()),
             ws: WsRuntime::<ServerMsg, ClientMsg>::new(),
         }
     }

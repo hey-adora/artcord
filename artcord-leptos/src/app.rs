@@ -1,6 +1,10 @@
+use crate::app::pages::admin::overview::Overview;
+use crate::app::pages::admin::ws_live::WsLive;
+use crate::app::pages::admin::ws_old::WsOld;
 use crate::app::pages::admin::Admin;
 use crate::app::pages::login::Login;
 use crate::app::pages::register::Register;
+use crate::app::utils::PageUrl;
 use artcord_leptos_web_sockets::runtime::WsRuntime;
 use artcord_state::message::debug_client_msg::DebugClientMsg;
 use artcord_state::message::debug_msg_key::DebugMsgPermKey;
@@ -35,7 +39,6 @@ pub fn App() -> impl IntoView {
     provide_meta_context();
     provide_context(GlobalState::new());
     //signal_switch_init();
-
     //let location = use_location();
     #[cfg(feature = "development")]
     {
@@ -45,41 +48,7 @@ pub fn App() -> impl IntoView {
         debug_ch.recv().start(|msg, _| {
             window().location().reload().unwrap();
         });
-
-        // a
-
-        // let ready_channel = debug_ws.create_singleton();
-
-        //let client_msg = DebugClientMsg::BrowserReady;
-        // ready_channel.send_once(client_msg, |server_msg| {
-        //     trace!("server msg received: {:#?}", server_msg);
-        // }).expect("failed to send");
-
-        // debug_ws.on_ws_state(move |is_connected| {
-        //     if is_connected {
-        //         trace!("ws_debug: sending browser ready package");
-        //         match debug_ws.send(DebugMsgPermKey::Debug, DebugClientMsg::BrowserReady) {
-        //             Ok(result) => {
-        //                 trace!("ws_debug: returned: {:?}", result);
-        //             }
-        //             Err(err) => {
-        //                 error!("ws_debug: send error: {}", err);
-        //             }
-        //         };
-        //     }
-        // });
-        //
-        // debug_ws.on(DebugMsgPermKey::Debug, |server_msg| {
-        //     trace!("ws_debug: Restart received: {:?}", server_msg);
-        //     window().location().reload().unwrap();
-        // });
     }
-
-    // debug_ws.on(DebugMsgPermKey::Restart, |server_msg| {
-    //     debug!("Restart received 22222222222: {:?}", server_msg);
-    // });
-    // WsRuntime::connect("ws://localhost", "3001");
-    // a a a a a a
 
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
     global_state.ws.connect(3420).unwrap();
@@ -107,13 +76,21 @@ pub fn App() -> impl IntoView {
         <Title text="ArtCord"/>
         <Body  class=move || format!("text-low-purple    bg-fixed bg-sword-lady  bg-[right_65%_bottom_0] md:bg-center bg-cover bg-no-repeat  bg-dark-night2 {}", if global_state.nav_open.get() == true { "overflow-hidden w-screen h-[dvh]" } else { "" })  />
         <Router>
+                {
+                    PageUrl::update_current_page_url();
+                }
+
                 <Routes>
-                    <Route path="" view=HomePage/>
-                    <Route path="/gallery" view=MainGalleryPage/>
-                    <Route path="/user/:id" view=UserGalleryPage/>
+                    <Route path=PageUrl::Home view=HomePage/>
+                    <Route path=PageUrl::MainGallery view=MainGalleryPage/>
+                    <Route path=PageUrl::UserGallery view=UserGalleryPage/>
                     <Route path="/account" view=Account/>
-                    <Route path="/admin" view=Admin/>
-                    <Route path="/*any" view=NotFound/>
+                    <Route path=PageUrl::AdminDash view=Admin >
+                        <Route path="" view=Overview/>
+                        <Route path=PageUrl::AdminDashWsLive view=WsLive/>
+                        <Route path=PageUrl::AdminDashWsOld view=WsOld/>
+                    </Route>
+                    <Route path=PageUrl::NotFound view=NotFound/>
                     <ProtectedRoute condition=move || !global_state.auth_is_logged_out() redirect_path="/" path="/login" view=Login/>
                     <ProtectedRoute condition=move || !global_state.auth_is_logged_out() redirect_path="/"  path="/register" view=Register/>
                 </Routes>
