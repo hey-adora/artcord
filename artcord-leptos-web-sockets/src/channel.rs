@@ -9,7 +9,7 @@ use tracing::{error, trace, warn};
 use wasm_bindgen::closure::Closure;
 use web_sys::WebSocket;
 
-pub mod channel_with_timeout;
+// pub mod channel_with_timeout;
 
 #[derive(Clone)]
 pub struct WsChannelType<ServerMsg: Clone + Receive + Debug + 'static> {
@@ -81,8 +81,10 @@ impl<
     ) -> Self {
         let channel_key = if let Some(key) = key {
             key
-        } else {
+        } else if persistant {
             crate::location_hash()
+        } else {
+            u128::generate_key()
         };
 
         let create_channel = || {
@@ -159,7 +161,11 @@ impl<
         // key: Option<u128>,
     ) {
         let channel_key = self.key;
-        let callback_key = crate::location_hash();
+        let callback_key = if persistant {
+            crate::location_hash()
+        } else {
+            u128::generate_key()
+        };
         self.ws.with_value(|ws| {
             self.channels.update_value({
                 move |channels| {
