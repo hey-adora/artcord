@@ -152,6 +152,7 @@ pub fn Admin() -> impl IntoView {
     let nav_tran = global_state.nav_tran;
     let ws = global_state.ws;
     let page = global_state.pages.admin;
+    let page_url = global_state.current_page_url;
 
     create_effect(move |_| {
         nav_tran.set(true);
@@ -162,7 +163,7 @@ pub fn Admin() -> impl IntoView {
             // style:max-height=move || format!("{}", if nav_tran.get() { "calc(100dvh - 4rem)" } else { "calc(100dvh" })
         >
             <Navbar/>
-            <div class="flex gap-4 bg-dark-night/90 p-4 ">
+            <div class="grid grid-cols-[auto_1fr] gap-4 bg-dark-night/90 p-4 ">
                 <div class="flex flex-col gap-4 bg-dark-night  px-6 ">
                     <div class="font-bold">"DASHBOARD"</div>
                     <div class="flex flex-col gap-2 ">
@@ -175,9 +176,9 @@ pub fn Admin() -> impl IntoView {
                     style:max-height="calc(100dvh - 4rem)"
                     >
                         <div class="font-bold text-lg text-white gap-4 flex  ">
-                            <a href=PageUrl::url_dash() class="bg-mid-purple rounded-2xl px-4">"Overview"</a>
-                            <a href=PageUrl::url_dash_wslive() class="bg-mid-purple rounded-2xl px-4">"WsLive"</a>
-                            <a href=PageUrl::url_dash_wsold() class="border-white border-2 rounded-2xl px-4">"WsOld"</a>
+                            <a href=PageUrl::url_dash() class=move || format!(" rounded-2xl px-4 {}", if page_url.get() == PageUrl::AdminDash { "bg-mid-purple" } else { "border-white border-2" }) >"Overview"</a>
+                            <a href=PageUrl::url_dash_wslive() class=move || format!(" rounded-2xl px-4 {}", if page_url.get() == PageUrl::AdminDashWsLive { "bg-mid-purple" } else { "border-white border-2" }) >"WsLive"</a>
+                            <a href=PageUrl::url_dash_wsold() class=move || format!(" rounded-2xl px-4 {}", if page_url.get() == PageUrl::AdminDashWsOld { "bg-mid-purple" } else { "border-white border-2" }) >"WsOld"</a>
                             // <a href="/" class="border-white border-2 rounded-2xl px-4">"Statistics"</a>
                         </div>
                         <Outlet/>
