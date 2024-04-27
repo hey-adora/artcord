@@ -1,6 +1,6 @@
 use artcord_mongodb::database::DB;
 use artcord_state::{
-    message::prod_server_msg::{RegistrationRes, ServerMsg},
+    message::prod_server_msg::{ServerMsg},
     misc::registration_invalid::{RegistrationInvalidMsg, BCRYPT_COST},
     model::acc::Acc,
 };
@@ -23,21 +23,21 @@ pub async fn ws_register(
         RegistrationInvalidMsg::validate_registration(&email, &password);
 
     if invalid == true {
-        return Ok(ServerMsg::Registration(RegistrationRes::Err(
+        return Ok(ServerMsg::RegistrationErr(
             RegistrationInvalidMsg {
                 general_error: None,
                 password_error,
                 email_error,
             },
-        )));
+        ));
     }
 
     let acc = db.acc_find_one(&email).await?;
     if let Some(acc) = acc {
-        return Ok(ServerMsg::Registration(RegistrationRes::Err(
+        return Ok(ServerMsg::RegistrationErr(
             RegistrationInvalidMsg::new()
                 .general(format!("Account with email '{}' already exists.", &email)),
-        )));
+        ));
     };
 
     let password = format!("{}{}", &password, &pepper);
@@ -51,7 +51,7 @@ pub async fn ws_register(
     let result = db
         .acc_insert_one(acc)
         .await
-        .and_then(|e| Ok(ServerMsg::Registration(RegistrationRes::Success)))?;
+        .and_then(|e| Ok(ServerMsg::RegistrationSuccess))?;
     // .or_else(|e| Err(ServerMsgCreationError::from(e)))?;
 
     Ok(result)

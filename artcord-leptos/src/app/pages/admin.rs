@@ -5,12 +5,12 @@ use artcord_leptos_web_sockets::channel::WsRecvResult;
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_client_msg::WsPath;
 use artcord_state::message::prod_server_msg::AdminStatCountType;
-use artcord_state::message::prod_server_msg::LiveWsStatsRes;
 use artcord_state::message::prod_server_msg::ServerMsg;
 use artcord_state::message::prod_server_msg::WsStatTemp;
 use artcord_state::model::ws_statistics;
 use artcord_state::model::ws_statistics::ReqCount;
 use artcord_state::model::ws_statistics::WsStat;
+use leptos::html::U;
 use leptos::*;
 use leptos_router::use_params_map;
 use leptos_router::Outlet;
@@ -29,6 +29,8 @@ use crate::app::components::navbar::Navbar;
 use crate::app::global_state::GlobalState;
 use crate::app::utils::PageUrl;
 
+use self::ws_old::PAGE_AMOUNT;
+
 pub mod overview;
 pub mod ws_live;
 pub mod ws_old;
@@ -42,7 +44,7 @@ pub fn WsPathTableHeaderView() -> impl IntoView {
         .map(|v| {
             view! {
 
-                <th>{*v}</th>
+                <th class="px-2">{*v}</th>
             }
         })
         .collect_view()
@@ -83,6 +85,9 @@ impl From<WsStatTemp> for WebWsStat {
 pub struct AdminPageState {
     pub live_connections: RwSignal<HashMap<String, WebWsStat>>,
     pub old_connections: RwSignal<Vec<WsStat>>,
+    pub old_connections_pagination: RwSignal<Option<u64>>,
+    pub old_connections_active_page: RwSignal<u64>,
+    pub old_connections_loading: RwSignal<bool>,
 }
 
 impl AdminPageState {
@@ -90,15 +95,22 @@ impl AdminPageState {
         Self {
             live_connections: RwSignal::new(HashMap::new()),
             old_connections: RwSignal::new(Vec::new()),
+            old_connections_pagination: RwSignal::new(None),
+            old_connections_active_page: RwSignal::new(0),
+            old_connections_loading: RwSignal::new(true),
         }
     }
 
-    pub fn set_old_stats(&self, stats: Vec<WsStat>) {
+    pub fn set_old_stats(&self, stats: Vec<WsStat>, pagination: Option<u64>) {
         // let mut web_stats: HashMap<String, WsStat> = HashMap::with_capacity(stats.len());
         // for (path, stat) in stats {
         //     web_stats.insert(path, stat.into());
         // }
+        if let Some(pagination) = pagination {
+            self.old_connections_pagination.set(Some(pagination.div_ceil(PAGE_AMOUNT)));
+        }
         self.old_connections.set(stats);
+        self.old_connections_loading.set(false);
     }
 
     pub fn set_live_stats(&self, stats: HashMap<String, WsStatTemp>) {
@@ -159,7 +171,7 @@ pub fn Admin() -> impl IntoView {
     });
 
     view! {
-        <main class=move||format!("grid grid-rows-[1fr] h-[100dvh] overflow-y-hidden top-0 transition-all duration-300 {}", if nav_tran.get() {"pt-[4rem]"} else {"pt-[0rem]"})
+        <main class=move||format!("grid grid-rows-[1fr] h-[100dvh] top-0 transition-all duration-300 {}", if nav_tran.get() {"pt-[4rem]"} else {"pt-[0rem]"})
             // style:max-height=move || format!("{}", if nav_tran.get() { "calc(100dvh - 4rem)" } else { "calc(100dvh" })
         >
             <Navbar/>
@@ -173,7 +185,7 @@ pub fn Admin() -> impl IntoView {
                     </div>
                 </div>
                 <div class="h-full overflow-y-hidden grid gap-4 grid-rows-[auto_1fr] "
-                    style:max-height="calc(100dvh - 4rem)"
+                    style:max-height="calc(100dvh - 6rem)"
                     >
                         <div class="font-bold text-lg text-white gap-4 flex  ">
                             <a href=PageUrl::url_dash() class=move || format!(" rounded-2xl px-4 {}", if page_url.get() == PageUrl::AdminDash { "bg-mid-purple" } else { "border-white border-2" }) >"Overview"</a>

@@ -11,7 +11,6 @@ use artcord_mongodb::database::DB;
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_client_msg::WsPath;
 use artcord_state::message::prod_perm_key::ProdMsgPermKey;
-use artcord_state::message::prod_server_msg::LiveWsStatsRes;
 use artcord_state::message::prod_server_msg::ServerMsg;
 use artcord_state::model::ws_statistics;
 use artcord_state::model::ws_statistics::WsStat;

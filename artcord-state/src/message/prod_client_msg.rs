@@ -45,7 +45,14 @@ pub enum ClientMsg {
         email: String,
         password: String,
     },
-    WsStats,
+    WsStatsTotalCount,
+    WsStatsPaged {
+        page: u64,
+        amount: u64
+    },
+    WsStatsFirstPage {
+        amount: u64
+    },
     LiveWsStats(bool),
 }
 
@@ -151,7 +158,9 @@ pub enum WsPath {
     Login,
     Register,
     Logout,
-    WsStats,
+    WsStatsPaged,
+    WsStatsTotalCount,
+    WsStatsFirstPage,
     LiveWsStats,
 }
 
@@ -182,7 +191,9 @@ impl WsPath {
             WsPath::Login => (1, Duration::from_secs(5)),
             WsPath::Register => (1, Duration::from_secs(5)),
             WsPath::Logout => (1, Duration::from_secs(30)),
-            WsPath::WsStats => (1, Duration::from_secs(1)),
+            WsPath::WsStatsPaged => (1, Duration::from_secs(1)),
+            WsPath::WsStatsTotalCount => (1, Duration::from_secs(1)),
+            WsPath::WsStatsFirstPage => (1, Duration::from_secs(1)),
             WsPath::LiveWsStats => (1, Duration::from_secs(1)),
         }
     }
@@ -253,7 +264,9 @@ impl From<&ClientMsg> for WsPath {
                 password: _,
             } => WsPath::Register,
             ClientMsg::Logout => WsPath::Logout,
-            ClientMsg::WsStats => WsPath::WsStats,
+            ClientMsg::WsStatsPaged { page, amount } => WsPath::WsStatsPaged,
+            ClientMsg::WsStatsTotalCount => WsPath::WsStatsTotalCount,
+            ClientMsg::WsStatsFirstPage { amount } => WsPath::WsStatsFirstPage,
             ClientMsg::LiveWsStats(_) => WsPath::LiveWsStats,
         }
     }

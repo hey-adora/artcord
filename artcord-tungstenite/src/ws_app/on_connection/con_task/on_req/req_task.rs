@@ -13,6 +13,8 @@ use tokio_tungstenite::tungstenite::protocol::CloseFrame;
 use tokio_tungstenite::tungstenite::Message;
 use tracing::{debug, error, trace};
 
+use crate::ws_app::on_connection::con_task::on_req::req_task::res::ws_stats_first_page::ws_stats_total_count;
+use crate::ws_app::on_connection::con_task::on_req::req_task::res::ws_stats_total_count::ws_stats_first_page;
 use crate::ws_app::on_connection::con_task::ConMsg;
 use crate::ws_app::ws_statistic::AdminConStatMsg;
 use crate::ws_app::WsResError;
@@ -21,7 +23,7 @@ use self::res::live_ws_stats::live_ws_stats;
 use self::res::main_gallery::ws_handle_main_gallery;
 use self::res::user::ws_handle_user;
 use self::res::user_gallery::ws_handle_user_gallery;
-use self::res::ws_stats::ws_stats;
+use self::res::ws_stats_paged::ws_stats_paged;
 
 pub mod res;
 
@@ -89,13 +91,15 @@ pub async fn req_task(
                 .await?;
 
             let response_data: Result<Option<ServerMsg>, WsResError> = match data {
-                ClientMsg::WsStats => ws_stats(db).await,
+                ClientMsg::WsStatsTotalCount => ws_stats_total_count(db).await,
+                ClientMsg::WsStatsFirstPage {  amount } => ws_stats_first_page(db, amount).await,
+                ClientMsg::WsStatsPaged { page, amount } => ws_stats_paged(db, page, amount).await,
                 ClientMsg::LiveWsStats(listener_state) => {
                     live_ws_stats(
                         db,
                         listener_state,
                         connection_key,
-                        res_key.clone(),
+                        res_key,
                         addr,
                         &connection_task_tx,
                         admin_ws_stats_tx,

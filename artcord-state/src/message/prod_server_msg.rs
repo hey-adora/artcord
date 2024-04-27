@@ -14,13 +14,24 @@ use super::{prod_client_msg::WsPath, prod_perm_key::ProdMsgPermKey};
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub enum ServerMsg {
-    LiveWsStats(LiveWsStatsRes),
-    WsStats(Vec<WsStat>),
-    MainGallery(MainGalleryRes),
-    UserGallery(UserGalleryRes),
-    User(UserRes),
-    Login(LoginRes),
-    Registration(RegistrationRes),
+    WsLiveStatsStarted(HashMap<String, WsStatTemp>),
+    WsLiveStatsUpdateRemoveStat { con_key: String },
+    WsLiveStatsUpdateAddedStat { con_key: String, stat: WsStatTemp },
+    WsLiveStatsUpdateInc { con_key: String, path: WsPath },
+    WsLiveStatsStopped,
+    WsLiveStatsAlreadyStarted,
+    WsLiveStatsAlreadyStopped,
+    WsLiveStatsTaskIsNotSet,
+    WsStatsTotalCount(u64),
+    WsStatsFirstPage { total_count: u64, first_page: Vec<WsStat> },
+    WsStatsPage(Vec<WsStat>),
+    GalleryMain(Vec<AggImg>),
+    GalleryUser(Option<Vec<AggImg>>),
+    User(Option<User>),
+    LoginSuccess { user_id: String, token: String },
+    LoginErr(String),
+    RegistrationSuccess,
+    RegistrationErr(RegistrationInvalidMsg),
     LoggedOut,
 
     // Imgs(Vec<AggImg>),
@@ -52,17 +63,7 @@ pub enum ServerMsg {
 //     Err(RegistrationInvalidMsg),
 // }
 
-#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
-pub enum RegistrationRes {
-    Success,
-    Err(RegistrationInvalidMsg),
-}
 
-#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
-pub enum LoginRes {
-    Success { user_id: String, token: String },
-    Err(String),
-}
 
 pub type AdminStatCountType = HashMap<WsPath, u64>;
 
@@ -90,7 +91,7 @@ impl From<WsStat> for WsStatTemp {
             count.insert(
                 WsPath::from_str(&req_count.path)
                     .inspect_err(|e| error!("ws_stat_temp invalid path: {}", e))
-                    .unwrap_or(WsPath::WsStats),
+                    .unwrap_or(WsPath::WsStatsPaged),
                 req_count.count as u64,
             );
         }
@@ -102,34 +103,11 @@ impl From<WsStat> for WsStatTemp {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
-pub enum LiveWsStatsRes {
-    Started(HashMap<String, WsStatTemp>),
-    UpdateRemoveStat { con_key: String },
-    UpdateAddedStat { con_key: String, stat: WsStatTemp },
-    UpdateInc { con_key: String, path: WsPath },
-    Stopped,
-    AlreadyStarted,
-    AlreadyStopped,
-    TaskIsNotSet,
-}
 
-#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
-pub enum MainGalleryRes {
-    Imgs(Vec<AggImg>),
-}
 
-#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
-pub enum UserGalleryRes {
-    Imgs(Vec<AggImg>),
-    UserNotFound,
-}
 
-#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
-pub enum UserRes {
-    User(User),
-    UserNotFound,
-}
+
+
 
 impl artcord_leptos_web_sockets::Receive for ServerMsg {
     fn recv_from_vec(bytes: &[u8]) -> Result<WsPackage<Self>, String>

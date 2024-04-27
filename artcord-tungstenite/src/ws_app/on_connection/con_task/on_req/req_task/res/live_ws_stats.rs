@@ -4,7 +4,7 @@ use artcord_leptos_web_sockets::{WsError, WsPackage, WsRouteKey};
 use artcord_mongodb::database::DB;
 use artcord_state::message::{
     prod_perm_key::ProdMsgPermKey,
-    prod_server_msg::{LiveWsStatsRes, ServerMsg},
+    prod_server_msg::{ServerMsg},
 };
 use futures::channel::oneshot::Cancellation;
 use thiserror::Error;

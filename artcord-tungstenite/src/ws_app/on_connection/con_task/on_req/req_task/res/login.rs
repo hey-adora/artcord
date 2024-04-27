@@ -1,6 +1,6 @@
 use artcord_mongodb::database::DB;
 use artcord_state::{
-    message::prod_server_msg::{LoginRes, ServerMsg},
+    message::prod_server_msg::{ServerMsg},
     model::acc_session::AccSession,
 };
 // use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
@@ -20,17 +20,17 @@ pub async fn ws_login(
 
     let acc = db.acc_find_one(&email).await?;
     let Some(acc) = acc else {
-        return Ok(ServerMsg::Login(LoginRes::Err(
+        return Ok(ServerMsg::LoginErr(
             "Invalid email or password.".to_string(),
-        )));
+        ));
     };
 
     let password = format!("{}{}", &password, &pepper);
     let good = bcrypt::verify(password, &acc.password)?;
     if good == false {
-        return Ok(ServerMsg::Login(LoginRes::Err(
+        return Ok(ServerMsg::LoginErr(
             "Invalid email or password.".to_string(),
-        )));
+        ));
     }
 
     let token: String = (0..WS_TOKEN_SIZE)
@@ -47,8 +47,8 @@ pub async fn ws_login(
     );
     db.acc_session_insert_one(acc_session).await?;
 
-    Ok(ServerMsg::Login(LoginRes::Success {
+    Ok(ServerMsg::LoginSuccess {
         user_id: acc.id,
         token,
-    }))
+    })
 }

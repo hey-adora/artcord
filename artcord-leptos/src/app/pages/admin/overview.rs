@@ -4,7 +4,6 @@ use std::rc::Rc;
 use artcord_leptos_web_sockets::channel::WsRecvResult;
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_client_msg::WsPath;
-use artcord_state::message::prod_server_msg::LiveWsStatsRes;
 use artcord_state::message::prod_server_msg::ServerMsg;
 use leptos::html::canvas;
 use leptos::html::Canvas;
@@ -333,7 +332,7 @@ pub fn Overview() -> impl IntoView {
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
     let page = global_state.pages.admin;
     let ws = global_state.ws;
-    let can = Can::new();
+    let can = Can::<Div>::new();
     let canvas_ref = can.canvas;
     let container_ref = can.container;
     // let canvas_size = RwSignal::new((0_u32, 0_u32));
@@ -477,10 +476,11 @@ pub fn Overview() -> impl IntoView {
 
     // let color = Color::from("#925CB3");
     view! {
-        <div class="grid overflow-y-hidden grid-rows-[auto_1fr]">
+        <div class="grid grid-rows-[auto_1fr] overflow-y-hidden">
             <div>"Overview"</div>
             <div class="overflow-y-scroll grid grid-rows-[1fr_1fr]">
                 <div  _ref=container_ref class=" bg-dark-night">
+                    // <div class="w-[100rem] h-[100rem] box"></div>
                     <canvas _ref=canvas_ref class="w-full h-full box"/>
                 </div>
                 // <svg viewBox="0 0 820 620">

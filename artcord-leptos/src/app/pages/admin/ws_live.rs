@@ -1,7 +1,6 @@
 use artcord_leptos_web_sockets::channel::WsRecvResult;
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_client_msg::WsPath;
-use artcord_state::message::prod_server_msg::LiveWsStatsRes;
 use artcord_state::message::prod_server_msg::ServerMsg;
 use leptos::*;
 
@@ -23,22 +22,19 @@ pub fn WsLive() -> impl IntoView {
         .recv()
         .start(move |server_msg, _| match server_msg {
             WsRecvResult::Ok(server_msg) => match server_msg {
-                ServerMsg::LiveWsStats(msg) => match msg {
-                    LiveWsStatsRes::Started(stats) => {
-                        page.set_live_stats(stats.clone());
-                    }
-                    LiveWsStatsRes::UpdateAddedStat { con_key, stat } => {
-                        page.add_live_stat(con_key.clone(), stat.clone().into());
-                    }
-                    LiveWsStatsRes::UpdateInc { con_key, path } => {
-                        page.inc_live_stat(con_key, path);
-                    }
-                    LiveWsStatsRes::UpdateRemoveStat { con_key } => {
-                        page.remove_live_stat(con_key);
-                    }
-                    _ => {}
-                },
-                ServerMsg::WsStats(stats) => {}
+                ServerMsg::WsLiveStatsStarted(stats) => {
+                    page.set_live_stats(stats.clone());
+                }
+                ServerMsg::WsLiveStatsUpdateAddedStat { con_key, stat } => {
+                    page.add_live_stat(con_key.clone(), stat.clone().into());
+                }
+                ServerMsg::WsLiveStatsUpdateInc { con_key, path } => {
+                    page.inc_live_stat(con_key, path);
+                }
+                ServerMsg::WsLiveStatsUpdateRemoveStat { con_key } => {
+                    page.remove_live_stat(con_key);
+                }
+                ServerMsg::WsStatsPage(stats) => {}
                 _ => {}
             },
             WsRecvResult::TimeOut => {}
@@ -73,7 +69,7 @@ pub fn WsLive() -> impl IntoView {
     };
 
     view! {
-        <div class="grid overflow-y-hidden grid-rows-[auto_1fr]">
+        <div class="grid grid-rows-[auto_1fr] overflow-y-hidden">
             <div>"Live WebSocket Connections"</div>
             <div class="overflow-y-scroll ">
                 <table>

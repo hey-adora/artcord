@@ -6,6 +6,8 @@ use crate::app::components::navbar::Navbar;
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_perm_key::ProdMsgPermKey;
 use leptos::html::Main;
+use leptos_use::use_event_listener;
+use leptos_use::use_window;
 use tracing::debug;
 use tracing::trace;
 
@@ -25,6 +27,7 @@ pub fn HomePage() -> impl IntoView {
     // testt(a, b, c) ;
 
     let on_scroll = move |_: Event| {
+        trace!("hello");
         let Some(scroll_el) = scroll_el.get() else {
             return;
         };
@@ -38,7 +41,19 @@ pub fn HomePage() -> impl IntoView {
         debug!("ADMIN RECV: {:?}", msg);
     });
 
-    let msg = ClientMsg::WsStats;
+    // create_effect(move |_| {
+    //     use_event_listener(use_window(), ev::scroll, move |el| {
+    //         let Some(scroll_el) = scroll_el.get_untracked() else {
+    //             return;
+    //         };
+    //         // let window = use_window();
+    //         window().scroll_y();
+    //         let y = scroll_el.scroll_top();
+    //         shrink_nav(nav_tran, y as u32);
+    //     });
+    // });
+
+    //let msg = ClientMsg::WsStats;
 
     // create_effect(|_| {
     //     on_cleanup(|| {
@@ -46,26 +61,26 @@ pub fn HomePage() -> impl IntoView {
     //     });
     // });
 
-    let test_click = move |_| {
-        let msg2 = ClientMsg::Logout;
-        ws_test.sender().send(msg2);
-        // on_cleanup(|| {
-        //     debug!("CLEANING UP");
-        // });
-        // ws_test
-        //     .send_or_skip(msg, |res| {
-        //         trace!("test hello");
-        //     })
-        //     .unwrap();
-    };
+    // let test_click = move |_| {
+    //     let msg2 = ClientMsg::Logout;
+    //     ws_test.sender().send(msg2);
+    //     // on_cleanup(|| {
+    //     //     debug!("CLEANING UP");
+    //     // });
+    //     // ws_test
+    //     //     .send_or_skip(msg, |res| {
+    //     //         trace!("test hello");
+    //     //     })
+    //     //     .unwrap();
+    // };
 
     view! {
-        <main  on:scroll=on_scroll _ref=scroll_el class="flex flex-col ">
+        <main  on:scroll=on_scroll _ref=scroll_el class="flex flex-col h-[100dvh] overflow-y-auto">
 
             <Navbar/>
             <section id="home" class=" px-6 py-6 2xl:px-[6rem] desktop:px-[16rem]  grid grid-rows-[auto_auto_1fr] grid-cols-[1fr]  min-h-[100svh] " >
                 <div class="h-[4rem] md:h-[6rem]"></div>
-                <button on:click=test_click>"CLICK ME"</button> a
+                // <button on:click=test_click>"CLICK ME"</button> a
                 <div class="flex flex-col gap-[2rem] md:gap-[4rem]  max-w-min ">
                     <div class="text-left flex flex-col justify-start">
                         <h2 class="text-[2rem] font-bold whitespace-nowrap ">"Discord Art Server"</h2>

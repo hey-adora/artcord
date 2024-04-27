@@ -6,7 +6,7 @@ use artcord_state::{
     message::{
         prod_client_msg::WsPath,
         prod_perm_key::ProdMsgPermKey,
-        prod_server_msg::{LiveWsStatsRes, ServerMsg, WsStatTemp},
+        prod_server_msg::{ServerMsg, WsStatTemp},
     },
     model::ws_statistics::WsStat,
 };
@@ -118,10 +118,10 @@ pub async fn on_msg(
             let count = stat.count.entry(path).or_insert(0_u64);
             *count += 1;
 
-            let update_msg = ServerMsg::LiveWsStats(LiveWsStatsRes::UpdateInc {
+            let update_msg = ServerMsg::WsLiveStatsUpdateInc {
                 con_key: connection_key,
                 path,
-            });
+            };
 
             for (con_key, (ws_key, tx)) in list {
                 let update_msg: WsPackage<ServerMsg> = (ws_key.clone(), update_msg.clone());
@@ -152,10 +152,10 @@ pub async fn on_msg(
             // tx.send(ConMsg::Send(msg)).await?;
             // list.insert(connection_key.clone(), (ws_key, tx));
 
-            let update_msg = ServerMsg::LiveWsStats(LiveWsStatsRes::UpdateAddedStat {
+            let update_msg = ServerMsg::WsLiveStatsUpdateAddedStat {
                 con_key: connection_key,
                 stat: current_con_stats,
-            });
+            };
             for (con_key, (ws_key, tx)) in list {
                 let update_msg: WsPackage<ServerMsg> = (ws_key.clone(), update_msg.clone());
                 let update_msg = ServerMsg::as_bytes(update_msg)?;
@@ -180,7 +180,7 @@ pub async fn on_msg(
             //     return Ok(false);
             // };
 
-            let msg = ServerMsg::LiveWsStats(LiveWsStatsRes::Started(stats.clone()));
+            let msg = ServerMsg::WsLiveStatsStarted(stats.clone());
             let msg: WsPackage<ServerMsg> = (ws_key.clone(), msg);
             trace!("admin stats: sending: {:?}", &msg);
             let msg = ServerMsg::as_bytes(msg)?;
@@ -212,9 +212,9 @@ pub async fn on_msg(
                 return Ok(false);
             };
 
-            let update_msg = ServerMsg::LiveWsStats(LiveWsStatsRes::UpdateRemoveStat {
+            let update_msg = ServerMsg::WsLiveStatsUpdateRemoveStat {
                 con_key: connection_key.clone(),
-            });
+            };
 
             db.ws_statistic_insert_one(stat.clone().into()).await?;
             stats.remove(&connection_key);

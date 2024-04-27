@@ -6,4 +6,6 @@ pub mod registration;
 pub mod statistics;
 pub mod user;
 pub mod user_gallery;
-pub mod ws_stats;
+pub mod ws_stats_paged;
+pub mod ws_stats_first_page;
+pub mod ws_stats_total_count;

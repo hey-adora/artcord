@@ -4,7 +4,7 @@ use artcord_leptos_web_sockets::{WsPackage, WsRouteKey};
 use artcord_mongodb::database::DB;
 use artcord_state::message::{
     prod_perm_key::ProdMsgPermKey,
-    prod_server_msg::{ServerMsg, UserGalleryRes},
+    prod_server_msg::{ServerMsg},
 };
 use thiserror::Error;
 
@@ -21,13 +21,11 @@ pub async fn ws_handle_user_gallery(
         .await?;
 
     let Some(result) = result else {
-        let res = UserGalleryRes::UserNotFound;
-        let res = ServerMsg::UserGallery(res);
+        let res = ServerMsg::GalleryUser(None);
         return Ok(Some(res));
     };
 
-    let res = UserGalleryRes::Imgs(result);
-    let res = ServerMsg::UserGallery(res);
+    let res = ServerMsg::GalleryUser(Some(result));
     Ok(Some(res))
 }
 

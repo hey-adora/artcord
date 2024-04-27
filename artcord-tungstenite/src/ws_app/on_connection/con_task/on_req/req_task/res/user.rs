@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use artcord_mongodb::database::DB;
-use artcord_state::message::prod_server_msg::{ServerMsg, UserRes};
+use artcord_state::message::prod_server_msg::{ServerMsg};
 
 use crate::ws_app::WsResError;
 
@@ -9,8 +9,8 @@ pub async fn ws_handle_user(db: Arc<DB>, user_id: String) -> Result<Option<Serve
     Ok(Some(
         db.user_find_one(&user_id)
             .await?
-            .map(|v| ServerMsg::User(UserRes::User(v)))
-            .unwrap_or(ServerMsg::User(UserRes::UserNotFound)),
+            .map(|v| ServerMsg::User(Some(v)))
+            .unwrap_or(ServerMsg::User(None)),
     ))
 }
 

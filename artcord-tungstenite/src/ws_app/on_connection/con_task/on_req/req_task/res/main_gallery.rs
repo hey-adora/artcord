@@ -4,7 +4,7 @@ use artcord_leptos_web_sockets::{WsPackage, WsRouteKey};
 use artcord_mongodb::database::DB;
 use artcord_state::message::{
     prod_perm_key::ProdMsgPermKey,
-    prod_server_msg::{MainGalleryRes, ServerMsg},
+    prod_server_msg::{ ServerMsg},
 };
 use thiserror::Error;
 
@@ -22,9 +22,7 @@ pub async fn ws_handle_main_gallery(
     //     data: ServerMsg::MainGallery(artcord_state::message::prod_server_msg::MainGalleryResponse::Imgs(result)),
     // };
     // Ok(server_package)
-    let res = MainGalleryRes::Imgs(result);
-    let res = ServerMsg::MainGallery(res);
-    Ok(Some(res))
+    Ok(Some(ServerMsg::GalleryMain(result)))
 }
 
 // #[derive(Error, Debug)]

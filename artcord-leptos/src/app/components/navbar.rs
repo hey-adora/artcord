@@ -6,18 +6,19 @@ use leptos::leptos_dom::log;
 use leptos::*;
 use leptos_router::use_location;
 use web_sys::MouseEvent;
+use tracing::trace;
 
 use crate::app::utils::{LoadingNotFound, PageUrl};
 
 pub fn shrink_nav(nav_tran: RwSignal<bool>, y: u32) {
     if y > 100 {
-        if nav_tran.with(|&s| s) {
-            //log!("FALSE: {}", y());
+        if nav_tran.with_untracked(|&s| s) {
+            //trace!("FALSE: {}", y);
             nav_tran.set(false);
         }
     } else {
-        if nav_tran.with(|&s| !s) {
-            //log!("TRUE: {}", y());
+        if nav_tran.with_untracked(|&s| !s) {
+            //trace!("TRUE: {}", y);
             nav_tran.set(true);
         }
     }

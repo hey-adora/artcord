@@ -95,6 +95,12 @@ impl DB {
         Ok(result)
     }
 
+    pub async fn ws_statistic_total_amount(
+        &self,
+    ) -> Result<u64, mongodb::error::Error> {
+        self.collection_ws_statistic.count_documents(doc! {}, None).await
+    }
+
     pub async fn ws_statistic_paged_latest(
         &self,
         page: u64,
