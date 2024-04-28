@@ -106,7 +106,7 @@ impl DB {
         page: u64,
         amount: u64,
     ) -> Result<Vec<WsStat>, mongodb::error::Error> {
-        let amount = amount.clamp(25, 10000);
+        let amount = amount.clamp(1, 10000);
         let mut pipeline = vec![doc! { "$sort": doc! { WsStatFieldName::CreatedAt.name(): -1 } }];
         if page > 0 {
             let skip = (page * amount) as i64;

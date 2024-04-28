@@ -96,6 +96,10 @@ impl PageUrl {
         format!("{}{}", PageUrl::AdminDash, PageUrl::AdminDashWsOld)
     }
 
+    pub fn url_dash_wsold_paged(page: u64) -> String {
+        format!("{}{}?p={}", PageUrl::AdminDash, PageUrl::AdminDashWsOld, page)
+    }
+
     pub fn update_current_page_url() {
         let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
         let re = move |value: &str, re: &str| -> bool {

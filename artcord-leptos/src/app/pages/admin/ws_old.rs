@@ -4,15 +4,20 @@ use artcord_state::message::prod_client_msg::WsPath;
 use artcord_state::message::prod_server_msg::ServerMsg;
 use artcord_state::model::ws_statistics::ReqCount;
 use leptos::*;
+use leptos_router::use_params_map;
+use leptos_router::use_query_map;
 use strum::VariantNames;
+use tracing::error;
 
 use crate::app::global_state::GlobalState;
+use crate::app::utils::PageUrl;
 
 use super::WebAdminStatCountType;
 use super::WsPathTableHeaderView;
 use strum::IntoEnumIterator;
+use tracing::trace;
 
-pub const PAGE_AMOUNT: u64 = 100;
+pub const PAGE_AMOUNT: u64 = 10;
 
 #[component]
 pub fn WsOld() -> impl IntoView {
@@ -22,8 +27,9 @@ pub fn WsOld() -> impl IntoView {
     let page = global_state.pages.admin;
     let old_ws_stats = page.old_connections;
     let pagination = page.old_connections_pagination;
-    let active_page = page.old_connections_active_page;
+    //let active_page = page.old_connections_active_page;
     let loading = page.old_connections_loading;
+    let query = use_query_map();
 
     ws_old_ws_stats
         .recv()
@@ -36,7 +42,6 @@ pub fn WsOld() -> impl IntoView {
                     total_count,
                     first_page,
                 } => {
-                    
                     page.set_old_stats(first_page.clone(), Some(*total_count));
                 }
                 _ => {}
@@ -44,21 +49,47 @@ pub fn WsOld() -> impl IntoView {
             WsRecvResult::TimeOut => {}
         });
 
+    // create_effect({
+    //     let ws_old_ws_stats = ws_old_ws_stats.clone();
+    //     move |_| {
+
+    //     }
+    // });
+
     create_effect({
         let ws_old_ws_stats = ws_old_ws_stats.clone();
         move |_| {
-            if old_ws_stats.with_untracked(move |stats| stats.len() > 0) {
+            let page = query.with(move |query| query.get("p").cloned());
+            let Some(page) = page else {
+                if old_ws_stats.with_untracked(move |stats| stats.len() > 0) {
+                    return;
+                }
+                ws_old_ws_stats
+                    .sender()
+                    .resend_on_reconnect()
+                    .send(ClientMsg::WsStatsFirstPage {
+                        amount: PAGE_AMOUNT,
+                    });
                 return;
-            }
+            };
+
+            let page = match u64::from_str_radix(&page, 10) {
+                Ok(page) => page,
+                Err(err) => {
+                    error!("error parsing page '{}': {}", page, err);
+                    return;
+                }
+            };
+
             ws_old_ws_stats
-            .sender()
-            .resend_on_reconnect()
-            .send(ClientMsg::WsStatsFirstPage {
-                amount: PAGE_AMOUNT,
-            });
+                .sender()
+                .resend_on_reconnect()
+                .send(ClientMsg::WsStatsPaged {
+                    page,
+                    amount: PAGE_AMOUNT,
+                });
         }
     });
-    
 
     let old_connections_count_view = move |count: Vec<ReqCount>| {
         // let count_iter = count.into_iter();
@@ -98,35 +129,97 @@ pub fn WsOld() -> impl IntoView {
         }
     };
 
-    let pagination_on_click = move |page: u64| {
-        ws_old_ws_stats
-            .sender()
-            .resend_on_reconnect()
-            .send(ClientMsg::WsStatsPaged {
-                page,
-                amount: PAGE_AMOUNT,
-            });
-    };
+    // let pagination_on_click = move |page: u64| {
+
+    // };
 
     let pagination_view = move || {
-        let pagination_on_click = pagination_on_click.clone();
+        //let pagination_on_click = pagination_on_click.clone();
+        let active_page = query
+            .with(move |query| query.get("p").cloned())
+            .map(|v| u64::from_str_radix(&v, 10).unwrap_or(0))
+            .unwrap_or(0);
         if let Some(count) = pagination.get() {
-            (0..count).map( |i| {
-                let pagination_on_click = pagination_on_click.clone();
-                view!{<button 
-                    on:click=move |_| {
-                        if loading.get_untracked() {
-                            return;
-                        }
-                        pagination_on_click(i);
-                        active_page.set(i);
-                        loading.set(true);
+            let PAEG_SIZE: u64 = 4;
+            let (first_page, last_page) = if count > PAEG_SIZE + 1 {
+                //let middle =  count / 3;
+
+                //let first = active_page;
+                let last = if active_page < 3 {
+                    PAEG_SIZE + 2
+                } else if active_page + PAEG_SIZE <= count - 1 {
+                    active_page + PAEG_SIZE
+                } else {
+                    count
+                };
+
+                let first = if last == count {
+                    count - 1 - PAEG_SIZE
+                } else if active_page > 1 {
+                    active_page - 1
+                } else {
+                    active_page
+                };
+
+                trace!("pagination: {} {}", first, last);
+
+                (first, last)
+            } else {
+                (0, count)
+            };
+
+            let btn = {
+                //let pagination_on_click = pagination_on_click.clone();
+                move |i: u64| {
+                    //let pagination_on_click = pagination_on_click.clone();
+                    //let active_page = active_page.clone();
+
+                    let loading = loading.clone();
+                    let count = count.clone();
+                    view! {  <a
+                        href=PageUrl::url_dash_wsold_paged(i)
+                        on:click=move |_| {
+                            if loading.get_untracked() {
+                                return;
+                            }
+                            //pagination_on_click(i);
+                            loading.set(true);
                     }
-                    class=move || format!(" px-2 font-black border-2 {}", if active_page.get() == i { "bg-mid-purple border-transparent" } else { "border-mid-purple" } )>{i + 1}</button>
+                    class=move || format!(" px-2 font-black border-2 {}", if ((i == 0 || i == count - 1) && active_page != i) {"border-low-purple"} else { if active_page == i { "bg-mid-purple border-transparent" } else { "border-mid-purple" } },  )>{i + 1}</a> }
                 }
-            }).collect_view()
+            };
+
+            let first_btn = {
+                let btn = btn.clone();
+                view! {
+                    <Show  when=move || (count > PAEG_SIZE + 2 && first_page > 0) >
+                        { btn(0) }
+                        // <Show when=move || (first_page > 1)>{ view! { <span class="px-1">"..."</span> } }</Show>
+                    </Show>
+                }
+            };
+
+            let last_btn = {
+                let btn = btn.clone();
+                view! {
+                    <Show  when=move || ( count > PAEG_SIZE + 2 && last_page < count )>
+                    // <Show when=move || (last_page < count - 1)>{ view! { <span class="px-1">"..."</span> } }</Show>
+                    { btn(count - 1) }
+                    </Show>
+                }
+            };
+
+            view! {
+                <div>
+                    { first_btn }
+                    {
+                        (first_page..last_page).map(btn).collect_view()
+                    }
+                    { last_btn }
+                </div>
+            }
         } else {
-            view! { <div>"Loading..."</div> }.into_view()
+            view! { <div>"Loading..."</div> }
         }
     };
 
@@ -142,7 +235,7 @@ pub fn WsOld() -> impl IntoView {
                             <th>"ip"</th>
                             <WsPathTableHeaderView/>
                         </tr>
-                        {move || old_connections_view()}
+                        { move || old_connections_view() }
                     </table>
                 </Show>
             </div>
