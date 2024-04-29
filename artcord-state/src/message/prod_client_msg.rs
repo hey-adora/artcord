@@ -45,14 +45,21 @@ pub enum ClientMsg {
         email: String,
         password: String,
     },
-    WsStatsTotalCount,
+    WsStatsTotalCount {
+        from: Option<i64>,
+    },
+    WsStatsWithPagination {
+        page: u64,
+        amount: u64,
+    },
     WsStatsPaged {
         page: u64,
-        amount: u64
+        amount: u64,
+        from: i64,
     },
-    WsStatsFirstPage {
-        amount: u64
-    },
+    // WsStatsFirstPage {
+    //     amount: u64
+    // },
     LiveWsStats(bool),
 }
 
@@ -160,7 +167,8 @@ pub enum WsPath {
     Logout,
     WsStatsPaged,
     WsStatsTotalCount,
-    WsStatsFirstPage,
+    //WsStatsFirstPage,
+    WsStatsWithPagination,
     LiveWsStats,
 }
 
@@ -193,7 +201,8 @@ impl WsPath {
             WsPath::Logout => (1, Duration::from_secs(30)),
             WsPath::WsStatsPaged => (1, Duration::from_secs(1)),
             WsPath::WsStatsTotalCount => (1, Duration::from_secs(1)),
-            WsPath::WsStatsFirstPage => (1, Duration::from_secs(1)),
+            //WsPath::WsStatsFirstPage => (1, Duration::from_secs(1)),
+            WsPath::WsStatsWithPagination => (1, Duration::from_secs(1)),
             WsPath::LiveWsStats => (1, Duration::from_secs(1)),
         }
     }
@@ -264,9 +273,10 @@ impl From<&ClientMsg> for WsPath {
                 password: _,
             } => WsPath::Register,
             ClientMsg::Logout => WsPath::Logout,
-            ClientMsg::WsStatsPaged { page, amount } => WsPath::WsStatsPaged,
-            ClientMsg::WsStatsTotalCount => WsPath::WsStatsTotalCount,
-            ClientMsg::WsStatsFirstPage { amount } => WsPath::WsStatsFirstPage,
+            ClientMsg::WsStatsPaged { page, amount, from } => WsPath::WsStatsPaged,
+            ClientMsg::WsStatsTotalCount { from } => WsPath::WsStatsTotalCount,
+            //ClientMsg::WsStatsFirstPage { amount } => WsPath::WsStatsFirstPage,
+            ClientMsg::WsStatsWithPagination { amount, page } => WsPath::WsStatsWithPagination,
             ClientMsg::LiveWsStats(_) => WsPath::LiveWsStats,
         }
     }

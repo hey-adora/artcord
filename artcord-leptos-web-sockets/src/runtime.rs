@@ -470,11 +470,11 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
             return;
         };
 
-        debug!("ONE ONE ONE ");
+        //debug!("ONE ONE ONE ");
         trace!("ws({})_global: recved msg: {:#?}", url, &server_msg);
 
         Self::execute(url, channels, server_msg);
-        debug!("TWO TWO TWO ");
+        //debug!("TWO TWO TWO ");
     }
 
     fn flush_pending_client_msgs(
@@ -563,7 +563,7 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
             return;
         };
 
-        debug!("THREE THREE");
+        //debug!("THREE THREE");
 
         for (callback_key, callback) in channel.callbacks {
             trace!(
@@ -572,12 +572,12 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
                 channel_key
             );
 
-            debug!("FOUR FOUR");
+            //debug!("FOUR FOUR");
             let mut keep_open = true;
             callback(&server_msg, &mut keep_open);
-            debug!("FIVE FIVE");
+            //debug!("FIVE FIVE");
             Self::update_callback_after_recv(channels, &url, channel_key, callback_key, keep_open);
-            debug!("SIX SIX");
+            //debug!("SIX SIX");
         }
         Self::update_channel_after_recv(channels, &url, channel_key);
     }

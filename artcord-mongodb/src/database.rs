@@ -85,9 +85,17 @@ impl DB {
 
 #[derive(Error, Debug)]
 pub enum DBError {
+    // bson::document::ValueAccessError
+
     #[error("Mongodb: {0}.")]
     Mongo(#[from] mongodb::error::Error),
 
-    #[error("Not found: {0}.")]
-    NotFound(String),
+    #[error("Bson: {0}.")]
+    Bson(#[from] bson::document::ValueAccessError),
+
+    #[error("Bson DE: {0}.")]
+    BsonDE(#[from] bson::de::Error),
+
+    // #[error("Not found: {0}.")]
+    // NotFound(String),
 }

@@ -12,6 +12,8 @@ use tracing::{debug, error, trace};
 use wasm_bindgen::JsValue;
 use web_sys::Location;
 
+use crate::app::pages::admin::ws_old::PAGE_AMOUNT;
+
 use self::img_resize::GalleryImg;
 
 use super::global_state::GlobalState;
@@ -96,8 +98,12 @@ impl PageUrl {
         format!("{}{}", PageUrl::AdminDash, PageUrl::AdminDashWsOld)
     }
 
-    pub fn url_dash_wsold_paged(page: u64) -> String {
-        format!("{}{}?p={}", PageUrl::AdminDash, PageUrl::AdminDashWsOld, page)
+    pub fn url_dash_wsold_paged(page: u64, from: i64) -> String {
+        format!("{}{}?p={}&a={}&f={}", PageUrl::AdminDash, PageUrl::AdminDashWsOld, page, PAGE_AMOUNT, from)
+    }
+
+    pub fn url_dash_wsold_refresh(page: u64) -> String {
+        format!("{}{}?p={}&a={}", PageUrl::AdminDash, PageUrl::AdminDashWsOld, page, PAGE_AMOUNT)
     }
 
     pub fn update_current_page_url() {

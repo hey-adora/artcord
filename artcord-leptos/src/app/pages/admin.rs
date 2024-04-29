@@ -81,6 +81,16 @@ impl From<WsStatTemp> for WebWsStat {
 //     fn from(value: &HashMap<WsPath, AdminStat>) -> Self {}
 // }
 
+pub enum AdminWsOldPageState {
+    New,
+    Fetch {
+        page: u64,
+        amount: u64,
+        from: u64,
+    },
+    Refresh,
+}
+
 #[derive(Copy, Clone, Debug)]
 pub struct AdminPageState {
     pub live_connections: RwSignal<HashMap<String, WebWsStat>>,
@@ -88,6 +98,7 @@ pub struct AdminPageState {
     pub old_connections_pagination: RwSignal<Option<u64>>,
     pub old_connections_active_page: RwSignal<u64>,
     pub old_connections_loading: RwSignal<bool>,
+    pub old_connections_from: RwSignal<Option<i64>>,
 }
 
 impl AdminPageState {
@@ -97,18 +108,37 @@ impl AdminPageState {
             old_connections: RwSignal::new(Vec::new()),
             old_connections_pagination: RwSignal::new(None),
             old_connections_active_page: RwSignal::new(0),
-            old_connections_loading: RwSignal::new(true),
+            old_connections_loading: RwSignal::new(false),
+            old_connections_from: RwSignal::new(None),
         }
     }
 
-    pub fn set_old_stats(&self, stats: Vec<WsStat>, pagination: Option<u64>) {
+    pub fn set_old_stats_pagination(&self, pagination: u64) {
+        self.old_connections_pagination.set(Some(pagination.div_ceil(PAGE_AMOUNT)));
+    }
+
+    pub fn set_old_stats_paged(&self, stats: Vec<WsStat>) {
+        self.old_connections.set(stats);
+        self.old_connections_loading.set(false);
+    }
+
+    pub fn set_old_stats_with_pagination(&self, total_count: u64, from: Option<i64>, stats: Vec<WsStat>) {
         // let mut web_stats: HashMap<String, WsStat> = HashMap::with_capacity(stats.len());
         // for (path, stat) in stats {
         //     web_stats.insert(path, stat.into());
         // }
-        if let Some(pagination) = pagination {
-            self.old_connections_pagination.set(Some(pagination.div_ceil(PAGE_AMOUNT)));
-        }
+
+    //     if let Some(pagination) = pagination {
+    //         self.old_connections_pagination.set(Some(pagination.div_ceil(PAGE_AMOUNT)));
+    //     }
+    //   //  stats.fir
+    //     // self.old_connections_from.set(Some(()))
+    //     if self.old_connections_from.with_untracked(|v|v.is_none()) {
+    //         let from = stats.first().map(|v|v.created_at);
+    //         ;
+    //     }
+        self.old_connections_pagination.set(Some(total_count.div_ceil(PAGE_AMOUNT)));
+        //self.old_connections_from.set(from);
         self.old_connections.set(stats);
         self.old_connections_loading.set(false);
     }

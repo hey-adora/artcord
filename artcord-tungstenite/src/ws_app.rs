@@ -7,6 +7,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::time::Duration;
 
+use artcord_mongodb::database::DBError;
 use artcord_mongodb::database::DB;
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_client_msg::WsPath;
@@ -466,6 +467,9 @@ pub enum WsResError {
     // tokio::sync::mpsc::error::SendError<tokio_tungstenite::tungstenite::Message>>>
     #[error("Mongodb error: {0}")]
     MongoDB(#[from] mongodb::error::Error),
+
+    #[error("DB Error error: {0}")]
+    DBError(#[from] DBError),
 
     #[error("Bcrypt error: {0}")]
     Bcrypt(#[from] bcrypt::BcryptError),

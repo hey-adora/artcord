@@ -9,13 +9,12 @@ use tracing::{debug, trace};
 
 use crate::ws_app::{ws_statistic::AdminConStatMsg, ConMsg, WsResError};
 
-pub async fn ws_stats_paged(
+pub async fn ws_stats_with_pagination(
     db: Arc<DB>,
     page: u64,
     amount: u64,
-    from: i64,
 ) -> Result<Option<ServerMsg>, WsResError> {
-    let imgs = db.ws_statistic_paged_latest(page, amount, from).await?;
+    let (total_count, latest, stats) = db.ws_statistic_with_pagination_latest(page, amount).await?;
 
-    Ok(Some(ServerMsg::WsStatsPage(imgs)))
+    Ok(Some(ServerMsg::WsStatsWithPagination { total_count, latest, stats } ))
 }

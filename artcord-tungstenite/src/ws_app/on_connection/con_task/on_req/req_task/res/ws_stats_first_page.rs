@@ -9,11 +9,12 @@ use tracing::{debug, trace};
 
 use crate::ws_app::{ws_statistic::AdminConStatMsg, ConMsg, WsResError};
 
-pub async fn ws_stats_total_count(
-    db: Arc<DB>,
-) -> Result<Option<ServerMsg>, WsResError> {
-    let amount = db.ws_statistic_total_amount().await?;
+// pub async fn ws_stats_first_page(
+//     db: Arc<DB>,
+//     amount: u64,
+// ) -> Result<Option<ServerMsg>, WsResError> {
+//     let total_amount = db.ws_statistic_total_amount(None).await?;
+//     let imgs = db.ws_statistic_paged_latest(0, amount, None).await?;
 
-    Ok(Some(ServerMsg::WsStatsTotalCount(amount) ))
-    // Ok(Some(UserTaskState::Started))
-}
+//     Ok(Some(ServerMsg::WsStatsFirstPage { total_count: total_amount, first_page: imgs }))
+// }

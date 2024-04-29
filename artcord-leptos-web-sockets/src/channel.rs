@@ -317,6 +317,11 @@ impl<
                             .unwrap_or(0)
                     });
                     if waiting_for_response > 0 {
+                        trace!(
+                            "ws({})_send: skipped '{}'",
+                            self.ws_url.get_value().unwrap_or("error".to_string()),
+                            &channel_key,
+                        );
                         return Ok(WsResourcSendResult::Skipped);
                     }
                 }
