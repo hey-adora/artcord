@@ -4,6 +4,7 @@ use artcord_state::message::prod_client_msg::WsPath;
 use artcord_state::message::prod_server_msg::ServerMsg;
 use artcord_state::model::ws_statistics::ReqCount;
 use leptos::*;
+use leptos_router::use_navigate;
 use leptos_router::use_params_map;
 use leptos_router::use_query_map;
 use strum::VariantNames;
@@ -15,6 +16,7 @@ use crate::app::utils::PageUrl;
 use super::WebAdminStatCountType;
 use super::WsPathTableHeaderView;
 use strum::IntoEnumIterator;
+use tracing::debug;
 use tracing::trace;
 
 pub const PAGE_AMOUNT: u64 = 100;
@@ -28,9 +30,13 @@ pub fn WsOld() -> impl IntoView {
     let old_ws_stats = page.old_connections;
     let pagination = page.old_connections_pagination;
     let active_page = page.old_connections_active_page;
+    //let active_page_mem = create_memo(move |_| active_page.get());
     let loading = page.old_connections_loading;
+    let loaded = page.old_connections_loaded;
     let from = page.old_connections_from;
+    //let from_mem = create_memo(move |_| from.get());
     let query = use_query_map();
+    let use_navigate = use_navigate();
 
     ws_old_ws_stats
         .recv()
@@ -87,101 +93,169 @@ pub fn WsOld() -> impl IntoView {
 
     // };
 
+    create_effect(move |_| {
+        let from_q = query
+            .with(move |query| query.get("f").map(|v| i64::from_str_radix(v, 10).ok()))
+            .flatten();
 
-
-
-    create_effect({
-        let ws_old_ws_stats = ws_old_ws_stats.clone();
-        move |_| {
-            trace!("dash: ws_old: fetching pages...");
-            let page_q = query.with(move |query| query.get("p").cloned());
-            let from_q = query
-                .with(move |query| query.get("f").map(|v| i64::from_str_radix(v, 10).ok()))
-                .flatten();
-            let Some(page_q) = page_q else {
-                trace!("dash: ws_old: fetching first page");
-                let already_fetched = old_ws_stats.with_untracked(move |stats| stats.len() > 0);
-                if already_fetched {
-                    trace!("dash: ws_old: first page already fetched");
-                    return;
-                }
-
-                ws_old_ws_stats
-                    .sender()
-                    .send(ClientMsg::WsStatsWithPagination {
-                        page: 0,
-                        amount: PAGE_AMOUNT,
-                    });
-                return;
-            };
-
-            let page = match u64::from_str_radix(&page_q, 10) {
-                Ok(page) => page,
-                Err(err) => {
-                    error!("error parsing page '{}': {}", page_q, err);
-                    return;
-                }
-            };
-
-            let Some(from_parsed) = from.get_untracked() else {
-                if let Some(from_q) = from_q {
-                    trace!(
-                        "dash: ws_old: fetching page with pagination using url 'f' {} {}",
-                        from_q,
-                        page
-                    );
-                    from.set(Some(from_q));
-                    ws_old_ws_stats
-                        .sender()
-                        .send(ClientMsg::WsStatsTotalCount { from: Some(from_q) });
-                    ws_old_ws_stats.sender().send(ClientMsg::WsStatsPaged {
-                        page,
-                        amount: PAGE_AMOUNT,
-                        from: from_q,
-                    });
-                } else {
-                    trace!("dash: ws_old: fetching page with pagination {}", page);
-                    ws_old_ws_stats
-                        .sender()
-                        .send(ClientMsg::WsStatsWithPagination {
-                            page: page,
-                            amount: PAGE_AMOUNT,
-                        });
-                }
-                return;
-            };
-
-            let from = from_q
-                .map(|new_from| {
-                    if new_from == from_parsed {
-                        from_parsed
-                    } else {
-                        trace!(
-                            "dash: ws_old: from and 'f' did not match, updating {} == {}",
-                            from_parsed,
-                            new_from
-                        );
-                        from.set(Some(new_from));
-                        new_from
-                    }
-                })
-                .unwrap_or(from_parsed);
-
-            trace!("dash: ws_old: fetching page {}", page);
-
-            if pagination.get_untracked().is_none() {
-                ws_old_ws_stats
-                        .sender()
-                        .send(ClientMsg::WsStatsTotalCount { from: Some(from) });
-            }
-
-            ws_old_ws_stats.sender().send(ClientMsg::WsStatsPaged {
-                page,
-                amount: PAGE_AMOUNT,
-                from,
-            });
+        if let Some(from_q) = from_q {
+            from.set(Some(from_q));
         }
     });
+
+    create_effect(move |_| {
+        let page = query
+            .with(move |query| {
+                query.get("p").map(|v| {
+                    u64::from_str_radix(v, 10)
+                        .inspect_err(|err| error!("error parsing page {}", err))
+                        .ok()
+                })
+            })
+            .flatten();
+
+        if let Some(page) = page {
+            active_page.set(page);
+        }
+    });
+
+    create_effect(move |_| {
+        let page = active_page.get();
+        let from = from.get();
+        
+        let Some(from) = from else {
+            trace!("dash: wsold: fetching with pagination...");
+            loading.set(true);
+            let _ = ws_old_ws_stats
+                .sender()
+                .send(ClientMsg::WsStatsWithPagination {
+                    page,
+                    amount: PAGE_AMOUNT,
+                });
+            return;
+        };
+
+        if pagination.get_untracked().is_none() {
+            trace!("dash: wsold: fetching pages seperatly");
+            let _ = ws_old_ws_stats
+                .sender()
+                .send(ClientMsg::WsStatsTotalCount { from: Some(from) });
+        }
+
+        if loaded.with_untracked(move |loaded_page| {
+            loaded_page
+                .map(|loaded_page| loaded_page == page)
+                .unwrap_or(false)
+        }) {
+            trace!("dash: wsold: its already fetched for page: {page}");
+            return;
+        } else {
+            trace!("dash: wsold: fetching without pagination... {:?} {}", loaded.get_untracked(), page);
+        }
+        
+        loading.set(true);
+
+        let _ = ws_old_ws_stats.sender().send(ClientMsg::WsStatsPaged {
+            page,
+            amount: PAGE_AMOUNT,
+            from,
+        });
+
+        active_page.set(page);
+    });
+
+    // create_effect({
+    //     let ws_old_ws_stats = ws_old_ws_stats.clone();
+    //     move |_| {
+    //         trace!("dash: ws_old: fetching pages...");
+    //         let page_q = query.with(move |query| query.get("p").cloned());
+    //         let from_q = query
+    //             .with(move |query| query.get("f").map(|v| i64::from_str_radix(v, 10).ok()))
+    //             .flatten();
+    //         let Some(page_q) = page_q else {
+    //             trace!("dash: ws_old: fetching first page");
+    //             let already_fetched = old_ws_stats.with_untracked(move |stats| stats.len() > 0);
+    //             if already_fetched {
+    //                 trace!("dash: ws_old: first page already fetched");
+    //                 return;
+    //             }
+
+    //             ws_old_ws_stats
+    //                 .sender()
+    //                 .send(ClientMsg::WsStatsWithPagination {
+    //                     page: 0,
+    //                     amount: PAGE_AMOUNT,
+    //                 });
+    //             return;
+    //         };
+
+    //         let page = match u64::from_str_radix(&page_q, 10) {
+    //             Ok(page) => page,
+    //             Err(err) => {
+    //                 error!("error parsing page '{}': {}", page_q, err);
+    //                 return;
+    //             }
+    //         };
+
+    //         let Some(from_parsed) = from.get_untracked() else {
+    //             if let Some(from_q) = from_q {
+    //                 trace!(
+    //                     "dash: ws_old: fetching page with pagination using url 'f' {} {}",
+    //                     from_q,
+    //                     page
+    //                 );
+    //                 from.set(Some(from_q));
+    //                 ws_old_ws_stats
+    //                     .sender()
+    //                     .send(ClientMsg::WsStatsTotalCount { from: Some(from_q) });
+    //                 ws_old_ws_stats.sender().send(ClientMsg::WsStatsPaged {
+    //                     page,
+    //                     amount: PAGE_AMOUNT,
+    //                     from: from_q,
+    //                 });
+    //             } else {
+    //                 trace!("dash: ws_old: fetching page with pagination {}", page);
+    //                 ws_old_ws_stats
+    //                     .sender()
+    //                     .send(ClientMsg::WsStatsWithPagination {
+    //                         page: page,
+    //                         amount: PAGE_AMOUNT,
+    //                     });
+    //             }
+    //             return;
+    //         };
+
+    //         let from = from_q
+    //             .map(|new_from| {
+    //                 if new_from == from_parsed {
+    //                     from_parsed
+    //                 } else {
+    //                     trace!(
+    //                         "dash: ws_old: from and 'f' did not match, updating {} == {}",
+    //                         from_parsed,
+    //                         new_from
+    //                     );
+    //                     from.set(Some(new_from));
+    //                     new_from
+    //                 }
+    //             })
+    //             .unwrap_or(from_parsed);
+
+    //         trace!("dash: ws_old: fetching page {}", page);
+
+    //         if pagination.get_untracked().is_none() {
+    //             ws_old_ws_stats
+    //                 .sender()
+    //                 .send(ClientMsg::WsStatsTotalCount { from: Some(from) });
+    //         }
+
+    //         ws_old_ws_stats.sender().send(ClientMsg::WsStatsPaged {
+    //             page,
+    //             amount: PAGE_AMOUNT,
+    //             from,
+    //         });
+    //     }
+    // });
 
     let old_connections_count_view = move |count: Vec<ReqCount>| {
         // let count_iter = count.into_iter();
@@ -251,7 +325,6 @@ pub fn WsOld() -> impl IntoView {
         let active_page = active_page.get();
         trace!("dash: ws_old: building pagination: active page {active_page}");
         if let (Some(count), Some(from)) = (pagination.get(), from.get()) {
-            
             trace!("dash: ws_old: pagination received total count");
             let PAEG_SIZE: u64 = 4;
             let (first_page, last_page) = if count > PAEG_SIZE + 1 {
@@ -337,8 +410,8 @@ pub fn WsOld() -> impl IntoView {
         }
     };
 
-    let refresh_href = move || {
-        query
+    let refresh_click = move |_| {
+        let link = query
             .with(move |query| query.get("p").cloned())
             .map(|v| {
                 u64::from_str_radix(&v, 10)
@@ -346,14 +419,17 @@ pub fn WsOld() -> impl IntoView {
                     .ok()
             })
             .flatten()
-            .unwrap_or(PageUrl::url_dash_wsold())
+            .unwrap_or(PageUrl::url_dash_wsold());
+
+        use_navigate(&link, Default::default());
+        from.set(None);
     };
 
     view! {
         <div class="grid grid-rows-[auto_1fr_auto] overflow-y-hidden gap-2">
             <div class="flex justify-between">
                 <div>"WebSocket Connection History"</div>
-                <a  class="border-2 px-2 border-low-purple">"Refresh"</a>
+                <button on:click=refresh_click class="border-2 px-2 border-low-purple">"Refresh"</button>
             </div>
             <div class="overflow-y-scroll overflow-x-auto">
                 <Show when=move || !loading.get() fallback=move || view!{

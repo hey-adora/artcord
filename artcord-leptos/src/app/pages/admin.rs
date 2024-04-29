@@ -98,6 +98,7 @@ pub struct AdminPageState {
     pub old_connections_pagination: RwSignal<Option<u64>>,
     pub old_connections_active_page: RwSignal<u64>,
     pub old_connections_loading: RwSignal<bool>,
+    pub old_connections_loaded: RwSignal<Option<u64>>,
     pub old_connections_from: RwSignal<Option<i64>>,
 }
 
@@ -110,6 +111,7 @@ impl AdminPageState {
             old_connections_active_page: RwSignal::new(0),
             old_connections_loading: RwSignal::new(false),
             old_connections_from: RwSignal::new(None),
+            old_connections_loaded: RwSignal::new(None),
         }
     }
 
@@ -120,6 +122,7 @@ impl AdminPageState {
     pub fn set_old_stats_paged(&self, stats: Vec<WsStat>) {
         self.old_connections.set(stats);
         self.old_connections_loading.set(false);
+        self.old_connections_loaded.set(Some(self.old_connections_active_page.get_untracked()));
     }
 
     pub fn set_old_stats_with_pagination(&self, total_count: u64, from: Option<i64>, stats: Vec<WsStat>) {
@@ -128,19 +131,19 @@ impl AdminPageState {
         //     web_stats.insert(path, stat.into());
         // }
 
-    //     if let Some(pagination) = pagination {
-    //         self.old_connections_pagination.set(Some(pagination.div_ceil(PAGE_AMOUNT)));
-    //     }
-    //   //  stats.fir
-    //     // self.old_connections_from.set(Some(()))
-    //     if self.old_connections_from.with_untracked(|v|v.is_none()) {
-    //         let from = stats.first().map(|v|v.created_at);
-    //         ;
-    //     }
+        // if let Some(pagination) = pagination {
+        //     self.old_connections_pagination.set(Some(pagination.div_ceil(PAGE_AMOUNT)));
+        // }
+      //  stats.fir
+        // self.old_connections_from.set(Some(()))
+        // if self.old_connections_from.with_untracked(|v|v.is_none()) {
+        //     let from = stats.first().map(|v|v.created_at);
+        // }
         self.old_connections_pagination.set(Some(total_count.div_ceil(PAGE_AMOUNT)));
-        //self.old_connections_from.set(from);
+        self.old_connections_from.set(from);
         self.old_connections.set(stats);
         self.old_connections_loading.set(false);
+        self.old_connections_loaded.set(Some(self.old_connections_active_page.get_untracked()));
     }
 
     pub fn set_live_stats(&self, stats: HashMap<String, WsStatTemp>) {
