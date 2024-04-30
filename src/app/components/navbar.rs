@@ -106,7 +106,7 @@ pub fn Navbar() -> impl IntoView {
                         view! {
                             <div class=move || format!("{}", if global_state.nav_open.get() == true { " hidden " } else { " " }) >
                                 // { move || global_state.nav_open.get() }
-                                <a target="_blank" href="https://discord.gg/habmw7Ehga" class="hidden h-12 sm:flex gap-2 items-center text-[1rem] font-black bg-gradient-to-br from-first-one to-second-one hover:to-dark-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] transition-colors duration-300 " >
+                                <a target="_blank" href="https://discord.gg/artfriends" class="hidden h-12 sm:flex gap-2 items-center text-[1rem] font-black bg-gradient-to-br from-first-one to-second-one hover:to-dark-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem] transition-colors duration-300 " >
                                     <img class="h-8" src="/assets/discord.svg"/>
                                     "Join"
                                 </a>
