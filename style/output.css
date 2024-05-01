@@ -669,6 +669,10 @@ video {
   display: none;
 }
 
+.aspect-video {
+  aspect-ratio: 16 / 9;
+}
+
 .h-12 {
   height: 3rem;
 }
@@ -775,6 +779,10 @@ video {
 
 .max-w-\[20rem\] {
   max-width: 20rem;
+}
+
+.max-w-full {
+  max-width: 100%;
 }
 
 .max-w-min {

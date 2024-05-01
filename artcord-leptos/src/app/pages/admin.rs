@@ -27,6 +27,7 @@ use tracing::warn;
 use crate::app::components::navbar::Navbar;
 
 use crate::app::global_state::GlobalState;
+use crate::app::hooks::use_ws_live_stats::LiveWsStats;
 use crate::app::utils::PageUrl;
 
 use self::ws_old::PAGE_AMOUNT;
@@ -93,26 +94,33 @@ pub enum AdminWsOldPageState {
 
 #[derive(Copy, Clone, Debug)]
 pub struct AdminPageState {
-    pub live_connections: RwSignal<HashMap<String, WebWsStat>>,
+    pub live_connections: LiveWsStats,
     pub old_connections: RwSignal<Vec<WsStat>>,
     pub old_connections_pagination: RwSignal<Option<u64>>,
     pub old_connections_active_page: RwSignal<u64>,
     pub old_connections_loading: RwSignal<bool>,
     pub old_connections_loaded: RwSignal<Option<u64>>,
     pub old_connections_from: RwSignal<Option<i64>>,
+    pub overview_old_connections: RwSignal<Vec<WsStat>>,
+
 }
 
 impl AdminPageState {
     pub fn new() -> Self {
         Self {
-            live_connections: RwSignal::new(HashMap::new()),
+            live_connections: LiveWsStats::new(),
             old_connections: RwSignal::new(Vec::new()),
             old_connections_pagination: RwSignal::new(None),
             old_connections_active_page: RwSignal::new(0),
             old_connections_loading: RwSignal::new(false),
             old_connections_from: RwSignal::new(None),
             old_connections_loaded: RwSignal::new(None),
+            overview_old_connections: RwSignal::new(Vec::new()),
         }
+    }
+
+    pub fn set_overview_old_stats(&self, stats: Vec<WsStat>) {
+        self.overview_old_connections.set(stats);
     }
 
     pub fn set_old_stats_pagination(&self, pagination: u64) {
@@ -146,48 +154,7 @@ impl AdminPageState {
         self.old_connections_loaded.set(Some(self.old_connections_active_page.get_untracked()));
     }
 
-    pub fn set_live_stats(&self, stats: HashMap<String, WsStatTemp>) {
-        let mut web_stats: HashMap<String, WebWsStat> = HashMap::with_capacity(stats.len());
-        for (path, stat) in stats {
-            web_stats.insert(path, stat.into());
-        }
-        self.live_connections.set(web_stats);
-    }
-
-    pub fn add_live_stat(&self, con_key: String, stat: WebWsStat) {
-        self.live_connections.update(move |stats| {
-            stats.insert(con_key.clone(), stat.clone().into());
-        });
-    }
-
-    pub fn inc_live_stat(&self, con_key: &str, path: &WsPath) {
-        self.live_connections.with_untracked(|stats| {
-            let stat = stats.get(con_key);
-            let Some(stat) = stat else {
-                warn!("admin: con stat not found: {}", con_key);
-                return;
-            };
-            let count = stat.count.get(path);
-            let Some(count) = count else {
-                warn!("admin: con count stat not found: {} {:?}", con_key, path);
-                return;
-            };
-            count.update(|count| {
-                *count += 1;
-            });
-        });
-    }
-
-    pub fn remove_live_stat(&self, con_key: &str) {
-        self.live_connections.update(|stats| {
-            let stat = stats.remove(con_key);
-            if stat.is_some() {
-                warn!("admin: live stat removed: {}", con_key);
-            } else {
-                warn!("admin: stat for removal not found: {}", con_key);
-            }
-        });
-    }
+   
 }
 
 #[component]

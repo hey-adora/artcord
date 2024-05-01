@@ -32,6 +32,7 @@ use tracing::{error, trace};
 pub mod components;
 pub mod global_state;
 pub mod pages;
+pub mod hooks;
 pub mod utils;
 
 #[component]
