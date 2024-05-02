@@ -57,6 +57,10 @@ pub enum ClientMsg {
         amount: u64,
         from: i64,
     },
+    WsStatsRange {
+        from: i64,
+        to: i64,
+    },
     // WsStatsFirstPage {
     //     amount: u64
     // },
@@ -166,6 +170,7 @@ pub enum WsPath {
     Register,
     Logout,
     WsStatsPaged,
+    WsStatsRanged,
     WsStatsTotalCount,
     //WsStatsFirstPage,
     WsStatsWithPagination,
@@ -204,6 +209,7 @@ impl WsPath {
             //WsPath::WsStatsFirstPage => (1, Duration::from_secs(1)),
             WsPath::WsStatsWithPagination => (1, Duration::from_secs(1)),
             WsPath::LiveWsStats => (1, Duration::from_secs(1)),
+            WsPath::WsStatsRanged => (1, Duration::from_secs(1)),
         }
     }
     // pub fn get_throttle(&self) -> (u64, Duration) {
@@ -278,6 +284,7 @@ impl From<&ClientMsg> for WsPath {
             //ClientMsg::WsStatsFirstPage { amount } => WsPath::WsStatsFirstPage,
             ClientMsg::WsStatsWithPagination { amount, page } => WsPath::WsStatsWithPagination,
             ClientMsg::LiveWsStats(_) => WsPath::LiveWsStats,
+            ClientMsg::WsStatsRange { from, to } => WsPath::WsStatsRanged,
         }
     }
 }

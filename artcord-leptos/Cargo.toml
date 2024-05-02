@@ -34,6 +34,7 @@ tracing = { version = "0.1.40", features = ["release_max_level_warn"] }
 async-std = "1.12.0"
 strum = { version = "0.26.2", features = ["derive"] }
 regex = "1.10.4"
+rand = "0.8.5"
 
 [features]
 default = []

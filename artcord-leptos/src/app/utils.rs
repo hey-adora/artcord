@@ -22,6 +22,8 @@ pub mod img_resize;
 pub mod img_resized;
 pub mod signal_switch;
 
+pub const DAY_IN_MS: i64 = 24 * 60 * 60 * 1000;
+
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum LoadingNotFound {
     NotLoaded,

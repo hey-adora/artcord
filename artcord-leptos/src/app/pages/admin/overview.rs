@@ -19,6 +19,7 @@ use leptos::*;
 use leptos_use::use_event_listener;
 use leptos_use::use_mouse;
 use leptos_use::use_resize_observer;
+use rand::Rng;
 use tracing::debug;
 use tracing::error;
 use tracing::trace;
@@ -62,15 +63,15 @@ pub fn Overview() -> impl IntoView {
                     let day_milis = 24 * 60 * 60 * 1000;
                     let time_duration = day_milis;
 
-                    let Some(first_day) = stats.first().cloned() else {
+                    let Some(last_day) = stats.first().cloned() else {
                         return;
                     };
-                    let Some(last_day) = stats.last().cloned() else {
+                    let Some(first_day) = stats.last().cloned() else {
                         return;
                     };
 
 
-                    let mut prev_start_of_day: i64 = last_day.created_at.checked_sub(last_day.created_at % time_duration).unwrap_or(0);
+                    
                     
                     let mut data_item: f64 = 0_f64;
 
@@ -78,41 +79,70 @@ pub fn Overview() -> impl IntoView {
                     let Some(date) = date else {
                         return;
                     };
-                    let weekday = date.weekday();
-                    let from_monday = weekday.num_days_from_monday();
-                    let first_day_of_the_week = (first_day.created_at - (first_day.created_at % day_milis)) - (from_monday as i64 * day_milis);
-                    let Some(first_day_of_the_week_date) = DateTime::from_timestamp_millis(first_day_of_the_week) else {
-                        return;
-                    };
+                    // let weekday = date.weekday();
+                    // let from_monday = weekday.num_days_from_monday();
+                    // let first_day_of_the_week = (first_day.created_at - (first_day.created_at % day_milis)) - (from_monday as i64 * day_milis);
+                    // let Some(first_day_of_the_week_date) = DateTime::from_timestamp_millis(first_day_of_the_week) else {
+                    //     return;
+                    // };
 
-                    let date = DateTime::from_timestamp_millis(last_day.created_at);
-                    let Some(date) = date else {
-                        return;
-                    };
-                    let weekday = date.weekday();
-                    let to_sunday = weekday.num_days_from_sunday();
-                    let last_day_of_the_week = (last_day.created_at - (last_day.created_at % day_milis))   - (to_sunday as i64 * day_milis);
-                    let Some(last_day_of_the_week_date) = DateTime::from_timestamp_millis(last_day_of_the_week) else {
-                        return;
-                    };
+                    // let date = DateTime::from_timestamp_millis(last_day.created_at);
+                    // let Some(date) = date else {
+                    //     return;
+                    // };
+                    // let weekday = date.weekday();
+                    // let to_sunday = weekday.num_days_from_sunday();
+                    // let last_day_of_the_week = (last_day.created_at - (last_day.created_at % day_milis))   - (to_sunday as i64 * day_milis);
+                    // let Some(last_day_of_the_week_date) = DateTime::from_timestamp_millis(last_day_of_the_week) else {
+                    //     return;
+                    // };
 
-                    let diff = last_day_of_the_week - first_day_of_the_week;
-                    let steps = diff / day_milis * 7;
-
-
-                    trace!("graph: time: {} {} {} {} {} {}", from_monday, to_sunday, first_day_of_the_week_date, last_day_of_the_week_date, diff, steps);
+                    // let diff = last_day_of_the_week - first_day_of_the_week;
+                    // let steps = diff / day_milis;
 
 
+                    // trace!("graph: time: {} {} {} {} {} {} {} ", from_monday, to_sunday, first_day_of_the_week_date, last_day_of_the_week_date, diff, steps, day_milis);
+
+                    // let current_step = 0;
+
+                    // for i in (first_day_of_the_week..last_day_of_the_week).step_by(day_milis) {
+                        
+                    // }
+
+                    let mut prev_start_of_day: i64 = first_day.created_at.checked_sub(first_day.created_at % time_duration).unwrap_or(0);
                     for stat in stats.iter().rev() {
                         let Some(created_at_start_of_the_day) = stat.created_at.checked_sub(stat.created_at % time_duration) else {
                             error!("graph: invalid date: {:#?}", stats);
                             continue;
                         };
+
+                        // if created_at_start_of_the_day > last_day_of_the_week || created_at_start_of_the_day < first_day_of_the_week {
+                        //     continue;
+                        // } 
+
+                        //let next_day_estimation = prev_start_of_day + day_milis;
+                   
+
                         if created_at_start_of_the_day > prev_start_of_day {
+                          
+
                             new_data.push(prev_start_of_day as f64);
                             new_data.push(data_item);
+
+                            if (created_at_start_of_the_day - prev_start_of_day) / day_milis > 1 {
+                                //let diff = created_at_start_of_the_day - next_day_estimation;
+                                //let skipped_days = diff / day_milis;
+                                for day_i in (prev_start_of_day + day_milis..created_at_start_of_the_day).step_by(day_milis as usize) {
+                                    new_data.push(day_i as f64);
+                                    new_data.push(0.0);
+                                }
+                            }
+
                             prev_start_of_day = created_at_start_of_the_day;
                             data_item = 0.0;
+
+                        
+                            
                             continue;
                         }
 
@@ -300,13 +330,35 @@ pub fn Overview() -> impl IntoView {
     // };
 
     // let color = Color::from("#925CB3");
+
+    let on_add_data_click = move |_| {
+        canvas_data.update(move |data| {
+            let last_item = data.get(data.len() - 2);
+            let Some(last_item) = last_item else {
+                return;
+            };
+            data.push(*last_item + (24 * 60 * 60 * 1000) as f64);
+            data.push(rand::thread_rng().gen_range(0..1000) as f64);
+        });
+    };
+
     view! {
         <div class="grid grid-rows-[auto_1fr] overflow-y-hidden">
             <div>"Overview"</div>
             <div class="overflow-y-scroll grid grid-rows-[1fr_1fr]">
-                <div  class=" ">
+                <div  class=" bg-dark-night flex flex-col py-6 ">
+                    
                     // <div class="w-[100rem] h-[100rem] box"></div>
-                    <canvas _ref=canvas_ref class="w-full box max-w-full bg-dark-night aspect-video"/>
+                    <div class="px-6 flex gap-4 ">
+                        <button class=" border-2 border-low-purple text-white px-2 rounded-2xl font-bold">"Unique IP"</button>
+                        <button class=" border-2 border-low-purple text-white px-2 rounded-2xl font-bold">"All"</button>
+                    </div>
+                    <canvas _ref=canvas_ref class="w-full box max-w-full  aspect-video"/>
+                    <div class="px-6 flex gap-4 ">
+                        <button class=" border-2 border-low-purple text-white px-2 font-bold" on:click=on_add_data_click>"Today"</button>
+                        <button class=" border-2 border-low-purple text-white px-2 font-bold" on:click=on_add_data_click>"7 Days"</button>
+                        <button class=" border-2 border-low-purple text-white px-2 font-bold" on:click=on_add_data_click>"30 Days"</button>
+                    </div>
                 </div>
                 // <svg viewBox="0 0 820 620">
                 //     <g class="" transform="translate(100, 480)">

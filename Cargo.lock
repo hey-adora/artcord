@@ -654,6 +654,7 @@ dependencies = [
  "leptos_meta",
  "leptos_router",
  "log",
+ "rand",
  "regex",
  "strum",
  "tracing",
