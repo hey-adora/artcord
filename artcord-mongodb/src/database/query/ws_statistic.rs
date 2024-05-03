@@ -1,12 +1,16 @@
+use std::str::FromStr;
+
 use crate::database::{DBError, DB};
-use artcord_state::model::ws_statistics::{WsStat, WsStatFieldName};
+use artcord_state::{misc::DAY_IN_MS, model::ws_statistics::{WsStat, WsStatFieldName}};
 use bson::{doc, Document};
+use chrono::{DateTime, Utc};
 use futures::TryStreamExt;
 use mongodb::{
     options::{FindOptions, IndexOptions},
     Collection, Database, IndexModel,
 };
 use tracing::{debug, error};
+use chrono::naive::NaiveDate;
 
 pub const COLLECTION_WS_STATISTIC_NAME: &'static str = "ws_statistic";
 
@@ -308,16 +312,64 @@ impl DB {
         // Ok(result)
     }
 
-    // pub async fn user_find_one(
-    //     &self,
-    //     user_id: &str,
-    // ) -> Result<Option<User>, mongodb::error::Error> {
-    //     let result = self
-    //         .collection_user
-    //         .find_one(doc! {UserFieldName::AuthorId.name(): user_id}, None)
-    //         .await?;
-    //     //println!("wtf{:?}", user);
-    //     // Ok(ServerMsg::Profile(user))
-    //     Ok(result)
-    // }
+
+    pub async fn ws_statistic_ranged_latest(
+        &self,
+        from: i64,
+        to: i64,
+    ) -> Result<Vec<f64>, DBError> {
+        let pipeline = vec![
+            doc! { "$sort": { WsStatFieldName::CreatedAt.name(): -1 } },
+            doc! { "$match": { WsStatFieldName::CreatedAt.name(): { "$lt": from, "$gt": to } } },
+            doc! { "$group": { 
+                "_id": {
+                    "$dateToString": {
+                        "date": {
+                            "$toDate": "$created_at",
+                        },
+                        "format": "%Y-%m-%d"
+                    }
+                }, 
+                "count": { "$count": { } }
+            } },
+            doc! { "$sort": { "_id": -1 } },
+        ];
+
+        debug!("db: pipes: {:#?}", &pipeline); 
+
+        let mut stats: mongodb::Cursor<Document> = self
+            .collection_ws_statistic
+            .aggregate(pipeline, None)
+            .await?;
+
+        let stats = stats.try_collect().await.unwrap_or_else(|_| vec![]);
+
+        let mut output: Vec<f64> = Vec::new();
+
+        let mut prev_created_at: Option<i64> = None;
+        for stat in stats {
+            debug!("db: graph: {}", stat);
+            let created_at = stat.get_str("_id")
+            .map(|date| NaiveDate::parse_from_str(date, "%Y-%m-%d").map(|date| DateTime::<Utc>::from_naive_utc_and_offset(date.into(), Utc)) )??.timestamp_millis();
+            let count = stat.get_i32("count")? as f64;
+
+            
+            if let Some(prev_created_at) = prev_created_at {
+                //debug!("({} - {}) / {} > 1 = {} | {} {}", created_at, prev_created_at, DAY_IN_MS, (created_at - prev_created_at) / DAY_IN_MS > 1, created_at - prev_created_at, (created_at - prev_created_at) / DAY_IN_MS);
+                if (prev_created_at - created_at ) / DAY_IN_MS > 1 {
+                    for day_i in (created_at + DAY_IN_MS..prev_created_at).step_by(DAY_IN_MS as usize) {
+                        output.push(day_i as f64);
+                        output.push(0.0);
+                    }
+                }
+            }
+           
+            output.push(created_at as f64);
+            output.push(count);
+            prev_created_at = Some(created_at);
+            //output.push(doc);
+        }
+
+        Ok(output)
+    }
 }

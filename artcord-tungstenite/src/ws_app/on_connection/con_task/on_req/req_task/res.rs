@@ -10,3 +10,4 @@ pub mod ws_stats_paged;
 pub mod ws_stats_first_page;
 pub mod ws_stats_total_count;
 pub mod ws_stats_with_paginatoin;
+pub mod ws_stats_ranged;

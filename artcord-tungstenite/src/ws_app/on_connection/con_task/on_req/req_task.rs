@@ -13,6 +13,7 @@ use tokio_tungstenite::tungstenite::protocol::CloseFrame;
 use tokio_tungstenite::tungstenite::Message;
 use tracing::{debug, error, trace};
 
+use crate::ws_app::on_connection::con_task::on_req::req_task::res::ws_stats_ranged::ws_stats_ranged;
 //use crate::ws_app::on_connection::con_task::on_req::req_task::res::ws_stats_first_page::ws_stats_first_page;
 use crate::ws_app::on_connection::con_task::on_req::req_task::res::ws_stats_total_count::ws_stats_total_count;
 use crate::ws_app::on_connection::con_task::on_req::req_task::res::ws_stats_with_paginatoin::ws_stats_with_pagination;
@@ -93,6 +94,7 @@ pub async fn req_task(
 
             let response_data: Result<Option<ServerMsg>, WsResError> = match data {
                 ClientMsg::WsStatsTotalCount { from } => ws_stats_total_count(db, from).await,
+                ClientMsg::WsStatsRange { from, to } => ws_stats_ranged(db, from, to).await,
                 //ClientMsg::WsStatsFirstPage {  amount } => ws_stats_first_page(db, amount).await,
                 ClientMsg::WsStatsPaged { page, amount, from } => ws_stats_paged(db, page, amount, from).await,
                 ClientMsg::WsStatsWithPagination { page, amount } => ws_stats_with_pagination(db, page, amount).await,

@@ -26,6 +26,7 @@ pub enum ServerMsg {
     //WsStatsFirstPage { total_count: u64, first_page: Vec<WsStat> },
     WsStatsWithPagination { total_count: u64, latest: Option<i64>, stats: Vec<WsStat> },
     WsStatsPage(Vec<WsStat>),
+    WsStatsGraph(Vec<f64>),
     GalleryMain(Vec<AggImg>),
     GalleryUser(Option<Vec<AggImg>>),
     User(Option<User>),

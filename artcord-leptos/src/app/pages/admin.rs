@@ -102,6 +102,7 @@ pub struct AdminPageState {
     pub old_connections_loaded: RwSignal<Option<u64>>,
     pub old_connections_from: RwSignal<Option<i64>>,
     pub overview_old_connections: RwSignal<Vec<WsStat>>,
+    pub overview_selected_days: RwSignal<u64>,
 
 }
 
@@ -116,6 +117,7 @@ impl AdminPageState {
             old_connections_from: RwSignal::new(None),
             old_connections_loaded: RwSignal::new(None),
             overview_old_connections: RwSignal::new(Vec::new()),
+            overview_selected_days: RwSignal::new(7),
         }
     }
 

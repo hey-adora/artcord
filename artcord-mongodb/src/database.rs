@@ -96,6 +96,9 @@ pub enum DBError {
     #[error("Bson DE: {0}.")]
     BsonDE(#[from] bson::de::Error),
 
+    #[error("Chrono parse: {0}.")]
+    Chrono(#[from] chrono::ParseError),
+
     // #[error("Not found: {0}.")]
     // NotFound(String),
 }

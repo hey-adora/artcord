@@ -8,6 +8,7 @@ use artcord_state::message::prod_client_msg::WsPath;
 use artcord_state::message::prod_server_msg::ServerMsg;
 use chrono::DateTime;
 use chrono::Datelike;
+use chrono::Days;
 use chrono::TimeZone;
 use chrono::Utc;
 use leptos::html::canvas;
@@ -40,6 +41,7 @@ pub fn Overview() -> impl IntoView {
     let page = global_state.pages.admin;
     let ws = global_state.ws;
     let (canvas_ref, canvas_data) = use_graph();
+    let selected_days = page.overview_selected_days;
    // let can = Can::new();
 
       //  canvas_data.set(vec![0.0, 0.0, 10.0, 10.0, 20.0, 10.0]);
@@ -55,123 +57,61 @@ pub fn Overview() -> impl IntoView {
                 ServerMsg::WsStatsTotalCount(stats) => {
                     page.set_old_stats_pagination(*stats);
                 }
-                ServerMsg::WsStatsPage(stats) => {
-                    //page.set_old_stats_paged(stats.clone());
-
-                    let mut new_data: Vec<f64> = Vec::with_capacity(stats.len() * 2);
-
-                    let day_milis = 24 * 60 * 60 * 1000;
-                    let time_duration = day_milis;
-
-                    let Some(last_day) = stats.first().cloned() else {
-                        return;
-                    };
-                    let Some(first_day) = stats.last().cloned() else {
-                        return;
-                    };
-
-
-                    
-                    
-                    let mut data_item: f64 = 0_f64;
-
-                    let date = DateTime::from_timestamp_millis(first_day.created_at);
-                    let Some(date) = date else {
-                        return;
-                    };
-                    // let weekday = date.weekday();
-                    // let from_monday = weekday.num_days_from_monday();
-                    // let first_day_of_the_week = (first_day.created_at - (first_day.created_at % day_milis)) - (from_monday as i64 * day_milis);
-                    // let Some(first_day_of_the_week_date) = DateTime::from_timestamp_millis(first_day_of_the_week) else {
+                ServerMsg::WsStatsGraph(stats) => {
+                    // let Some(first_day) = stats.last().cloned() else {
                     //     return;
                     // };
 
-                    // let date = DateTime::from_timestamp_millis(last_day.created_at);
-                    // let Some(date) = date else {
-                    //     return;
-                    // };
-                    // let weekday = date.weekday();
-                    // let to_sunday = weekday.num_days_from_sunday();
-                    // let last_day_of_the_week = (last_day.created_at - (last_day.created_at % day_milis))   - (to_sunday as i64 * day_milis);
-                    // let Some(last_day_of_the_week_date) = DateTime::from_timestamp_millis(last_day_of_the_week) else {
-                    //     return;
-                    // };
+                    // let mut new_data: Vec<f64> = Vec::with_capacity(stats.len() * 2);
+                    // let mut data_item: f64 = 0_f64;
+                    // let mut prev_start_of_day: i64 = first_day.created_at.checked_sub(first_day.created_at % DAY_IN_MS).unwrap_or(0);
+                    // for stat in stats.iter().rev() {
+                    //     let Some(created_at_start_of_the_day) = stat.created_at.checked_sub(stat.created_at % DAY_IN_MS) else {
+                    //         error!("graph: invalid date: {:#?}", stats);
+                    //         continue;
+                    //     };
 
-                    // let diff = last_day_of_the_week - first_day_of_the_week;
-                    // let steps = diff / day_milis;
-
-
-                    // trace!("graph: time: {} {} {} {} {} {} {} ", from_monday, to_sunday, first_day_of_the_week_date, last_day_of_the_week_date, diff, steps, day_milis);
-
-                    // let current_step = 0;
-
-                    // for i in (first_day_of_the_week..last_day_of_the_week).step_by(day_milis) {
-                        
-                    // }
-
-                    let mut prev_start_of_day: i64 = first_day.created_at.checked_sub(first_day.created_at % time_duration).unwrap_or(0);
-                    for stat in stats.iter().rev() {
-                        let Some(created_at_start_of_the_day) = stat.created_at.checked_sub(stat.created_at % time_duration) else {
-                            error!("graph: invalid date: {:#?}", stats);
-                            continue;
-                        };
-
-                        // if created_at_start_of_the_day > last_day_of_the_week || created_at_start_of_the_day < first_day_of_the_week {
-                        //     continue;
-                        // } 
-
-                        //let next_day_estimation = prev_start_of_day + day_milis;
-                   
-
-                        if created_at_start_of_the_day > prev_start_of_day {
+                    //     if created_at_start_of_the_day > prev_start_of_day {
                           
 
-                            new_data.push(prev_start_of_day as f64);
-                            new_data.push(data_item);
+                    //         new_data.push(prev_start_of_day as f64);
+                    //         new_data.push(data_item);
 
-                            if (created_at_start_of_the_day - prev_start_of_day) / day_milis > 1 {
-                                //let diff = created_at_start_of_the_day - next_day_estimation;
-                                //let skipped_days = diff / day_milis;
-                                for day_i in (prev_start_of_day + day_milis..created_at_start_of_the_day).step_by(day_milis as usize) {
-                                    new_data.push(day_i as f64);
-                                    new_data.push(0.0);
-                                }
-                            }
+                    //         if (created_at_start_of_the_day - prev_start_of_day) / DAY_IN_MS > 1 {
+                    //             for day_i in (prev_start_of_day + DAY_IN_MS..created_at_start_of_the_day).step_by(DAY_IN_MS as usize) {
+                    //                 new_data.push(day_i as f64);
+                    //                 new_data.push(0.0);
+                    //             }
+                    //         }
 
-                            prev_start_of_day = created_at_start_of_the_day;
-                            data_item = 0.0;
+                    //         prev_start_of_day = created_at_start_of_the_day;
+                    //         data_item = 0.0;
 
                         
                             
-                            continue;
-                        }
+                    //         continue;
+                    //     }
 
-                        data_item += 1_f64;
+                    //     data_item += 1_f64;
+                    // }
 
-                        // let created_at = DateTime::from_timestamp_millis(stat.created_at);
-                        // let Some(created_at) = created_at else {
-                        //     continue;
-                        // };
-                        //created_at.day()
-                        //Duration::from_secs(MILI) 
-                        //Utc::now().timestamp_millis()
-                        // new_data.push(stat.created_at as f64);
-                        // new_data.push(stat.d);
-                    }
+                    // new_data.push(prev_start_of_day as f64);
+                    // new_data.push(data_item);
 
-                    new_data.push(prev_start_of_day as f64);
-                    new_data.push(data_item);
-
-                    trace!("admin: overview data: {:#?}", &new_data);
-                    canvas_data.set(new_data);
-                    //stats.iter().map(|stat| );
+                    // trace!("admin: overview data: {:#?}", &new_data);
+                    // let data = stats.clone().into_iter().fold(Vec::<f64>::new(), |mut p, c| {
+                    //     p.push(c.created_at as f64);
+                    //     p.push(rand::thread_rng().gen_range(0..1000) as f64);
+                    //     p
+                    // });
+                    canvas_data.set(stats.clone());
                 }
                 ServerMsg::WsStatsWithPagination {
                     total_count,
                     latest,
                     stats,
                 } => {
-                    page.set_old_stats_with_pagination(*total_count, latest.clone(), stats.clone());
+                    //page.set_old_stats_with_pagination(*total_count, latest.clone(), stats.clone());
                 }
                 // ServerMsg::WsStatsFirstPage {
                 //     total_count,
@@ -184,10 +124,9 @@ pub fn Overview() -> impl IntoView {
             WsRecvResult::TimeOut => {}
         });
 
-    let _ = ws_old_ws_stats.sender().send(ClientMsg::WsStatsPaged {
-        page: 0,
-        amount: 100000,
-        from: Utc::now().timestamp_micros(),
+    let _ = ws_old_ws_stats.sender().send(ClientMsg::WsStatsRange {
+        from: Utc::now().timestamp_millis(),
+        to: Utc::now().checked_sub_days(Days::new(7)).map(|to| to.timestamp_millis()).unwrap_or_default(),
     });
 
     // let canvas_size = RwSignal::new((0_u32, 0_u32));
@@ -331,15 +270,26 @@ pub fn Overview() -> impl IntoView {
 
     // let color = Color::from("#925CB3");
 
-    let on_add_data_click = move |_| {
-        canvas_data.update(move |data| {
-            let last_item = data.get(data.len() - 2);
-            let Some(last_item) = last_item else {
-                return;
-            };
-            data.push(*last_item + (24 * 60 * 60 * 1000) as f64);
-            data.push(rand::thread_rng().gen_range(0..1000) as f64);
+    let on_add_data_click = move |days: u64| {
+        // canvas_data.update(move |data| {
+        //     let last_item = data.get(data.len() - 2);
+        //     let Some(last_item) = last_item else {
+        //         return;
+        //     };
+        //     data.push(*last_item + (24 * 60 * 60 * 1000) as f64);
+        //     data.push(rand::thread_rng().gen_range(0..1000) as f64);
+        // });
+        selected_days.set(days);
+        let _ = ws_old_ws_stats.sender().send(ClientMsg::WsStatsRange {
+            from: Utc::now().timestamp_millis(),
+            to: Utc::now().checked_sub_days(Days::new(days)).map(|to| to.timestamp_millis()).unwrap_or_default(),
         });
+    };
+
+    let days_btn_view = move |days: u64| {
+        view! {
+            <button class=move || format!(" border-2  text-white px-2 font-black {}", if selected_days.get() == days {"bg-mid-purple border-transparent "} else {"border-low-purple"}) on:click={let on_add_data_click = on_add_data_click.clone(); move |_| on_add_data_click(days)}>{days} " days"</button>
+        }
     };
 
     view! {
@@ -355,9 +305,11 @@ pub fn Overview() -> impl IntoView {
                     </div>
                     <canvas _ref=canvas_ref class="w-full box max-w-full  aspect-video"/>
                     <div class="px-6 flex gap-4 ">
-                        <button class=" border-2 border-low-purple text-white px-2 font-bold" on:click=on_add_data_click>"Today"</button>
-                        <button class=" border-2 border-low-purple text-white px-2 font-bold" on:click=on_add_data_click>"7 Days"</button>
-                        <button class=" border-2 border-low-purple text-white px-2 font-bold" on:click=on_add_data_click>"30 Days"</button>
+                        // { days_btn_view(2) }
+                        { days_btn_view(7) }
+                        { days_btn_view(30) }
+                        // <button class=" border-2 border-low-purple text-white px-2 font-bold" on:click={let on_add_data_click = on_add_data_click.clone(); move |_| on_add_data_click(7)}>"7 Days"</button>
+                        // <button class=" border-2 border-low-purple text-white px-2 font-bold" on:click={let on_add_data_click = on_add_data_click.clone(); move |_| on_add_data_click(30)}>"30 Days"</button>
                     </div>
                 </div>
                 // <svg viewBox="0 0 820 620">
