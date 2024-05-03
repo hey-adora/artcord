@@ -319,7 +319,7 @@ impl DB {
         to: i64,
     ) -> Result<Vec<f64>, DBError> {
         let pipeline = vec![
-            doc! { "$sort": { WsStatFieldName::CreatedAt.name(): -1 } },
+            doc! { "$sort": { WsStatFieldName::CreatedAt.name(): 1 } },
             doc! { "$match": { WsStatFieldName::CreatedAt.name(): { "$lt": from, "$gt": to } } },
             doc! { "$group": { 
                 "_id": {
@@ -332,7 +332,7 @@ impl DB {
                 }, 
                 "count": { "$count": { } }
             } },
-            doc! { "$sort": { "_id": -1 } },
+            doc! { "$sort": { "_id": 1 } },
         ];
 
         debug!("db: pipes: {:#?}", &pipeline); 

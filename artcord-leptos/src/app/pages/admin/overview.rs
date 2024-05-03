@@ -270,6 +270,49 @@ pub fn Overview() -> impl IntoView {
 
     // let color = Color::from("#925CB3");
 
+    let on_add_data_test_click = move |days: u64| {
+        canvas_data.update(move |data| {
+            for _ in 0..days {
+                let last_item = data.get(data.len() - 2);
+                let Some(last_item) = last_item else {
+                    return;
+                };
+                data.push(*last_item + (24 * 60 * 60 * 1000) as f64);
+                data.push(rand::thread_rng().gen_range(0..1000) as f64);
+            };
+
+            // let Some(first_item) = data.first() else {
+            //     return;
+            // };
+            // let mut new_data: Vec<f64> = vec![
+            //     *first_item + (24 * 60 * 60 * 1000) as f64,
+            //     rand::thread_rng().gen_range(0..1000) as f64,
+            // ];
+            // for _ in 0..days {
+            //     let Some(first_item) = new_data.first() else {
+            //         return;
+            //     };
+            //     new_data.insert(0, *first_item + (24 * 60 * 60 * 1000) as f64);
+            //     new_data.insert(1, rand::thread_rng().gen_range(0..1000) as f64);
+            // };
+
+        
+            
+            
+            // new_data.extend_from_slice(data);
+            // *data = new_data;
+
+            // debug!("wtf: {:#?}", data);
+
+        });
+        // selected_days.set(days);
+        // let _ = ws_old_ws_stats.sender().send(ClientMsg::WsStatsRange {
+        //     from: Utc::now().timestamp_millis(),
+        //     to: Utc::now().checked_sub_days(Days::new(days)).map(|to| to.timestamp_millis()).unwrap_or_default(),
+        // });
+    };
+
+
     let on_add_data_click = move |days: u64| {
         // canvas_data.update(move |data| {
         //     let last_item = data.get(data.len() - 2);
@@ -300,6 +343,7 @@ pub fn Overview() -> impl IntoView {
                     
                     // <div class="w-[100rem] h-[100rem] box"></div>
                     <div class="px-6 flex gap-4 ">
+                        <button on:click=move |_| on_add_data_test_click(40) class=" border-2 border-low-purple text-white px-2 rounded-2xl font-bold">"ADD DATA"</button>
                         <button class=" border-2 border-low-purple text-white px-2 rounded-2xl font-bold">"Unique IP"</button>
                         <button class=" border-2 border-low-purple text-white px-2 rounded-2xl font-bold">"All"</button>
                     </div>
