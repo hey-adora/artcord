@@ -31,7 +31,6 @@ use web_sys::CanvasRenderingContext2d;
 use crate::app::global_state::GlobalState;
 use crate::app::hooks::use_graph::use_graph;
 
-use super::WebAdminStatCountType;
 use super::WsPathTableHeaderView;
 use strum::IntoEnumIterator;
 
@@ -339,15 +338,15 @@ pub fn Overview() -> impl IntoView {
         <div class="grid grid-rows-[auto_1fr] overflow-y-hidden">
             <div>"Overview"</div>
             <div class="overflow-y-scroll grid grid-rows-[1fr_1fr]">
-                <div  class=" bg-dark-night flex flex-col py-6 ">
-                    
+                <div  class="  flex flex-col justify-center ">
+                    <div class="bg-dark-night py-6 px-4  rounded-2xl max-w-[80vh] ">
                     // <div class="w-[100rem] h-[100rem] box"></div>
-                    <div class="px-6 flex gap-4 ">
+                        <div class="px-6 flex gap-4 ">
                         <button on:click=move |_| on_add_data_test_click(40) class=" border-2 border-low-purple text-white px-2 rounded-2xl font-bold">"ADD DATA"</button>
                         <button class=" border-2 border-low-purple text-white px-2 rounded-2xl font-bold">"Unique IP"</button>
                         <button class=" border-2 border-low-purple text-white px-2 rounded-2xl font-bold">"All"</button>
                     </div>
-                    <canvas _ref=canvas_ref class="w-full box max-w-full  aspect-video"/>
+                    <canvas _ref=canvas_ref class="w-full flex aspect-video max-w-[80vh]"/>
                     <div class="px-6 flex gap-4 ">
                         // { days_btn_view(2) }
                         { days_btn_view(7) }
@@ -356,6 +355,7 @@ pub fn Overview() -> impl IntoView {
                         // <button class=" border-2 border-low-purple text-white px-2 font-bold" on:click={let on_add_data_click = on_add_data_click.clone(); move |_| on_add_data_click(30)}>"30 Days"</button>
                     </div>
                 </div>
+            </div>
                 // <svg viewBox="0 0 820 620">
                 //     <g class="" transform="translate(100, 480)">
                 //         <text>"wowowwowo"</text>
