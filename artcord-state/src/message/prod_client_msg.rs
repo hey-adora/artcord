@@ -60,6 +60,7 @@ pub enum ClientMsg {
     WsStatsRange {
         from: i64,
         to: i64,
+        unique_ip: bool,
     },
     // WsStatsFirstPage {
     //     amount: u64
@@ -284,7 +285,7 @@ impl From<&ClientMsg> for WsPath {
             //ClientMsg::WsStatsFirstPage { amount } => WsPath::WsStatsFirstPage,
             ClientMsg::WsStatsWithPagination { amount, page } => WsPath::WsStatsWithPagination,
             ClientMsg::LiveWsStats(_) => WsPath::LiveWsStats,
-            ClientMsg::WsStatsRange { from, to } => WsPath::WsStatsRanged,
+            ClientMsg::WsStatsRange { from, to, unique_ip } => WsPath::WsStatsRanged,
         }
     }
 }

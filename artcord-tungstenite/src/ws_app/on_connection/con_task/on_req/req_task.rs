@@ -94,7 +94,7 @@ pub async fn req_task(
 
             let response_data: Result<Option<ServerMsg>, WsResError> = match data {
                 ClientMsg::WsStatsTotalCount { from } => ws_stats_total_count(db, from).await,
-                ClientMsg::WsStatsRange { from, to } => ws_stats_ranged(db, from, to).await,
+                ClientMsg::WsStatsRange { from, to , unique_ip} => ws_stats_ranged(db, from, to, unique_ip).await,
                 //ClientMsg::WsStatsFirstPage {  amount } => ws_stats_first_page(db, amount).await,
                 ClientMsg::WsStatsPaged { page, amount, from } => ws_stats_paged(db, page, amount, from).await,
                 ClientMsg::WsStatsWithPagination { page, amount } => ws_stats_with_pagination(db, page, amount).await,

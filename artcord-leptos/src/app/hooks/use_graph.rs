@@ -89,9 +89,16 @@ impl Graph {
         let median_amount = graph.median_amount;
 
         let (min_x, max_x, min_y, max_y) = get_min_max(data.chunks(chunk_size).clone());
+                let diff_x = (max_x - min_x);
+                let diff_x = if diff_x <= 0.0 { 1.0 } else { diff_x };
+
+                let diff_y = (max_y - min_y);
+                let diff_y = if diff_y <= 0.0 { 1.0 } else { diff_y };
+
+
                 let (canvas_width_ratio, canvas_height_ratio) = (
-                    (width - graph.padding) / (max_x - min_x),
-                    (height - graph.padding) / (max_y - min_y),
+                    (width - graph.padding) / diff_x,
+                    (height - graph.padding) / diff_y,
                 );
 
                 graph.max_x = max_x;

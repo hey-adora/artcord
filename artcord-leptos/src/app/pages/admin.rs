@@ -27,6 +27,7 @@ use crate::app::components::navbar::Navbar;
 
 use crate::app::global_state::GlobalState;
 use crate::app::hooks::use_ws_live_stats::LiveWsStats;
+use crate::app::utils::LoadingNotFound;
 use crate::app::utils::PageUrl;
 
 use self::ws_old::PAGE_AMOUNT;
@@ -75,8 +76,10 @@ pub struct AdminPageState {
     pub old_connections_loading: RwSignal<bool>,
     pub old_connections_loaded: RwSignal<Option<u64>>,
     pub old_connections_from: RwSignal<Option<i64>>,
+    pub overview_state: RwSignal<LoadingNotFound>,
     pub overview_old_connections: RwSignal<Vec<WsStat>>,
     pub overview_selected_days: RwSignal<u64>,
+    pub overview_selected_unique: RwSignal<bool>,
 
 }
 
@@ -92,6 +95,8 @@ impl AdminPageState {
             old_connections_loaded: RwSignal::new(None),
             overview_old_connections: RwSignal::new(Vec::new()),
             overview_selected_days: RwSignal::new(7),
+            overview_selected_unique: RwSignal::new(true),
+            overview_state: RwSignal::new(LoadingNotFound::NotLoaded),
         }
     }
 

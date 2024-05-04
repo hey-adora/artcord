@@ -544,46 +544,6 @@ video {
   --tw-backdrop-sepia:  ;
 }
 
-.container {
-  width: 100%;
-}
-
-@media (min-width: 640px) {
-  .container {
-    max-width: 640px;
-  }
-}
-
-@media (min-width: 768px) {
-  .container {
-    max-width: 768px;
-  }
-}
-
-@media (min-width: 1024px) {
-  .container {
-    max-width: 1024px;
-  }
-}
-
-@media (min-width: 1280px) {
-  .container {
-    max-width: 1280px;
-  }
-}
-
-@media (min-width: 1536px) {
-  .container {
-    max-width: 1536px;
-  }
-}
-
-@media (min-width: 1700px) {
-  .container {
-    max-width: 1700px;
-  }
-}
-
 .static {
   position: static;
 }
@@ -685,10 +645,6 @@ video {
   height: 100dvh;
 }
 
-.h-\[100rem\] {
-  height: 100rem;
-}
-
 .h-\[100vh\] {
   height: 100vh;
 }
@@ -745,10 +701,6 @@ video {
   min-height: 20rem;
 }
 
-.w-\[100rem\] {
-  width: 100rem;
-}
-
 .w-\[100vw\] {
   width: 100vw;
 }
@@ -798,10 +750,6 @@ video {
   --tw-border-spacing-x: 1.25rem;
   --tw-border-spacing-y: 1.25rem;
   border-spacing: var(--tw-border-spacing-x) var(--tw-border-spacing-y);
-}
-
-.transform {
-  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
 }
 
 .cursor-pointer {
@@ -1021,11 +969,6 @@ video {
   background-color: rgb(103 57 139 / var(--tw-bg-opacity));
 }
 
-.bg-light-flower {
-  --tw-bg-opacity: 1;
-  background-color: rgb(230 197 232 / var(--tw-bg-opacity));
-}
-
 .bg-mid-purple {
   --tw-bg-opacity: 1;
   background-color: rgb(146 92 179 / var(--tw-bg-opacity));
@@ -1223,11 +1166,6 @@ video {
   color: rgb(0 0 0 / var(--tw-text-opacity));
 }
 
-.text-light-flower {
-  --tw-text-opacity: 1;
-  color: rgb(230 197 232 / var(--tw-text-opacity));
-}
-
 .text-low-purple {
   --tw-text-opacity: 1;
   color: rgb(255 255 255 / var(--tw-text-opacity));
@@ -1366,11 +1304,6 @@ html {
 
 .hover\:to-dark-purple:hover {
   --tw-gradient-to: #250157 var(--tw-gradient-to-position);
-}
-
-.hover\:text-blue-600:hover {
-  --tw-text-opacity: 1;
-  color: rgb(37 99 235 / var(--tw-text-opacity));
 }
 
 .hover\:text-low-purple:hover {

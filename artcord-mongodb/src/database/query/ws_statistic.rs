@@ -325,23 +325,56 @@ impl DB {
         &self,
         from: i64,
         to: i64,
+        unique_id: bool,
     ) -> Result<Vec<f64>, DBError> {
-        let pipeline = vec![
+        let mut pipeline = vec![
             doc! { "$sort": { WsStatFieldName::CreatedAt.name(): 1 } },
             doc! { "$match": { WsStatFieldName::CreatedAt.name(): { "$lt": from, "$gt": to } } },
-            doc! { "$group": {
-                "_id": {
-                    "$dateToString": {
-                        "date": {
-                            "$toDate": format!("${}", WsStatFieldName::CreatedAt.name()),
-                        },
-                        "format": "%Y-%m-%d"
-                    }
-                },
-                "count": { "$count": { } }
-            } },
-            doc! { "$sort": { "_id": 1 } },
         ];
+
+        if unique_id {
+            pipeline.push(
+                doc! { "$group": {
+                    "_id": {
+                        "date": {
+                            "$dateToString": {
+                                "date": {
+                                    "$toDate": format!("${}", WsStatFieldName::CreatedAt.name()),
+                                },
+                                "format": "%Y-%m-%d"
+                            }
+                        },
+                        "ip": "$ip",
+                    },
+                } },
+            );
+            pipeline.push(
+                doc! { "$group": {
+                    "_id": {
+                        "date": "$_id.date",
+                    },
+                    "count": { "$count": { } }
+                } },
+            );
+        } else {
+            pipeline.push(
+                doc! { "$group": {
+                    "_id": {
+                        "date": {
+                            "$dateToString": {
+                                "date": {
+                                    "$toDate": format!("${}", WsStatFieldName::CreatedAt.name()),
+                                },
+                                "format": "%Y-%m-%d"
+                            }
+                        },
+                    },
+                    "count": { "$count": { } }
+                } },
+            );
+        }
+
+        pipeline.push(doc! { "$sort": { "_id.date": 1 } });
 
         //debug!("db: pipes: {:#?}", &pipeline);
 
@@ -356,9 +389,10 @@ impl DB {
 
         let mut prev_created_at: Option<i64> = None;
         for stat in stats {
-            //debug!("db: graph: {}", stat);
+            debug!("db: graph: {}", stat);
             let created_at = stat
-                .get_str("_id")
+                .get_document("_id")
+                .and_then(|_id|_id.get_str("date"))
                 .map(|date| {
                     NaiveDate::parse_from_str(date, "%Y-%m-%d")
                         .map(|date| DateTime::<Utc>::from_naive_utc_and_offset(date.into(), Utc))
@@ -369,7 +403,7 @@ impl DB {
             //debug!("db: graph: {}", stat);
 
             if let Some(prev_created_at) = prev_created_at {
-                debug!("({} - {}) / {} > 1 = {} | {} {}", created_at, prev_created_at, DAY_IN_MS, (created_at - prev_created_at) / DAY_IN_MS > 1, created_at - prev_created_at, (created_at - prev_created_at) / DAY_IN_MS);
+                //debug!("({} - {}) / {} > 1 = {} | {} {}", created_at, prev_created_at, DAY_IN_MS, (created_at - prev_created_at) / DAY_IN_MS > 1, created_at - prev_created_at, (created_at - prev_created_at) / DAY_IN_MS);
                 if (created_at - prev_created_at) / DAY_IN_MS > 1 {
                     for day_i in (prev_created_at + DAY_IN_MS..created_at).step_by(DAY_IN_MS as usize) {
                         output.push(day_i as f64);
