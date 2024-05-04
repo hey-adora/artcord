@@ -11,10 +11,16 @@ use web_sys::CanvasRenderingContext2d;
 pub struct Graph {
     data: Vec<f64>,
     chunk_size: usize,
+    chunk_value_index: usize,
+    median_amount: usize,
     line_height: f64,
     padding: f64,
     line_width: f64,
     point_radius: f64,
+    width: f64,
+    height: f64,
+    canvas_width_ratio: f64,
+    canvas_height_ratio: f64,
     min_x: f64,
     min_y: f64,
     max_x: f64,
@@ -40,6 +46,12 @@ impl Default for Graph {
             line_width: 2.0,
             point_radius: 2.0,
             chunk_size: 2,
+            chunk_value_index: 1,
+            median_amount: 10,
+            width: 0.0,
+            height: 0.0,
+            canvas_width_ratio: 0.0,
+            canvas_height_ratio: 0.0,
             min_x: 0.0,
             min_y: 0.0,
             max_x: 0.0,
@@ -65,24 +77,115 @@ impl Graph {
         }
     }
 
-    pub fn draw(&self, ctx: CanvasRenderingContext2d, width: f64, height: f64, mouse_pos: Option<(f64, f64)>) {
+    pub fn set_data(&mut self, data: Vec<f64>) {
+        self.data = data;
+    }
+
+    pub fn calculate(&mut self, ctx: &CanvasRenderingContext2d, width: f64, height: f64) {
         let graph = self;
-        ctx.set_font(graph.font);
-        
+        let data = &graph.data;
+        let chunk_size = graph.chunk_size;
+        let chunk_value_index = graph.chunk_value_index;
+        let median_amount = graph.median_amount;
+
+        let (min_x, max_x, min_y, max_y) = get_min_max(data.chunks(chunk_size).clone());
+                let (canvas_width_ratio, canvas_height_ratio) = (
+                    (width - graph.padding) / (max_x - min_x),
+                    (height - graph.padding) / (max_y - min_y),
+                );
+
+                graph.max_x = max_x;
+                graph.max_y = max_y;
+                graph.min_x = min_x;
+                graph.min_y = min_y;
+                graph.width = width;
+                graph.height = height;
+                graph.canvas_width_ratio = canvas_width_ratio;
+                graph.canvas_height_ratio = canvas_height_ratio;
+
+                graph.medians = GraphText::new_medians(
+                    &ctx,
+                    data,
+                    chunk_size,
+                    chunk_value_index,
+                    median_amount,
+                    graph.padding,
+                    height as f64,
+                );
+                graph.lines = GraphLine::from_vec(
+                    &ctx,
+                    data,
+                    chunk_size,
+                    chunk_value_index,
+                    canvas_width_ratio,
+                    canvas_height_ratio,
+                    max_x,
+                    max_y,
+                    min_x,
+                    min_y,
+                    median_amount,
+                    graph.padding,
+                    graph.line_height,
+                    graph.point_radius,
+                    height as f64,
+                    width as f64,
+                );
+                graph.lines_bg = GraphBgLine::from_vec(
+                    &ctx,
+                    data,
+                    chunk_size,
+                    chunk_value_index,
+                    canvas_width_ratio,
+                    canvas_height_ratio,
+                    max_x,
+                    max_y,
+                    min_x,
+                    min_y,
+                    median_amount,
+                    graph.padding,
+                    graph.line_height,
+                    graph.point_radius,
+                    height as f64,
+                    width as f64,
+                    graph.color_brightest.clone(),
+                    graph.color_accent.clone(),
+                    graph.color_lowest.clone(),
+                    graph.color_lowest_accent.clone(),
+                );
+                graph.points = GraphPoint::from_vec(
+                    &ctx,
+                    data,
+                    chunk_size,
+                    chunk_value_index,
+                    canvas_width_ratio,
+                    canvas_height_ratio,
+                    max_x,
+                    max_y,
+                    min_x,
+                    min_y,
+                    median_amount,
+                    graph.padding,
+                    graph.line_height,
+                    graph.point_radius,
+                    height as f64,
+                    width as f64,
+                );
+                //debug!("graph: {:#?}", &graph);
+    }
+
+    pub fn draw(&self, ctx: &CanvasRenderingContext2d, mouse_pos: Option<(f64, f64)>) {
+       
+
+        let graph = self;
+        let height = self.height;
+        let width = self.width;
+        let canvas_width_ratio = self.canvas_width_ratio;
+        let canvas_height_ratio = self.canvas_height_ratio;
+
         ctx.clear_rect(0.0, 0.0, width, height);
+        ctx.set_font(graph.font);
         ctx.set_line_width(graph.line_width);
         
-
-        // let Some((mouse_x, mouse_y)) = mouse_pos.get() else {
-        //     return;
-        // };
-        //debug!("MOUSE: {} {}", mouse_x, mouse_y);
-
-        let (canvas_width_ratio, canvas_height_ratio) = (
-            (width - graph.padding) / (graph.max_x - graph.min_x),
-            (height - graph.padding) / (graph.max_y - graph.min_y),
-        );
-
         let closest_point = mouse_pos.and_then(|mouse_pos| {
             get_closest_point(
                 self.data.chunks(graph.chunk_size).clone(),
@@ -97,6 +200,7 @@ impl Graph {
             )
         });
 
+        ctx.set_fill_style(&graph.color_brightest);
         for median in &graph.medians {
             ctx.fill_text(&median.text, median.x, median.y);
         }
@@ -557,9 +661,6 @@ impl GraphText {
 }
 
 pub fn use_graph() -> (NodeRef<Canvas>, RwSignal<Vec<f64>>) {
-    let chunk_size: usize = 2; // pass this to default
-    let chunk_value_index: usize = 1;
-    let median_amount: usize = 10;
     let canvas_ref = NodeRef::new();
     let data = RwSignal::new(vec![0.0, 0.0, 10.0, 10.0, 20.0, 10.0]);
     let graph = RwSignal::new(Graph::new());
@@ -577,87 +678,9 @@ pub fn use_graph() -> (NodeRef<Canvas>, RwSignal<Vec<f64>>) {
             };
 
             graph.update(move |graph| {
-                let (min_x, max_x, min_y, max_y) = get_min_max(value.chunks(chunk_size).clone());
-                let (canvas_width_ratio, canvas_height_ratio) = (
-                    (width - graph.padding) / (max_x - min_x),
-                    (height - graph.padding) / (max_y - min_y),
-                );
-
-                graph.data = value.clone();
-                graph.max_x = max_x;
-                graph.max_y = max_y;
-                graph.min_x = min_x;
-                graph.min_y = min_y;
-
-                graph.medians = GraphText::new_medians(
-                    &ctx,
-                    value,
-                    chunk_size,
-                    chunk_value_index,
-                    median_amount,
-                    graph.padding,
-                    height as f64,
-                );
-                graph.lines = GraphLine::from_vec(
-                    &ctx,
-                    value,
-                    chunk_size,
-                    chunk_value_index,
-                    canvas_width_ratio,
-                    canvas_height_ratio,
-                    max_x,
-                    max_y,
-                    min_x,
-                    min_y,
-                    median_amount,
-                    graph.padding,
-                    graph.line_height,
-                    graph.point_radius,
-                    height as f64,
-                    width as f64,
-                );
-                graph.lines_bg = GraphBgLine::from_vec(
-                    &ctx,
-                    value,
-                    chunk_size,
-                    chunk_value_index,
-                    canvas_width_ratio,
-                    canvas_height_ratio,
-                    max_x,
-                    max_y,
-                    min_x,
-                    min_y,
-                    median_amount,
-                    graph.padding,
-                    graph.line_height,
-                    graph.point_radius,
-                    height as f64,
-                    width as f64,
-                    graph.color_brightest.clone(),
-                    graph.color_accent.clone(),
-                    graph.color_lowest.clone(),
-                    graph.color_lowest_accent.clone(),
-                );
-                graph.points = GraphPoint::from_vec(
-                    &ctx,
-                    value,
-                    chunk_size,
-                    chunk_value_index,
-                    canvas_width_ratio,
-                    canvas_height_ratio,
-                    max_x,
-                    max_y,
-                    min_x,
-                    min_y,
-                    median_amount,
-                    graph.padding,
-                    graph.line_height,
-                    graph.point_radius,
-                    height as f64,
-                    width as f64,
-                );
-
-                graph.draw(ctx, width, height, None);
+                graph.set_data(value.clone());
+                graph.calculate(&ctx, width, height);
+                graph.draw(&ctx, None);
             });
         },
         false,
@@ -677,11 +700,13 @@ pub fn use_graph() -> (NodeRef<Canvas>, RwSignal<Vec<f64>>) {
         canvas.set_width(width as u32);
         canvas.set_height(height as u32);
 
+        
         let Some((ctx, width, height)) = get_ctx(canvas) else {
             return;
         };
-        graph.with_untracked(|graph| {
-            graph.draw(ctx, width, height, None);
+        graph.update_untracked(|graph| {
+            graph.calculate(&ctx, width, height);
+            graph.draw(&ctx, None);
         });
     });
 
@@ -695,7 +720,7 @@ pub fn use_graph() -> (NodeRef<Canvas>, RwSignal<Vec<f64>>) {
             return;
         };
         graph.with_untracked(|graph| {
-            graph.draw(ctx, width, height, Some((ev.offset_x() as f64, ev.offset_y() as f64)));
+            graph.draw(&ctx, Some((ev.offset_x() as f64, ev.offset_y() as f64)));
         });
     });
 
@@ -709,7 +734,7 @@ pub fn use_graph() -> (NodeRef<Canvas>, RwSignal<Vec<f64>>) {
             return;
         };
         graph.with_untracked(|graph| {
-            graph.draw(ctx, width, height, None);
+            graph.draw(&ctx, None);
         });
     });
 
