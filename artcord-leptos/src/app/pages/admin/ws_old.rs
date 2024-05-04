@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use artcord_leptos_web_sockets::channel::WsRecvResult;
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_client_msg::WsPath;
@@ -13,7 +15,6 @@ use tracing::error;
 use crate::app::global_state::GlobalState;
 use crate::app::utils::PageUrl;
 
-use super::WebAdminStatCountType;
 use super::WsPathTableHeaderView;
 use strum::IntoEnumIterator;
 use tracing::debug;
@@ -282,7 +283,9 @@ pub fn WsOld() -> impl IntoView {
             .map(|v| {
                 view! {
                         <tr class="border border-mid-purple">
+                            <td class="border border-mid-purple">{v.ip}</td>
                             <td class="border border-mid-purple">{v.addr}</td>
+                            <td class="border border-mid-purple">{ format!("{:?}", Duration::from_millis((v.disconnected_at - v.connected_at) as u64)) }</td>
                             { old_connections_count_view(v.req_count) }
                         </tr>
                 }
@@ -438,6 +441,8 @@ pub fn WsOld() -> impl IntoView {
                     <table class="border-spacing-5 border border-mid-purple ">
                         <tr class="sticky top-0 left-0 z-10 bg-mid-purple border border-mid-purple ">
                             <th>"ip"</th>
+                            <th>"addr"</th>
+                            <th>"duration"</th>
                             <WsPathTableHeaderView/>
                         </tr>
                         { move || old_connections_view() }

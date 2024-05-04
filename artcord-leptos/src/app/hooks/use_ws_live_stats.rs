@@ -1,11 +1,9 @@
 use std::collections::HashMap;
 
 use artcord_leptos_web_sockets::{channel::WsRecvResult, runtime::WsRuntime};
-use artcord_state::message::{prod_client_msg::{ClientMsg, WsPath}, prod_server_msg::{ServerMsg, WsStatTemp}};
+use artcord_state::{message::{prod_client_msg::{ClientMsg, WsPath}, prod_server_msg::ServerMsg}, model::ws_statistics::{WebWsStat, WsStatTemp}};
 use leptos::{RwSignal, SignalSet, SignalUpdate, SignalWithUntracked};
 use tracing::warn;
-
-use crate::app::pages::admin::WebWsStat;
 
 #[derive(Copy, Clone, Debug)]
 pub struct LiveWsStats {

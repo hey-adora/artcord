@@ -2,12 +2,12 @@ use artcord_leptos_web_sockets::channel::WsRecvResult;
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_client_msg::WsPath;
 use artcord_state::message::prod_server_msg::ServerMsg;
+use artcord_state::model::ws_statistics::WebAdminStatCountType;
 use leptos::*;
 
 use crate::app::global_state::GlobalState;
 use crate::app::hooks::use_ws_live_stats::use_ws_live_stats;
 
-use super::WebAdminStatCountType;
 use super::WsPathTableHeaderView;
 use strum::IntoEnumIterator;
 
@@ -50,7 +50,7 @@ pub fn WsLive() -> impl IntoView {
             <div>"Live WebSocket Connections"</div>
             <div class="overflow-y-scroll ">
                 <table>
-                    <tr class="sticky top-0 left-0 bg-light-flower ">
+                    <tr class="sticky top-0 left-0 bg-mid-purple ">
                         <th>"ip"</th>
                         <WsPathTableHeaderView/>
                     </tr>

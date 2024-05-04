@@ -73,25 +73,25 @@ impl DB {
         Ok(())
     }
 
-    pub async fn ws_statistic_update_disconnect(
-        &self,
-        id: String,
-    ) -> Result<(), mongodb::error::Error> {
-        let _ = self
-            .collection_ws_statistic
-            .update_one(
-                doc! { WsStatFieldName::Id.name(): id},
-                doc! {
-                    "$set": {
-                        WsStatFieldName::IsConnected.name(): false
-                    }
-                },
-                None,
-            )
-            .await?;
+    // pub async fn ws_statistic_update_disconnect(
+    //     &self,
+    //     id: String,
+    // ) -> Result<(), mongodb::error::Error> {
+    //     let _ = self
+    //         .collection_ws_statistic
+    //         .update_one(
+    //             doc! { WsStatFieldName::Id.name(): id},
+    //             doc! {
+    //                 "$set": {
+    //                     WsStatFieldName::IsConnected.name(): false
+    //                 }
+    //             },
+    //             None,
+    //         )
+    //         .await?;
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     pub async fn ws_statistic_all_latest(&self) -> Result<Vec<WsStat>, mongodb::error::Error> {
         let opts = FindOptions::builder()
@@ -165,7 +165,7 @@ impl DB {
                 "total_count": [
                     {
                         "$sort": {
-                            "created_at": -1
+                            WsStatFieldName::CreatedAt.name(): -1
                         }
                     },
                     {
@@ -175,7 +175,7 @@ impl DB {
                 "latest": [
                     {
                         "$sort": {
-                            "created_at": -1
+                            WsStatFieldName::CreatedAt.name(): -1
                         }
                     },
                     {
@@ -183,7 +183,7 @@ impl DB {
                     },
                     {
                         "$project": {
-                            "created_at": 1
+                            WsStatFieldName::CreatedAt.name(): 1
                         }
                     }
                 ],
@@ -211,7 +211,7 @@ impl DB {
             .try_collect()
             .await
             .unwrap_or_else(|_| vec![]);
-        debug!("STATS: {:#?}", &stats_with_paginatoin);
+        //debug!("STATS: {:#?}", &stats_with_paginatoin);
 
         let mut output: Vec<WsStat> = Vec::new();
 
@@ -237,7 +237,7 @@ impl DB {
             v.first()
                 .map(|v| {
                     v.as_document()
-                        .map(|v| v.get("created_at").map(|v| v.as_i64()))
+                        .map(|v| v.get(WsStatFieldName::CreatedAt.name()).map(|v| v.as_i64()))
                 })
                 .flatten()
                 .flatten()
@@ -264,6 +264,7 @@ impl DB {
         //     output.push(doc);
         //     // println!("hh");
         // }
+        //debug!("STATS: {:#?}", &stats);
 
         Ok((total_count, latest, stats))
         // let opts = FindOptions::builder()
@@ -342,7 +343,7 @@ impl DB {
             doc! { "$sort": { "_id": 1 } },
         ];
 
-        debug!("db: pipes: {:#?}", &pipeline);
+        //debug!("db: pipes: {:#?}", &pipeline);
 
         let mut stats: mongodb::Cursor<Document> = self
             .collection_ws_statistic
@@ -355,7 +356,7 @@ impl DB {
 
         let mut prev_created_at: Option<i64> = None;
         for stat in stats {
-            debug!("db: graph: {}", stat);
+            //debug!("db: graph: {}", stat);
             let created_at = stat
                 .get_str("_id")
                 .map(|date| {

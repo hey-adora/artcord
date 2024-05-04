@@ -6,10 +6,11 @@ use artcord_state::{
     message::{
         prod_client_msg::WsPath,
         prod_perm_key::ProdMsgPermKey,
-        prod_server_msg::{ServerMsg, WsStatTemp},
+        prod_server_msg::ServerMsg,
     },
-    model::ws_statistics::WsStat,
+    model::ws_statistics::{WsStat, WsStatTemp},
 };
+use chrono::Utc;
 use tokio::{select, sync::mpsc, task::JoinHandle};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
@@ -26,6 +27,7 @@ pub enum AdminConStatMsg {
     AddTrack {
         connection_key: String,
         tx: mpsc::Sender<ConMsg>,
+        ip: String,
         addr: String,
         // ws_key: WsRouteKey,
     },
@@ -133,6 +135,7 @@ pub async fn on_msg(
         AdminConStatMsg::AddTrack {
             connection_key,
             tx,
+            ip,
             addr,
             // ws_key,
         } => {
@@ -141,7 +144,7 @@ pub async fn on_msg(
             trace!("admin stats: added to track: {}", &connection_key);
             let current_con_stats: WsStatTemp = stats
                 .entry(connection_key.clone())
-                .or_insert(WsStatTemp::new(addr.clone()))
+                .or_insert(WsStatTemp::new(ip, addr.clone(), Utc::now().timestamp_millis()))
                 .clone();
 
             // let msg = ServerMsg::AdminStats(AdminStatsRes::Started(stats.clone()));

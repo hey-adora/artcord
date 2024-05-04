@@ -3,7 +3,7 @@ use std::{collections::HashMap, net::SocketAddr, str::FromStr};
 use crate::{
     aggregation::server_msg_img::AggImg,
     misc::registration_invalid::RegistrationInvalidMsg,
-    model::{user::User, ws_statistics::WsStat},
+    model::{user::User, ws_statistics::{WsStat, WsStatTemp}},
 };
 
 use artcord_leptos_web_sockets::WsPackage;
@@ -66,44 +66,6 @@ pub enum ServerMsg {
 // }
 
 
-
-pub type AdminStatCountType = HashMap<WsPath, u64>;
-
-#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
-pub struct WsStatTemp {
-    pub addr: String,
-    // pub is_connected: bool,
-    pub count: AdminStatCountType,
-}
-
-impl WsStatTemp {
-    pub fn new(addr: String) -> Self {
-        Self {
-            addr,
-            // is_connected: true,
-            count: HashMap::new(),
-        }
-    }
-}
-
-impl From<WsStat> for WsStatTemp {
-    fn from(value: WsStat) -> Self {
-        let mut count = HashMap::<WsPath, u64>::with_capacity(value.req_count.len());
-        for req_count in value.req_count {
-            count.insert(
-                WsPath::from_str(&req_count.path)
-                    .inspect_err(|e| error!("ws_stat_temp invalid path: {}", e))
-                    .unwrap_or(WsPath::WsStatsPaged),
-                req_count.count as u64,
-            );
-        }
-
-        Self {
-            addr: value.addr,
-            count,
-        }
-    }
-}
 
 
 

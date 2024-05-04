@@ -4,12 +4,11 @@ use std::time::Duration;
 use artcord_leptos_web_sockets::channel::WsRecvResult;
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_client_msg::WsPath;
-use artcord_state::message::prod_server_msg::AdminStatCountType;
 use artcord_state::message::prod_server_msg::ServerMsg;
-use artcord_state::message::prod_server_msg::WsStatTemp;
 use artcord_state::model::ws_statistics;
 use artcord_state::model::ws_statistics::ReqCount;
 use artcord_state::model::ws_statistics::WsStat;
+use artcord_state::model::ws_statistics::WsStatTemp;
 use leptos::html::U;
 use leptos::*;
 use leptos_router::use_params_map;
@@ -36,7 +35,7 @@ pub mod overview;
 pub mod ws_live;
 pub mod ws_old;
 
-pub type WebAdminStatCountType = HashMap<WsPath, RwSignal<u64>>;
+
 
 #[component]
 pub fn WsPathTableHeaderView() -> impl IntoView {
@@ -51,32 +50,7 @@ pub fn WsPathTableHeaderView() -> impl IntoView {
         .collect_view()
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub struct WebWsStat {
-    pub addr: String,
-    // pub is_connected: RwSignal<bool>,
-    pub count: WebAdminStatCountType,
-}
 
-impl From<WsStatTemp> for WebWsStat {
-    fn from(value: WsStatTemp) -> Self {
-        let mut count_map: WebAdminStatCountType = HashMap::with_capacity(value.count.len());
-        for path in WsPath::iter() {
-            count_map.insert(
-                path,
-                RwSignal::new(value.count.get(&path).cloned().unwrap_or(0_u64)),
-            );
-        }
-        // for (path, count) in value.count {
-        //     count_map.insert(path, RwSignal::new(count));
-        // }
-        WebWsStat {
-            addr: value.addr,
-            // is_connected: RwSignal::new(true),
-            count: count_map,
-        }
-    }
-}
 
 // impl From<&HashMap<WsPath, AdminStat>> for HashMap<String, WebAdminStat> {
 //     fn from(value: &HashMap<WsPath, AdminStat>) -> Self {}

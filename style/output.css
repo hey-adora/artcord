@@ -781,8 +781,8 @@ video {
   max-width: 20rem;
 }
 
-.max-w-full {
-  max-width: 100%;
+.max-w-\[80vh\] {
+  max-width: 80vh;
 }
 
 .max-w-min {

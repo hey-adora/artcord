@@ -728,6 +728,7 @@ dependencies = [
  "bson",
  "chrono",
  "field_types",
+ "leptos",
  "serde",
  "strum",
  "tracing",

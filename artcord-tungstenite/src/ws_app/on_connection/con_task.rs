@@ -57,6 +57,7 @@ pub async fn con_task(
         .send(AdminConStatMsg::AddTrack {
             connection_key: con_id.clone(),
             tx: connection_task_tx.clone(),
+            ip: ip.to_string(),
             addr: addr.to_string(),
         })
         .await;
