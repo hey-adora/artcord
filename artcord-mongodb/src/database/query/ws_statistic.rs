@@ -1,8 +1,12 @@
 use std::str::FromStr;
 
 use crate::database::{DBError, DB};
-use artcord_state::{misc::DAY_IN_MS, model::ws_statistics::{WsStat, WsStatFieldName}};
+use artcord_state::{
+    misc::DAY_IN_MS,
+    model::ws_statistics::{WsStat, WsStatFieldName},
+};
 use bson::{doc, Document};
+use chrono::naive::NaiveDate;
 use chrono::{DateTime, Utc};
 use futures::TryStreamExt;
 use mongodb::{
@@ -10,7 +14,6 @@ use mongodb::{
     Collection, Database, IndexModel,
 };
 use tracing::{debug, error};
-use chrono::naive::NaiveDate;
 
 pub const COLLECTION_WS_STATISTIC_NAME: &'static str = "ws_statistic";
 
@@ -216,38 +219,44 @@ impl DB {
             return Ok((0, None, output));
         };
 
-        let total_count = stats_with_paginatoin.get_array("total_count").map(|v| {
-            v.first()
-                .map(|v| {
-                    v.as_document()
-                        .map(|v| v.get("total_count").map(|v| v.as_i32()))
-                })
-                .flatten()
-                .flatten()
-                .flatten()
-        })?.unwrap_or(0) as u64;
-
-        let latest = stats_with_paginatoin
-            .get_array("latest")
+        let total_count = stats_with_paginatoin
+            .get_array("total_count")
             .map(|v| {
                 v.first()
                     .map(|v| {
                         v.as_document()
-                            .map(|v| v.get("created_at").map(|v| v.as_i64()))
+                            .map(|v| v.get("total_count").map(|v| v.as_i32()))
                     })
                     .flatten()
                     .flatten()
                     .flatten()
-            })?;
-        
+            })?
+            .unwrap_or(0) as u64;
+
+        let latest = stats_with_paginatoin.get_array("latest").map(|v| {
+            v.first()
+                .map(|v| {
+                    v.as_document()
+                        .map(|v| v.get("created_at").map(|v| v.as_i64()))
+                })
+                .flatten()
+                .flatten()
+                .flatten()
+        })?;
+
         let stats = stats_with_paginatoin
             .get_array("stats")
             .map(|v| {
-                v.iter().map(|v| {
-                    v.as_document()
-                        .map(|v| mongodb::bson::from_document::<WsStat>(v.clone()).map_err(|err| DBError::from(err)))
-                }).flatten()
-            }).map(|v| v.collect::<Result<Vec<WsStat>, DBError>>())??;
+                v.iter()
+                    .map(|v| {
+                        v.as_document().map(|v| {
+                            mongodb::bson::from_document::<WsStat>(v.clone())
+                                .map_err(|err| DBError::from(err))
+                        })
+                    })
+                    .flatten()
+            })
+            .map(|v| v.collect::<Result<Vec<WsStat>, DBError>>())??;
 
         // while let Some(result) = stats.try_next().await? {   bson::de::Error
         //     let doc: WsStat = mongodb::bson::from_document(result)?;
@@ -275,9 +284,8 @@ impl DB {
         let amount = amount.clamp(1, 10000);
         let mut pipeline = vec![doc! { "$sort": doc! { WsStatFieldName::CreatedAt.name(): -1 } }];
 
-        pipeline.push(
-            doc! { "$match": doc! { WsStatFieldName::CreatedAt.name(): { "$lt": from } } },
-        );
+        pipeline
+            .push(doc! { "$match": doc! { WsStatFieldName::CreatedAt.name(): { "$lt": from } } });
 
         if page > 0 {
             let skip = (page * amount) as i64;
@@ -312,7 +320,6 @@ impl DB {
         // Ok(result)
     }
 
-
     pub async fn ws_statistic_ranged_latest(
         &self,
         from: i64,
@@ -321,21 +328,21 @@ impl DB {
         let pipeline = vec![
             doc! { "$sort": { WsStatFieldName::CreatedAt.name(): 1 } },
             doc! { "$match": { WsStatFieldName::CreatedAt.name(): { "$lt": from, "$gt": to } } },
-            doc! { "$group": { 
+            doc! { "$group": {
                 "_id": {
                     "$dateToString": {
                         "date": {
-                            "$toDate": "$created_at",
+                            "$toDate": format!("${}", WsStatFieldName::CreatedAt.name()),
                         },
                         "format": "%Y-%m-%d"
                     }
-                }, 
+                },
                 "count": { "$count": { } }
             } },
             doc! { "$sort": { "_id": 1 } },
         ];
 
-        debug!("db: pipes: {:#?}", &pipeline); 
+        debug!("db: pipes: {:#?}", &pipeline);
 
         let mut stats: mongodb::Cursor<Document> = self
             .collection_ws_statistic
@@ -349,21 +356,27 @@ impl DB {
         let mut prev_created_at: Option<i64> = None;
         for stat in stats {
             debug!("db: graph: {}", stat);
-            let created_at = stat.get_str("_id")
-            .map(|date| NaiveDate::parse_from_str(date, "%Y-%m-%d").map(|date| DateTime::<Utc>::from_naive_utc_and_offset(date.into(), Utc)) )??.timestamp_millis();
+            let created_at = stat
+                .get_str("_id")
+                .map(|date| {
+                    NaiveDate::parse_from_str(date, "%Y-%m-%d")
+                        .map(|date| DateTime::<Utc>::from_naive_utc_and_offset(date.into(), Utc))
+                })??
+                .timestamp_millis();
             let count = stat.get_i32("count")? as f64;
 
-            
+            //debug!("db: graph: {}", stat);
+
             if let Some(prev_created_at) = prev_created_at {
-                //debug!("({} - {}) / {} > 1 = {} | {} {}", created_at, prev_created_at, DAY_IN_MS, (created_at - prev_created_at) / DAY_IN_MS > 1, created_at - prev_created_at, (created_at - prev_created_at) / DAY_IN_MS);
-                if (prev_created_at - created_at ) / DAY_IN_MS > 1 {
-                    for day_i in (created_at + DAY_IN_MS..prev_created_at).step_by(DAY_IN_MS as usize) {
+                debug!("({} - {}) / {} > 1 = {} | {} {}", created_at, prev_created_at, DAY_IN_MS, (created_at - prev_created_at) / DAY_IN_MS > 1, created_at - prev_created_at, (created_at - prev_created_at) / DAY_IN_MS);
+                if (created_at - prev_created_at) / DAY_IN_MS > 1 {
+                    for day_i in (prev_created_at + DAY_IN_MS..created_at).step_by(DAY_IN_MS as usize) {
                         output.push(day_i as f64);
                         output.push(0.0);
                     }
                 }
             }
-           
+
             output.push(created_at as f64);
             output.push(count);
             prev_created_at = Some(created_at);
