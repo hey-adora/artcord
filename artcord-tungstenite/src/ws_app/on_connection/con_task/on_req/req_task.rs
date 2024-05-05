@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use artcord_leptos_web_sockets::{WsPackage, WsRouteKey};
 use artcord_mongodb::database::DB;
-use artcord_state::message::prod_client_msg::{ClientMsg, WsPath};
+use artcord_state::message::prod_client_msg::{ClientMsg};
 use artcord_state::message::prod_perm_key::ProdMsgPermKey;
 use artcord_state::message::prod_server_msg::ServerMsg;
 use tokio::sync::mpsc;
@@ -12,6 +12,7 @@ use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 use tokio_tungstenite::tungstenite::protocol::CloseFrame;
 use tokio_tungstenite::tungstenite::Message;
 use tracing::{debug, error, trace};
+use enum_index::EnumIndex;
 
 use crate::ws_app::on_connection::con_task::on_req::req_task::res::ws_stats_ranged::ws_stats_ranged;
 //use crate::ws_app::on_connection::con_task::on_req::req_task::res::ws_stats_first_page::ws_stats_first_page;
@@ -46,7 +47,7 @@ pub async fn req_task(
 
         let client_msg = ClientMsg::from_bytes(&client_msg?)?;
         let res_key: WsRouteKey = client_msg.0;
-        let data = client_msg.1;
+        let data: ClientMsg = client_msg.1;
 
         trace!("recv: {:#?}", data);
 
@@ -88,7 +89,7 @@ pub async fn req_task(
             admin_ws_stats_tx
                 .send(AdminConStatMsg::Inc {
                     connection_key: connection_key.clone(),
-                    path: WsPath::from(&data),
+                    path: data.enum_index(),
                 })
                 .await?;
 

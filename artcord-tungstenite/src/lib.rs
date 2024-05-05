@@ -7,7 +7,6 @@ use std::time::Duration;
 
 use artcord_mongodb::database::DB;
 use artcord_state::message::prod_client_msg::ClientMsg;
-use artcord_state::message::prod_client_msg::WsPath;
 use artcord_state::message::prod_perm_key::ProdMsgPermKey;
 use artcord_state::message::prod_server_msg::ServerMsg;
 use artcord_state::util::time::time_is_past;

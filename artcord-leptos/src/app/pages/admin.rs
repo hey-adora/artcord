@@ -3,11 +3,10 @@ use std::time::Duration;
 
 use artcord_leptos_web_sockets::channel::WsRecvResult;
 use artcord_state::message::prod_client_msg::ClientMsg;
-use artcord_state::message::prod_client_msg::WsPath;
 use artcord_state::message::prod_server_msg::ServerMsg;
 use artcord_state::model::ws_statistics;
 use artcord_state::model::ws_statistics::ReqCount;
-use artcord_state::model::ws_statistics::WsStat;
+use artcord_state::model::ws_statistics::WsStatDb;
 use artcord_state::model::ws_statistics::WsStatTemp;
 use leptos::html::U;
 use leptos::*;
@@ -40,7 +39,7 @@ pub mod ws_old;
 
 #[component]
 pub fn WsPathTableHeaderView() -> impl IntoView {
-    WsPath::VARIANTS
+    ClientMsg::VARIANTS
         .iter()
         .map(|v| {
             view! {
@@ -70,14 +69,14 @@ pub enum AdminWsOldPageState {
 #[derive(Copy, Clone, Debug)]
 pub struct AdminPageState {
     pub live_connections: LiveWsStats,
-    pub old_connections: RwSignal<Vec<WsStat>>,
+    pub old_connections: RwSignal<Vec<WsStatDb>>,
     pub old_connections_pagination: RwSignal<Option<u64>>,
     pub old_connections_active_page: RwSignal<u64>,
     pub old_connections_loading: RwSignal<bool>,
     pub old_connections_loaded: RwSignal<Option<u64>>,
     pub old_connections_from: RwSignal<Option<i64>>,
     pub overview_state: RwSignal<LoadingNotFound>,
-    pub overview_old_connections: RwSignal<Vec<WsStat>>,
+    pub overview_old_connections: RwSignal<Vec<WsStatDb>>,
     pub overview_selected_days: RwSignal<u64>,
     pub overview_selected_unique: RwSignal<bool>,
 
@@ -100,7 +99,7 @@ impl AdminPageState {
         }
     }
 
-    pub fn set_overview_old_stats(&self, stats: Vec<WsStat>) {
+    pub fn set_overview_old_stats(&self, stats: Vec<WsStatDb>) {
         self.overview_old_connections.set(stats);
     }
 
@@ -108,13 +107,13 @@ impl AdminPageState {
         self.old_connections_pagination.set(Some(pagination.div_ceil(PAGE_AMOUNT)));
     }
 
-    pub fn set_old_stats_paged(&self, stats: Vec<WsStat>) {
+    pub fn set_old_stats_paged(&self, stats: Vec<WsStatDb>) {
         self.old_connections.set(stats);
         self.old_connections_loading.set(false);
         self.old_connections_loaded.set(Some(self.old_connections_active_page.get_untracked()));
     }
 
-    pub fn set_old_stats_with_pagination(&self, total_count: u64, from: Option<i64>, stats: Vec<WsStat>) {
+    pub fn set_old_stats_with_pagination(&self, total_count: u64, from: Option<i64>, stats: Vec<WsStatDb>) {
         // let mut web_stats: HashMap<String, WsStat> = HashMap::with_capacity(stats.len());
         // for (path, stat) in stats {
         //     web_stats.insert(path, stat.into());

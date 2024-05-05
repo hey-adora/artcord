@@ -9,7 +9,7 @@ use artcord_leptos_web_sockets::WsPackage;
 use artcord_leptos_web_sockets::WsRouteKey;
 use artcord_mongodb::database::DB;
 use artcord_state::message::prod_client_msg::ClientMsg;
-use artcord_state::message::prod_client_msg::WsPath;
+use artcord_state::message::prod_client_msg::ClientMsgIndexType;
 use artcord_state::message::prod_perm_key::ProdMsgPermKey;
 use artcord_state::message::prod_server_msg::ServerMsg;
 use artcord_state::util::time::time_is_past;
@@ -60,7 +60,7 @@ use super::on_connection::con_task::ConMsg;
 pub struct ThrottleStats {
     ws_connection_count: u64,
     // wrap hashmap in SocketAddr (maybe)
-    ws_path_count: HashMap<WsPath, (u64, Instant)>,
+    ws_path_count: HashMap<ClientMsgIndexType, (u64, Instant)>,
     ws_red_flag: Option<(u64, DateTime<Utc>)>,
     ws_banned_until: Option<DateTime<Utc>>,
     // ws_proccesing: RwLock<bool>,

@@ -16,3 +16,6 @@ tracing = "0.1.40"
 uuid = "1.7.0"
 strum = { version = "0.26.2", features = ["derive"] }
 leptos = { version = "0.6.6", features = ["default"] }
+enum_index = "0.2.0"
+enum_index_derive = "0.2.0"
+thiserror = "1.0.57"

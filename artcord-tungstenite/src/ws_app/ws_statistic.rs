@@ -4,11 +4,9 @@ use artcord_leptos_web_sockets::{WsPackage, WsRouteKey};
 use artcord_mongodb::database::DB;
 use artcord_state::{
     message::{
-        prod_client_msg::WsPath,
-        prod_perm_key::ProdMsgPermKey,
-        prod_server_msg::ServerMsg,
+        prod_client_msg::ClientMsgIndexType, prod_perm_key::ProdMsgPermKey, prod_server_msg::ServerMsg
     },
-    model::ws_statistics::{WsStat, WsStatTemp},
+    model::ws_statistics::{WsStatDb, WsStatTemp},
 };
 use chrono::Utc;
 use tokio::{select, sync::mpsc, task::JoinHandle};
@@ -21,7 +19,7 @@ use super::{ws_throttle::AdminMsgErr, ConMsg};
 pub enum AdminConStatMsg {
     Inc {
         connection_key: String,
-        path: WsPath,
+        path: ClientMsgIndexType,
     },
 
     AddTrack {
@@ -88,7 +86,13 @@ pub async fn admin_stat_task(
         }
     }
 
-    let unsaved_stats: Vec<WsStat> = WsStat::from_hashmap_temp_stats(stats);
+    let unsaved_stats = match WsStatDb::from_hashmap_temp_stats(stats) {
+        Ok(stats) => stats,
+        Err(err) => {
+            error!("ws_stats: error converting from WsStatsTemp to WsStats {}", err);
+            return;
+        }
+    };
     let result = db.ws_statistic_insert_many(unsaved_stats).await;
     if let Err(err) = result {
         error!("ws_stats: saving unsaved_stats {}", err);
@@ -219,7 +223,15 @@ pub async fn on_msg(
                 con_key: connection_key.clone(),
             };
 
-            db.ws_statistic_insert_one(stat.clone().into()).await?;
+            let stat_db: WsStatDb = match stat.clone().try_into() {
+                Ok(stat) => stat,
+                Err(err) => {
+                    warn!("admin stats: missing connection entry: {}", &connection_key);
+                    return Ok(false);
+                }
+            };
+
+            db.ws_statistic_insert_one(stat_db).await?;
             stats.remove(&connection_key);
 
             for (con_key, (ws_key, tx)) in list {

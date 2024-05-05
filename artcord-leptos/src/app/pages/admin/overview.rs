@@ -4,7 +4,6 @@ use std::time::Duration;
 
 use artcord_leptos_web_sockets::channel::WsRecvResult;
 use artcord_state::message::prod_client_msg::ClientMsg;
-use artcord_state::message::prod_client_msg::WsPath;
 use artcord_state::message::prod_server_msg::ServerMsg;
 use chrono::DateTime;
 use chrono::Datelike;
@@ -21,6 +20,8 @@ use leptos_use::use_event_listener;
 use leptos_use::use_mouse;
 use leptos_use::use_resize_observer;
 use rand::Rng;
+use strum::VariantArray;
+use strum::VariantNames;
 use tracing::debug;
 use tracing::error;
 use tracing::trace;
@@ -159,6 +160,8 @@ pub fn Overview() -> impl IntoView {
         }
     };
 
+    //<WsPath as VariantArray>::VARIANTS
+
     view! {
         <div class="grid grid-rows-[auto_1fr] overflow-y-hidden">
             <div>"Overview"</div>
@@ -183,6 +186,8 @@ pub fn Overview() -> impl IntoView {
                                 { days_btn_view(30) }
                             </div>
                         </div>
+                        <div>
+                    </div>
                 </div>
             </div>
         </div>

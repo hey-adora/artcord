@@ -3,7 +3,7 @@ use std::str::FromStr;
 use crate::database::{DBError, DB};
 use artcord_state::{
     misc::DAY_IN_MS,
-    model::ws_statistics::{WsStat, WsStatFieldName},
+    model::ws_statistics::{WsStatDb, WsStatDbFieldName},
 };
 use bson::{doc, Document};
 use chrono::naive::NaiveDate;
@@ -18,12 +18,12 @@ use tracing::{debug, error};
 pub const COLLECTION_WS_STATISTIC_NAME: &'static str = "ws_statistic";
 
 impl DB {
-    pub async fn init_ws_statistic(database: &Database) -> Collection<WsStat> {
+    pub async fn init_ws_statistic(database: &Database) -> Collection<WsStatDb> {
         let (index1) = (
             {
                 let opts = IndexOptions::builder().unique(true).build();
                 IndexModel::builder()
-                    .keys(doc! { WsStatFieldName::Id.name(): -1 })
+                    .keys(doc! { WsStatDbFieldName::Id.name(): -1 })
                     .options(opts)
                     .build()
             },
@@ -36,7 +36,7 @@ impl DB {
             // },
         );
 
-        let collection = database.collection::<WsStat>(COLLECTION_WS_STATISTIC_NAME);
+        let collection = database.collection::<WsStatDb>(COLLECTION_WS_STATISTIC_NAME);
 
         collection
             .create_indexes([index1.0], None)
@@ -50,7 +50,7 @@ impl DB {
 impl DB {
     pub async fn ws_statistic_insert_one(
         &self,
-        statistic: WsStat,
+        statistic: WsStatDb,
     ) -> Result<String, mongodb::error::Error> {
         let result = self
             .collection_ws_statistic
@@ -62,7 +62,7 @@ impl DB {
 
     pub async fn ws_statistic_insert_many(
         &self,
-        statistics: Vec<WsStat>,
+        statistics: Vec<WsStatDb>,
     ) -> Result<(), mongodb::error::Error> {
         let _ = self
             .collection_ws_statistic
@@ -93,9 +93,9 @@ impl DB {
     //     Ok(())
     // }
 
-    pub async fn ws_statistic_all_latest(&self) -> Result<Vec<WsStat>, mongodb::error::Error> {
+    pub async fn ws_statistic_all_latest(&self) -> Result<Vec<WsStatDb>, mongodb::error::Error> {
         let opts = FindOptions::builder()
-            .sort(doc! { WsStatFieldName::CreatedAt.name(): -1 })
+            .sort(doc! { WsStatDbFieldName::CreatedAt.name(): -1 })
             .build();
         let result = self.collection_ws_statistic.find(doc! {}, opts).await?;
         let result = result.try_collect().await.unwrap_or_else(|_| vec![]);
@@ -109,8 +109,8 @@ impl DB {
     ) -> Result<u64, mongodb::error::Error> {
         let mut pipeline = if let Some(from) = from {
             vec![
-                doc! { "$sort": doc! { WsStatFieldName::CreatedAt.name(): -1 } },
-                doc! { "$match": doc! { WsStatFieldName::CreatedAt.name(): { "$lt": from } } },
+                doc! { "$sort": doc! { WsStatDbFieldName::CreatedAt.name(): -1 } },
+                doc! { "$match": doc! { WsStatDbFieldName::CreatedAt.name(): { "$lt": from } } },
                 doc! { "$count": "total" },
             ]
         } else {
@@ -145,11 +145,11 @@ impl DB {
         page: u64,
         amount: u64,
         //   from: Option<i64>,
-    ) -> Result<(u64, Option<i64>, Vec<WsStat>), DBError> {
+    ) -> Result<(u64, Option<i64>, Vec<WsStatDb>), DBError> {
         let amount = amount.clamp(1, 10000);
 
         let mut stats_pipeline = vec![doc! {
-            "$sort": { WsStatFieldName::CreatedAt.name(): -1 }
+            "$sort": { WsStatDbFieldName::CreatedAt.name(): -1 }
         }];
 
         if page > 0 {
@@ -165,7 +165,7 @@ impl DB {
                 "total_count": [
                     {
                         "$sort": {
-                            WsStatFieldName::CreatedAt.name(): -1
+                            WsStatDbFieldName::CreatedAt.name(): -1
                         }
                     },
                     {
@@ -175,7 +175,7 @@ impl DB {
                 "latest": [
                     {
                         "$sort": {
-                            WsStatFieldName::CreatedAt.name(): -1
+                            WsStatDbFieldName::CreatedAt.name(): -1
                         }
                     },
                     {
@@ -183,7 +183,7 @@ impl DB {
                     },
                     {
                         "$project": {
-                            WsStatFieldName::CreatedAt.name(): 1
+                            WsStatDbFieldName::CreatedAt.name(): 1
                         }
                     }
                 ],
@@ -213,7 +213,7 @@ impl DB {
             .unwrap_or_else(|_| vec![]);
         //debug!("STATS: {:#?}", &stats_with_paginatoin);
 
-        let mut output: Vec<WsStat> = Vec::new();
+        let mut output: Vec<WsStatDb> = Vec::new();
 
         let Some(stats_with_paginatoin) = stats_with_paginatoin.first() else {
             return Ok((0, None, output));
@@ -237,7 +237,7 @@ impl DB {
             v.first()
                 .map(|v| {
                     v.as_document()
-                        .map(|v| v.get(WsStatFieldName::CreatedAt.name()).map(|v| v.as_i64()))
+                        .map(|v| v.get(WsStatDbFieldName::CreatedAt.name()).map(|v| v.as_i64()))
                 })
                 .flatten()
                 .flatten()
@@ -250,13 +250,13 @@ impl DB {
                 v.iter()
                     .map(|v| {
                         v.as_document().map(|v| {
-                            mongodb::bson::from_document::<WsStat>(v.clone())
+                            mongodb::bson::from_document::<WsStatDb>(v.clone())
                                 .map_err(|err| DBError::from(err))
                         })
                     })
                     .flatten()
             })
-            .map(|v| v.collect::<Result<Vec<WsStat>, DBError>>())??;
+            .map(|v| v.collect::<Result<Vec<WsStatDb>, DBError>>())??;
 
         // while let Some(result) = stats.try_next().await? {   bson::de::Error
         //     let doc: WsStat = mongodb::bson::from_document(result)?;
@@ -281,12 +281,12 @@ impl DB {
         page: u64,
         amount: u64,
         from: i64,
-    ) -> Result<Vec<WsStat>, mongodb::error::Error> {
+    ) -> Result<Vec<WsStatDb>, mongodb::error::Error> {
         let amount = amount.clamp(1, 10000);
-        let mut pipeline = vec![doc! { "$sort": doc! { WsStatFieldName::CreatedAt.name(): -1 } }];
+        let mut pipeline = vec![doc! { "$sort": doc! { WsStatDbFieldName::CreatedAt.name(): -1 } }];
 
         pipeline
-            .push(doc! { "$match": doc! { WsStatFieldName::CreatedAt.name(): { "$lt": from } } });
+            .push(doc! { "$match": doc! { WsStatDbFieldName::CreatedAt.name(): { "$lt": from } } });
 
         if page > 0 {
             let skip = (page * amount) as i64;
@@ -302,10 +302,10 @@ impl DB {
             .aggregate(pipeline, None)
             .await?;
 
-        let mut output: Vec<WsStat> = Vec::new();
+        let mut output: Vec<WsStatDb> = Vec::new();
 
         while let Some(result) = stats.try_next().await? {
-            let doc: WsStat = mongodb::bson::from_document(result)?;
+            let doc: WsStatDb = mongodb::bson::from_document(result)?;
             //let a = doc.f
             output.push(doc);
             // println!("hh");
@@ -328,8 +328,8 @@ impl DB {
         unique_id: bool,
     ) -> Result<Vec<f64>, DBError> {
         let mut pipeline = vec![
-            doc! { "$sort": { WsStatFieldName::CreatedAt.name(): 1 } },
-            doc! { "$match": { WsStatFieldName::CreatedAt.name(): { "$lt": from, "$gt": to } } },
+            doc! { "$sort": { WsStatDbFieldName::CreatedAt.name(): 1 } },
+            doc! { "$match": { WsStatDbFieldName::CreatedAt.name(): { "$lt": from, "$gt": to } } },
         ];
 
         if unique_id {
@@ -339,7 +339,7 @@ impl DB {
                         "date": {
                             "$dateToString": {
                                 "date": {
-                                    "$toDate": format!("${}", WsStatFieldName::CreatedAt.name()),
+                                    "$toDate": format!("${}", WsStatDbFieldName::CreatedAt.name()),
                                 },
                                 "format": "%Y-%m-%d"
                             }
@@ -363,7 +363,7 @@ impl DB {
                         "date": {
                             "$dateToString": {
                                 "date": {
-                                    "$toDate": format!("${}", WsStatFieldName::CreatedAt.name()),
+                                    "$toDate": format!("${}", WsStatDbFieldName::CreatedAt.name()),
                                 },
                                 "format": "%Y-%m-%d"
                             }

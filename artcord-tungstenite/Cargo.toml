@@ -22,6 +22,8 @@ tokio-util = { version = "0.7.10", features = ["full"] }
 uuid = "1.7.0"
 rand = "0.8.5"
 bcrypt = "0.15.1"
+enum_index = "0.2.0"
+enum_index_derive = "0.2.0"
 
 [features]
 development = []

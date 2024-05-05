@@ -5,10 +5,11 @@
 // };
 
 use artcord_leptos_web_sockets::WsPackage;
+use enum_index_derive::EnumIndex;
 use field_types::FieldName;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use strum::{EnumIter, EnumString, IntoStaticStr, VariantArray, VariantNames};
+use strum::{EnumCount, EnumIter, EnumString, IntoStaticStr, VariantArray, VariantNames};
 
 use std::fmt::Display;
 use std::net::IpAddr;
@@ -16,7 +17,9 @@ use std::time::Duration;
 
 use super::prod_perm_key::ProdMsgPermKey;
 
-#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub type ClientMsgIndexType = usize;
+
+#[derive(Deserialize, Serialize, Debug, PartialEq, Clone, VariantNames, EnumIndex, EnumCount)]
 pub enum ClientMsg {
     GalleryInit {
         amount: u32,
@@ -68,6 +71,8 @@ pub enum ClientMsg {
     LiveWsStats(bool),
 }
 
+
+
 impl artcord_leptos_web_sockets::Send for ClientMsg {
     fn send_as_vec(package: &WsPackage<Self>) -> Result<Vec<u8>, String>
     where
@@ -93,6 +98,24 @@ impl ClientMsg {
     //     }
     // }
 
+    pub fn get_throttle(&self) -> (u64, Duration) {
+        match self {
+            _ => (1, Duration::from_secs(5)),
+            //WsPath::Gallery => (1, Duration::from_secs(5)),
+            // WsPath::UserGallery => (1, Duration::from_secs(5)),
+            // WsPath::User => (1, Duration::from_secs(5)),
+            // WsPath::Login => (1, Duration::from_secs(5)),
+            // WsPath::Register => (1, Duration::from_secs(5)),
+            // WsPath::Logout => (1, Duration::from_secs(30)),
+            // WsPath::WsStatsPaged => (1, Duration::from_secs(1)),
+            // WsPath::WsStatsTotalCount => (1, Duration::from_secs(1)),
+            // //WsPath::WsStatsFirstPage => (1, Duration::from_secs(1)),
+            // WsPath::WsStatsWithPagination => (1, Duration::from_secs(1)),
+            // WsPath::LiveWsStats => (1, Duration::from_secs(1)),
+            // WsPath::WsStatsRanged => (1, Duration::from_secs(1)),
+        }
+    }
+
     pub fn as_vec(package: &WsPackage<Self>) -> Result<Vec<u8>, bincode::Error> {
         let a = bincode::serialize::<WsPackage<Self>>(package);
         //log!("SERIALIZE {:?} {:?}", self, a);
@@ -107,9 +130,9 @@ impl ClientMsg {
 
     pub fn throttle(
         &self,
-        throttle_time: &mut HashMap<WsPath, (u64, HashMap<IpAddr, u64>)>,
+        throttle_time: &mut HashMap<ClientMsgIndexType, (u64, HashMap<IpAddr, u64>)>,
         ip: &IpAddr,
-        path: WsPath,
+        path: ClientMsgIndexType,
         current_time: i64,
         duration: i64,
         max_count: u64,
@@ -148,158 +171,160 @@ impl ClientMsg {
     }
 }
 
-#[derive(
-    Deserialize,
-    Serialize,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Debug,
-    Hash,
-    VariantNames,
-    EnumString,
-    EnumIter,
-    IntoStaticStr,
-)]
-#[strum(serialize_all = "snake_case")]
-pub enum WsPath {
-    Gallery,
-    UserGallery,
-    User,
-    Login,
-    Register,
-    Logout,
-    WsStatsPaged,
-    WsStatsRanged,
-    WsStatsTotalCount,
-    //WsStatsFirstPage,
-    WsStatsWithPagination,
-    LiveWsStats,
-}
-
-// impl Display for WsPath {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         write!(f, "{:?}", self)
-//     }
+// #[derive(
+//     Deserialize,
+//     Serialize,
+//     Clone,
+//     Copy,
+//     PartialEq,
+//     Eq,
+//     Debug,
+//     Hash,
+//     VariantNames,
+//     VariantArray,
+//     EnumString,
+//     EnumIter,
+//     IntoStaticStr,
+// )]
+// #[strum(serialize_all = "snake_case")]
+// pub enum WsPath {
+//     Gallery,
+//     UserGallery,
+//     User,
+//     Login,
+//     Register,
+//     Logout,
+//     WsStatsPaged,
+//     WsStatsRanged,
+//     WsStatsTotalCount,
+//     //WsStatsFirstPage,
+//     WsStatsWithPagination,
+//     LiveWsStats,
 // }
 
-// #[derive(Clone, PartialEq, Eq, Debug, Hash)]
-// pub struct Throttle {
-//     pub max_connections: u64,
-//     pub interval: Duration,
-// }
+// // impl Display for WsPath {
+// //     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+// //         write!(f, "{:?}", self)
+// //     }
+// // }
 
-// impl Throttle {
-//     pub fn new() -> Self {
+// // #[derive(Clone, PartialEq, Eq, Debug, Hash)]
+// // pub struct Throttle {
+// //     pub max_connections: u64,
+// //     pub interval: Duration,
+// // }
 
-//     }
-// }
+// // impl Throttle {
+// //     pub fn new() -> Self {
 
-impl WsPath {
-    pub fn get_throttle(&self) -> (u64, Duration) {
-        match self {
-            WsPath::Gallery => (1, Duration::from_secs(5)),
-            WsPath::UserGallery => (1, Duration::from_secs(5)),
-            WsPath::User => (1, Duration::from_secs(5)),
-            WsPath::Login => (1, Duration::from_secs(5)),
-            WsPath::Register => (1, Duration::from_secs(5)),
-            WsPath::Logout => (1, Duration::from_secs(30)),
-            WsPath::WsStatsPaged => (1, Duration::from_secs(1)),
-            WsPath::WsStatsTotalCount => (1, Duration::from_secs(1)),
-            //WsPath::WsStatsFirstPage => (1, Duration::from_secs(1)),
-            WsPath::WsStatsWithPagination => (1, Duration::from_secs(1)),
-            WsPath::LiveWsStats => (1, Duration::from_secs(1)),
-            WsPath::WsStatsRanged => (1, Duration::from_secs(1)),
-        }
-    }
-    // pub fn get_throttle(&self) -> (u64, Duration) {
-    //     match self {
-    //         WsPath::Gallery => (100, Duration::from_secs(1)),
-    //         WsPath::UserGallery => (100, Duration::from_secs(1)),
-    //         WsPath::User => (100, Duration::from_secs(1)),
-    //         WsPath::Login => (100, Duration::from_secs(1)),
-    //         WsPath::Register => (100, Duration::from_secs(1)),
-    //         WsPath::Logout => (1, Duration::from_secs(30)),
-    //     }
-    // }
+// //     }
+// // }
 
-    // pub fn to_ms(&self) -> Duration {
-    //     match self {
-    //         WsPath::Gallery => 60 * 1000,
-    //         WsPath::UserGallery => 60 * 1000,
-    //         WsPath::User => 60 * 1000,
-    //         WsPath::Login => 60 * 1000,
-    //         WsPath::Register => 60 * 1000,
-    //         WsPath::Logout => 60 * 1000,
-    //     }
-    // }
-
-    // pub fn to_count(&self) -> u64 {
-    //     match self {
-    //         WsPath::Gallery => 6000,
-    //         WsPath::UserGallery => 6000,
-    //         WsPath::User => 6000,
-    //         WsPath::Login => 10,
-    //         WsPath::Register => 10,
-    //         WsPath::Logout => 10,
-    //     }
-    // }
-}
-
-// impl Into<WsPath> for ClientMsg {
-//     fn into(self) -> WsPath {
+// impl WsPath {
+//     pub fn get_throttle(&self) -> (u64, Duration) {
 //         match self {
-//             ClientMsg::GalleryInit { amount, from } => WsPath::Gallery,
+//             WsPath::Gallery => (1, Duration::from_secs(5)),
+//             WsPath::UserGallery => (1, Duration::from_secs(5)),
+//             WsPath::User => (1, Duration::from_secs(5)),
+//             WsPath::Login => (1, Duration::from_secs(5)),
+//             WsPath::Register => (1, Duration::from_secs(5)),
+//             WsPath::Logout => (1, Duration::from_secs(30)),
+//             WsPath::WsStatsPaged => (1, Duration::from_secs(1)),
+//             WsPath::WsStatsTotalCount => (1, Duration::from_secs(1)),
+//             //WsPath::WsStatsFirstPage => (1, Duration::from_secs(1)),
+//             WsPath::WsStatsWithPagination => (1, Duration::from_secs(1)),
+//             WsPath::LiveWsStats => (1, Duration::from_secs(1)),
+//             WsPath::WsStatsRanged => (1, Duration::from_secs(1)),
+//         }
+//     }
+//     // pub fn get_throttle(&self) -> (u64, Duration) {
+//     //     match self {
+//     //         WsPath::Gallery => (100, Duration::from_secs(1)),
+//     //         WsPath::UserGallery => (100, Duration::from_secs(1)),
+//     //         WsPath::User => (100, Duration::from_secs(1)),
+//     //         WsPath::Login => (100, Duration::from_secs(1)),
+//     //         WsPath::Register => (100, Duration::from_secs(1)),
+//     //         WsPath::Logout => (1, Duration::from_secs(30)),
+//     //     }
+//     // }
+
+//     // pub fn to_ms(&self) -> Duration {
+//     //     match self {
+//     //         WsPath::Gallery => 60 * 1000,
+//     //         WsPath::UserGallery => 60 * 1000,
+//     //         WsPath::User => 60 * 1000,
+//     //         WsPath::Login => 60 * 1000,
+//     //         WsPath::Register => 60 * 1000,
+//     //         WsPath::Logout => 60 * 1000,
+//     //     }
+//     // }
+
+//     // pub fn to_count(&self) -> u64 {
+//     //     match self {
+//     //         WsPath::Gallery => 6000,
+//     //         WsPath::UserGallery => 6000,
+//     //         WsPath::User => 6000,
+//     //         WsPath::Login => 10,
+//     //         WsPath::Register => 10,
+//     //         WsPath::Logout => 10,
+//     //     }
+//     // }
+// }
+
+// // impl Into<WsPath> for ClientMsg {
+// //     fn into(self) -> WsPath {
+// //         match self {
+// //             ClientMsg::GalleryInit { amount, from } => WsPath::Gallery,
+// //             ClientMsg::UserGalleryInit {
+// //                 from,
+// //                 amount,
+// //                 user_id,
+// //             } => WsPath::UserGallery,
+// //             ClientMsg::User { user_id } => WsPath::User,
+// //         }
+// //     }
+// // }
+
+// impl From<&ClientMsg> for WsPath {
+//     fn from(value: &ClientMsg) -> Self {
+//         match value {
+//             ClientMsg::GalleryInit { amount: _, from: _ } => WsPath::Gallery,
 //             ClientMsg::UserGalleryInit {
-//                 from,
-//                 amount,
-//                 user_id,
+//                 from: _,
+//                 amount: _,
+//                 user_id: _,
 //             } => WsPath::UserGallery,
-//             ClientMsg::User { user_id } => WsPath::User,
+//             ClientMsg::User { user_id: _ } => WsPath::User,
+//             ClientMsg::Login {
+//                 email: _,
+//                 password: _,
+//             } => WsPath::Login,
+//             ClientMsg::Register {
+//                 email: _,
+//                 password: _,
+//             } => WsPath::Register,
+//             ClientMsg::Logout => WsPath::Logout,
+//             ClientMsg::WsStatsPaged { page, amount, from } => WsPath::WsStatsPaged,
+//             ClientMsg::WsStatsTotalCount { from } => WsPath::WsStatsTotalCount,
+//             //ClientMsg::WsStatsFirstPage { amount } => WsPath::WsStatsFirstPage,
+//             ClientMsg::WsStatsWithPagination { amount, page } => WsPath::WsStatsWithPagination,
+//             ClientMsg::LiveWsStats(_) => WsPath::LiveWsStats,
+//             ClientMsg::WsStatsRange { from, to, unique_ip } => WsPath::WsStatsRanged,
 //         }
 //     }
 // }
-
-impl From<&ClientMsg> for WsPath {
-    fn from(value: &ClientMsg) -> Self {
-        match value {
-            ClientMsg::GalleryInit { amount: _, from: _ } => WsPath::Gallery,
-            ClientMsg::UserGalleryInit {
-                from: _,
-                amount: _,
-                user_id: _,
-            } => WsPath::UserGallery,
-            ClientMsg::User { user_id: _ } => WsPath::User,
-            ClientMsg::Login {
-                email: _,
-                password: _,
-            } => WsPath::Login,
-            ClientMsg::Register {
-                email: _,
-                password: _,
-            } => WsPath::Register,
-            ClientMsg::Logout => WsPath::Logout,
-            ClientMsg::WsStatsPaged { page, amount, from } => WsPath::WsStatsPaged,
-            ClientMsg::WsStatsTotalCount { from } => WsPath::WsStatsTotalCount,
-            //ClientMsg::WsStatsFirstPage { amount } => WsPath::WsStatsFirstPage,
-            ClientMsg::WsStatsWithPagination { amount, page } => WsPath::WsStatsWithPagination,
-            ClientMsg::LiveWsStats(_) => WsPath::LiveWsStats,
-            ClientMsg::WsStatsRange { from, to, unique_ip } => WsPath::WsStatsRanged,
-        }
-    }
-}
 
 #[cfg(test)]
 mod client_msg_tests {
 
     use chrono::Utc;
+    use enum_index::EnumIndex;
     use std::cell::RefCell;
     use std::collections::HashMap;
     use std::net::{IpAddr, Ipv4Addr};
     use std::rc::Rc;
 
-    use super::{ClientMsg, WsPath};
+    use super::{ClientMsg, ClientMsgIndexType};
 
     #[test]
     fn msg_throttle() {
@@ -311,7 +336,7 @@ mod client_msg_tests {
         }));
 
         let max_count = 10;
-        let throttle_times: Rc<RefCell<HashMap<WsPath, (u64, HashMap<IpAddr, u64>)>>> =
+        let throttle_times: Rc<RefCell<HashMap<ClientMsgIndexType, (u64, HashMap<IpAddr, u64>)>>> =
             Rc::new(RefCell::new(HashMap::new()));
         let ip = IpAddr::from(Ipv4Addr::new(127, 0, 0, 1));
 
@@ -327,8 +352,8 @@ mod client_msg_tests {
         let check = |start: u64, state: bool, check_index: bool| {
             for i in start..=max_count {
                 let throttle_times = &mut *throttle_times.borrow_mut();
-                let msg = msg.borrow();
-                let path: WsPath = (&*msg).into();
+                let msg = &*msg.borrow();
+                let path: ClientMsgIndexType = msg.enum_index();
 
                 let result = msg.throttle(
                     throttle_times,
@@ -388,3 +413,4 @@ mod client_msg_tests {
         check(0, true, false);
     }
 }
+

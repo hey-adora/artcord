@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use artcord_leptos_web_sockets::channel::WsRecvResult;
 use artcord_state::message::prod_client_msg::ClientMsg;
-use artcord_state::message::prod_client_msg::WsPath;
 use artcord_state::message::prod_server_msg::ServerMsg;
 use artcord_state::model::ws_statistics::ReqCount;
 use leptos::*;
@@ -260,7 +259,7 @@ pub fn WsOld() -> impl IntoView {
 
     let old_connections_count_view = move |count: Vec<ReqCount>| {
         // let count_iter = count.into_iter();
-        <WsPath as VariantNames>::VARIANTS
+        <ClientMsg as VariantNames>::VARIANTS
             .into_iter()
             .map(|path| {
                 // let path_str = path.

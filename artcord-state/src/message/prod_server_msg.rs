@@ -3,29 +3,30 @@ use std::{collections::HashMap, net::SocketAddr, str::FromStr};
 use crate::{
     aggregation::server_msg_img::AggImg,
     misc::registration_invalid::RegistrationInvalidMsg,
-    model::{user::User, ws_statistics::{WsStat, WsStatTemp}},
+    model::{user::User, ws_statistics::{WsStatDb, WsStatTemp}},
 };
 
 use artcord_leptos_web_sockets::WsPackage;
 use serde::{Deserialize, Serialize};
 use tracing::error;
 
-use super::{prod_client_msg::WsPath, prod_perm_key::ProdMsgPermKey};
+use super::prod_client_msg::ClientMsgIndexType;
+
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub enum ServerMsg {
     WsLiveStatsStarted(HashMap<String, WsStatTemp>),
     WsLiveStatsUpdateRemoveStat { con_key: String },
     WsLiveStatsUpdateAddedStat { con_key: String, stat: WsStatTemp },
-    WsLiveStatsUpdateInc { con_key: String, path: WsPath },
+    WsLiveStatsUpdateInc { con_key: String, path: ClientMsgIndexType },
     WsLiveStatsStopped,
     WsLiveStatsAlreadyStarted,
     WsLiveStatsAlreadyStopped,
     WsLiveStatsTaskIsNotSet,
     WsStatsTotalCount(u64),
     //WsStatsFirstPage { total_count: u64, first_page: Vec<WsStat> },
-    WsStatsWithPagination { total_count: u64, latest: Option<i64>, stats: Vec<WsStat> },
-    WsStatsPage(Vec<WsStat>),
+    WsStatsWithPagination { total_count: u64, latest: Option<i64>, stats: Vec<WsStatDb> },
+    WsStatsPage(Vec<WsStatDb>),
     WsStatsGraph(Vec<f64>),
     GalleryMain(Vec<AggImg>),
     GalleryUser(Option<Vec<AggImg>>),

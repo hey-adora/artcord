@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use artcord_leptos_web_sockets::{channel::WsRecvResult, runtime::WsRuntime};
-use artcord_state::{message::{prod_client_msg::{ClientMsg, WsPath}, prod_server_msg::ServerMsg}, model::ws_statistics::{WebWsStat, WsStatTemp}};
+use artcord_state::{message::{prod_client_msg::{ClientMsg, ClientMsgIndexType}, prod_server_msg::ServerMsg}, model::ws_statistics::{WebWsStat, WsStatTemp}};
 use leptos::{RwSignal, SignalSet, SignalUpdate, SignalWithUntracked};
 use tracing::warn;
 
@@ -37,14 +37,14 @@ impl LiveWsStats {
         });
     }
 
-    pub fn inc_live_stat(&self, con_key: &str, path: &WsPath) {
+    pub fn inc_live_stat(&self, con_key: &str, path: ClientMsgIndexType) {
         self.stats.with_untracked(|stats| {
             let stat = stats.get(con_key);
             let Some(stat) = stat else {
                 warn!("admin: con stat not found: {}", con_key);
                 return;
             };
-            let count = stat.count.get(path);
+            let count = stat.count.get(&path);
             let Some(count) = count else {
                 warn!("admin: con count stat not found: {} {:?}", con_key, path);
                 return;
@@ -81,7 +81,7 @@ pub fn use_ws_live_stats(ws: WsRuntime<ServerMsg, ClientMsg>, live_stats: LiveWs
                     live_stats.add_live_stat(con_key.clone(), stat.clone().into());
                 }
                 ServerMsg::WsLiveStatsUpdateInc { con_key, path } => {
-                    live_stats.inc_live_stat(con_key, path);
+                    live_stats.inc_live_stat(con_key, *path);
                 }
                 ServerMsg::WsLiveStatsUpdateRemoveStat { con_key } => {
                     live_stats.remove_live_stat(con_key);
