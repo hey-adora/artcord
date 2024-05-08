@@ -1,8 +1,8 @@
 use chrono::{DateTime, TimeDelta, Utc};
 use tracing::error;
 
-pub fn time_is_past(time: DateTime<Utc>) -> bool {
-    Utc::now() > time
+pub fn time_is_past(time: &DateTime<Utc>) -> bool {
+    Utc::now() > *time
 }
 
 pub fn time_passed(start: DateTime<Utc>, passed: TimeDelta) -> bool {

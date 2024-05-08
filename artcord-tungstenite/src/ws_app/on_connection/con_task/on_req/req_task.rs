@@ -7,6 +7,7 @@ use artcord_mongodb::database::DB;
 use artcord_state::message::prod_client_msg::{ClientMsg};
 use artcord_state::message::prod_perm_key::ProdMsgPermKey;
 use artcord_state::message::prod_server_msg::ServerMsg;
+use artcord_state::model::ws_statistics::TempConIdType;
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 use tokio_tungstenite::tungstenite::protocol::CloseFrame;
@@ -20,7 +21,7 @@ use crate::ws_app::on_connection::con_task::on_req::req_task::res::ws_stats_tota
 use crate::ws_app::on_connection::con_task::on_req::req_task::res::ws_stats_with_paginatoin::ws_stats_with_pagination;
 use crate::ws_app::on_connection::con_task::ConMsg;
 use crate::ws_app::ws_statistic::AdminConStatMsg;
-use crate::ws_app::WsResError;
+use crate::ws_app::{WsAppMsg, WsResError};
 
 use self::res::live_ws_stats::live_ws_stats;
 use self::res::main_gallery::ws_handle_main_gallery;
@@ -35,7 +36,8 @@ pub async fn req_task(
     db: Arc<DB>,
     connection_task_tx: mpsc::Sender<ConMsg>,
     admin_ws_stats_tx: mpsc::Sender<AdminConStatMsg>,
-    connection_key: String,
+    ws_app_tx: mpsc::Sender<WsAppMsg>,
+    connection_key: TempConIdType,
     addr: SocketAddr,
 ) {
     let user_task_result = async {
@@ -99,6 +101,17 @@ pub async fn req_task(
                 //ClientMsg::WsStatsFirstPage {  amount } => ws_stats_first_page(db, amount).await,
                 ClientMsg::WsStatsPaged { page, amount, from } => ws_stats_paged(db, page, amount, from).await,
                 ClientMsg::WsStatsWithPagination { page, amount } => ws_stats_with_pagination(db, page, amount).await,
+                ClientMsg::LiveWsThrottleCache(listener_state) => {
+                    res::ws_throttle_cached::ws_throttle_cached(
+                        db,
+                        listener_state,
+                        connection_key,
+                        res_key,
+                        &connection_task_tx,
+                        &ws_app_tx,
+                    )
+                    .await
+                }
                 ClientMsg::LiveWsStats(listener_state) => {
                     live_ws_stats(
                         db,

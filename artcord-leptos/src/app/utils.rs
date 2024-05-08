@@ -41,6 +41,7 @@ pub enum PageUrl {
     AdminDash,
     AdminDashWsLive,
     AdminDashWsOld,
+    AdminThrottleCached,
     NotFound,
 }
 
@@ -59,6 +60,7 @@ impl Display for PageUrl {
                 PageUrl::AdminDash => "/dash",
                 PageUrl::AdminDashWsLive => "/wslive",
                 PageUrl::AdminDashWsOld => "/wsold",
+                PageUrl::AdminThrottleCached => "/throttle_cached",
                 PageUrl::NotFound => "/*any",
             }
         )
@@ -89,6 +91,10 @@ impl PageUrl {
 
     pub fn url_dash() -> String {
         PageUrl::AdminDash.to_string()
+    }
+
+    pub fn url_throttle_cached() -> String {
+        format!("{}{}", PageUrl::AdminDash, PageUrl::AdminThrottleCached)
     }
 
     pub fn url_dash_wslive() -> String {
@@ -125,12 +131,13 @@ impl PageUrl {
             let url = format!("{}{}", location.pathname.get(), location.hash.get());
             let url = url.as_str();
             let url = match url {
-                "/" | "/#home" => PageUrl::Home,
-                "/#about" => PageUrl::HomeAbout,
-                "/gallery" => PageUrl::MainGallery,
-                "/dash" => PageUrl::AdminDash,
-                "/dash/wslive" => PageUrl::AdminDashWsLive,
-                "/dash/wsold" => PageUrl::AdminDashWsOld,
+                url if url == Self::url_home() || url == Self::url_home() => PageUrl::Home,
+                url if url == Self::url_home_about() => PageUrl::HomeAbout,
+                url if url == Self::url_main_gallery() => PageUrl::MainGallery,
+                url if url == Self::url_dash() => PageUrl::AdminDash,
+                url if url == Self::url_dash_wslive() => PageUrl::AdminDashWsLive,
+                url if url == Self::url_dash_wsold() => PageUrl::AdminDashWsOld,
+                url if url == Self::url_throttle_cached() => PageUrl::AdminThrottleCached,
                 url if re(url, r"^\/user\/[[:alnum:]]+$") => PageUrl::UserGallery,
                 _ => PageUrl::NotFound,
             };

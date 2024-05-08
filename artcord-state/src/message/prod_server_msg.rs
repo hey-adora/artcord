@@ -3,7 +3,7 @@ use std::{collections::HashMap, net::SocketAddr, str::FromStr};
 use crate::{
     aggregation::server_msg_img::AggImg,
     misc::registration_invalid::RegistrationInvalidMsg,
-    model::{user::User, ws_statistics::{WsStatDb, WsStatTemp}},
+    model::{user::User, ws_statistics::{TempConIdType, WsStatDb, WsStatTemp}},
 };
 
 use artcord_leptos_web_sockets::WsPackage;
@@ -15,10 +15,10 @@ use super::prod_client_msg::ClientMsgIndexType;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub enum ServerMsg {
-    WsLiveStatsStarted(HashMap<String, WsStatTemp>),
-    WsLiveStatsUpdateRemoveStat { con_key: String },
-    WsLiveStatsUpdateAddedStat { con_key: String, stat: WsStatTemp },
-    WsLiveStatsUpdateInc { con_key: String, path: ClientMsgIndexType },
+    WsLiveStatsStarted(HashMap<TempConIdType, WsStatTemp>),
+    WsLiveStatsUpdateRemoveStat { con_key: TempConIdType },
+    WsLiveStatsUpdateAddedStat { con_key: TempConIdType, stat: WsStatTemp },
+    WsLiveStatsUpdateInc { con_key: TempConIdType, path: ClientMsgIndexType },
     WsLiveStatsStopped,
     WsLiveStatsAlreadyStarted,
     WsLiveStatsAlreadyStopped,

@@ -3,6 +3,7 @@ use crate::ws_app::on_connection::con_task::on_req::on_req;
 use crate::ws_app::ws_statistic::AdminConStatMsg;
 use crate::ws_app::WsAppMsg;
 use artcord_mongodb::database::DB;
+use artcord_state::model::ws_statistics::TempConIdType;
 use futures::StreamExt;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
@@ -17,6 +18,8 @@ use tracing::{error, trace};
 pub mod on_msg;
 pub mod on_req;
 
+
+
 pub enum ConMsg {
     Send(Message),
     Stop,
@@ -26,7 +29,7 @@ pub async fn con_task(
     stream: TcpStream,
     cancellation_token: CancellationToken,
     db: Arc<DB>,
-    ws_tx: mpsc::Sender<WsAppMsg>,
+    ws_app_tx: mpsc::Sender<WsAppMsg>,
     ip: IpAddr,
     addr: SocketAddr,
     admin_ws_stats_tx: mpsc::Sender<AdminConStatMsg>,
@@ -43,7 +46,7 @@ pub async fn con_task(
     };
     // ws_stream.
     trace!("con accepted");
-    let con_id = uuid::Uuid::new_v4().to_string();
+    let con_id: TempConIdType = uuid::Uuid::new_v4().as_u128();
     // let Ok(ws_stream) = ws_stream else {
     //     return;
     // };
@@ -83,7 +86,7 @@ pub async fn con_task(
         select! {
             result = client_in.next() => {
                 trace!("read finished");
-                let exit = on_req(result, &user_task_tracker, &db, &connection_task_tx, &admin_ws_stats_tx, &con_id, &addr).await;
+                let exit = on_req(result, &user_task_tracker, &db, &connection_task_tx, &admin_ws_stats_tx, &ws_app_tx, &con_id, &addr).await;
                 if exit {
                     break;
                 }
@@ -130,7 +133,7 @@ pub async fn con_task(
 
     user_task_tracker.close();
     user_task_tracker.wait().await;
-    let send_result = ws_tx.send(WsAppMsg::Disconnected(ip)).await;
+    let send_result = ws_app_tx.send(WsAppMsg::Disconnected(ip)).await;
     if let Err(err) = send_result {
         error!("failed to send disconnect to ws: {}", err);
     }

@@ -2,8 +2,7 @@ use std::str::FromStr;
 
 use crate::database::{DBError, DB};
 use artcord_state::{
-    misc::DAY_IN_MS,
-    model::ws_statistics::{WsStatDb, WsStatDbFieldName},
+    model::ws_statistics::{WsStatDb, WsStatDbFieldName}, util::DAY_IN_MS,
 };
 use bson::{doc, Document};
 use chrono::naive::NaiveDate;

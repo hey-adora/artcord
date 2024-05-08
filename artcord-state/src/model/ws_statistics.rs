@@ -1,4 +1,4 @@
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use field_types::FieldName;
 use leptos::RwSignal;
 use serde::de::value;
@@ -6,12 +6,14 @@ use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use strum::VariantNames;
 use std::num::TryFromIntError;
+use std::sync::mpsc;
 use std::{collections::HashMap, fmt::Debug, str::FromStr};
 use tracing::error;
 use thiserror::Error;
 
 use crate::message::prod_client_msg::ClientMsgIndexType;
 use crate::message::prod_client_msg::ClientMsg;
+
 
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -26,12 +28,12 @@ impl ReqCount {
     }
 }
 
-impl TryFrom<(ClientMsgIndexType, u64)> for ReqCount {
+impl TryFrom<(ClientMsgIndexType, WsStatTempCountItem)> for ReqCount {
     type Error = ReqCountTryFromError;
 
-    fn try_from((msg_enum_index, connection_count): (ClientMsgIndexType, u64)) -> Result<Self, Self::Error> {
+    fn try_from((msg_enum_index, connection_count): (ClientMsgIndexType, WsStatTempCountItem)) -> Result<Self, Self::Error> {
         let path = ClientMsg::VARIANTS.get(msg_enum_index).ok_or(ReqCountTryFromError::InvalidClientMsgEnumIndex(msg_enum_index))?;
-        let count = i64::try_from(connection_count)?;
+        let count = i64::try_from(connection_count.total_count)?;
         Ok(
             Self {
                 count,
@@ -42,14 +44,6 @@ impl TryFrom<(ClientMsgIndexType, u64)> for ReqCount {
 }
 
 
-#[derive(Error, Debug)]
-pub enum ReqCountTryFromError {
-    #[error("Failed to convert u64 to i64: {0}")]
-    TryFromIntError(#[from] TryFromIntError),
-
-    #[error("Invalid client msg enum index - out of bounds: {0}")]
-    InvalidClientMsgEnumIndex(usize),
-}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, FieldName)]
 pub struct WsStatDb {
@@ -98,26 +92,26 @@ impl WsStatDb {
         }
     }
 
-    pub fn from_hashmap_temp_stats(temp_stats: HashMap<String, WsStatTemp>) -> Result<Vec<Self>, ReqCountTryFromError> {
-        temp_stats.into_iter().map(|(_connection_uuid, connection_temp_stats)| connection_temp_stats.try_into()).collect()
+    pub fn from_hashmap_temp_stats(temp_stats: HashMap<TempConIdType, WsStatTemp>) -> Result<Vec<Self>, ReqCountTryFromError> {
+        temp_stats.into_iter().map(|(connection_uuid, connection_temp_stats)| WsStatDb::from_temp(connection_temp_stats, uuid::Uuid::from_u128(connection_uuid).to_string(), Utc::now().timestamp_millis())).collect()
     }
 }
 
-impl TryFrom<WsStatTemp> for WsStatDb {
-    type Error = ReqCountTryFromError;
+// impl TryFrom<WsStatTemp> for WsStatDb {
+//     type Error = ReqCountTryFromError;
 
-    fn try_from(value: WsStatTemp) -> Result<Self, Self::Error> {
-        Self::from_temp(value, Utc::now().timestamp_millis())
-    }
-}
+//     fn try_from(value: WsStatTemp) -> Result<Self, Self::Error> {
+//         Self::from_temp(value, Utc::now().timestamp_millis())
+//     }
+// }
 
 impl WsStatDb {
-    fn from_temp(value: WsStatTemp, disconnected_at: i64) -> Result<Self, ReqCountTryFromError> {
+    pub fn from_temp(value: WsStatTemp, id: String, disconnected_at: i64) -> Result<Self, ReqCountTryFromError> {
         let req_count: Vec<ReqCount> = value.count.into_iter().map(|v| v.try_into()).collect::<Result<Vec<ReqCount>, ReqCountTryFromError>>()?;
 
         Ok(
             Self {
-                id: uuid::Uuid::new_v4().to_string(),
+                id,
                 ip: value.ip,
                 addr: value.addr,
                 req_count,
@@ -130,8 +124,35 @@ impl WsStatDb {
     }
 }
 
+pub type TempConIdType = u128;
 
-pub type AdminStatCountType = HashMap<ClientMsgIndexType, u64>;
+#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct WsStatTempCountItem {
+    pub total_count: u64,
+    pub count: u64,
+    pub last_reset_at: i64,
+}
+
+impl Default for WsStatTempCountItem {
+    fn default() -> Self {
+        Self {
+            total_count: 0,
+            count: 0,
+            last_reset_at: Utc::now().timestamp_millis()
+        }
+    }
+}
+
+impl WsStatTempCountItem {
+    pub fn new(total_count: u64) -> Self {
+        Self {
+            total_count,
+            ..Self::default()
+        }
+    }
+}
+
+pub type AdminStatCountType = HashMap<ClientMsgIndexType, WsStatTempCountItem>;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct WsStatTemp {
@@ -153,21 +174,18 @@ impl WsStatTemp {
 }
 
 impl TryFrom<WsStatDb> for WsStatTemp {
-    type Error = ();
+    type Error = WsStatDbToTempTryFromError;
 
     fn try_from(value: WsStatDb) -> Result<WsStatTemp, Self::Error> {
-        let mut count = HashMap::<ClientMsgIndexType, u64>::with_capacity(value.req_count.len());
+        let mut count = HashMap::<ClientMsgIndexType, WsStatTempCountItem>::with_capacity(value.req_count.len());
         for req_count in value.req_count {
-            let client_msg_enum_index = ClientMsg::VARIANTS.iter().position(|name| *name == req_count.path);
-            let Some(client_msg_enum_index) = client_msg_enum_index else {
-                error!("failed to convert {:?} to WsStatTemp, invalid variant name", &req_count);
-                return Err(());
-            };
+            let client_msg_enum_index = ClientMsg::VARIANTS.iter().position(|name| *name == req_count.path).ok_or(WsStatDbToTempTryFromError::InvalidClientMsgEnumName(req_count.path))?;
+            let total_count = u64::try_from(req_count.count)?;
+            let count_item = WsStatTempCountItem::new(total_count);
 
-            
             count.insert(
                 client_msg_enum_index,
-                req_count.count as u64,
+                count_item,
             );
         }
 
@@ -197,7 +215,7 @@ impl From<WsStatTemp> for WebWsStat {
 
         //let a: AdminStatCountType = value.count.iter().map(|a| 0).collect();
         let count_map = value.count.iter().fold(WebAdminStatCountType::new(), |mut prev, (key, value)| {
-            prev.insert(*key, RwSignal::new(*value));
+            prev.insert(*key, RwSignal::new(value.total_count));
             prev
         });
         // let mut count_map: WebAdminStatCountType = HashMap::with_capacity(value.count.len());
@@ -216,4 +234,23 @@ impl From<WsStatTemp> for WebWsStat {
             count: count_map,
         }
     }
+}
+
+
+#[derive(Error, Debug)]
+pub enum ReqCountTryFromError {
+    #[error("Failed to convert u64 to i64: {0}")]
+    TryFromIntError(#[from] TryFromIntError),
+
+    #[error("Invalid client msg enum index - out of bounds: {0}")]
+    InvalidClientMsgEnumIndex(usize),
+}
+
+#[derive(Error, Debug)]
+pub enum WsStatDbToTempTryFromError {
+    #[error("Failed to convert i64 to u64: {0}")]
+    TryFromIntError(#[from] TryFromIntError),
+
+    #[error("Invalid client msg enum name - name not found: {0}")]
+    InvalidClientMsgEnumName(String),
 }

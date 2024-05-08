@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::net::SocketAddr;
+use std::ops::Div;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::time::Duration;
@@ -12,9 +13,11 @@ use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_client_msg::ClientMsgIndexType;
 use artcord_state::message::prod_perm_key::ProdMsgPermKey;
 use artcord_state::message::prod_server_msg::ServerMsg;
+use artcord_state::model::ws_statistics::TempConIdType;
 use artcord_state::util::time::time_is_past;
 use artcord_state::util::time::time_passed_days;
 use chrono::DateTime;
+use chrono::Days;
 use chrono::Month;
 use chrono::Months;
 use chrono::TimeDelta;
@@ -50,30 +53,42 @@ use tracing::instrument;
 use tracing::Instrument;
 use tracing::{error, trace};
 
+use crate::WS_MAX_FAILED_CON_ATTEMPTS;
 use crate::WS_BAN_UNTIL_DAYS;
 use crate::WS_EXPIRE_RED_FLAGS_DAYS;
 use crate::WS_LIMIT_MAX_CONNECTIONS;
 use crate::WS_LIMIT_MAX_RED_FLAGS;
+use crate::WS_MAX_FAILED_CON_ATTEMPTS_DELTA;
+use crate::WS_MAX_FAILED_CON_ATTEMPTS_RATE;
 
 use super::on_connection::con_task::ConMsg;
 
-pub struct ThrottleStats {
+#[derive(Debug, Clone, PartialEq)]
+pub enum IpBanReason {
+    TooManyConnectionAttempts
+}
+
+pub struct ThrottleConnection {
     ws_connection_count: u64,
     // wrap hashmap in SocketAddr (maybe)
     ws_path_count: HashMap<ClientMsgIndexType, (u64, Instant)>,
-    ws_red_flag: Option<(u64, DateTime<Utc>)>,
-    ws_banned_until: Option<DateTime<Utc>>,
+    ws_total_blocked_connection_attempts: u64,
+    ws_blocked_connection_attempts: u64,
+    ws_blocked_connection_attempts_last_reset_at: DateTime<Utc>,
+    ws_banned_until: Option<(DateTime<Utc>, IpBanReason)>,
     // ws_proccesing: RwLock<bool>,
     // ws_path_interval: RwLock<DateTime<chrono::Utc>>,
     //ws_last_connection: RwLock<u64>,
 }
 
-impl ThrottleStats {
+impl ThrottleConnection {
     pub fn new() -> Self {
         Self {
             ws_connection_count: 1,
             ws_path_count: HashMap::new(),
-            ws_red_flag: None,
+            ws_total_blocked_connection_attempts: 0,
+            ws_blocked_connection_attempts: 0,
+            ws_blocked_connection_attempts_last_reset_at: Utc::now(),
             ws_banned_until: None,
             //   ws_path_interval: RwLock::new(Utc::now())
         }
@@ -153,10 +168,11 @@ impl ThrottleStats {
     // //         }
     // // }
     //
-    pub async fn is_banned(&self) -> bool {
+    pub fn is_banned(&self) -> bool {
         let is_baned = self
             .ws_banned_until
-            .map(|until| !time_is_past(until))
+            .as_ref()
+            .map(|(until, _reason)| !time_is_past(until))
             .unwrap_or_else(|| {
                 trace!("throttle: ban check: entry doesnt exist");
                 false
@@ -169,6 +185,42 @@ impl ThrottleStats {
 
         is_baned
     }
+
+    pub fn ban(&mut self, reason: IpBanReason) {
+        trace!("throttle - banned: {:?}", &reason);
+        let Some(date) = Utc::now().checked_add_days(Days::new(WS_BAN_UNTIL_DAYS)) else {
+            error!("throtte: failed to ban, failed to add {} days to Utc::now()", WS_BAN_UNTIL_DAYS);
+            return;
+        };
+        self.ws_banned_until = Some((date, reason));
+    }
+
+    pub fn inc_failed_con_attempts(&mut self) {
+        trace!("throttle - inc from: {} {} to {} {}", self.ws_total_blocked_connection_attempts, self.ws_blocked_connection_attempts,  self.ws_total_blocked_connection_attempts + 1, self.ws_blocked_connection_attempts + 1);
+        self.ws_total_blocked_connection_attempts += 1;
+        self.ws_blocked_connection_attempts += 1;
+    }
+
+    pub fn reached_max_failed_con_attempts_rate(&self) -> bool {
+        trace!("throttle - reached_max_rate check count: {} >= {} = {}", self.ws_blocked_connection_attempts, WS_MAX_FAILED_CON_ATTEMPTS, self.ws_blocked_connection_attempts >= WS_MAX_FAILED_CON_ATTEMPTS);
+        if self.ws_blocked_connection_attempts >= WS_MAX_FAILED_CON_ATTEMPTS {
+            let time_passed = Utc::now() - self.ws_blocked_connection_attempts_last_reset_at;
+            let rate = self.ws_blocked_connection_attempts.checked_div(time_passed.num_minutes() as u64).unwrap_or(1);
+            trace!("throttle - reached_max_rate checking rate: {} >= {} = {}", rate, WS_MAX_FAILED_CON_ATTEMPTS, rate >= WS_MAX_FAILED_CON_ATTEMPTS_RATE);
+            rate >= WS_MAX_FAILED_CON_ATTEMPTS_RATE
+        }
+        else {
+            false
+        }
+    }
+
+    pub fn reset_max_failed_con_attempts_rate(&mut self) {
+        let date = Utc::now();
+        trace!("throttle - reset from: {} {} to {} {}", self.ws_blocked_connection_attempts, self.ws_blocked_connection_attempts_last_reset_at, 0,  date);
+        self.ws_blocked_connection_attempts = 0;
+        self.ws_blocked_connection_attempts_last_reset_at = date;
+    }
+
     //
     // pub async fn maybe_ban(&self) {
     //     let red_flag = *self.ws_red_flag.read().await;
@@ -227,13 +279,15 @@ impl ThrottleStats {
 }
 
 pub struct WsThrottle {
-    pub ips: HashMap<IpAddr, ThrottleStats>,
+    pub ips: HashMap<IpAddr, ThrottleConnection>,
+    pub listener_list: HashMap<TempConIdType, (WsRouteKey, mpsc::Sender<ConMsg>)>,
 }
 
 impl WsThrottle {
     pub fn new() -> Self {
         Self {
             ips: HashMap::new(),
+            listener_list: HashMap::new(),
         }
     }
 
@@ -255,11 +309,12 @@ impl WsThrottle {
     pub async fn is_bad(&mut self, ip: IpAddr) -> bool {
         let Some(user_throttle_stats) = self.ips.get_mut(&ip) else {
             trace!("ws({}): throttle: created new", &ip);
-            self.ips.insert(ip, ThrottleStats::new());
+            self.ips.insert(ip, ThrottleConnection::new());
             return false;
         };
-        if user_throttle_stats.is_banned().await {
+        if user_throttle_stats.is_banned() {
             trace!("ws({}): throttle: is banned", &ip);
+            user_throttle_stats.inc_failed_con_attempts();
             return true;
         }
         trace!("ws({}): throttle: stats exist", &ip);
@@ -288,6 +343,11 @@ impl WsThrottle {
                 &ip,
                 user_throttle_stats.ws_connection_count
             );
+            user_throttle_stats.inc_failed_con_attempts();
+            if user_throttle_stats.reached_max_failed_con_attempts_rate() {
+                user_throttle_stats.ban(IpBanReason::TooManyConnectionAttempts);
+                user_throttle_stats.reset_max_failed_con_attempts_rate();
+            }
             return true;
         }
         user_throttle_stats.ws_connection_count += 1;

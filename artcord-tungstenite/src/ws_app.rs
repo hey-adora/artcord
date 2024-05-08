@@ -7,12 +7,14 @@ use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::time::Duration;
 
+use artcord_leptos_web_sockets::WsRouteKey;
 use artcord_mongodb::database::DBError;
 use artcord_mongodb::database::DB;
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_perm_key::ProdMsgPermKey;
 use artcord_state::message::prod_server_msg::ServerMsg;
 use artcord_state::model::ws_statistics;
+use artcord_state::model::ws_statistics::TempConIdType;
 use artcord_state::model::ws_statistics::WsStatDb;
 use artcord_state::shared_global::throttle;
 use artcord_state::util::time::time_is_past;
@@ -76,6 +78,14 @@ pub mod ws_throttle;
 pub enum WsAppMsg {
     Stop,
     Disconnected(IpAddr),
+    AddListener {
+        connection_key: TempConIdType,
+        tx: mpsc::Sender<ConMsg>,
+        ws_key: WsRouteKey,
+    },
+    RemoveListener {
+        connection_key: TempConIdType,
+    },
 }
 
 // pub struct WsAppDTO {
@@ -459,6 +469,9 @@ pub enum WsResError {
     Send(#[from] tokio::sync::mpsc::error::SendError<tokio_tungstenite::tungstenite::Message>),
 
     #[error("Send error: {0}")]
+    WsAppSend(#[from] tokio::sync::mpsc::error::SendError<WsAppMsg>),
+
+    #[error("Send error: {0}")]
     ConnectionSend(#[from] tokio::sync::mpsc::error::SendError<ConMsg>),
 
     #[error("Send error: {0}")]
@@ -478,3 +491,12 @@ pub enum WsResError {
     #[error("RwLock error: {0}")]
     RwLock(String),
 }
+
+
+// #[cfg(test)] 
+// mod tests {
+//     #[bench]
+//     fn bench_add_two(b: &mut Bencher) {
+//         b.iter(|| add_two(2));
+//     }
+// }

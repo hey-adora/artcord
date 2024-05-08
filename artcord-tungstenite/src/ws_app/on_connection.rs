@@ -18,7 +18,7 @@ pub async fn on_connection(
     db: &Arc<DB>,
     task_tracker: &TaskTracker,
     ws_addr: &str,
-    ws_tx: &mpsc::Sender<WsAppMsg>,
+    ws_app_tx: &mpsc::Sender<WsAppMsg>,
     admin_ws_stats_tx: &mpsc::Sender<AdminConStatMsg>,
 ) {
     let (stream, user_addr) = match con {
@@ -40,7 +40,7 @@ pub async fn on_connection(
             stream,
             cancellation_token.clone(),
             db.clone(),
-            ws_tx.clone(),
+            ws_app_tx.clone(),
             ip,
             user_addr,
             admin_ws_stats_tx.clone(),

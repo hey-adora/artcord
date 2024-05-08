@@ -1,13 +1,14 @@
 use std::collections::HashMap;
 
 use artcord_leptos_web_sockets::{channel::WsRecvResult, runtime::WsRuntime};
-use artcord_state::{message::{prod_client_msg::{ClientMsg, ClientMsgIndexType}, prod_server_msg::ServerMsg}, model::ws_statistics::{WebWsStat, WsStatTemp}};
+use artcord_state::{message::{prod_client_msg::{ClientMsg, ClientMsgIndexType}, prod_server_msg::ServerMsg}, model::ws_statistics::{TempConIdType, WebWsStat, WsStatTemp}};
 use leptos::{RwSignal, SignalSet, SignalUpdate, SignalWithUntracked};
 use tracing::warn;
+use tracing::trace;
 
 #[derive(Copy, Clone, Debug)]
 pub struct LiveWsStats {
-    pub stats: RwSignal<HashMap<String, WebWsStat>>
+    pub stats: RwSignal<HashMap<TempConIdType, WebWsStat>>
 }
 
 impl Default for LiveWsStats {
@@ -23,21 +24,21 @@ impl LiveWsStats {
         Self::default()
     }
 
-    pub fn set_live_stats(&self, stats: HashMap<String, WsStatTemp>) {
-        let mut web_stats: HashMap<String, WebWsStat> = HashMap::with_capacity(stats.len());
+    pub fn set_live_stats(&self, stats: HashMap<TempConIdType, WsStatTemp>) {
+        let mut web_stats: HashMap<TempConIdType, WebWsStat> = HashMap::with_capacity(stats.len());
         for (path, stat) in stats {
             web_stats.insert(path, stat.into());
         }
         self.stats.set(web_stats);
     }
 
-    pub fn add_live_stat(&self, con_key: String, stat: WebWsStat) {
+    pub fn add_live_stat(&self, con_key: TempConIdType, stat: WebWsStat) {
         self.stats.update(move |stats| {
             stats.insert(con_key.clone(), stat.clone().into());
         });
     }
 
-    pub fn inc_live_stat(&self, con_key: &str, path: ClientMsgIndexType) {
+    pub fn inc_live_stat(&self, con_key: &TempConIdType, path: ClientMsgIndexType) {
         self.stats.with_untracked(|stats| {
             let stat = stats.get(con_key);
             let Some(stat) = stat else {
@@ -55,11 +56,11 @@ impl LiveWsStats {
         });
     }
 
-    pub fn remove_live_stat(&self, con_key: &str) {
+    pub fn remove_live_stat(&self, con_key: &TempConIdType) {
         self.stats.update(|stats| {
             let stat = stats.remove(con_key);
             if stat.is_some() {
-                warn!("admin: live stat removed: {}", con_key);
+                trace!("admin: live stat removed: {}", con_key);
             } else {
                 warn!("admin: stat for removal not found: {}", con_key);
             }

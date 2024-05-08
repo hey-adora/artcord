@@ -69,6 +69,7 @@ pub enum ClientMsg {
     //     amount: u64
     // },
     LiveWsStats(bool),
+    LiveWsThrottleCache(bool),
 }
 
 

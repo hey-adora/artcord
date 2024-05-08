@@ -6,10 +6,10 @@ use artcord_state::{
     message::{
         prod_client_msg::ClientMsgIndexType, prod_perm_key::ProdMsgPermKey, prod_server_msg::ServerMsg
     },
-    model::ws_statistics::{WsStatDb, WsStatTemp},
+    model::ws_statistics::{TempConIdType, WsStatDb, WsStatTemp, WsStatTempCountItem},
 };
 use chrono::Utc;
-use tokio::{select, sync::mpsc, task::JoinHandle};
+use tokio::{select, sync::{mpsc, oneshot}, task::JoinHandle};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::{error, trace, warn};
@@ -17,13 +17,19 @@ use tracing::{error, trace, warn};
 use super::{ws_throttle::AdminMsgErr, ConMsg};
 
 pub enum AdminConStatMsg {
+    CheckThrottle {
+        connection_key: TempConIdType,
+        path: ClientMsgIndexType,
+        result_tx: oneshot::Sender<bool>,
+    },
+
     Inc {
-        connection_key: String,
+        connection_key: TempConIdType,
         path: ClientMsgIndexType,
     },
 
     AddTrack {
-        connection_key: String,
+        connection_key: TempConIdType,
         tx: mpsc::Sender<ConMsg>,
         ip: String,
         addr: String,
@@ -31,18 +37,18 @@ pub enum AdminConStatMsg {
     },
 
     AddRecv {
-        connection_key: String,
+        connection_key: TempConIdType,
         tx: mpsc::Sender<ConMsg>,
         addr: String,
         ws_key: WsRouteKey,
     },
 
     RemoveRecv {
-        connection_key: String,
+        connection_key: TempConIdType,
     },
 
     StopTrack {
-        connection_key: String,
+        connection_key: TempConIdType,
     },
 }
 
@@ -61,13 +67,14 @@ pub async fn admin_stat_task(
     cancelation_token: CancellationToken,
     db: Arc<DB>,
 ) {
-    let mut listener_list: HashMap<String, (WsRouteKey, mpsc::Sender<ConMsg>)> = HashMap::new();
-    let mut stats: HashMap<String, WsStatTemp> = HashMap::new();
+    let mut listener_list: HashMap<TempConIdType, (WsRouteKey, mpsc::Sender<ConMsg>)> = HashMap::new();
+    let mut con_list: HashMap<TempConIdType, mpsc::Sender<ConMsg>> = HashMap::new();
+    let mut stats: HashMap<TempConIdType, WsStatTemp> = HashMap::new();
 
     loop {
         select! {
             msg = rx.recv() => {
-                let exit = on_msg(msg, &mut listener_list, &mut stats, &*db).await;
+                let exit = on_msg(msg, &mut listener_list, &mut stats, &mut con_list, &*db).await;
                 match exit {
                     Ok(exit) => {
                         if exit {
@@ -101,8 +108,9 @@ pub async fn admin_stat_task(
 
 pub async fn on_msg(
     msg: Option<AdminConStatMsg>,
-    list: &mut HashMap<String, (WsRouteKey, mpsc::Sender<ConMsg>)>,
-    stats: &mut HashMap<String, WsStatTemp>,
+    list: &mut HashMap<TempConIdType, (WsRouteKey, mpsc::Sender<ConMsg>)>,
+    stats: &mut HashMap<TempConIdType, WsStatTemp>,
+    cons: &mut HashMap<TempConIdType, mpsc::Sender<ConMsg>>,
     db: &DB,
 ) -> Result<bool, AdminMsgErr> {
     let Some(msg) = msg else {
@@ -110,6 +118,9 @@ pub async fn on_msg(
     };
 
     match msg {
+        AdminConStatMsg::CheckThrottle { connection_key, path, result_tx } => {
+                        
+        }
         AdminConStatMsg::Inc {
             connection_key,
             path,
@@ -121,8 +132,9 @@ pub async fn on_msg(
                 // stats.insert(connection_key, AdminStat::new(kj, is_connected, count))
                 return Ok(false);
             };
-            let count = stat.count.entry(path).or_insert(0_u64);
-            *count += 1;
+            let count = stat.count.entry(path).or_insert(WsStatTempCountItem::default());
+            count.total_count += 1;
+            count.count += 1;
 
             let update_msg = ServerMsg::WsLiveStatsUpdateInc {
                 con_key: connection_key,
@@ -150,6 +162,7 @@ pub async fn on_msg(
                 .entry(connection_key.clone())
                 .or_insert(WsStatTemp::new(ip, addr.clone(), Utc::now().timestamp_millis()))
                 .clone();
+            cons.insert(connection_key.clone(), tx);
 
             // let msg = ServerMsg::AdminStats(AdminStatsRes::Started(stats.clone()));
             // let msg: WsPackage<ServerMsg> = (ws_key.clone(), msg);
@@ -223,7 +236,7 @@ pub async fn on_msg(
                 con_key: connection_key.clone(),
             };
 
-            let stat_db: WsStatDb = match stat.clone().try_into() {
+            let stat_db: WsStatDb = match WsStatDb::from_temp(stat.clone(), uuid::Uuid::from_u128(connection_key).to_string(), Utc::now().timestamp_millis()) {
                 Ok(stat) => stat,
                 Err(err) => {
                     warn!("admin stats: missing connection entry: {}", &connection_key);
@@ -233,6 +246,7 @@ pub async fn on_msg(
 
             db.ws_statistic_insert_one(stat_db).await?;
             stats.remove(&connection_key);
+            cons.remove(&connection_key);
 
             for (con_key, (ws_key, tx)) in list {
                 let update_msg: WsPackage<ServerMsg> = (ws_key.clone(), update_msg.clone());

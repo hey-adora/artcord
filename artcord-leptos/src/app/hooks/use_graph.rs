@@ -668,9 +668,20 @@ impl GraphText {
 }
 
 pub fn use_graph() -> (NodeRef<Canvas>, RwSignal<Vec<f64>>) {
+
+
+
     let canvas_ref = NodeRef::new();
     let data = RwSignal::new(vec![0.0, 0.0, 10.0, 10.0, 20.0, 10.0]);
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        return (canvas_ref, data);
+    }
+
     let graph = RwSignal::new(Graph::new());
+
+    
 
     let _ = watch(
         move || data.get(),

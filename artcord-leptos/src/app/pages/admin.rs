@@ -34,6 +34,7 @@ use self::ws_old::PAGE_AMOUNT;
 pub mod overview;
 pub mod ws_live;
 pub mod ws_old;
+pub mod throttle_cached;
 
 
 
@@ -145,7 +146,7 @@ pub fn Admin() -> impl IntoView {
     let ws = global_state.ws;
     let page = global_state.pages.admin;
     let page_url = global_state.current_page_url;
-
+    
     create_effect(move |_| {
         nav_tran.set(true);
     });
@@ -169,6 +170,7 @@ pub fn Admin() -> impl IntoView {
                     >
                         <div class="font-bold text-lg text-white gap-4 flex  ">
                             <a href=PageUrl::url_dash() class=move || format!(" rounded-2xl px-4 {}", if page_url.get() == PageUrl::AdminDash { "bg-mid-purple" } else { "border-white border-2" }) >"Overview"</a>
+                            <a href=PageUrl::url_throttle_cached() class=move || format!(" rounded-2xl px-4 {}", if page_url.get() == PageUrl::AdminThrottleCached { "bg-mid-purple" } else { "border-white border-2" }) >"ThrottleCached"</a>
                             <a href=PageUrl::url_dash_wslive() class=move || format!(" rounded-2xl px-4 {}", if page_url.get() == PageUrl::AdminDashWsLive { "bg-mid-purple" } else { "border-white border-2" }) >"WsLive"</a>
                             <a href=PageUrl::url_dash_wsold() class=move || format!(" rounded-2xl px-4 {}", if page_url.get() == PageUrl::AdminDashWsOld { "bg-mid-purple" } else { "border-white border-2" }) >"WsOld"</a>
                             // <a href="/" class="border-white border-2 rounded-2xl px-4">"Statistics"</a>

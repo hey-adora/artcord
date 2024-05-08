@@ -1,6 +1,7 @@
 use crate::app::pages::admin::overview::Overview;
 use crate::app::pages::admin::ws_live::WsLive;
 use crate::app::pages::admin::ws_old::WsOld;
+use crate::app::pages::admin::throttle_cached::ThrottleCached;
 use crate::app::pages::admin::Admin;
 use crate::app::pages::login::Login;
 use crate::app::pages::register::Register;
@@ -90,6 +91,7 @@ pub fn App() -> impl IntoView {
                     <Route path="/account" view=Account/>
                     <Route path=PageUrl::AdminDash view=Admin >
                         <Route path="" view=Overview/>
+                        <Route path=PageUrl::AdminThrottleCached view=ThrottleCached/>
                         <Route path=PageUrl::AdminDashWsLive view=WsLive/>
                         <Route path=PageUrl::AdminDashWsOld view=WsOld/>
                     </Route>
