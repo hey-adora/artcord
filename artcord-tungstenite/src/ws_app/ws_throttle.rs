@@ -13,6 +13,7 @@ use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_client_msg::ClientMsgIndexType;
 use artcord_state::message::prod_perm_key::ProdMsgPermKey;
 use artcord_state::message::prod_server_msg::ServerMsg;
+use artcord_state::misc::throttle_connection::LiveThrottleConnection;
 use artcord_state::model::ws_statistics::TempConIdType;
 use artcord_state::util::time::time_is_past;
 use artcord_state::util::time::time_passed_days;
@@ -62,224 +63,14 @@ use crate::WS_MAX_FAILED_CON_ATTEMPTS_DELTA;
 use crate::WS_MAX_FAILED_CON_ATTEMPTS_RATE;
 
 use super::on_connection::con_task::ConMsg;
+use super::on_msg::WsMsgErr;
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum IpBanReason {
-    TooManyConnectionAttempts
-}
 
-pub struct ThrottleConnection {
-    ws_connection_count: u64,
-    // wrap hashmap in SocketAddr (maybe)
-    ws_path_count: HashMap<ClientMsgIndexType, (u64, Instant)>,
-    ws_total_blocked_connection_attempts: u64,
-    ws_blocked_connection_attempts: u64,
-    ws_blocked_connection_attempts_last_reset_at: DateTime<Utc>,
-    ws_banned_until: Option<(DateTime<Utc>, IpBanReason)>,
-    // ws_proccesing: RwLock<bool>,
-    // ws_path_interval: RwLock<DateTime<chrono::Utc>>,
-    //ws_last_connection: RwLock<u64>,
-}
 
-impl ThrottleConnection {
-    pub fn new() -> Self {
-        Self {
-            ws_connection_count: 1,
-            ws_path_count: HashMap::new(),
-            ws_total_blocked_connection_attempts: 0,
-            ws_blocked_connection_attempts: 0,
-            ws_blocked_connection_attempts_last_reset_at: Utc::now(),
-            ws_banned_until: None,
-            //   ws_path_interval: RwLock::new(Utc::now())
-        }
-    }
 
-    // pub async fn maybe_sleep(&self, ws_path: &WsPath) {
-    //     let mut ws_path_count_guard = self.ws_path_count.write().await;
-    //     // let (count, interval) = ws_path_count.entry(ws_path).or_insert((1, Instant::now()));
-    //     let ws_path_count = ws_path_count_guard.get_mut(ws_path);
-    //     if let Some((count, interval)) = ws_path_count {
-    //         let (count_limit, interval_limit) = ws_path.get_throttle();
-    //         let elapsed = interval.elapsed();
-    //         if elapsed > interval_limit {
-    //             trace!("throttle: reset");
-    //             *count = 0;
-    //             *interval = Instant::now();
-    //         } else if *count > count_limit {
-    //             let left = interval_limit.checked_sub(elapsed);
-    //             if let Some(left) = left {
-    //                 trace!("throttle: sleeping for: {:?}", &left);
-    //                 sleep(left).await;
-    //             } else {
-    //                 error!("throttle: failed to get left time");
-    //                 sleep(interval_limit).await;
-    //             }
-    //             *count = 0;
-    //             *interval = Instant::now();
-    //             trace!("throttle: sleep completed");
-    //         } else {
-    //             trace!("throttle: all good: state: {} {:?}", &count, &elapsed);
-    //             *count += 1;
-    //         }
-    //     } else {
-    //         let new_ws_path_count = (1_u64, Instant::now());
-    //         ws_path_count_guard.insert(ws_path.clone(), new_ws_path_count);
-    //     }
-    // }
-    //
-    // // pub async fn maybe_connect_to_ws() {
-    // //         if let Some(user_throttle_stats) = user_throttle_stats {
-    // //             trace!("ws({}): throttle: stats exist", &ws_addr);
-    // //             let count = *user_throttle_stats.ws_connection_count.read().await;
-    // //
-    // //             // let (time, count) = *throttle.read().await;
-    // //
-    // //             // let throttle = match throttle {
-    // //             //     Ok(result) => result,
-    // //             //     Err(err) => {
-    // //             //         error!("ws({}): lock error: {}", &ws_addr, err);
-    // //             //         continue;
-    // //             //     }
-    // //             // };
-    // //
-    // //             // (time, count)
-    // //             trace!(
-    // //                 "ws({}): throttle: {} > {}",
-    // //                 &ws_addr,
-    // //                 count,
-    // //                 WS_LIMIT_MAX_CONNECTIONS
-    // //             );
-    // //             if count > WS_LIMIT_MAX_CONNECTIONS {
-    // //                 trace!("ws({}): connection limit reached: {}", &ws_addr, count);
-    // //                 continue;
-    // //             }
-    // //             *user_throttle_stats.ws_connection_count.write().await += 1;
-    // //             trace!(
-    // //                 "ws({}): throttle: incremented to: {}",
-    // //                 &ws_addr,
-    // //                 *user_throttle_stats.ws_connection_count.read().await
-    // //             );
-    // //             user_throttle_stats.clone()
-    // //         } else {
-    // //             trace!("ws({}): throttle: created new", &ws_addr);
-    // //             let user_throttle_stats = Arc::new(ThrottleStats::new());
-    // //             throttle.insert(ip, user_throttle_stats.clone());
-    // //             user_throttle_stats
-    // //         }
-    // // }
-    //
-    pub fn is_banned(&self) -> bool {
-        let is_baned = self
-            .ws_banned_until
-            .as_ref()
-            .map(|(until, _reason)| !time_is_past(until))
-            .unwrap_or_else(|| {
-                trace!("throttle: ban check: entry doesnt exist");
-                false
-            });
-        trace!(
-            "throttle: is banned: {}, state: {:#?}",
-            is_baned,
-            self.ws_banned_until
-        );
-
-        is_baned
-    }
-
-    pub fn ban(&mut self, reason: IpBanReason) {
-        trace!("throttle - banned: {:?}", &reason);
-        let Some(date) = Utc::now().checked_add_days(Days::new(WS_BAN_UNTIL_DAYS)) else {
-            error!("throtte: failed to ban, failed to add {} days to Utc::now()", WS_BAN_UNTIL_DAYS);
-            return;
-        };
-        self.ws_banned_until = Some((date, reason));
-    }
-
-    pub fn inc_failed_con_attempts(&mut self) {
-        trace!("throttle - inc from: {} {} to {} {}", self.ws_total_blocked_connection_attempts, self.ws_blocked_connection_attempts,  self.ws_total_blocked_connection_attempts + 1, self.ws_blocked_connection_attempts + 1);
-        self.ws_total_blocked_connection_attempts += 1;
-        self.ws_blocked_connection_attempts += 1;
-    }
-
-    pub fn reached_max_failed_con_attempts_rate(&self) -> bool {
-        trace!("throttle - reached_max_rate check count: {} >= {} = {}", self.ws_blocked_connection_attempts, WS_MAX_FAILED_CON_ATTEMPTS, self.ws_blocked_connection_attempts >= WS_MAX_FAILED_CON_ATTEMPTS);
-        if self.ws_blocked_connection_attempts >= WS_MAX_FAILED_CON_ATTEMPTS {
-            let time_passed = Utc::now() - self.ws_blocked_connection_attempts_last_reset_at;
-            let rate = self.ws_blocked_connection_attempts.checked_div(time_passed.num_minutes() as u64).unwrap_or(1);
-            trace!("throttle - reached_max_rate checking rate: {} >= {} = {}", rate, WS_MAX_FAILED_CON_ATTEMPTS, rate >= WS_MAX_FAILED_CON_ATTEMPTS_RATE);
-            rate >= WS_MAX_FAILED_CON_ATTEMPTS_RATE
-        }
-        else {
-            false
-        }
-    }
-
-    pub fn reset_max_failed_con_attempts_rate(&mut self) {
-        let date = Utc::now();
-        trace!("throttle - reset from: {} {} to {} {}", self.ws_blocked_connection_attempts, self.ws_blocked_connection_attempts_last_reset_at, 0,  date);
-        self.ws_blocked_connection_attempts = 0;
-        self.ws_blocked_connection_attempts_last_reset_at = date;
-    }
-
-    //
-    // pub async fn maybe_ban(&self) {
-    //     let red_flag = *self.ws_red_flag.read().await;
-    //     if let Some((count, last_modified)) = red_flag {
-    //         if time_passed_days(last_modified, WS_EXPIRE_RED_FLAGS_DAYS) {
-    //             let red_flag = &mut *self.ws_red_flag.write().await;
-    //             trace!("throttle: ws_red_flag: {:?} to None", red_flag,);
-    //             *red_flag = None;
-    //         } else if count > WS_LIMIT_MAX_RED_FLAGS {
-    //             let now = Utc::now();
-    //             let ban = self
-    //                 .ws_banned_until
-    //                 .read()
-    //                 .await
-    //                 .clone()
-    //                 .map(|until| now > until)
-    //                 .unwrap_or(true);
-    //
-    //             if ban {
-    //                 let new_date = now + chrono::Days::new(WS_BAN_UNTIL_DAYS);
-    //                 trace!("throttle: banned until: {}", &new_date,);
-    //
-    //                 *self.ws_banned_until.write().await = Some(new_date);
-    //                 debug!("IM HEREEEEEEEEEEEEEEEEEEEEEEEEEEEEEE");
-    //             } else {
-    //                 trace!("throttle: is already banned");
-    //             }
-    //             // if let Some(banned_until) = banned_until {
-    //             //     // banned_until.
-    //             // } else {
-    //             //     *banned_until = Some(Utc::now() + Months::new(1));
-    //             // }
-    //         } else {
-    //             let red_flag = &mut *self.ws_red_flag.write().await;
-    //             if let Some((count, last_modified)) = red_flag {
-    //                 let new_date = Utc::now();
-    //                 trace!(
-    //                     "throttle: ws_red_flag: ({}, {}) to ({}, {})",
-    //                     count,
-    //                     last_modified,
-    //                     *count + 1,
-    //                     new_date
-    //                 );
-    //                 *count += 1;
-    //                 *last_modified = new_date;
-    //             } else {
-    //                 error!("throttle: failed to get ws_red_flag");
-    //             }
-    //         }
-    //     } else {
-    //         let new_red_flag = Some((1, Utc::now()));
-    //         trace!("throttle: new ws_red_flag created: {:?}", &new_red_flag);
-    //         *self.ws_red_flag.write().await = new_red_flag;
-    //     }
-    // }
-}
 
 pub struct WsThrottle {
-    pub ips: HashMap<IpAddr, ThrottleConnection>,
+    pub ips: HashMap<IpAddr, LiveThrottleConnection>,
     pub listener_list: HashMap<TempConIdType, (WsRouteKey, mpsc::Sender<ConMsg>)>,
 }
 
@@ -291,36 +82,95 @@ impl WsThrottle {
         }
     }
 
-    pub async fn disconnected(&mut self, ip: &IpAddr) {
-        let ip_stats = self.ips.get_mut(ip);
-        let Some(ip_stats) = ip_stats else {
-            error!("throttle: cant disconnect ip that doesnt exist");
-            return;
-        };
-        let val = ip_stats.ws_connection_count.checked_sub(1);
-        let Some(val) = val else {
-            error!("throttle: overflow prevented");
-            return;
-        };
+    pub async fn add_listener(&mut self, con_key: TempConIdType, ws_key: WsRouteKey, tx: mpsc::Sender<ConMsg>) -> Result<bool, WsMsgErr> {
+        trace!("ws_app: listener added: {}", con_key);
 
-        ip_stats.ws_connection_count = val;
+        let msg = if self.listener_list.insert(con_key, (ws_key, tx.clone())).is_some() {
+            ServerMsg::WsLiveThrottleCachedEntryUpdated(self.ips.clone())
+        } else {
+            ServerMsg::WsLiveThrottleCachedEntryAdded(self.ips.clone())
+        };
+        let msg: WsPackage<ServerMsg> = (ws_key.clone(), msg);
+        let msg = ServerMsg::as_bytes(msg)?;
+        let msg = Message::binary(msg);
+        tx.send(ConMsg::Send(msg)).await?;
+
+        Ok(false)
     }
 
-    pub async fn is_bad(&mut self, ip: IpAddr) -> bool {
+    pub async fn remove_listener(&mut self, con_key: TempConIdType, ws_key: WsRouteKey, tx: mpsc::Sender<ConMsg>) -> Result<bool, WsMsgErr> {
+        trace!("ws_app: listener removed: {}", con_key);
+        let Some((ws_key, tx)) = self.listener_list.remove(&con_key) else {
+            debug!("ws_app: listener not found: {}", con_key);
+            let msg = ServerMsg::WsLiveThrottleCachedEntryNotFound;
+            let msg: WsPackage<ServerMsg> = (ws_key.clone(), msg);
+            let msg = ServerMsg::as_bytes(msg)?;
+            let msg = Message::binary(msg);
+            tx.send(ConMsg::Send(msg)).await?;
+            return Ok(false);
+        };
+        let msg = ServerMsg::WsLivThrottleCachedEntryRemoved;
+        let msg: WsPackage<ServerMsg> = (ws_key.clone(), msg);
+        let msg = ServerMsg::as_bytes(msg)?;
+        let msg = Message::binary(msg);
+        tx.send(ConMsg::Send(msg)).await?;
+
+        Ok(false)
+    }
+
+    pub async fn on_inc(&mut self, ip: IpAddr, path: ClientMsgIndexType) -> Result<bool, WsMsgErr> {
+        let con = self.ips.get_mut(&ip);
+        let Some(con) = con else {
+            return Ok(false);
+        };
+        con.inc_path(&path);
+
+        let msg = ServerMsg::WsLiveThrottleCachedIncPath { ip, path };
+        for (_con_key, (ws_key, tx)) in self.listener_list.iter() {
+            let msg: WsPackage<ServerMsg> = (ws_key.clone(), msg.clone());
+            let msg = ServerMsg::as_bytes(msg)?;
+            let msg = Message::binary(msg);
+            tx.send(ConMsg::Send(msg)).await?;
+        }
+        Ok(false)
+    }
+
+    pub async fn on_disconnected(&mut self, ip: IpAddr, con_id: TempConIdType) -> Result<bool, WsMsgErr>  {
+        let ip_stats = self.ips.get_mut(&ip);
+        let Some(ip_stats) = ip_stats else {
+            error!("throttle: cant disconnect ip that doesnt exist");
+            return Ok(false);
+        };
+        let no_cons_left = ip_stats.decrement_con_count();
+        if no_cons_left {
+            self.listener_list.remove(&con_id);
+        }
+        let msg = ServerMsg::WsLiveThrottleCachedDisconnected { ip } ;
+        for (_con_key, (ws_key, tx)) in self.listener_list.iter() {
+            let msg: WsPackage<ServerMsg> = (ws_key.clone(), msg.clone());
+            let msg = ServerMsg::as_bytes(msg)?;
+            let msg = Message::binary(msg);
+            tx.send(ConMsg::Send(msg)).await?;
+        }
+
+        Ok(false)
+    }
+
+    pub async fn on_connect(&mut self, ip: IpAddr) -> Result<bool, WsMsgErr> {
         let Some(user_throttle_stats) = self.ips.get_mut(&ip) else {
             trace!("ws({}): throttle: created new", &ip);
-            self.ips.insert(ip, ThrottleConnection::new());
-            return false;
+            self.ips.insert(ip, LiveThrottleConnection::new());
+            return Ok(false);
         };
         if user_throttle_stats.is_banned() {
             trace!("ws({}): throttle: is banned", &ip);
             user_throttle_stats.inc_failed_con_attempts();
-            return true;
+            return Ok(true);
         }
         trace!("ws({}): throttle: stats exist", &ip);
         // let count = user_throttle_stats.ws_connection_count;
 
-        // let (time, count) = *throttle.read().await;
+        // let (time, count) = *throttle.read().await; 
 
         // let throttle = match throttle {
         //     Ok(result) => result,
@@ -331,32 +181,26 @@ impl WsThrottle {
         // };
 
         // (time, count)
-        trace!(
-            "ws({}): throttle: {} > {}",
-            &ip,
-            user_throttle_stats.ws_connection_count,
-            WS_LIMIT_MAX_CONNECTIONS
-        );
-        if user_throttle_stats.ws_connection_count > WS_LIMIT_MAX_CONNECTIONS {
-            trace!(
-                "ws({}): connection limit reached: {}",
-                &ip,
-                user_throttle_stats.ws_connection_count
-            );
-            user_throttle_stats.inc_failed_con_attempts();
-            if user_throttle_stats.reached_max_failed_con_attempts_rate() {
-                user_throttle_stats.ban(IpBanReason::TooManyConnectionAttempts);
-                user_throttle_stats.reset_max_failed_con_attempts_rate();
+
+        let reached_max = user_throttle_stats.reached_max_con(&ip, WS_LIMIT_MAX_CONNECTIONS, WS_MAX_FAILED_CON_ATTEMPTS, WS_MAX_FAILED_CON_ATTEMPTS_RATE, WS_BAN_UNTIL_DAYS);
+        if !reached_max {
+            let msg = ServerMsg::WsLiveThrottleCachedConnected { ip } ;
+            let mut to_remove: Vec<TempConIdType> = Vec::new();
+            for (con_key, (ws_key, tx)) in self.listener_list.iter() {
+                let msg: WsPackage<ServerMsg> = (ws_key.clone(), msg.clone());
+                let msg = ServerMsg::as_bytes(msg)?;
+                let msg = Message::binary(msg);
+                let send_result = tx.send(ConMsg::Send(msg)).await;
+                if let Err(err) = send_result {
+                    debug!("ws({}): throttle: failed to send on_con update to {} {}", &ip, con_key, err);
+                    to_remove.push(*con_key);
+                }
             }
-            return true;
+            for con_key in to_remove {
+                self.listener_list.remove(&con_key);
+            }
         }
-        user_throttle_stats.ws_connection_count += 1;
-        trace!(
-            "ws({}): throttle: incremented to: {}",
-            &ip,
-            user_throttle_stats.ws_connection_count
-        );
-        false
+        Ok(reached_max)
     }
 }
 

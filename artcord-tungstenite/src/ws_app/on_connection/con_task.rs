@@ -86,7 +86,7 @@ pub async fn con_task(
         select! {
             result = client_in.next() => {
                 trace!("read finished");
-                let exit = on_req(result, &user_task_tracker, &db, &connection_task_tx, &admin_ws_stats_tx, &ws_app_tx, &con_id, &addr).await;
+                let exit = on_req(result, &user_task_tracker, &db, &connection_task_tx, &admin_ws_stats_tx, &ws_app_tx, &con_id, &addr, &ip).await;
                 if exit {
                     break;
                 }
@@ -114,15 +114,6 @@ pub async fn con_task(
     }
 
     let send_result = admin_ws_stats_tx
-        .send(AdminConStatMsg::RemoveRecv {
-            connection_key: con_id.clone(),
-        })
-        .await;
-    if let Err(err) = send_result {
-        error!("error removing recv: {}", err);
-    }
-
-    let send_result = admin_ws_stats_tx
         .send(AdminConStatMsg::StopTrack {
             connection_key: con_id.clone(),
         })
@@ -131,9 +122,16 @@ pub async fn con_task(
         error!("error stoping track: {}", err);
     }
 
+    // let send_result = ws_app_tx
+    //     .send(WsAppMsg::Disconnected { connection_key: con_id, ip })
+    //     .await;
+    // if let Err(err) = send_result {
+    //     error!("error sending disc to ws_app: {}", err);
+    // }
+
     user_task_tracker.close();
     user_task_tracker.wait().await;
-    let send_result = ws_app_tx.send(WsAppMsg::Disconnected(ip)).await;
+    let send_result = ws_app_tx.send(WsAppMsg::Disconnected { ip, connection_key: con_id}).await;
     if let Err(err) = send_result {
         error!("failed to send disconnect to ws: {}", err);
     }

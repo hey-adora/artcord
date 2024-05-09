@@ -11,6 +11,7 @@ use artcord_leptos_web_sockets::WsRouteKey;
 use artcord_mongodb::database::DBError;
 use artcord_mongodb::database::DB;
 use artcord_state::message::prod_client_msg::ClientMsg;
+use artcord_state::message::prod_client_msg::ClientMsgIndexType;
 use artcord_state::message::prod_perm_key::ProdMsgPermKey;
 use artcord_state::message::prod_server_msg::ServerMsg;
 use artcord_state::model::ws_statistics;
@@ -77,7 +78,10 @@ pub mod ws_throttle;
 
 pub enum WsAppMsg {
     Stop,
-    Disconnected(IpAddr),
+    Disconnected {
+        connection_key: TempConIdType,
+        ip: IpAddr
+    },
     AddListener {
         connection_key: TempConIdType,
         tx: mpsc::Sender<ConMsg>,
@@ -85,6 +89,12 @@ pub enum WsAppMsg {
     },
     RemoveListener {
         connection_key: TempConIdType,
+        tx: mpsc::Sender<ConMsg>,
+        ws_key: WsRouteKey,
+    },
+    Inc {
+        ip: IpAddr,
+        path: ClientMsgIndexType,
     },
 }
 
@@ -173,6 +183,13 @@ pub async fn create_ws(
 
                     ws_msg = ws_recv.recv() => {
                         let exit = on_ws_msg(ws_msg, &mut throttle).await;
+                        let exit = match exit {
+                            Ok(exit) => exit,
+                            Err(err) => {
+                                error!("ws_app: on_ws_msg error: {}", err);
+                                continue;
+                            }
+                        };
                         if exit {
                             break;
                         }

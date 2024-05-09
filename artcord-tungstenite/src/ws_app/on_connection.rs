@@ -5,7 +5,7 @@ use std::{io, net::SocketAddr, sync::Arc};
 use artcord_mongodb::database::DB;
 use tokio::{net::TcpStream, sync::mpsc};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
-use tracing::{debug, Instrument};
+use tracing::{debug, error, Instrument};
 
 use self::con_task::con_task;
 
@@ -30,7 +30,14 @@ pub async fn on_connection(
     };
 
     let ip = user_addr.ip();
-    if throttle.is_bad(ip).await {
+    let reach_max_con = match throttle.on_connect(ip).await {
+        Ok(max) => max,
+        Err(err) => {
+            error!("ws({}): failed to run on_connect: {}", &ws_addr, err);
+            return;
+        }
+    };
+    if reach_max_con {
         debug!("ws({}): dont connect", &ws_addr);
         return;
     }

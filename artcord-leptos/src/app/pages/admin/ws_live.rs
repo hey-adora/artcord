@@ -38,7 +38,7 @@ pub fn WsLive() -> impl IntoView {
             <For each=move || live_stats.stats.get().into_iter() key=|item| item.0.clone() let:item>
                 <tr>
                     <td>{item.1.addr}</td>
-                    { live_connection_count_view(item.1.count) }
+                    { move || live_connection_count_view(item.1.count.get()) }
                 </tr>
             </For>
         }

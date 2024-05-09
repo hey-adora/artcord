@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
 use artcord_leptos_web_sockets::{WsPackage, WsRouteKey};
@@ -39,6 +39,7 @@ pub async fn req_task(
     ws_app_tx: mpsc::Sender<WsAppMsg>,
     connection_key: TempConIdType,
     addr: SocketAddr,
+    ip: IpAddr,
 ) {
     let user_task_result = async {
         // let client_msg = client_msg?;
@@ -56,18 +57,18 @@ pub async fn req_task(
         // sleep(Duration::from_secs(5)).await;
 
         let get_response_data = async {
-            if let ClientMsg::LiveWsStats(listener_state) = data {
-                return live_ws_stats(
-                    db,
-                    listener_state,
-                    connection_key,
-                    res_key,
-                    addr,
-                    &connection_task_tx,
-                    admin_ws_stats_tx,
-                )
-                .await;
-            }
+            // if let ClientMsg::LiveWsStats(listener_state) = data {
+            //     return live_ws_stats(
+            //         db,
+            //         listener_state,
+            //         connection_key,
+            //         res_key,
+            //         addr,
+            //         &connection_task_tx,
+            //         admin_ws_stats_tx,
+            //     )
+            //     .await;
+            // }
             // let response_data: Option<Result<Option<ServerMsg>, WsResError>> = match data {
             //     ClientMsg::LiveWsStats(listener_state) => Some(
             //         live_ws_stats(
@@ -91,6 +92,13 @@ pub async fn req_task(
             admin_ws_stats_tx
                 .send(AdminConStatMsg::Inc {
                     connection_key: connection_key.clone(),
+                    path: data.enum_index(),
+                })
+                .await?;
+
+            ws_app_tx
+                .send(WsAppMsg::Inc {
+                    ip: ip.clone(),
                     path: data.enum_index(),
                 })
                 .await?;

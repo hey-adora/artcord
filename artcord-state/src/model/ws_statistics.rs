@@ -207,7 +207,7 @@ pub type WebAdminStatCountType = HashMap<ClientMsgIndexType, RwSignal<u64>>;
 pub struct WebWsStat {
     pub addr: String,
     // pub is_connected: RwSignal<bool>,
-    pub count: WebAdminStatCountType,
+    pub count: RwSignal<WebAdminStatCountType>,
 }
 
 impl From<WsStatTemp> for WebWsStat {
@@ -231,7 +231,7 @@ impl From<WsStatTemp> for WebWsStat {
         WebWsStat {
             addr: value.addr,
             // is_connected: RwSignal::new(true),
-            count: count_map,
+            count: RwSignal::new(count_map),
         }
     }
 }

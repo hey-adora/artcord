@@ -26,6 +26,7 @@ use crate::app::components::navbar::Navbar;
 
 use crate::app::global_state::GlobalState;
 use crate::app::hooks::use_ws_live_stats::LiveWsStats;
+use crate::app::hooks::use_ws_live_throttle_cache::LiveThrottleCache;
 use crate::app::utils::LoadingNotFound;
 use crate::app::utils::PageUrl;
 
@@ -70,6 +71,7 @@ pub enum AdminWsOldPageState {
 #[derive(Copy, Clone, Debug)]
 pub struct AdminPageState {
     pub live_connections: LiveWsStats,
+    pub live_throttle_cache: LiveThrottleCache,
     pub old_connections: RwSignal<Vec<WsStatDb>>,
     pub old_connections_pagination: RwSignal<Option<u64>>,
     pub old_connections_active_page: RwSignal<u64>,
@@ -80,13 +82,13 @@ pub struct AdminPageState {
     pub overview_old_connections: RwSignal<Vec<WsStatDb>>,
     pub overview_selected_days: RwSignal<u64>,
     pub overview_selected_unique: RwSignal<bool>,
-
 }
 
 impl AdminPageState {
     pub fn new() -> Self {
         Self {
             live_connections: LiveWsStats::new(),
+            live_throttle_cache: LiveThrottleCache::new(),
             old_connections: RwSignal::new(Vec::new()),
             old_connections_pagination: RwSignal::new(None),
             old_connections_active_page: RwSignal::new(0),

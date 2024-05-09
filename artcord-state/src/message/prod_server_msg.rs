@@ -1,8 +1,8 @@
-use std::{collections::HashMap, net::SocketAddr, str::FromStr};
+use std::{collections::HashMap, net::{IpAddr, SocketAddr}, str::FromStr};
 
 use crate::{
     aggregation::server_msg_img::AggImg,
-    misc::registration_invalid::RegistrationInvalidMsg,
+    misc::{registration_invalid::RegistrationInvalidMsg, throttle_connection::LiveThrottleConnection},
     model::{user::User, ws_statistics::{TempConIdType, WsStatDb, WsStatTemp}},
 };
 
@@ -14,14 +14,21 @@ use super::prod_client_msg::ClientMsgIndexType;
 
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
-pub enum ServerMsg {
+pub enum ServerMsg { 
+    WsLiveThrottleCachedEntryAdded(HashMap<IpAddr, LiveThrottleConnection>),
+    WsLivThrottleCachedEntryRemoved,
+    WsLiveThrottleCachedEntryUpdated(HashMap<IpAddr, LiveThrottleConnection>),
+    WsLiveThrottleCachedEntryNotFound,
+    WsLiveThrottleCachedIncPath { ip: IpAddr, path: ClientMsgIndexType },
+    WsLiveThrottleCachedConnected { ip: IpAddr },
+    WsLiveThrottleCachedDisconnected { ip: IpAddr },
     WsLiveStatsStarted(HashMap<TempConIdType, WsStatTemp>),
     WsLiveStatsUpdateRemoveStat { con_key: TempConIdType },
     WsLiveStatsUpdateAddedStat { con_key: TempConIdType, stat: WsStatTemp },
     WsLiveStatsUpdateInc { con_key: TempConIdType, path: ClientMsgIndexType },
     WsLiveStatsStopped,
-    WsLiveStatsAlreadyStarted,
-    WsLiveStatsAlreadyStopped,
+    WsLiveStatsUpdated,
+    WsLiveStatsNotFound,
     WsLiveStatsTaskIsNotSet,
     WsStatsTotalCount(u64),
     //WsStatsFirstPage { total_count: u64, first_page: Vec<WsStat> },

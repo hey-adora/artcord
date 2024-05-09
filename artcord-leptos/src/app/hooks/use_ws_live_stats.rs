@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use artcord_leptos_web_sockets::{channel::WsRecvResult, runtime::WsRuntime};
 use artcord_state::{message::{prod_client_msg::{ClientMsg, ClientMsgIndexType}, prod_server_msg::ServerMsg}, model::ws_statistics::{TempConIdType, WebWsStat, WsStatTemp}};
-use leptos::{RwSignal, SignalSet, SignalUpdate, SignalWithUntracked};
+use leptos::{RwSignal, SignalGet, SignalSet, SignalUpdate, SignalWithUntracked};
 use tracing::warn;
 use tracing::trace;
 
@@ -45,14 +45,25 @@ impl LiveWsStats {
                 warn!("admin: con stat not found: {}", con_key);
                 return;
             };
-            let count = stat.count.get(&path);
-            let Some(count) = count else {
-                warn!("admin: con count stat not found: {} {:?}", con_key, path);
-                return;
-            };
-            count.update(|count| {
-                *count += 1;
+            let updated = stat.count.with_untracked(|count| {
+                let count = count.get(&path);
+                let Some(count) = count else {
+                    return false;
+                };
+                count.update(|count| {
+                    trace!("admin: con count stat incremented: {} {:?}", con_key, path);
+                    *count += 1;
+                });
+                true
             });
+
+            if !updated {
+                stat.count.update(|count| {
+                    trace!("admin: con count stat inserted: {} {:?}", con_key, path);
+                    count.insert(path, RwSignal::new(0));
+                });
+            }
+            
         });
     }
 

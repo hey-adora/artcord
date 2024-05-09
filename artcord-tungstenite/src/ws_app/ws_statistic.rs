@@ -36,14 +36,14 @@ pub enum AdminConStatMsg {
         // ws_key: WsRouteKey,
     },
 
-    AddRecv {
+    AddListener {
         connection_key: TempConIdType,
         tx: mpsc::Sender<ConMsg>,
         addr: String,
         ws_key: WsRouteKey,
     },
 
-    RemoveRecv {
+    RemoveListener {
         connection_key: TempConIdType,
     },
 
@@ -183,7 +183,7 @@ pub async fn on_msg(
                 tx.send(ConMsg::Send(update_msg.clone())).await?;
             }
         }
-        AdminConStatMsg::AddRecv {
+        AdminConStatMsg::AddListener {
             connection_key,
             tx,
             addr,
@@ -206,7 +206,6 @@ pub async fn on_msg(
             let msg = ServerMsg::as_bytes(msg)?;
             let msg = Message::binary(msg);
             tx.send(ConMsg::Send(msg)).await?;
-            list.insert(connection_key.clone(), (ws_key, tx));
 
             // let update_msg = ServerMsg::AdminStats(AdminStatsRes::UpdateAddedNew {
             //     con_key: connection_key,
@@ -218,8 +217,12 @@ pub async fn on_msg(
             //     let update_msg = Message::binary(update_msg);
             //     tx.send(ConMsg::Send(update_msg.clone())).await;
             // }
+
+            list.insert(connection_key.clone(), (ws_key, tx));
+
+          
         }
-        AdminConStatMsg::RemoveRecv { connection_key } => {
+        AdminConStatMsg::RemoveListener { connection_key } => {
             trace!("admin stats: removed from recv: {}", &connection_key);
             list.remove(&connection_key);
         }
@@ -247,6 +250,7 @@ pub async fn on_msg(
             db.ws_statistic_insert_one(stat_db).await?;
             stats.remove(&connection_key);
             cons.remove(&connection_key);
+            list.remove(&connection_key);
 
             for (con_key, (ws_key, tx)) in list {
                 let update_msg: WsPackage<ServerMsg> = (ws_key.clone(), update_msg.clone());

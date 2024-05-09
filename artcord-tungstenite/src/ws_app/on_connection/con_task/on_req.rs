@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
 use artcord_mongodb::database::DB;
@@ -26,6 +26,7 @@ pub async fn on_req(
     ws_app_tx: &mpsc::Sender<WsAppMsg>,
     connection_key: &TempConIdType,
     addr: &SocketAddr,
+    ip: &IpAddr,
 ) -> bool {
     let Some(result) = result else {
         trace!("read.next() returned None");
@@ -48,6 +49,7 @@ pub async fn on_req(
         ws_app_tx.clone(),
         connection_key.clone(),
         addr.clone(),
+        ip.clone(),
     ));
 
     false

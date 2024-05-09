@@ -2,10 +2,10 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use artcord_leptos_web_sockets::{WsError, WsPackage, WsRouteKey};
 use artcord_mongodb::database::DB;
-use artcord_state::{message::{
-    prod_perm_key::ProdMsgPermKey,
-    prod_server_msg::ServerMsg,
-}, model::ws_statistics::TempConIdType};
+use artcord_state::{
+    message::{prod_perm_key::ProdMsgPermKey, prod_server_msg::ServerMsg},
+    model::ws_statistics::TempConIdType,
+};
 use futures::channel::oneshot::Cancellation;
 use thiserror::Error;
 use tokio::{
@@ -38,7 +38,11 @@ pub async fn ws_throttle_cached(
             .await?;
     } else {
         ws_app_tx
-            .send(WsAppMsg::RemoveListener { connection_key })
+            .send(WsAppMsg::RemoveListener {
+                connection_key,
+                tx: connection_tx.clone(),
+                ws_key,
+            })
             .await?;
     }
 

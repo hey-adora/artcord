@@ -32,7 +32,7 @@ pub async fn live_ws_stats(
 ) -> Result<Option<ServerMsg>, WsResError> {
     if listener_state {
         admin_ws_stats_tx
-            .send(AdminConStatMsg::AddRecv {
+            .send(AdminConStatMsg::AddListener {
                 connection_key,
                 tx: connection_tx.clone(),
                 addr: addr.to_string(),
@@ -41,7 +41,7 @@ pub async fn live_ws_stats(
             .await?;
     } else {
         admin_ws_stats_tx
-            .send(AdminConStatMsg::RemoveRecv { connection_key })
+            .send(AdminConStatMsg::RemoveListener { connection_key })
             .await?;
     }
 
