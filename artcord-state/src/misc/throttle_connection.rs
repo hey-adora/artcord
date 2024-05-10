@@ -16,9 +16,9 @@ pub enum IpBanReason {
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct LiveThrottleConnectionCount {
-    total_count: u64,
-    count: u64,
-    last_reset_at: DateTime<Utc>,
+    pub total_count: u64,
+    pub count: u64,
+    pub last_reset_at: DateTime<Utc>,
 }
 
 impl Default for LiveThrottleConnectionCount {
@@ -39,13 +39,13 @@ impl LiveThrottleConnectionCount {
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct LiveThrottleConnection {
-    ws_connection_count: u64,
+    pub ws_connection_count: u64,
     // wrap hashmap in SocketAddr (maybe)
-    ws_path_count: HashMap<ClientMsgIndexType, LiveThrottleConnectionCount>,
-    ws_total_blocked_connection_attempts: u64,
-    ws_blocked_connection_attempts: u64,
-    ws_blocked_connection_attempts_last_reset_at: DateTime<Utc>,
-    ws_banned_until: Option<(DateTime<Utc>, IpBanReason)>,
+    pub ws_path_count: HashMap<ClientMsgIndexType, LiveThrottleConnectionCount>,
+    pub ws_total_blocked_connection_attempts: u64,
+    pub ws_blocked_connection_attempts: u64,
+    pub ws_blocked_connection_attempts_last_reset_at: DateTime<Utc>,
+    pub ws_banned_until: Option<(DateTime<Utc>, IpBanReason)>,
     // ws_proccesing: RwLock<bool>,
     // ws_path_interval: RwLock<DateTime<chrono::Utc>>,
     //ws_last_connection: RwLock<u64>,
@@ -138,6 +138,10 @@ impl LiveThrottleConnection {
     // //         }
     // // }
     //
+
+    // pub fn sync_with_web(&mut self, ips: &mut RwSignal<HashMap<IpAddr, WebThrottleConnection>>) {
+
+    // }
 
     pub fn inc_path(&mut self, path: &ClientMsgIndexType) {
         let con_path = self.ws_path_count.get_mut(path);

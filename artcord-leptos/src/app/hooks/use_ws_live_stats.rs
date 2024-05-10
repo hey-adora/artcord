@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use artcord_leptos_web_sockets::{channel::WsRecvResult, runtime::WsRuntime};
 use artcord_state::{message::{prod_client_msg::{ClientMsg, ClientMsgIndexType}, prod_server_msg::ServerMsg}, model::ws_statistics::{TempConIdType, WebWsStat, WsStatTemp}};
-use leptos::{RwSignal, SignalGet, SignalSet, SignalUpdate, SignalWithUntracked};
+use leptos::{RwSignal, SignalGet, SignalGetUntracked, SignalSet, SignalUpdate, SignalWithUntracked};
 use tracing::warn;
 use tracing::trace;
 
@@ -24,12 +24,39 @@ impl LiveWsStats {
         Self::default()
     }
 
-    pub fn set_live_stats(&self, stats: HashMap<TempConIdType, WsStatTemp>) {
-        let mut web_stats: HashMap<TempConIdType, WebWsStat> = HashMap::with_capacity(stats.len());
-        for (path, stat) in stats {
-            web_stats.insert(path, stat.into());
-        }
-        self.stats.set(web_stats);
+    pub fn set_live_stats(&self, new_stats: HashMap<TempConIdType, WsStatTemp>) {
+        //let mut web_stats: HashMap<TempConIdType, WebWsStat> = HashMap::with_capacity(stats.len());
+     
+        self.stats.update(|stats| {
+            for (new_path, new_stat) in new_stats {
+                let stat = stats.get(&new_path);
+                let Some(stat) = stat else {
+                    stats.insert(new_path, new_stat.into());
+                    continue;
+                };
+                for (new_path_index, new_path_count) in new_stat.count {
+                    let updated = stat.count.with_untracked(|stat_path_count| {
+                        let Some(path_count) = stat_path_count.get(&new_path_index) else {
+                            return false;
+                        };
+
+                        if path_count.get_untracked() != new_path_count.total_count {
+                            path_count.set(new_path_count.total_count);
+                        }
+
+                        true
+                    });
+                    
+                    if !updated {
+                        stat.count.update(|stat_count| {
+                            stat_count.insert(new_path_index, RwSignal::new(new_path_count.total_count));
+                        });
+                    }
+                }
+            }
+        });
+       
+        //self.stats.set(web_stats);
     }
 
     pub fn add_live_stat(&self, con_key: TempConIdType, stat: WebWsStat) {

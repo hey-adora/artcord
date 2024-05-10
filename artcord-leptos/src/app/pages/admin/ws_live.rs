@@ -33,17 +33,6 @@ pub fn WsLive() -> impl IntoView {
             .collect_view()
     };
 
-    let live_connection_view = move || {
-        view! {
-            <For each=move || live_stats.stats.get().into_iter() key=|item| item.0.clone() let:item>
-                <tr>
-                    <td>{item.1.addr}</td>
-                    { move || live_connection_count_view(item.1.count.get()) }
-                </tr>
-            </For>
-        }
-    };
-
     view! {
         <div class="grid grid-rows-[auto_1fr] overflow-y-hidden">
             <div>"Live WebSocket Connections"</div>
@@ -53,7 +42,12 @@ pub fn WsLive() -> impl IntoView {
                         <th>"ip"</th>
                         <WsPathTableHeaderView/>
                     </tr>
-                    {move || live_connection_view()}
+                    <For each=move || live_stats.stats.get().into_iter() key=|item| item.0.clone() let:item>
+                        <tr>
+                            <td>{item.1.addr}</td>
+                            { move || live_connection_count_view(item.1.count.get()) }
+                        </tr>
+                    </For>
                 </table>
 
             </div>

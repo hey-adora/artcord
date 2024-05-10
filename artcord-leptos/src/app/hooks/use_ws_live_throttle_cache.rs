@@ -66,7 +66,58 @@ impl LiveThrottleCache {
     }
 
     pub fn on_start(&self, throttle_cache: HashMap<IpAddr, LiveThrottleConnection>) {
-        self.ips.set(WebThrottleConnection::from_live(throttle_cache));
+        self.ips.update(|ips| {
+            for (ip, new_con) in throttle_cache {
+                if let Some(con) = ips.get(&ip) {
+                    if con.ws_connection_count.get_untracked() != new_con.ws_connection_count {
+                        con.ws_connection_count.set(new_con.ws_connection_count);
+                    }
+                    for (new_path_index, new_path_count) in new_con.ws_path_count {
+                            let updated = con.ws_path_count.with_untracked(|con_path_count| {
+                                let con_path_count = con_path_count.get(&new_path_index);
+                                let Some(con_path_count) = con_path_count else {
+                                    return false;
+                                };
+                                if con_path_count.total_count.get_untracked() != new_path_count.total_count {
+                                    con_path_count.total_count.set(new_path_count.total_count);
+                                }
+                                if con_path_count.count.get_untracked() != new_path_count.count {
+                                    con_path_count.count.set(new_path_count.count);
+                                }
+                                if con_path_count.last_reset_at.get_untracked() != new_path_count.last_reset_at {
+                                    con_path_count.last_reset_at.set(new_path_count.last_reset_at);
+                                }
+                                true
+                            });
+                            if !updated {
+                                con.ws_path_count.update(|con_path_count| {
+                                    con_path_count.insert(new_path_index, new_path_count.into());
+                                });
+                            }
+                    }
+                    if con.ws_total_blocked_connection_attempts.get_untracked() != new_con.ws_total_blocked_connection_attempts {
+                        con.ws_total_blocked_connection_attempts.set(new_con.ws_total_blocked_connection_attempts);
+                    }
+                    if con.ws_blocked_connection_attempts.get_untracked() != new_con.ws_blocked_connection_attempts {
+                        con.ws_blocked_connection_attempts.set(new_con.ws_blocked_connection_attempts);
+                    }
+                    if con.ws_blocked_connection_attempts_last_reset_at.get_untracked() != new_con.ws_blocked_connection_attempts_last_reset_at {
+                        con.ws_blocked_connection_attempts_last_reset_at.set(new_con.ws_blocked_connection_attempts_last_reset_at);
+                    }
+                    if con.ws_banned_until.get_untracked() != new_con.ws_banned_until {
+                        con.ws_banned_until.set(new_con.ws_banned_until);
+                    }
+          
+                    // for  in  {
+                        
+                    // }
+                } else {
+                    ips.insert(ip, new_con.into());
+                }
+            }
+        });
+        
+        //self.ips.set(WebThrottleConnection::from_live(throttle_cache));
     }
 
     pub fn on_inc(&self, ip: &IpAddr, path_index: &ClientMsgIndexType) {

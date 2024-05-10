@@ -46,17 +46,11 @@ pub fn ThrottleCached() -> impl IntoView {
                 .collect_view()
         };
 
-    let live_connection_view = move || {
-        view! {
-            <For each=move || live_throttle_cache.ips.get().into_iter() key=|item| item.0.clone() let:item>
-                <tr>
-                    <td>{item.0.to_string()}</td>
-                    <td>{move || item.1.ws_connection_count.get()}</td>
-                    { move || live_connection_count_view(item.1.ws_path_count.get()) }
-                </tr>
-            </For>
-        }
-    };
+    // let live_connection_view = move || {
+    //     view! {
+            
+    //     }
+    // };
 
     view! {
         <div class="grid grid-rows-[auto_1fr] overflow-y-hidden">
@@ -68,7 +62,13 @@ pub fn ThrottleCached() -> impl IntoView {
                         <th>"ConCount"</th>
                         <WsPathTableHeaderView/>
                     </tr>
-                    {move || live_connection_view()}
+                    <For each=move || live_throttle_cache.ips.get().into_iter() key=|item| item.0.clone() let:item>
+                        <tr>
+                            <td>{item.0.to_string()}</td>
+                            <td>{move || item.1.ws_connection_count.get()}</td>
+                            { move || live_connection_count_view(item.1.ws_path_count.get()) }
+                        </tr>
+                    </For>
                 </table>
 
             </div>
