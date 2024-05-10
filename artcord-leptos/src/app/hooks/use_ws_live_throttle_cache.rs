@@ -1,7 +1,8 @@
 use std::{collections::HashMap, net::IpAddr};
 
 use artcord_leptos_web_sockets::{channel::WsRecvResult, runtime::WsRuntime};
-use artcord_state::{message::{prod_client_msg::{ClientMsg, ClientMsgIndexType}, prod_server_msg::ServerMsg}, misc::throttle_connection::{LiveThrottleConnection, WebThrottleConnection, WebThrottleConnectionCount}, model::ws_statistics::{TempConIdType, WebWsStat, WsStatTemp}};
+use artcord_state::{message::{prod_client_msg::{ClientMsg, ClientMsgIndexType}, prod_server_msg::ServerMsg}, misc::throttle_connection::{IpBanReason, LiveThrottleConnection, WebThrottleConnection, WebThrottleConnectionCount}, model::ws_statistics::{TempConIdType, WebWsStat, WsStatTemp}};
+use chrono::{DateTime, Utc};
 use leptos::{RwSignal, SignalGet, SignalGetUntracked, SignalSet, SignalUpdate, SignalWithUntracked};
 use tracing::warn;
 use tracing::trace;
@@ -120,6 +121,29 @@ impl LiveThrottleCache {
         //self.ips.set(WebThrottleConnection::from_live(throttle_cache));
     }
 
+    pub fn on_blocks(&self, ip: &IpAddr, total_blocks: u64, blocks: u64) {
+        self.ips.with_untracked(|ips| {
+            let con = ips.get(ip); 
+            let Some(con) = con else {
+                warn!("live throttle: ip not found!");
+                return;
+            };
+            con.ws_total_blocked_connection_attempts.set(total_blocks);
+            con.ws_blocked_connection_attempts.set(total_blocks);
+        });
+    }
+
+    pub fn on_ban(&self, ip: &IpAddr, date: DateTime<Utc>, reason: IpBanReason) {
+        self.ips.with_untracked(|ips| {
+            let con = ips.get(ip); 
+            let Some(con) = con else {
+                warn!("live throttle: ip not found!");
+                return;
+            };
+            con.ws_banned_until.set(Some((date, reason)));
+        });
+    }
+
     pub fn on_inc(&self, ip: &IpAddr, path_index: &ClientMsgIndexType) {
         self.ips.with_untracked(|ips| {
             let con = ips.get(ip);
@@ -158,6 +182,9 @@ pub fn use_ws_live_throttle_cache(ws: WsRuntime<ServerMsg, ClientMsg>, live_thro
                 ServerMsg::WsLiveThrottleCachedEntryAdded(stats) => {
                     live_throttle_cache.on_start(stats.clone());
                 }
+                ServerMsg::WsLiveThrottleCachedEntryUpdated(stats) => {
+                    live_throttle_cache.on_start(stats.clone());
+                }
                 ServerMsg::WsLiveThrottleCachedIncPath { ip, path } => {
                     live_throttle_cache.on_inc(ip, path);
                 }
@@ -166,6 +193,12 @@ pub fn use_ws_live_throttle_cache(ws: WsRuntime<ServerMsg, ClientMsg>, live_thro
                 }
                 ServerMsg::WsLiveThrottleCachedDisconnected { ip } => {
                     live_throttle_cache.on_disc(ip);
+                }
+                ServerMsg::WsLiveThrottleCachedBlocks { ip, total_blocks, blocks } => {
+                    live_throttle_cache.on_blocks(ip, *total_blocks, *blocks);
+                }
+                ServerMsg::WsLiveThrottleCachedBanned { ip, date, reason } => {
+                    live_throttle_cache.on_ban(ip, *date, reason.clone());
                 }
                 _ => {}
             },

@@ -160,6 +160,7 @@ pub async fn create_ws(
         let (listener_task, admin_ws_stats_tx) = create_admin_con_stat_task(&task_tracker, &cancellation_token, db.clone()).await;
 
         let con_task = async move {
+            //let mut listener_update_interval = time::interval(Duration::from_secs(2));
             // run taks
             loop {
                 // let handle_con = async {};
@@ -177,6 +178,10 @@ pub async fn create_ws(
                 //     }
                 // };
                 select! {
+                    // _ = listener_update_interval.tick() => {
+                    //     on_listener_update().await;
+                    // }
+
                     con = listener.accept() => {
                         on_connection(con, &mut throttle, &cancellation_token, &db, &task_tracker, &ws_addr, &ws_tx, &admin_ws_stats_tx).await;
                     },
@@ -213,6 +218,27 @@ pub async fn create_ws(
     (handle, ws_tx)
     // let mut throttle = Throttle::new();
 }
+
+// async fn on_listener_update() {
+//     let reached_max = user_throttle_stats.reached_max_con(&ip, WS_LIMIT_MAX_CONNECTIONS, WS_MAX_FAILED_CON_ATTEMPTS, WS_MAX_FAILED_CON_ATTEMPTS_RATE, WS_BAN_UNTIL_DAYS);
+//     if !reached_max {
+//         let msg = ServerMsg::WsLiveThrottleCachedConnected { ip } ;
+//         let mut to_remove: Vec<TempConIdType> = Vec::new();
+//         for (con_key, (ws_key, tx)) in self.listener_list.iter() {
+//             let msg: WsPackage<ServerMsg> = (ws_key.clone(), msg.clone());
+//             let msg = ServerMsg::as_bytes(msg)?;
+//             let msg = Message::binary(msg);
+//             let send_result = tx.send(ConMsg::Send(msg)).await;
+//             if let Err(err) = send_result {
+//                 debug!("ws({}): throttle: failed to send on_con update to {} {}", &ip, con_key, err);
+//                 to_remove.push(*con_key);
+//             }
+//         }
+//         for con_key in to_remove {
+//             self.listener_list.remove(&con_key);
+//         }
+//     }
+// }
 
 // pub async fn request_write_task(
 //     client_out: &mut SplitSink<WebSocketStream<TcpStream>, Message>,

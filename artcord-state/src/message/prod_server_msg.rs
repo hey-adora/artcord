@@ -2,11 +2,12 @@ use std::{collections::HashMap, net::{IpAddr, SocketAddr}, str::FromStr};
 
 use crate::{
     aggregation::server_msg_img::AggImg,
-    misc::{registration_invalid::RegistrationInvalidMsg, throttle_connection::LiveThrottleConnection},
+    misc::{registration_invalid::RegistrationInvalidMsg, throttle_connection::{IpBanReason, LiveThrottleConnection}},
     model::{user::User, ws_statistics::{TempConIdType, WsStatDb, WsStatTemp}},
 };
 
 use artcord_leptos_web_sockets::WsPackage;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use tracing::error;
 
@@ -22,6 +23,9 @@ pub enum ServerMsg {
     WsLiveThrottleCachedIncPath { ip: IpAddr, path: ClientMsgIndexType },
     WsLiveThrottleCachedConnected { ip: IpAddr },
     WsLiveThrottleCachedDisconnected { ip: IpAddr },
+    WsLiveThrottleCachedBlocks { ip: IpAddr, total_blocks: u64, blocks: u64 },
+    // WsLiveThrottleCachedIncWsTotalBlocks { ip: IpAddr, total_blocks: u64, blocks: u64 },
+    WsLiveThrottleCachedBanned { ip: IpAddr, date: DateTime<Utc>, reason: IpBanReason },
     WsLiveStatsStarted(HashMap<TempConIdType, WsStatTemp>),
     WsLiveStatsUpdateRemoveStat { con_key: TempConIdType },
     WsLiveStatsUpdateAddedStat { con_key: TempConIdType, stat: WsStatTemp },

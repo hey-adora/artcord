@@ -49,8 +49,17 @@ use tracing::{error, trace};
 
 pub mod ws_app;
 
-const WS_LIMIT_MAX_CONNECTIONS: u64 = 100;
-const WS_MAX_FAILED_CON_ATTEMPTS: u64 = 100;
+
+cfg_if! {
+    if #[cfg(feature = "development")] {
+        const WS_LIMIT_MAX_CONNECTIONS: u64 = 5;
+        const WS_MAX_FAILED_CON_ATTEMPTS: u64 = 5;
+    } else {
+        const WS_MAX_FAILED_CON_ATTEMPTS: u64 = 100;
+        const WS_LIMIT_MAX_CONNECTIONS: u64 = 100;
+    }
+}
+
 const WS_MAX_FAILED_CON_ATTEMPTS_DELTA: TimeDelta = match TimeDelta::try_minutes(10) { Some(delta) => delta, None => panic!("invalid delta") };
 const WS_MAX_FAILED_CON_ATTEMPTS_RATE: u64 =  WS_MAX_FAILED_CON_ATTEMPTS / WS_MAX_FAILED_CON_ATTEMPTS_DELTA.num_minutes() as u64;
 const WS_LIMIT_MAX_RED_FLAGS: u64 = 2;

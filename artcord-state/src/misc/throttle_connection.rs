@@ -1,4 +1,4 @@
-use chrono::Utc;
+use chrono::{TimeDelta, Utc};
 use chrono::{DateTime, Days};
 use leptos::RwSignal;
 use serde::{Deserialize, Serialize};
@@ -194,16 +194,28 @@ impl LiveThrottleConnection {
         is_baned
     }
 
-    pub fn ban(&mut self, reason: IpBanReason, ban_until_days: Days) {
+    pub fn ban(&mut self, reason: IpBanReason, ban_until_days: Days) -> Option<DateTime<Utc>> {
         trace!("throttle - banned: {:?}", &reason);
         let Some(date) = Utc::now().checked_add_days(ban_until_days) else {
             error!(
                 "throtte: failed to ban, failed to add {:?} days to Utc::now()",
                 ban_until_days
             );
-            return;
+            return None;
         };
-        self.ws_banned_until = Some((date, reason));
+        self.ws_banned_until = Some((date.clone(), reason));
+        return Some(date);
+    }
+
+    pub fn inc_failed_total_con_attempts(&mut self) {
+        trace!(
+            "throttle - inc from: {} {} to {} {}",
+            self.ws_total_blocked_connection_attempts,
+            self.ws_blocked_connection_attempts,
+            self.ws_total_blocked_connection_attempts + 1,
+            self.ws_blocked_connection_attempts + 1
+        );
+        self.ws_total_blocked_connection_attempts += 1;
     }
 
     pub fn inc_failed_con_attempts(&mut self) {
@@ -218,7 +230,8 @@ impl LiveThrottleConnection {
         self.ws_blocked_connection_attempts += 1;
     }
 
-    pub fn reached_max_failed_con_attempts_rate(&self, max_fail: u64, max_fail_rate: u64) -> bool {
+
+    pub fn reached_max_failed_con_attempts_rate(&mut self, max_fail: u64, max_fail_rate: u64, max_delta: &TimeDelta) -> bool {
         trace!(
             "throttle - reached_max_rate check count: {} >= {} = {}",
             self.ws_blocked_connection_attempts,
@@ -232,12 +245,20 @@ impl LiveThrottleConnection {
                 .checked_div(time_passed.num_minutes() as u64)
                 .unwrap_or(1);
             trace!(
-                "throttle - reached_max_rate checking rate: {} >= {} = {}",
+                "throttle - reached_max_rate checking rate: {} >= {} = {} | {}",
                 rate,
                 max_fail,
-                rate >= max_fail_rate
+                rate >= max_fail_rate,
+                time_passed
             );
-            rate >= max_fail_rate
+            let reached_max = rate >= max_fail_rate;
+
+            if time_passed >= *max_delta {
+                self.reset_max_failed_con_attempts_rate();
+            }
+
+            reached_max
+
         } else {
             false
         }
@@ -256,14 +277,15 @@ impl LiveThrottleConnection {
         self.ws_blocked_connection_attempts_last_reset_at = date;
     }
 
-    pub fn reached_max_con(
+    pub fn check_con(
         &mut self,
         ip: &IpAddr,
         max_cons: u64,
         max_fail: u64,
         max_fail_rate: u64,
         ban_until_days: u64,
-    ) -> bool {
+        max_delta: &TimeDelta,
+    ) -> ConStatus {
         trace!(
             "ws({}): throttle: {} > {}",
             ip,
@@ -277,14 +299,16 @@ impl LiveThrottleConnection {
                 self.ws_connection_count
             );
             self.inc_failed_con_attempts();
-            if self.reached_max_failed_con_attempts_rate(max_fail, max_fail_rate) {
-                self.ban(
-                    IpBanReason::TooManyConnectionAttempts,
+            if self.reached_max_failed_con_attempts_rate(max_fail, max_fail_rate, max_delta) {
+                let reason = IpBanReason::TooManyConnectionAttempts;
+                let banned = self.ban(
+                    reason.clone(),
                     Days::new(ban_until_days),
                 );
-                self.reset_max_failed_con_attempts_rate();
+                //self.reset_max_failed_con_attempts_rate();
+                return banned.map(|date| ConStatus::Banned((date, reason))).unwrap_or(ConStatus::Blocked(self.ws_total_blocked_connection_attempts, self.ws_blocked_connection_attempts));
             }
-            return true;
+            return ConStatus::Blocked(self.ws_total_blocked_connection_attempts, self.ws_blocked_connection_attempts);
         }
         self.ws_connection_count += 1;
         trace!(
@@ -292,7 +316,7 @@ impl LiveThrottleConnection {
             ip,
             self.ws_connection_count
         );
-        false
+        ConStatus::Allow
     }
 
     //
@@ -350,6 +374,13 @@ impl LiveThrottleConnection {
     //         *self.ws_red_flag.write().await = new_red_flag;
     //     }
     // }
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub enum ConStatus {
+    Allow,
+    Blocked(u64, u64),
+    Banned((DateTime<Utc>, IpBanReason))
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]

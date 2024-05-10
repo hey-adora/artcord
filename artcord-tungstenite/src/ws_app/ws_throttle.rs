@@ -13,6 +13,7 @@ use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_client_msg::ClientMsgIndexType;
 use artcord_state::message::prod_perm_key::ProdMsgPermKey;
 use artcord_state::message::prod_server_msg::ServerMsg;
+use artcord_state::misc::throttle_connection::ConStatus;
 use artcord_state::misc::throttle_connection::LiveThrottleConnection;
 use artcord_state::model::ws_statistics::TempConIdType;
 use artcord_state::util::time::time_is_past;
@@ -80,6 +81,45 @@ impl WsThrottle {
             ips: HashMap::new(),
             listener_list: HashMap::new(),
         }
+    }
+
+    // pub async fn send_update_to_listeners(&self) {
+    //     let reached_max = user_throttle_stats.reached_max_con(&ip, WS_LIMIT_MAX_CONNECTIONS, WS_MAX_FAILED_CON_ATTEMPTS, WS_MAX_FAILED_CON_ATTEMPTS_RATE, WS_BAN_UNTIL_DAYS);
+    //     if !reached_max {
+    //         let msg = ServerMsg::WsLiveThrottleCachedConnected { ip } ;
+    //         let mut to_remove: Vec<TempConIdType> = Vec::new();
+    //         for (con_key, (ws_key, tx)) in self.listener_list.iter() {
+    //             let msg: WsPackage<ServerMsg> = (ws_key.clone(), msg.clone());
+    //             let msg = ServerMsg::as_bytes(msg)?;
+    //             let msg = Message::binary(msg);
+    //             let send_result = tx.send(ConMsg::Send(msg)).await;
+    //             if let Err(err) = send_result {
+    //                 debug!("ws({}): throttle: failed to send on_con update to {} {}", &ip, con_key, err);
+    //                 to_remove.push(*con_key);
+    //             }
+    //         }
+    //         for con_key in to_remove {
+    //             self.listener_list.remove(&con_key);
+    //         }
+    //     }
+    // }
+
+    pub async fn send_update_to_listeners(&mut self, ip: &IpAddr, msg: ServerMsg) -> Result<(), WsMsgErr> {
+        let mut to_remove: Vec<TempConIdType> = Vec::new();
+        for (con_key, (ws_key, tx)) in self.listener_list.iter() {
+            let msg: WsPackage<ServerMsg> = (ws_key.clone(), msg.clone());
+            let msg = ServerMsg::as_bytes(msg)?;
+            let msg = Message::binary(msg);
+            let send_result = tx.send(ConMsg::Send(msg)).await;
+            if let Err(err) = send_result {
+                debug!("ws({}): throttle: failed to send on_con update to {} {}", ip, con_key, err);
+                to_remove.push(*con_key);
+            }
+        }
+        for con_key in to_remove {
+            self.listener_list.remove(&con_key);
+        }
+        Ok(())
     }
 
     pub async fn add_listener(&mut self, con_key: TempConIdType, ws_key: WsRouteKey, tx: mpsc::Sender<ConMsg>) -> Result<bool, WsMsgErr> {
@@ -164,7 +204,7 @@ impl WsThrottle {
         };
         if user_throttle_stats.is_banned() {
             trace!("ws({}): throttle: is banned", &ip);
-            user_throttle_stats.inc_failed_con_attempts();
+            user_throttle_stats.inc_failed_total_con_attempts();
             return Ok(true);
         }
         trace!("ws({}): throttle: stats exist", &ip);
@@ -182,25 +222,26 @@ impl WsThrottle {
 
         // (time, count)
 
-        let reached_max = user_throttle_stats.reached_max_con(&ip, WS_LIMIT_MAX_CONNECTIONS, WS_MAX_FAILED_CON_ATTEMPTS, WS_MAX_FAILED_CON_ATTEMPTS_RATE, WS_BAN_UNTIL_DAYS);
-        if !reached_max {
-            let msg = ServerMsg::WsLiveThrottleCachedConnected { ip } ;
-            let mut to_remove: Vec<TempConIdType> = Vec::new();
-            for (con_key, (ws_key, tx)) in self.listener_list.iter() {
-                let msg: WsPackage<ServerMsg> = (ws_key.clone(), msg.clone());
-                let msg = ServerMsg::as_bytes(msg)?;
-                let msg = Message::binary(msg);
-                let send_result = tx.send(ConMsg::Send(msg)).await;
-                if let Err(err) = send_result {
-                    debug!("ws({}): throttle: failed to send on_con update to {} {}", &ip, con_key, err);
-                    to_remove.push(*con_key);
-                }
+        let reached_max = user_throttle_stats.check_con(&ip, WS_LIMIT_MAX_CONNECTIONS, WS_MAX_FAILED_CON_ATTEMPTS, WS_MAX_FAILED_CON_ATTEMPTS_RATE, WS_BAN_UNTIL_DAYS, &WS_MAX_FAILED_CON_ATTEMPTS_DELTA);
+    
+
+        match reached_max {
+            ConStatus::Allow => {
+                let msg = ServerMsg::WsLiveThrottleCachedConnected { ip };
+                self.send_update_to_listeners(&ip, msg).await?;
+                Ok(false)
             }
-            for con_key in to_remove {
-                self.listener_list.remove(&con_key);
+            ConStatus::Blocked(total_blocks, blocks) => {
+                let msg = ServerMsg::WsLiveThrottleCachedBlocks { ip, total_blocks, blocks } ;
+                self.send_update_to_listeners(&ip, msg).await?;
+                Ok(true)
+            }
+            ConStatus::Banned((date, reason)) => {
+                let msg = ServerMsg::WsLiveThrottleCachedBanned { ip, date, reason };
+                self.send_update_to_listeners(&ip, msg).await?;
+                Ok(true)
             }
         }
-        Ok(reached_max)
     }
 }
 
