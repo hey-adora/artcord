@@ -46,7 +46,7 @@ pub fn HomePage() -> impl IntoView {
                         <h2 class="text-[2rem] font-bold whitespace-nowrap ">"Discord Art Server"</h2>
                         <p class="text-[1.3rem]">"Where creativity knows no bounds and artistic expression finds its true home! "</p>
                         <div class="flex gap-8 mt-4 items-center ">
-                            <a target="_blank" href="https://discord.gg/habmw7Ehga" class="flex gap-2 items-center text-[1rem] h-12 font-black bg-gradient-to-br from-first-one to-second-one hover:to-dark-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem]  transition-colors duration-300 " >
+                            <a target="_blank" href="https://discord.gg/artcord" class="flex gap-2 items-center text-[1rem] h-12 font-black bg-gradient-to-br from-first-one to-second-one hover:to-dark-purple border-[0.30rem] border-low-purple rounded-3xl px-4 py-[0.15rem]  transition-colors duration-300 " >
                                 <img class="h-8" src="/assets/discord.svg"/>
                                 "Join"
                             </a>
@@ -81,7 +81,7 @@ pub fn HomePage() -> impl IntoView {
                 <p class=""><img class="w-[2rem] h-[2rem] inline px-1" src="/assets/about_showcase.svg"/><strong>"Showcase"</strong> " Your Masterpieces: Your art deserves to be seen! Showcase your masterpieces in dedicated channels, where the spotlight is on you. Receive constructive feedback, encouragement, and applause from an appreciative audience. Your art can also be seen on our website!" </p>
                 <p class=""><img class="w-[2rem] h-[2rem] inline px-1" src="/assets/about_learn.svg"/><strong>"Learn and Share"</strong> " Knowledge: Whether you're a beginner seeking guidance or an expert willing to share your wisdom, ArtCord is welcoming you! Learn new techniques, discover resources, and contribute to a collective pool of artistic wisdom."</p>
                 <p class=""><img class="w-[2rem] h-[2rem] inline px-1" src="/assets/about_join.svg"/><strong>"Join the ArtCord"</strong>" Family: We believe that art has the power to connect people across borders and languages. Join ArtCord and become a part of a global family where creativity flows endlessly and art is appreciated."</p>
-                <a target="_blank" href="https://discord.gg/habmw7Ehga" class=" transition-shadow duration-300 hover:shadow-wow col-span-2 bg-sword-ico bg-contain bg-center w-[10rem] h-[10rem] bg-no-repeat grid place-items-center text-center mx-auto cursor-pointer  font-black text-[3rem]">
+                <a target="_blank" href="https://discord.gg/artcord" class=" transition-shadow duration-300 hover:shadow-wow col-span-2 bg-sword-ico bg-contain bg-center w-[10rem] h-[10rem] bg-no-repeat grid place-items-center text-center mx-auto cursor-pointer  font-black text-[3rem]">
                     "JOIN"
                 </a>
             </section>
