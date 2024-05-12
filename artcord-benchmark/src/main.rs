@@ -26,7 +26,7 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use std::{env, thread};
 use tokio::runtime::Runtime;
-use tokio::sync::mpsc;
+use tokio::sync::{broadcast, mpsc};
 use tokio::{select, signal};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, Level};
@@ -47,21 +47,36 @@ use tokio_tungstenite::{
 use tokio_util::task::TaskTracker;
 use url::Url;
 
+#[derive(Debug, Clone)]
 enum PlotType {
     Sin,
     Bell,
     Sigmoid,
 }
 
-enum Master {
+#[derive(Debug, Clone)]
+enum NodeMsg {
+    Disc,
+}
+
+#[derive(Debug, Clone)]
+enum ControllerMsg {
+    Hundread,
+    One,
+}
+
+#[derive(Debug, Clone)]
+enum MasterMsg {
     Con,
     Disc,
     Spawn,
+    Clear,
     CloseStarted,
     CloseCompleted,
     Resize,
 }
 
+#[derive(Debug, Clone)]
 struct DrawData {
     spawned: u64,
     connected: u64,
@@ -139,15 +154,19 @@ fn main() {
     // pb_total.set_message("total");
 
     let cancelation_token = CancellationToken::new();
-    let (master_tx, mut master_rx) = mpsc::channel::<Master>(1000);
+    let (master_tx, mut master_rx) = mpsc::channel::<MasterMsg>(1000);
+    let (controller_tx, controller_rx) = mpsc::channel::<ControllerMsg>(10);
+    let (node_tx, node_rx) = broadcast::channel::<NodeMsg>(1000);
     let runtime = Runtime::new().unwrap();
 
     runtime.spawn(controller_task(
         master_tx.clone(),
+        controller_rx,
+        node_rx,
         cancelation_token.clone(),
     ));
 
-    let input_thread = thread::spawn(move || input_thread(master_tx));
+    let input_thread = thread::spawn(move || input_thread(master_tx, controller_tx, node_tx));
 
     let mut draw_data = DrawData::new();
     let mut redraw = true;
@@ -167,31 +186,39 @@ fn main() {
             break;
         };
         match msg {
-            Master::Con => {
+            MasterMsg::Con => {
                 //pb_con.inc(1);
                 draw_data.connected += 1;
                 redraw = true;
             }
-            Master::Disc => {
+            MasterMsg::Disc => {
                 draw_data.disconnected += 1;
+                draw_data.spawned = draw_data.connected.saturating_sub(1);
+                draw_data.connected = draw_data.connected.saturating_sub(1);
                 //pb_dis.inc(1);
                 redraw = true;
             }
-            Master::Spawn => {
+            MasterMsg::Spawn => {
                 //pb_spawn.inc(1);
                 //ttt += 1;
                 draw_data.spawned += 1;
                 redraw = true;
             }
-            Master::Resize => {
+            MasterMsg::Clear => {
+                //pb_spawn.inc(1);
+                //ttt += 1;
+                draw_data.disconnected = 0;
+                redraw = true;
+            }
+            MasterMsg::Resize => {
                 terminal.autoresize().unwrap();
                 redraw = true;
             }
-            Master::CloseStarted => {
+            MasterMsg::CloseStarted => {
                 println!("\n\n");
                 cancelation_token.cancel();
             }
-            Master::CloseCompleted => {
+            MasterMsg::CloseCompleted => {
                 break;
             }
         }
@@ -260,13 +287,24 @@ fn draw(f: &mut ratatui::prelude::Frame, data: &mut DrawData) {
     render_gauge(2, (data.disconnected as f64 / data.max as f64).clamp(0.0, 1.0));
 }
 
-async fn controller_task(master_tx: mpsc::Sender<Master>, cancelation_token: CancellationToken) {
+async fn controller_task(master_tx: mpsc::Sender<MasterMsg>, mut controller_rx: mpsc::Receiver<ControllerMsg>, node_rx: broadcast::Receiver<NodeMsg>, cancelation_token: CancellationToken) {
     //info!("controller task started");
     let task_tracker = TaskTracker::new();
 
-    for i in 0..200 {
-        task_tracker.spawn(node(master_tx.clone(), cancelation_token.clone()));
+    while let Some(msg) = controller_rx.recv().await {
+        match msg {
+            ControllerMsg::Hundread => {
+                for i in 0..200 {
+                    task_tracker.spawn(node(master_tx.clone(), node_rx.resubscribe(), cancelation_token.clone()));
+                }
+            }
+            ControllerMsg::One => {
+                task_tracker.spawn(node(master_tx.clone(), node_rx.resubscribe(), cancelation_token.clone()));
+            }
+        }
     }
+
+    
 
     //info!("waiting for close signal...");
     // let close = signal::ctrl_c().await;
@@ -278,10 +316,10 @@ async fn controller_task(master_tx: mpsc::Sender<Master>, cancelation_token: Can
     task_tracker.close();
     task_tracker.wait().await;
     info!("runtime closed");
-    master_tx.send(Master::CloseCompleted).await.unwrap();
+    master_tx.send(MasterMsg::CloseCompleted).await.unwrap();
 }
 
-fn input_thread(master_tx: mpsc::Sender<Master>) {
+fn input_thread(master_tx: mpsc::Sender<MasterMsg>, controller_tx: mpsc::Sender<ControllerMsg>, node_tx: broadcast::Sender<NodeMsg>) {
     let tick_rate = Duration::from_millis(200);
     let mut last_tick = Instant::now();
     loop {
@@ -290,16 +328,29 @@ fn input_thread(master_tx: mpsc::Sender<Master>) {
             let event = crossterm::event::read().unwrap();
             match event {
                 Event::Key(key_event) => {
-                    if key_event.code == KeyCode::Char('c')
-                        && key_event.modifiers == KeyModifiers::CONTROL
-                    {
-                        //info!("cancel event sent");
-                        master_tx.blocking_send(Master::CloseStarted).unwrap();
-                        break;
+                    match key_event {
+                        key if key.code == KeyCode::Char('c')
+                        && key.modifiers == KeyModifiers::CONTROL => {
+                            master_tx.blocking_send(MasterMsg::CloseStarted).unwrap();
+                            break;
+                        }
+                        key if key.code == KeyCode::Char('q') => {
+                            controller_tx.blocking_send(ControllerMsg::Hundread).unwrap();
+                        }
+                        key if key.code == KeyCode::Char('w') => {
+                            controller_tx.blocking_send(ControllerMsg::One).unwrap();
+                        }
+                        key if key.code == KeyCode::Char('d') => {
+                            node_tx.send(NodeMsg::Disc).unwrap();
+                        }
+                        key if key.code == KeyCode::Char('c') => {
+                            master_tx.blocking_send(MasterMsg::Clear).unwrap();
+                        }
+                        _ => {}
                     }
                 }
                 Event::Resize(_, _) => {
-                    master_tx.blocking_send(Master::Resize).unwrap();
+                    master_tx.blocking_send(MasterMsg::Resize).unwrap();
                 }
                 _ => {}
             }
@@ -312,13 +363,13 @@ fn input_thread(master_tx: mpsc::Sender<Master>) {
     }
 }
 
-async fn node(master_tx: mpsc::Sender<Master>, cancellation_token: CancellationToken) {
-    master_tx.send(Master::Spawn).await.unwrap();
+async fn node(master_tx: mpsc::Sender<MasterMsg>, mut node_rx: broadcast::Receiver<NodeMsg>, cancellation_token: CancellationToken) {
+    master_tx.send(MasterMsg::Spawn).await.unwrap();
 
     let url = url::Url::parse("ws://localhost:3420").unwrap();
     let con = connect_async(url).await;
     let Ok(con) = con else {
-        master_tx.send(Master::Disc).await.unwrap();
+        master_tx.send(MasterMsg::Disc).await.unwrap();
         return;
     };
     let (ws_stream, res) = con;
@@ -326,10 +377,30 @@ async fn node(master_tx: mpsc::Sender<Master>, cancellation_token: CancellationT
     let (write, mut read) = ws_stream.split();
     let (send_tx, mut recv_tx) = mpsc::channel::<ClientMsg>(1);
 
-    master_tx.send(Master::Con).await.unwrap();
+    master_tx.send(MasterMsg::Con).await.unwrap();
 
     loop {
         select! {
+            msg = node_rx.recv() => {
+                let msg = match msg {
+                    Ok(msg) => msg,
+                    Err(err) => {
+                        error!("node err: {}", err);
+                        break;
+                    }
+                };
+                let end = on_node_msg(msg).await;
+                let end = match end {
+                    Ok(end) => end,
+                    Err(err) => {
+                        error!("node err: {}", err);
+                        break;
+                    }
+                };
+                if end {
+                    break;
+                }
+            }
             msg = read.next() => {
                 let Some(msg) = msg else {
                     break;
@@ -350,13 +421,29 @@ async fn node(master_tx: mpsc::Sender<Master>, cancellation_token: CancellationT
         }
     }
 
-    master_tx.send(Master::Disc).await.unwrap();
+    master_tx.send(MasterMsg::Disc).await.unwrap();
+}
+
+async fn on_node_msg(msg: NodeMsg) -> Result<bool, OnNodeMsgError> {
+    match msg {
+        NodeMsg::Disc => {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
 }
 
 async fn on_client_msg(msg: ClientMsg) -> Result<(), OnClientMsgError> {
     let bytes = ClientMsg::as_vec(&(0, msg))?;
 
     Ok(())
+}
+
+#[derive(Error, Debug)]
+pub enum OnNodeMsgError {
+    #[error("Serialization error: {0}")]
+    Serialization(#[from] bincode::Error),
 }
 
 #[derive(Error, Debug)]

@@ -50,7 +50,7 @@ impl LiveThrottleCache {
                 return false;
             };
             let count = ip.ws_connection_count.get_untracked();
-            if count <= 1 {
+            if count < 1 {
                 return true;
             }
             ip.ws_connection_count.update(|count| {
@@ -70,8 +70,8 @@ impl LiveThrottleCache {
         self.ips.update(|ips| {
             for (ip, new_con) in throttle_cache {
                 if let Some(con) = ips.get(&ip) {
-                    if con.ws_connection_count.get_untracked() != new_con.ws_connection_count {
-                        con.ws_connection_count.set(new_con.ws_connection_count);
+                    if con.ws_connection_count.get_untracked() != new_con.throttle.amount {
+                        con.ws_connection_count.set(new_con.throttle.amount);
                     }
                     for (new_path_index, new_path_count) in new_con.ws_path_count {
                             let updated = con.ws_path_count.with_untracked(|con_path_count| {
@@ -96,17 +96,17 @@ impl LiveThrottleCache {
                                 });
                             }
                     }
-                    if con.ws_total_blocked_connection_attempts.get_untracked() != new_con.ws_total_blocked_connection_attempts {
-                        con.ws_total_blocked_connection_attempts.set(new_con.ws_total_blocked_connection_attempts);
+                    if con.ws_total_blocked_connection_attempts.get_untracked() != new_con.throttle.tracker.total_amount {
+                        con.ws_total_blocked_connection_attempts.set(new_con.throttle.tracker.total_amount);
                     }
-                    if con.ws_blocked_connection_attempts.get_untracked() != new_con.ws_blocked_connection_attempts {
-                        con.ws_blocked_connection_attempts.set(new_con.ws_blocked_connection_attempts);
+                    if con.ws_blocked_connection_attempts.get_untracked() != new_con.throttle.tracker.amount {
+                        con.ws_blocked_connection_attempts.set(new_con.throttle.tracker.amount);
                     }
-                    if con.ws_blocked_connection_attempts_last_reset_at.get_untracked() != new_con.ws_blocked_connection_attempts_last_reset_at {
-                        con.ws_blocked_connection_attempts_last_reset_at.set(new_con.ws_blocked_connection_attempts_last_reset_at);
+                    if con.ws_blocked_connection_attempts_last_reset_at.get_untracked() != new_con.throttle.tracker.started_at {
+                        con.ws_blocked_connection_attempts_last_reset_at.set(new_con.throttle.tracker.started_at);
                     }
-                    if con.ws_banned_until.get_untracked() != new_con.ws_banned_until {
-                        con.ws_banned_until.set(new_con.ws_banned_until);
+                    if con.ws_banned_until.get_untracked() != new_con.throttle.banned_until {
+                        con.ws_banned_until.set(new_con.throttle.banned_until);
                     }
           
                     // for  in  {

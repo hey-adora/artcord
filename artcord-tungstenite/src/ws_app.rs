@@ -183,7 +183,7 @@ pub async fn create_ws(
                     // }
 
                     con = listener.accept() => {
-                        on_connection(con, &mut throttle, &cancellation_token, &db, &task_tracker, &ws_addr, &ws_tx, &admin_ws_stats_tx).await;
+                        on_connection(con, &mut throttle, &cancellation_token, &db, &task_tracker, &ws_addr, &ws_tx, &admin_ws_stats_tx, Utc::now()).await;
                     },
 
                     ws_msg = ws_recv.recv() => {

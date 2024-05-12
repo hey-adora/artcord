@@ -3,6 +3,7 @@ pub mod con_task;
 use std::{io, net::SocketAddr, sync::Arc};
 
 use artcord_mongodb::database::DB;
+use chrono::{DateTime, Utc};
 use tokio::{net::TcpStream, sync::mpsc};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::{debug, error, Instrument};
@@ -20,6 +21,7 @@ pub async fn on_connection(
     ws_addr: &str,
     ws_app_tx: &mpsc::Sender<WsAppMsg>,
     admin_ws_stats_tx: &mpsc::Sender<AdminConStatMsg>,
+    time: DateTime<Utc>,
 ) {
     let (stream, user_addr) = match con {
         Ok(result) => result,
@@ -30,7 +32,7 @@ pub async fn on_connection(
     };
 
     let ip = user_addr.ip();
-    let reach_max_con = match throttle.on_connect(ip).await {
+    let reach_max_con = match throttle.on_connect(ip, time).await {
         Ok(max) => max,
         Err(err) => {
             error!("ws({}): failed to run on_connect: {}", &ws_addr, err);

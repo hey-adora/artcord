@@ -5,10 +5,9 @@ use artcord_mongodb::database::DB;
 use artcord_state::{
     message::{
         prod_client_msg::ClientMsgIndexType, prod_perm_key::ProdMsgPermKey, prod_server_msg::ServerMsg
-    },
-    model::ws_statistics::{TempConIdType, WsStatDb, WsStatTemp, WsStatTempCountItem},
+    }, misc::throttle_threshold::Threshold, model::ws_statistics::{TempConIdType, WsStatDb, WsStatTemp, WsStatTempCountItem}
 };
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use tokio::{select, sync::{mpsc, oneshot}, task::JoinHandle};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
@@ -20,6 +19,7 @@ pub enum AdminConStatMsg {
     CheckThrottle {
         connection_key: TempConIdType,
         path: ClientMsgIndexType,
+        threshold: Threshold,
         result_tx: oneshot::Sender<bool>,
     },
 
@@ -118,8 +118,8 @@ pub async fn on_msg(
     };
 
     match msg {
-        AdminConStatMsg::CheckThrottle { connection_key, path, result_tx } => {
-                        
+        AdminConStatMsg::CheckThrottle { connection_key, path, threshold, result_tx } => {
+            result_tx.send(true);
         }
         AdminConStatMsg::Inc {
             connection_key,
