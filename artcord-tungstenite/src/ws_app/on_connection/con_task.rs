@@ -1,6 +1,6 @@
 use crate::ws_app::on_connection::con_task::on_msg::on_msg;
 use crate::ws_app::on_connection::con_task::on_req::on_req;
-use crate::ws_app::ws_statistic::AdminConStatMsg;
+use crate::ws_app::ws_statistic::WsStatsMsg;
 use crate::ws_app::WsAppMsg;
 use artcord_mongodb::database::DB;
 use artcord_state::model::ws_statistics::TempConIdType;
@@ -32,7 +32,7 @@ pub async fn con_task(
     ws_app_tx: mpsc::Sender<WsAppMsg>,
     ip: IpAddr,
     addr: SocketAddr,
-    admin_ws_stats_tx: mpsc::Sender<AdminConStatMsg>,
+    admin_ws_stats_tx: mpsc::Sender<WsStatsMsg>,
 ) {
     trace!("task spawned!");
     let ws_stream = tokio_tungstenite::accept_async(stream).await;
@@ -57,7 +57,7 @@ pub async fn con_task(
     let user_task_tracker = TaskTracker::new();
 
     let send_result = admin_ws_stats_tx
-        .send(AdminConStatMsg::AddTrack {
+        .send(WsStatsMsg::AddTrack {
             connection_key: con_id.clone(),
             tx: connection_task_tx.clone(),
             ip: ip.to_string(),
@@ -114,7 +114,7 @@ pub async fn con_task(
     }
 
     let send_result = admin_ws_stats_tx
-        .send(AdminConStatMsg::StopTrack {
+        .send(WsStatsMsg::StopTrack {
             connection_key: con_id.clone(),
         })
         .await;

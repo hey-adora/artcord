@@ -21,7 +21,7 @@ use crate::misc::throttle_threshold::Threshold;
 
 use super::prod_perm_key::ProdMsgPermKey;
 
-pub type ClientMsgIndexType = usize;
+pub type ClientPathType = usize;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone, VariantNames, EnumIndex, EnumCount)]
 pub enum ClientMsg {
@@ -135,9 +135,9 @@ impl ClientMsg {
 
     pub fn throttle(
         &self,
-        throttle_time: &mut HashMap<ClientMsgIndexType, (u64, HashMap<IpAddr, u64>)>,
+        throttle_time: &mut HashMap<ClientPathType, (u64, HashMap<IpAddr, u64>)>,
         ip: &IpAddr,
-        path: ClientMsgIndexType,
+        path: ClientPathType,
         current_time: i64,
         duration: i64,
         max_count: u64,

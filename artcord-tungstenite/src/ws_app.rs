@@ -11,12 +11,12 @@ use artcord_leptos_web_sockets::WsRouteKey;
 use artcord_mongodb::database::DBError;
 use artcord_mongodb::database::DB;
 use artcord_state::message::prod_client_msg::ClientMsg;
-use artcord_state::message::prod_client_msg::ClientMsgIndexType;
+use artcord_state::message::prod_client_msg::ClientPathType;
 use artcord_state::message::prod_perm_key::ProdMsgPermKey;
 use artcord_state::message::prod_server_msg::ServerMsg;
 use artcord_state::model::ws_statistics;
 use artcord_state::model::ws_statistics::TempConIdType;
-use artcord_state::model::ws_statistics::WsStatDb;
+use artcord_state::model::ws_statistics::DbWsStat;
 use artcord_state::shared_global::throttle;
 use artcord_state::util::time::time_is_past;
 use artcord_state::util::time::time_passed_days;
@@ -69,7 +69,7 @@ use crate::ws_app::ws_statistic::create_admin_con_stat_task;
 use crate::ws_app::ws_throttle::WsThrottle;
 
 use self::on_connection::con_task::ConMsg;
-use self::ws_statistic::AdminConStatMsg;
+use self::ws_statistic::WsStatsMsg;
 
 pub mod on_connection;
 mod on_msg;
@@ -94,7 +94,7 @@ pub enum WsAppMsg {
     },
     Inc {
         ip: IpAddr,
-        path: ClientMsgIndexType,
+        path: ClientPathType,
     },
 }
 
@@ -508,6 +508,9 @@ pub enum WsResError {
     #[error("MainGallery error: {0}")]
     Serialization(#[from] bincode::Error),
 
+    #[error("oneshot recv error: {0}")]
+    OneShotRecv(#[from] tokio::sync::oneshot::error::RecvError),
+
     #[error("Send error: {0}")]
     Send(#[from] tokio::sync::mpsc::error::SendError<tokio_tungstenite::tungstenite::Message>),
 
@@ -518,7 +521,7 @@ pub enum WsResError {
     ConnectionSend(#[from] tokio::sync::mpsc::error::SendError<ConMsg>),
 
     #[error("Send error: {0}")]
-    ThrottleSend(#[from] tokio::sync::mpsc::error::SendError<AdminConStatMsg>),
+    ThrottleSend(#[from] tokio::sync::mpsc::error::SendError<WsStatsMsg>),
     // tokio::sync::mpsc::error::SendError<tokio_tungstenite::tungstenite::Message>>>
     #[error("Mongodb error: {0}")]
     MongoDB(#[from] mongodb::error::Error),

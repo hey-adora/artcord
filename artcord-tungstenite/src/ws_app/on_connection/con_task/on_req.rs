@@ -8,7 +8,7 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_util::task::TaskTracker;
 use tracing::{debug, trace};
 
-use crate::ws_app::{ws_statistic::AdminConStatMsg, WsAppMsg};
+use crate::ws_app::{ws_statistic::WsStatsMsg, WsAppMsg};
 
 use self::req_task::req_task;
 
@@ -22,7 +22,7 @@ pub async fn on_req(
     user_task_tracker: &TaskTracker,
     db: &Arc<DB>,
     connection_task_tx: &mpsc::Sender<ConMsg>,
-    admin_ws_stats_tx: &mpsc::Sender<AdminConStatMsg>,
+    admin_ws_stats_tx: &mpsc::Sender<WsStatsMsg>,
     ws_app_tx: &mpsc::Sender<WsAppMsg>,
     connection_key: &TempConIdType,
     addr: &SocketAddr,

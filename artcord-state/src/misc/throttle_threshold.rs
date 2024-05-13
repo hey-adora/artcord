@@ -1,9 +1,27 @@
+use std::{num::TryFromIntError, str::FromStr};
+
 use crate::util::time::{time_is_past, time_passed};
 use chrono::{DateTime, Days, TimeDelta, Utc};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use tracing::{error, trace, warn};
 
 use super::throttle_connection::IpBanReason;
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct DbThrottleDoubleLayer {
+    pub banned_until: Option<i64>,
+    pub banned_reason: Option<String>,
+    pub block_tracker: DbThresholdTracker,
+    pub ban_tracker: DbThresholdTracker,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct DbThresholdTracker {
+    pub total_amount: i64,
+    pub amount: i64,
+    pub started_at: i64,
+}
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct ThrottleRanged {
@@ -50,6 +68,89 @@ pub enum IsBanned {
     NotBanned,
     UnBanned,
 }
+
+impl TryFrom<ThresholdTracker> for DbThresholdTracker {
+    type Error = ThresholdTrackerFromError;
+    fn try_from(value: ThresholdTracker) -> Result<Self, Self::Error> {
+        Ok(Self {
+            total_amount: i64::try_from(value.total_amount)?,
+            amount: i64::try_from(value.amount)?,
+            started_at: value.started_at.timestamp_millis(),
+        })
+    }
+}
+
+impl TryFrom<DbThresholdTracker> for ThresholdTracker {
+    type Error = DbThresholdTrackerFromError;
+    fn try_from(value: DbThresholdTracker) -> Result<Self, Self::Error> {
+        Ok(Self {
+            total_amount: u64::try_from(value.total_amount)?,
+            amount: u64::try_from(value.amount)?,
+            started_at: DateTime::<Utc>::from_timestamp_millis(value.started_at)
+                .ok_or(DbThresholdTrackerFromError::InvalidDate(value.started_at))?,
+        })
+    }
+}
+
+impl TryFrom<ThrottleDoubleLayer> for DbThrottleDoubleLayer {
+    type Error = ThrottleDoubleLayerFromError;
+    fn try_from(value: ThrottleDoubleLayer) -> Result<Self, Self::Error> {
+        let (banned_until, banned_reason) = value
+            .banned_until
+            .map(|(a, b)| {
+                let b: &'static str = b.into();
+                (Some(a.timestamp_millis()), Some(b.to_string()))
+            })
+            .unwrap_or((None, None));
+        Ok(Self {
+            banned_until,
+            banned_reason,
+            ban_tracker: value.ban_tracker.try_into()?,
+            block_tracker: value.block_tracker.try_into()?,
+        })
+    }
+}
+
+impl TryFrom<DbThrottleDoubleLayer> for ThrottleDoubleLayer {
+    type Error = DbThrottleDoubleLayerFromError;
+    fn try_from(value: DbThrottleDoubleLayer) -> Result<Self, Self::Error> {
+        if value.banned_reason.is_some() && value.banned_until.is_none() {
+            return Err(DbThrottleDoubleLayerFromError::MissingBannedDate);
+        }
+
+        if value.banned_reason.is_none() && value.banned_until.is_some() {
+            return Err(DbThrottleDoubleLayerFromError::MissingBannedReason);
+        }
+
+        let banned_until = if let (Some(a), Some(b)) = (value.banned_until, value.banned_reason) {
+            Some((
+                DateTime::<Utc>::from_timestamp_millis(a)
+                    .ok_or(DbThrottleDoubleLayerFromError::InvalidDate(a))?,
+                IpBanReason::from_str(&b)?,
+            ))
+        } else {
+            None
+        };
+
+        Ok(Self {
+            banned_until,
+            ban_tracker: value.ban_tracker.try_into()?,
+            block_tracker: value.block_tracker.try_into()?,
+        })
+    }
+}
+
+// impl TryFrom<ThrottleDoubleLayer> for DbThrottleDoubleLayer {
+//     type Error = FromDbThrottleError;
+//     fn try_from(value: DbThresholdTracker) -> Result<Self, Self::Error> {
+//         Ok(Self {
+//             total_amount: value.total_amount,
+//             amount: value.amount,
+//             started_at: DateTime::<Utc>::from_timestamp_millis(value.started_at)
+//                 .ok_or(FromDbThrottleError::InvalidDate(value.started_at))?,
+//         })
+//     }
+// }
 
 impl ThrottleRanged {
     pub fn new(range: u64, started_at: DateTime<Utc>) -> Self {
@@ -146,7 +247,7 @@ impl ThrottleDoubleLayer {
         is_banned(&mut self.banned_until, time)
     }
 
-    pub fn allow_con(
+    pub fn allow(
         &mut self,
         block_threshold: &Threshold,
         ban_threshold: &Threshold,
@@ -312,6 +413,46 @@ impl Threshold {
     // pub fn threshold
 }
 
+#[derive(Error, Debug)]
+pub enum DbThrottleDoubleLayerFromError {
+    // trum::ParseError
+    #[error("db missing ban date")]
+    MissingBannedDate,
+
+    #[error("db missing ban reason")]
+    MissingBannedReason,
+
+    #[error("invalid date: {0}")]
+    InvalidDate(i64),
+
+    #[error("invalid date: {0}")]
+    InvalidReason(#[from] strum::ParseError),
+
+    #[error("tracker error: {0}")]
+    TrackerError(#[from] DbThresholdTrackerFromError),
+}
+
+#[derive(Error, Debug)]
+pub enum ThrottleDoubleLayerFromError {
+    #[error("tracker error: {0}")]
+    TrackerError(#[from] ThresholdTrackerFromError),
+}
+
+#[derive(Error, Debug)]
+pub enum ThresholdTrackerFromError {
+    #[error("Failed to convert int: {0}")]
+    TryFromIntError(#[from] TryFromIntError),
+}
+
+#[derive(Error, Debug)]
+pub enum DbThresholdTrackerFromError {
+    #[error("Failed to convert int: {0}")]
+    TryFromIntError(#[from] TryFromIntError),
+
+    #[error("invalid date: {0}")]
+    InvalidDate(i64),
+}
+
 #[cfg(test)]
 mod throttle_tests {
     use chrono::{TimeDelta, Utc};
@@ -329,7 +470,7 @@ mod throttle_tests {
 
         let started_at = Utc::now();
         let now = Utc::now();
-        let ban_reason = IpBanReason::TooManyConnectionAttempts;
+        let ban_reason = IpBanReason::WsTooManyReconnections;
         let ban_duration = TimeDelta::try_seconds(10).unwrap();
         let threshold = Threshold::new(10, TimeDelta::try_seconds(10).unwrap());
 
@@ -391,14 +532,13 @@ mod throttle_tests {
             (
                 AllowCon::Banned((
                     now.checked_add_signed(ban_duration).unwrap(),
-                    IpBanReason::TooManyConnectionAttempts
+                    IpBanReason::WsTooManyReconnections
                 )),
                 10,
                 11,
                 10
             )
         );
-
 
         let now = now.checked_add_signed(ban_duration).unwrap();
         let result = throttle.inc(&threshold, ban_reason, ban_duration, now);
@@ -410,12 +550,7 @@ mod throttle_tests {
                 throttle.tracker.total_amount,
                 throttle.tracker.amount,
             ),
-            (
-                AllowCon::Unbanned,
-                10,
-                11,
-                0,
-            )
+            (AllowCon::Unbanned, 10, 11, 0,)
         );
 
         let result = throttle.inc(&threshold, ban_reason, ban_duration, now);
@@ -443,7 +578,6 @@ mod throttle_tests {
             ),
             (AllowCon::Allow, 10, 12, 1)
         );
-
     }
 
     #[test]
@@ -454,13 +588,13 @@ mod throttle_tests {
 
         let started_at = Utc::now();
         let now = Utc::now();
-        let ban_reason = IpBanReason::TooManyConnectionAttempts;
+        let ban_reason = IpBanReason::WsTooManyReconnections;
         let ban_duration = TimeDelta::try_seconds(10).unwrap();
         let block_threshold = Threshold::new(10, TimeDelta::try_seconds(10).unwrap());
         let ban_threshold = Threshold::new(10, TimeDelta::try_seconds(10).unwrap());
 
         let mut throttle = ThrottleDoubleLayer::new(started_at);
-        let result = throttle.allow_con(
+        let result = throttle.allow(
             &block_threshold,
             &ban_threshold,
             ban_reason,
@@ -471,7 +605,7 @@ mod throttle_tests {
         assert_eq!(result, AllowCon::Allow);
 
         for _ in 0..15 {
-            let _ = throttle.allow_con(
+            let _ = throttle.allow(
                 &block_threshold,
                 &ban_threshold,
                 ban_reason,
@@ -480,7 +614,7 @@ mod throttle_tests {
             );
         }
 
-        let result = throttle.allow_con(
+        let result = throttle.allow(
             &block_threshold,
             &ban_threshold,
             ban_reason,
@@ -500,7 +634,7 @@ mod throttle_tests {
         );
 
         for _ in 0..3 {
-            let _ = throttle.allow_con(
+            let _ = throttle.allow(
                 &block_threshold,
                 &ban_threshold,
                 ban_reason,
@@ -509,7 +643,7 @@ mod throttle_tests {
             );
         }
 
-        let result = throttle.allow_con(
+        let result = throttle.allow(
             &block_threshold,
             &ban_threshold,
             ban_reason,
@@ -528,7 +662,7 @@ mod throttle_tests {
             (
                 AllowCon::Banned((
                     now.checked_add_signed(ban_duration).unwrap(),
-                    IpBanReason::TooManyConnectionAttempts
+                    IpBanReason::WsTooManyReconnections
                 )),
                 10,
                 10,
@@ -537,7 +671,7 @@ mod throttle_tests {
             )
         );
 
-        let result = throttle.allow_con(
+        let result = throttle.allow(
             &block_threshold,
             &ban_threshold,
             ban_reason,
@@ -557,7 +691,7 @@ mod throttle_tests {
         );
 
         let now = now.checked_add_signed(ban_duration).unwrap();
-        let result = throttle.allow_con(
+        let result = throttle.allow(
             &block_threshold,
             &ban_threshold,
             ban_reason,
@@ -576,7 +710,7 @@ mod throttle_tests {
             (AllowCon::Unbanned, 10, 0, 12, 0)
         );
 
-        let result = throttle.allow_con(
+        let result = throttle.allow(
             &block_threshold,
             &ban_threshold,
             ban_reason,

@@ -4,8 +4,8 @@ use artcord_leptos_web_sockets::{WsPackage, WsRouteKey};
 use artcord_mongodb::database::DB;
 use artcord_state::{
     message::{
-        prod_client_msg::ClientMsgIndexType, prod_perm_key::ProdMsgPermKey, prod_server_msg::ServerMsg
-    }, misc::throttle_threshold::Threshold, model::ws_statistics::{TempConIdType, WsStatDb, WsStatTemp, WsStatTempCountItem}
+        prod_client_msg::ClientPathType, prod_perm_key::ProdMsgPermKey, prod_server_msg::ServerMsg
+    }, misc::{throttle_connection::IpBanReason, throttle_threshold::{AllowCon, Threshold}}, model::ws_statistics::{DbWsStat, TempConIdType, WsStat, WsStatPath}
 };
 use chrono::{DateTime, Utc};
 use tokio::{select, sync::{mpsc, oneshot}, task::JoinHandle};
@@ -13,19 +13,21 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::{error, trace, warn};
 
-use super::{ws_throttle::AdminMsgErr, ConMsg};
+use crate::{WS_BRUTE_BAN_THRESHOLD, WS_BRUTE_BLOCK_THRESHOLD, WS_BRUTE_THRESHOLD_BAN_DURATION};
 
-pub enum AdminConStatMsg {
+use super::{ws_throttle::WsStatsOnMsgErr, ConMsg};
+
+pub enum WsStatsMsg {
     CheckThrottle {
         connection_key: TempConIdType,
-        path: ClientMsgIndexType,
+        path: ClientPathType,
         threshold: Threshold,
         result_tx: oneshot::Sender<bool>,
     },
 
     Inc {
         connection_key: TempConIdType,
-        path: ClientMsgIndexType,
+        path: ClientPathType,
     },
 
     AddTrack {
@@ -56,20 +58,20 @@ pub async fn create_admin_con_stat_task(
     task_tracker: &TaskTracker,
     cancelation_token: &CancellationToken,
     db: Arc<DB>,
-) -> (JoinHandle<()>, mpsc::Sender<AdminConStatMsg>) {
-    let (tx, rx) = mpsc::channel::<AdminConStatMsg>(100);
+) -> (JoinHandle<()>, mpsc::Sender<WsStatsMsg>) {
+    let (tx, rx) = mpsc::channel::<WsStatsMsg>(100);
     let listener_task = task_tracker.spawn(admin_stat_task(rx, cancelation_token.clone(), db));
     (listener_task, tx)
 }
 
 pub async fn admin_stat_task(
-    mut rx: mpsc::Receiver<AdminConStatMsg>,
+    mut rx: mpsc::Receiver<WsStatsMsg>,
     cancelation_token: CancellationToken,
     db: Arc<DB>,
 ) {
     let mut listener_list: HashMap<TempConIdType, (WsRouteKey, mpsc::Sender<ConMsg>)> = HashMap::new();
     let mut con_list: HashMap<TempConIdType, mpsc::Sender<ConMsg>> = HashMap::new();
-    let mut stats: HashMap<TempConIdType, WsStatTemp> = HashMap::new();
+    let mut stats: HashMap<TempConIdType, WsStat> = HashMap::new();
 
     loop {
         select! {
@@ -93,7 +95,7 @@ pub async fn admin_stat_task(
         }
     }
 
-    let unsaved_stats = match WsStatDb::from_hashmap_temp_stats(stats) {
+    let unsaved_stats = match DbWsStat::from_hashmap_ws_stats(stats, Utc::now()) {
         Ok(stats) => stats,
         Err(err) => {
             error!("ws_stats: error converting from WsStatsTemp to WsStats {}", err);
@@ -107,21 +109,38 @@ pub async fn admin_stat_task(
 }
 
 pub async fn on_msg(
-    msg: Option<AdminConStatMsg>,
+    msg: Option<WsStatsMsg>,
     list: &mut HashMap<TempConIdType, (WsRouteKey, mpsc::Sender<ConMsg>)>,
-    stats: &mut HashMap<TempConIdType, WsStatTemp>,
+    stats: &mut HashMap<TempConIdType, WsStat>,
     cons: &mut HashMap<TempConIdType, mpsc::Sender<ConMsg>>,
     db: &DB,
-) -> Result<bool, AdminMsgErr> {
+) -> Result<bool, WsStatsOnMsgErr> {
     let Some(msg) = msg else {
         return Ok(true);
     };
 
     match msg {
-        AdminConStatMsg::CheckThrottle { connection_key, path, threshold, result_tx } => {
-            result_tx.send(true);
+        WsStatsMsg::CheckThrottle { connection_key, path, threshold, result_tx } => {
+            let stat = stats.get_mut(&connection_key);
+            let Some(stat) = stat else {
+                warn!("admin stats: missing connection entry: {}", &connection_key);
+                // stats.insert(connection_key, AdminStat::new(kj, is_connected, count))
+                return Ok(false);
+            };
+
+            let path = stat.count.entry(path).or_insert_with(|| WsStatPath::new(Utc::now()));
+
+            let result = path.throttle.allow(&WS_BRUTE_BLOCK_THRESHOLD, &WS_BRUTE_BAN_THRESHOLD, IpBanReason::WsRouteBruteForceDetected, WS_BRUTE_THRESHOLD_BAN_DURATION, Utc::now());
+
+            let result = match result {
+                AllowCon::Allow | AllowCon::Unbanned => true,
+                _ => false
+            };
+
+            result_tx.send(result).map_err(|_|WsStatsOnMsgErr::SendCheckThrottle)?;
+            //stats.
         }
-        AdminConStatMsg::Inc {
+        WsStatsMsg::Inc {
             connection_key,
             path,
         } => {
@@ -132,7 +151,7 @@ pub async fn on_msg(
                 // stats.insert(connection_key, AdminStat::new(kj, is_connected, count))
                 return Ok(false);
             };
-            let count = stat.count.entry(path).or_insert(WsStatTempCountItem::default());
+            let count = stat.count.entry(path).or_insert_with(|| WsStatPath::new(Utc::now()));
             count.total_count += 1;
             count.count += 1;
 
@@ -148,7 +167,7 @@ pub async fn on_msg(
                 tx.send(ConMsg::Send(update_msg.clone())).await?;
             }
         }
-        AdminConStatMsg::AddTrack {
+        WsStatsMsg::AddTrack {
             connection_key,
             tx,
             ip,
@@ -158,9 +177,9 @@ pub async fn on_msg(
             // let statistics = vec![Statistic::new(addr.clone().to_string())];
 
             trace!("admin stats: added to track: {}", &connection_key);
-            let current_con_stats: WsStatTemp = stats
+            let current_con_stats: WsStat = stats
                 .entry(connection_key.clone())
-                .or_insert(WsStatTemp::new(ip, addr.clone(), Utc::now().timestamp_millis()))
+                .or_insert(WsStat::new(ip, addr.clone(), Utc::now()))
                 .clone();
             cons.insert(connection_key.clone(), tx);
 
@@ -183,7 +202,7 @@ pub async fn on_msg(
                 tx.send(ConMsg::Send(update_msg.clone())).await?;
             }
         }
-        AdminConStatMsg::AddListener {
+        WsStatsMsg::AddListener {
             connection_key,
             tx,
             addr,
@@ -222,11 +241,11 @@ pub async fn on_msg(
 
           
         }
-        AdminConStatMsg::RemoveListener { connection_key } => {
+        WsStatsMsg::RemoveListener { connection_key } => {
             trace!("admin stats: removed from recv: {}", &connection_key);
             list.remove(&connection_key);
         }
-        AdminConStatMsg::StopTrack { connection_key } => {
+        WsStatsMsg::StopTrack { connection_key } => {
             trace!("admin stats: removed from track: {}", &connection_key);
             let stat = stats.get(&connection_key);
             let Some(stat) = stat else {
@@ -239,7 +258,8 @@ pub async fn on_msg(
                 con_key: connection_key.clone(),
             };
 
-            let stat_db: WsStatDb = match WsStatDb::from_temp(stat.clone(), uuid::Uuid::from_u128(connection_key).to_string(), Utc::now().timestamp_millis()) {
+            let disconnected_at = Utc::now();
+            let stat_db: DbWsStat = match DbWsStat::from_ws_stat(stat.clone(), uuid::Uuid::from_u128(connection_key).to_string(), disconnected_at, disconnected_at) {
                 Ok(stat) => stat,
                 Err(err) => {
                     warn!("admin stats: missing connection entry: {}", &connection_key);

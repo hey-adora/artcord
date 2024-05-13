@@ -4,11 +4,11 @@ use artcord_leptos_web_sockets::{WsPackage, WsRouteKey};
 use artcord_mongodb::database::DB;
 use artcord_state::{
     message::{prod_perm_key::ProdMsgPermKey, prod_server_msg::ServerMsg},
-    model::ws_statistics::WsStatDb,
+    model::ws_statistics::DbWsStat,
 };
 use thiserror::Error;
 
-pub async fn ws_statistics(db: Arc<DB>) -> Result<Vec<WsStatDb>, WsStatisticsError> {
+pub async fn ws_statistics(db: Arc<DB>) -> Result<Vec<DbWsStat>, WsStatisticsError> {
     // let result = db.user_find_one(&user_id).await?;
     //
     // let Some(result) = result else {

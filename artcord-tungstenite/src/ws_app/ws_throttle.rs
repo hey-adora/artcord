@@ -10,7 +10,7 @@ use artcord_leptos_web_sockets::WsPackage;
 use artcord_leptos_web_sockets::WsRouteKey;
 use artcord_mongodb::database::DB;
 use artcord_state::message::prod_client_msg::ClientMsg;
-use artcord_state::message::prod_client_msg::ClientMsgIndexType;
+use artcord_state::message::prod_client_msg::ClientPathType;
 use artcord_state::message::prod_perm_key::ProdMsgPermKey;
 use artcord_state::message::prod_server_msg::ServerMsg;
 use artcord_state::misc::throttle_connection::ConStatus;
@@ -162,7 +162,7 @@ impl WsThrottle {
         Ok(false)
     }
 
-    pub async fn on_inc(&mut self, ip: IpAddr, path: ClientMsgIndexType) -> Result<bool, WsMsgErr> {
+    pub async fn on_inc(&mut self, ip: IpAddr, path: ClientPathType) -> Result<bool, WsMsgErr> {
         let con = self.ips.get_mut(&ip);
         let Some(con) = con else {
             return Ok(false);
@@ -208,7 +208,7 @@ impl WsThrottle {
             return Ok(false);
         };
 
-        let result = con.throttle.inc(&WS_CON_THRESHOLD, IpBanReason::TooManyConnectionAttempts, WS_CON_THRESHOLD_BAN_DURATION, time);
+        let result = con.throttle.inc(&WS_CON_THRESHOLD, IpBanReason::WsTooManyReconnections, WS_CON_THRESHOLD_BAN_DURATION, time);
 
         match result {
             AllowCon::Allow => {
@@ -237,7 +237,7 @@ impl WsThrottle {
 }
 
 #[derive(Error, Debug)]
-pub enum AdminMsgErr {
+pub enum WsStatsOnMsgErr {
     // #[error("Statistics error: {0}")]
     // AdminThrottle(#[from] WsHandleAdminThrottleError),
     //
@@ -256,6 +256,9 @@ pub enum AdminMsgErr {
     // InvalidClientMsg,
     #[error("MainGallery error: {0}")]
     Serialization(#[from] bincode::Error),
+
+    #[error("checl_throttle send error")]
+    SendCheckThrottle,
 
     #[error("Send error: {0}")]
     Send(#[from] tokio::sync::mpsc::error::SendError<tokio_tungstenite::tungstenite::Message>),

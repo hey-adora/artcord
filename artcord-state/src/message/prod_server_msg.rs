@@ -3,7 +3,7 @@ use std::{collections::HashMap, net::{IpAddr, SocketAddr}, str::FromStr};
 use crate::{
     aggregation::server_msg_img::AggImg,
     misc::{registration_invalid::RegistrationInvalidMsg, throttle_connection::{IpBanReason, LiveThrottleConnection}},
-    model::{user::User, ws_statistics::{TempConIdType, WsStatDb, WsStatTemp}},
+    model::{user::User, ws_statistics::{TempConIdType, DbWsStat, WsStat}},
 };
 
 use artcord_leptos_web_sockets::WsPackage;
@@ -11,7 +11,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use tracing::error;
 
-use super::prod_client_msg::ClientMsgIndexType;
+use super::prod_client_msg::ClientPathType;
 
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
@@ -20,24 +20,24 @@ pub enum ServerMsg {
     WsLivThrottleCachedEntryRemoved,
     WsLiveThrottleCachedEntryUpdated(HashMap<IpAddr, LiveThrottleConnection>),
     WsLiveThrottleCachedEntryNotFound,
-    WsLiveThrottleCachedIncPath { ip: IpAddr, path: ClientMsgIndexType },
+    WsLiveThrottleCachedIncPath { ip: IpAddr, path: ClientPathType },
     WsLiveThrottleCachedConnected { ip: IpAddr },
     WsLiveThrottleCachedDisconnected { ip: IpAddr },
     WsLiveThrottleCachedBlocks { ip: IpAddr, total_blocks: u64, blocks: u64 },
     // WsLiveThrottleCachedIncWsTotalBlocks { ip: IpAddr, total_blocks: u64, blocks: u64 },
     WsLiveThrottleCachedBanned { ip: IpAddr, date: DateTime<Utc>, reason: IpBanReason },
-    WsLiveStatsStarted(HashMap<TempConIdType, WsStatTemp>),
+    WsLiveStatsStarted(HashMap<TempConIdType, WsStat>),
     WsLiveStatsUpdateRemoveStat { con_key: TempConIdType },
-    WsLiveStatsUpdateAddedStat { con_key: TempConIdType, stat: WsStatTemp },
-    WsLiveStatsUpdateInc { con_key: TempConIdType, path: ClientMsgIndexType },
+    WsLiveStatsUpdateAddedStat { con_key: TempConIdType, stat: WsStat },
+    WsLiveStatsUpdateInc { con_key: TempConIdType, path: ClientPathType },
     WsLiveStatsStopped,
     WsLiveStatsUpdated,
     WsLiveStatsNotFound,
     WsLiveStatsTaskIsNotSet,
     WsStatsTotalCount(u64),
     //WsStatsFirstPage { total_count: u64, first_page: Vec<WsStat> },
-    WsStatsWithPagination { total_count: u64, latest: Option<i64>, stats: Vec<WsStatDb> },
-    WsStatsPage(Vec<WsStatDb>),
+    WsStatsWithPagination { total_count: u64, latest: Option<i64>, stats: Vec<DbWsStat> },
+    WsStatsPage(Vec<DbWsStat>),
     WsStatsGraph(Vec<f64>),
     GalleryMain(Vec<AggImg>),
     GalleryUser(Option<Vec<AggImg>>),
@@ -62,6 +62,7 @@ pub enum ServerMsg {
     None,
     Reset,
     NotImplemented,
+    TooManyRequests,
     // Error(String),
 }
 

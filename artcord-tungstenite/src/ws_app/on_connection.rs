@@ -10,7 +10,7 @@ use tracing::{debug, error, Instrument};
 
 use self::con_task::con_task;
 
-use super::{ws_statistic::AdminConStatMsg, ws_throttle::WsThrottle, WsAppMsg};
+use super::{ws_statistic::WsStatsMsg, ws_throttle::WsThrottle, WsAppMsg};
 
 pub async fn on_connection(
     con: Result<(TcpStream, SocketAddr), io::Error>,
@@ -20,7 +20,7 @@ pub async fn on_connection(
     task_tracker: &TaskTracker,
     ws_addr: &str,
     ws_app_tx: &mpsc::Sender<WsAppMsg>,
-    admin_ws_stats_tx: &mpsc::Sender<AdminConStatMsg>,
+    admin_ws_stats_tx: &mpsc::Sender<WsStatsMsg>,
     time: DateTime<Utc>,
 ) {
     let (stream, user_addr) = match con {

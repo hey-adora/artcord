@@ -18,7 +18,7 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::{debug, trace};
 
-use crate::ws_app::{ws_statistic::AdminConStatMsg, ConMsg, WsResError};
+use crate::ws_app::{ws_statistic::WsStatsMsg, ConMsg, WsResError};
 
 pub async fn live_ws_stats(
     db: Arc<DB>,
@@ -27,12 +27,12 @@ pub async fn live_ws_stats(
     ws_key: WsRouteKey,
     addr: SocketAddr,
     connection_tx: &mpsc::Sender<ConMsg>,
-    admin_ws_stats_tx: mpsc::Sender<AdminConStatMsg>,
+    admin_ws_stats_tx: mpsc::Sender<WsStatsMsg>,
 
 ) -> Result<Option<ServerMsg>, WsResError> {
     if listener_state {
         admin_ws_stats_tx
-            .send(AdminConStatMsg::AddListener {
+            .send(WsStatsMsg::AddListener {
                 connection_key,
                 tx: connection_tx.clone(),
                 addr: addr.to_string(),
@@ -41,7 +41,7 @@ pub async fn live_ws_stats(
             .await?;
     } else {
         admin_ws_stats_tx
-            .send(AdminConStatMsg::RemoveListener { connection_key })
+            .send(WsStatsMsg::RemoveListener { connection_key })
             .await?;
     }
 

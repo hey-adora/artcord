@@ -1,7 +1,7 @@
 use std::{collections::HashMap, net::IpAddr};
 
 use artcord_leptos_web_sockets::{channel::WsRecvResult, runtime::WsRuntime};
-use artcord_state::{message::{prod_client_msg::{ClientMsg, ClientMsgIndexType}, prod_server_msg::ServerMsg}, misc::throttle_connection::{IpBanReason, LiveThrottleConnection, WebThrottleConnection, WebThrottleConnectionCount}, model::ws_statistics::{TempConIdType, WebWsStat, WsStatTemp}};
+use artcord_state::{message::{prod_client_msg::{ClientMsg, ClientPathType}, prod_server_msg::ServerMsg}, misc::throttle_connection::{IpBanReason, LiveThrottleConnection, WebThrottleConnection, WebThrottleConnectionCount}, model::ws_statistics::{TempConIdType, WebWsStat, WsStat}};
 use chrono::{DateTime, Utc};
 use leptos::{RwSignal, SignalGet, SignalGetUntracked, SignalSet, SignalUpdate, SignalWithUntracked};
 use tracing::warn;
@@ -144,7 +144,7 @@ impl LiveThrottleCache {
         });
     }
 
-    pub fn on_inc(&self, ip: &IpAddr, path_index: &ClientMsgIndexType) {
+    pub fn on_inc(&self, ip: &IpAddr, path_index: &ClientPathType) {
         self.ips.with_untracked(|ips| {
             let con = ips.get(ip);
             let Some(con_paths) = con else {

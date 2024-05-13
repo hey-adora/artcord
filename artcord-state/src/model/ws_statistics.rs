@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 use field_types::FieldName;
 use leptos::RwSignal;
 use serde::de::value;
@@ -11,181 +11,181 @@ use std::{collections::HashMap, fmt::Debug, str::FromStr};
 use tracing::error;
 use thiserror::Error;
 
-use crate::message::prod_client_msg::ClientMsgIndexType;
+use crate::message::prod_client_msg::ClientPathType;
 use crate::message::prod_client_msg::ClientMsg;
+use crate::misc::throttle_threshold::{DbThrottleDoubleLayer, DbThrottleDoubleLayerFromError, ThrottleDoubleLayer, ThrottleDoubleLayerFromError};
+
+pub type TempConIdType = u128;
+pub type WebStatPathType = HashMap<ClientPathType, RwSignal<u64>>;
 
 
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct ReqCount {
-    pub path: String,
-    pub count: i64,
+#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct WsStat {
+    pub ip: String,
+    pub addr: String,
+    pub count:  HashMap<ClientPathType, WsStatPath>,
+    pub connected_at: DateTime<Utc>,
+    pub throttle: ThrottleDoubleLayer,
 }
 
-impl ReqCount {
-    pub fn new(path: String, count: i64) -> Self {
-        Self { path, count }
-    }
+#[derive(Debug, PartialEq, Clone)]
+pub struct WebWsStat {
+    pub addr: String,
+    // pub is_connected: RwSignal<bool>,
+    pub count: RwSignal<WebStatPathType>,
 }
-
-impl TryFrom<(ClientMsgIndexType, WsStatTempCountItem)> for ReqCount {
-    type Error = ReqCountTryFromError;
-
-    fn try_from((msg_enum_index, connection_count): (ClientMsgIndexType, WsStatTempCountItem)) -> Result<Self, Self::Error> {
-        let path = ClientMsg::VARIANTS.get(msg_enum_index).ok_or(ReqCountTryFromError::InvalidClientMsgEnumIndex(msg_enum_index))?;
-        let count = i64::try_from(connection_count.total_count)?;
-        Ok(
-            Self {
-                count,
-                path: path.to_string(),
-            }
-        )
-    }
-}
-
-
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, FieldName)]
-pub struct WsStatDb {
+pub struct DbWsStat {
     pub id: String,
     pub ip: String,
     pub addr: String,
-    //pub is_connected: bool,
-    // pub addr: String,
-    pub req_count: Vec<ReqCount>,
-    // pub req_count_main_gallery: i64,
-    // pub req_count_user_gallery: i64,
-    // pub agent: String,
-    // pub acc: String,
-    // pub last_used: i64,
+    pub req_count: Vec<DbWsStatPath>,
     pub connected_at: i64,
     pub disconnected_at: i64,
+    pub throttle: DbThrottleDoubleLayer,
     pub modified_at: i64,
     pub created_at: i64,
 }
-// #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-// pub struct Statistic {
-//     pub id: String,
-//     pub ip: String,
-//     pub is_connected: bool,
-//     pub addr: String,
-//     pub req_count_main_gallery: i64,
-//     pub req_count_user_gallery: i64,
-//     // pub agent: String,
-//     // pub acc: String,
-//     // pub last_used: i64,
-//     pub modified_at: i64,
-//     pub created_at: i64,
-// }
 
-impl WsStatDb {
-    pub fn new(ip: String, addr: String, connected_at: i64, disconnected_at: i64) -> Self {
-        Self {
-            id: uuid::Uuid::new_v4().to_string(),
-            ip,
-            addr,
-            req_count: vec![],
-            connected_at,
-            disconnected_at,
-            modified_at: Utc::now().timestamp_millis(),
-            created_at: Utc::now().timestamp_millis(),
-        }
-    }
-
-    pub fn from_hashmap_temp_stats(temp_stats: HashMap<TempConIdType, WsStatTemp>) -> Result<Vec<Self>, ReqCountTryFromError> {
-        temp_stats.into_iter().map(|(connection_uuid, connection_temp_stats)| WsStatDb::from_temp(connection_temp_stats, uuid::Uuid::from_u128(connection_uuid).to_string(), Utc::now().timestamp_millis())).collect()
-    }
+#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct WsStatPath {
+    pub total_count: u64,
+    pub count: u64,
+    pub last_reset_at: DateTime<Utc>,
+    pub throttle: ThrottleDoubleLayer,
 }
 
-// impl TryFrom<WsStatTemp> for WsStatDb {
-//     type Error = ReqCountTryFromError;
+#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct DbWsStatPath {
+    pub path: String,
+    pub total_count: i64,
+    pub count: i64,
+    pub last_reset_at: i64,
+    pub throttle: DbThrottleDoubleLayer,
+}
 
-//     fn try_from(value: WsStatTemp) -> Result<Self, Self::Error> {
-//         Self::from_temp(value, Utc::now().timestamp_millis())
+
+// #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+// pub struct ReqCount {
+//     pub path: String,
+//     pub count: i64,
+// }
+
+// impl ReqCount {
+//     pub fn new(path: String, count: i64) -> Self {
+//         Self { path, count }
 //     }
 // }
 
-impl WsStatDb {
-    pub fn from_temp(value: WsStatTemp, id: String, disconnected_at: i64) -> Result<Self, ReqCountTryFromError> {
-        let req_count: Vec<ReqCount> = value.count.into_iter().map(|v| v.try_into()).collect::<Result<Vec<ReqCount>, ReqCountTryFromError>>()?;
+// impl TryFrom<(ClientMsgIndexType, WsStatTempCountItem)> for ReqCount {
+//     type Error = ReqCountTryFromError;
+
+//     fn try_from((msg_enum_index, connection_count): (ClientMsgIndexType, WsStatTempCountItem)) -> Result<Self, Self::Error> {
+//         let path = ClientMsg::VARIANTS.get(msg_enum_index).ok_or(ReqCountTryFromError::InvalidClientMsgEnumIndex(msg_enum_index))?;
+//         let count = i64::try_from(connection_count.total_count)?;
+//         Ok(
+//             Self {
+//                 count,
+//                 path: path.to_string(),
+//             }
+//         )
+//     }
+// }
+
+impl WsStatPath {
+    pub fn new(time: DateTime<Utc>) -> Self {
+        Self {
+            total_count: 0,
+            count: 0,
+            last_reset_at: time,
+            throttle: ThrottleDoubleLayer::new(time)
+        }
+    }
+}
+
+impl DbWsStat {
+    pub fn from_hashmap_ws_stats(temp_stats: HashMap<TempConIdType, WsStat>, time: DateTime<Utc>) -> Result<Vec<Self>, DbWsStatPathFromError> {
+        temp_stats.into_iter().map(|(connection_uuid, connection_temp_stats)| DbWsStat::from_ws_stat(connection_temp_stats, uuid::Uuid::from_u128(connection_uuid).to_string(), time, time)).collect()
+    }
+
+    pub fn from_ws_stat(value: WsStat, con_key: String, disconnected_at: DateTime<Utc>, time: DateTime<Utc>) -> Result<Self, DbWsStatPathFromError> {
+        let req_count: Vec<DbWsStatPath> = value.count.into_iter().map(|v| v.try_into()).collect::<Result<Vec<DbWsStatPath>, DbWsStatPathFromError>>()?;
 
         Ok(
             Self {
-                id,
+                id: con_key,
                 ip: value.ip,
                 addr: value.addr,
                 req_count,
-                connected_at: value.connected_at,
-                disconnected_at: disconnected_at,
-                modified_at: Utc::now().timestamp_millis(),
-                created_at: Utc::now().timestamp_millis(),
+                connected_at: value.connected_at.timestamp_millis(),
+                disconnected_at: disconnected_at.timestamp_millis(),
+                throttle: value.throttle.try_into()?,
+                modified_at: time.timestamp_millis(),
+                created_at: time.timestamp_millis(),
             }
         )
     }
 }
 
-pub type TempConIdType = u128;
 
-#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
-pub struct WsStatTempCountItem {
-    pub total_count: u64,
-    pub count: u64,
-    pub last_reset_at: i64,
-}
+/////////////////////////////
 
-impl Default for WsStatTempCountItem {
-    fn default() -> Self {
-        Self {
-            total_count: 0,
-            count: 0,
-            last_reset_at: Utc::now().timestamp_millis()
-        }
+impl TryFrom<(ClientPathType, WsStatPath)> for DbWsStatPath {
+    type Error = DbWsStatPathFromError;
+    fn try_from((path, value): (ClientPathType, WsStatPath)) -> Result<Self, Self::Error> {
+        let path = ClientMsg::VARIANTS.get(path).ok_or(DbWsStatPathFromError::InvalidClientMsgEnumIndex(path))?;
+        Ok(
+            Self {
+                path: path.to_string(),
+                total_count: i64::try_from(value.total_count)?,
+                count: i64::try_from(value.count)?,
+                last_reset_at: value.last_reset_at.timestamp_millis(),
+                throttle: value.throttle.try_into()?,
+            }
+        )
     }
 }
 
-impl WsStatTempCountItem {
-    pub fn new(total_count: u64) -> Self {
-        Self {
-            total_count,
-            ..Self::default()
-        }
+impl TryFrom<DbWsStatPath> for WsStatPath {
+    type Error = DbWsStatTempCountItemError;
+    fn try_from(value: DbWsStatPath) -> Result<Self, Self::Error> {
+        Ok(
+            Self {
+                total_count: u64::try_from(value.total_count)?,
+                count: u64::try_from(value.count)?,
+                throttle: value.throttle.try_into()?,
+                last_reset_at: DateTime::<Utc>::from_timestamp_millis(value.last_reset_at).ok_or(DbWsStatTempCountItemError::InvalidDate(value.last_reset_at))?,
+            }
+        )
     }
 }
 
-pub type AdminStatCountType = HashMap<ClientMsgIndexType, WsStatTempCountItem>;
-
-#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
-pub struct WsStatTemp {
-    pub ip: String,
-    pub addr: String,
-    pub count: AdminStatCountType,
-    pub connected_at: i64,
-}
-
-impl WsStatTemp {
-    pub fn new(ip: String, addr: String, connected_at: i64) -> Self {
+impl WsStat {
+    pub fn new(ip: String, addr: String, started_at: DateTime<Utc>) -> Self {
         Self {
             ip,
             addr,
             count: HashMap::new(),
-            connected_at,
+            connected_at: started_at,
+            throttle: ThrottleDoubleLayer::new(started_at),
         }
     }
 }
 
-impl TryFrom<WsStatDb> for WsStatTemp {
+impl TryFrom<DbWsStat> for WsStat {
     type Error = WsStatDbToTempTryFromError;
 
-    fn try_from(value: WsStatDb) -> Result<WsStatTemp, Self::Error> {
-        let mut count = HashMap::<ClientMsgIndexType, WsStatTempCountItem>::with_capacity(value.req_count.len());
+    fn try_from(value: DbWsStat) -> Result<WsStat, Self::Error> {
+        let mut count = HashMap::<ClientPathType, WsStatPath>::with_capacity(value.req_count.len());
         for req_count in value.req_count {
-            let client_msg_enum_index = ClientMsg::VARIANTS.iter().position(|name| *name == req_count.path).ok_or(WsStatDbToTempTryFromError::InvalidClientMsgEnumName(req_count.path))?;
-            let total_count = u64::try_from(req_count.count)?;
-            let count_item = WsStatTempCountItem::new(total_count);
+            let client_msg_enum_index = ClientMsg::VARIANTS.iter().position(|name| *name == req_count.path).ok_or(WsStatDbToTempTryFromError::InvalidClientMsgEnumName(req_count.path.clone()))?;
+            //let total_count = u64::try_from(req_count.count)?;
+            //let count_item = WsStatPath::from_db(total_count);
 
             count.insert(
                 client_msg_enum_index,
-                count_item,
+                req_count.try_into()?,
             );
         }
 
@@ -194,63 +194,65 @@ impl TryFrom<WsStatDb> for WsStatTemp {
                 ip: value.ip,
                 addr: value.addr,
                 count,
-                connected_at: value.connected_at,
+                throttle: value.throttle.try_into()?,
+                connected_at: DateTime::<Utc>::from_timestamp_millis(value.connected_at).ok_or(WsStatDbToTempTryFromError::InvalidDate(value.connected_at))?,
             }
         )
     }
 }
 
-
-pub type WebAdminStatCountType = HashMap<ClientMsgIndexType, RwSignal<u64>>;
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct WebWsStat {
-    pub addr: String,
-    // pub is_connected: RwSignal<bool>,
-    pub count: RwSignal<WebAdminStatCountType>,
-}
-
-impl From<WsStatTemp> for WebWsStat {
-    fn from(value: WsStatTemp) -> Self {
-
-        //let a: AdminStatCountType = value.count.iter().map(|a| 0).collect();
-        let count_map = value.count.iter().fold(WebAdminStatCountType::new(), |mut prev, (key, value)| {
+impl From<WsStat> for WebWsStat {
+    fn from(value: WsStat) -> Self {
+        let count_map = value.count.iter().fold(WebStatPathType::new(), |mut prev, (key, value)| {
             prev.insert(*key, RwSignal::new(value.total_count));
             prev
         });
-        // let mut count_map: WebAdminStatCountType = HashMap::with_capacity(value.count.len());
-        // for path in WsPath::iter() {
-        //     count_map.insert(
-        //         path,
-        //         RwSignal::new(value.count.get(&path).cloned().unwrap_or(0_u64)),
-        //     );
-        // }
-        // for (path, count) in value.count {
-        //     count_map.insert(path, RwSignal::new(count));
-        // }
         WebWsStat {
             addr: value.addr,
-            // is_connected: RwSignal::new(true),
             count: RwSignal::new(count_map),
         }
     }
 }
 
+#[derive(Error, Debug)]
+pub enum DbWsStatTempCountItemError {
+    #[error("Failed to convert i64 to u64: {0}")]
+    TryFromIntError(#[from] TryFromIntError),
+    
+    #[error("error converting double_layer_throttle: {0}")]
+    DoubleLayer(#[from] DbThrottleDoubleLayerFromError),
+
+    #[error("invalid date: {0}")]
+    InvalidDate(i64),
+}
+
 
 #[derive(Error, Debug)]
-pub enum ReqCountTryFromError {
+pub enum DbWsStatPathFromError {
     #[error("Failed to convert u64 to i64: {0}")]
     TryFromIntError(#[from] TryFromIntError),
 
     #[error("Invalid client msg enum index - out of bounds: {0}")]
     InvalidClientMsgEnumIndex(usize),
+
+    #[error("error converting double_layer_throttle: {0}")]
+    DoubleLayer(#[from] ThrottleDoubleLayerFromError),
 }
 
 #[derive(Error, Debug)]
 pub enum WsStatDbToTempTryFromError {
+    #[error("failed to convert path from database: {0}")]
+    DbWsStatTempCountItem(#[from] DbWsStatTempCountItemError),
+    
+    #[error("failed to convert from database: {0}")]
+    DbThrottleDoubleLayer(#[from] DbThrottleDoubleLayerFromError),
+    
     #[error("Failed to convert i64 to u64: {0}")]
     TryFromIntError(#[from] TryFromIntError),
 
     #[error("Invalid client msg enum name - name not found: {0}")]
     InvalidClientMsgEnumName(String),
+
+    #[error("Invalid date: {0}")]
+    InvalidDate(i64),
 }

@@ -18,7 +18,7 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::{debug, trace};
 
-use crate::ws_app::{ws_statistic::AdminConStatMsg, ConMsg, WsAppMsg, WsResError};
+use crate::ws_app::{ws_statistic::WsStatsMsg, ConMsg, WsAppMsg, WsResError};
 
 pub async fn ws_throttle_cached(
     db: Arc<DB>,

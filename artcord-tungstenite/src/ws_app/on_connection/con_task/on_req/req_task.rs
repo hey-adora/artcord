@@ -4,23 +4,23 @@ use std::sync::Arc;
 
 use artcord_leptos_web_sockets::{WsPackage, WsRouteKey};
 use artcord_mongodb::database::DB;
-use artcord_state::message::prod_client_msg::{ClientMsg};
+use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_perm_key::ProdMsgPermKey;
 use artcord_state::message::prod_server_msg::ServerMsg;
 use artcord_state::model::ws_statistics::TempConIdType;
+use enum_index::EnumIndex;
 use tokio::sync::{mpsc, oneshot};
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 use tokio_tungstenite::tungstenite::protocol::CloseFrame;
 use tokio_tungstenite::tungstenite::Message;
 use tracing::{debug, error, trace};
-use enum_index::EnumIndex;
 
 use crate::ws_app::on_connection::con_task::on_req::req_task::res::ws_stats_ranged::ws_stats_ranged;
 //use crate::ws_app::on_connection::con_task::on_req::req_task::res::ws_stats_first_page::ws_stats_first_page;
 use crate::ws_app::on_connection::con_task::on_req::req_task::res::ws_stats_total_count::ws_stats_total_count;
 use crate::ws_app::on_connection::con_task::on_req::req_task::res::ws_stats_with_paginatoin::ws_stats_with_pagination;
 use crate::ws_app::on_connection::con_task::ConMsg;
-use crate::ws_app::ws_statistic::AdminConStatMsg;
+use crate::ws_app::ws_statistic::WsStatsMsg;
 use crate::ws_app::{WsAppMsg, WsResError};
 
 use self::res::live_ws_stats::live_ws_stats;
@@ -35,7 +35,7 @@ pub async fn req_task(
     client_msg: Message,
     db: Arc<DB>,
     connection_task_tx: mpsc::Sender<ConMsg>,
-    admin_ws_stats_tx: mpsc::Sender<AdminConStatMsg>,
+    admin_ws_stats_tx: mpsc::Sender<WsStatsMsg>,
     ws_app_tx: mpsc::Sender<WsAppMsg>,
     connection_key: TempConIdType,
     addr: SocketAddr,
@@ -51,18 +51,42 @@ pub async fn req_task(
         let client_msg = ClientMsg::from_bytes(&client_msg?)?;
         let res_key: WsRouteKey = client_msg.0;
         let data: ClientMsg = client_msg.1;
+        let path_index = data.enum_index();
+        let path_throttle = data.get_throttle();
 
         trace!("recv: {:#?}", data);
 
-        // let a = data.get_throttle();
-        // let (throttle_tx, throttle_rx) = oneshot::channel::<bool>();
-        // admin_ws_stats_tx
-        // .send(AdminConStatMsg::CheckThrottle { connection_key: (), path: (), result_tx: () })
-        // .await?;
+        admin_ws_stats_tx
+            .send(WsStatsMsg::Inc {
+                connection_key: connection_key.clone(),
+                path: data.enum_index(),
+            })
+            .await?;
 
+        ws_app_tx
+            .send(WsAppMsg::Inc {
+                ip: ip.clone(),
+                path: data.enum_index(),
+            })
+            .await?;
+
+        let (throttle_tx, throttle_rx) = oneshot::channel::<bool>();
+        admin_ws_stats_tx
+            .send(WsStatsMsg::CheckThrottle {
+                connection_key,
+                path: path_index,
+                result_tx: throttle_tx,
+                threshold: path_throttle,
+            })
+            .await?;
+
+        let result = throttle_rx.await?;
         // sleep(Duration::from_secs(5)).await;
 
         let get_response_data = async {
+            if !result {
+                return Ok(Some(ServerMsg::TooManyRequests));
+            }
             // if let ClientMsg::LiveWsStats(listener_state) = data {
             //     return live_ws_stats(
             //         db,
@@ -95,26 +119,20 @@ pub async fn req_task(
             //     return res;
             // }
 
-            admin_ws_stats_tx
-                .send(AdminConStatMsg::Inc {
-                    connection_key: connection_key.clone(),
-                    path: data.enum_index(),
-                })
-                .await?;
-
-            ws_app_tx
-                .send(WsAppMsg::Inc {
-                    ip: ip.clone(),
-                    path: data.enum_index(),
-                })
-                .await?;
-
             let response_data: Result<Option<ServerMsg>, WsResError> = match data {
                 ClientMsg::WsStatsTotalCount { from } => ws_stats_total_count(db, from).await,
-                ClientMsg::WsStatsRange { from, to , unique_ip} => ws_stats_ranged(db, from, to, unique_ip).await,
+                ClientMsg::WsStatsRange {
+                    from,
+                    to,
+                    unique_ip,
+                } => ws_stats_ranged(db, from, to, unique_ip).await,
                 //ClientMsg::WsStatsFirstPage {  amount } => ws_stats_first_page(db, amount).await,
-                ClientMsg::WsStatsPaged { page, amount, from } => ws_stats_paged(db, page, amount, from).await,
-                ClientMsg::WsStatsWithPagination { page, amount } => ws_stats_with_pagination(db, page, amount).await,
+                ClientMsg::WsStatsPaged { page, amount, from } => {
+                    ws_stats_paged(db, page, amount, from).await
+                }
+                ClientMsg::WsStatsWithPagination { page, amount } => {
+                    ws_stats_with_pagination(db, page, amount).await
+                }
                 ClientMsg::LiveWsThrottleCache(listener_state) => {
                     res::ws_throttle_cached::ws_throttle_cached(
                         db,

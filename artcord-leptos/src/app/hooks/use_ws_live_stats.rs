@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use artcord_leptos_web_sockets::{channel::WsRecvResult, runtime::WsRuntime};
-use artcord_state::{message::{prod_client_msg::{ClientMsg, ClientMsgIndexType}, prod_server_msg::ServerMsg}, model::ws_statistics::{TempConIdType, WebWsStat, WsStatTemp}};
+use artcord_state::{message::{prod_client_msg::{ClientMsg, ClientPathType}, prod_server_msg::ServerMsg}, model::ws_statistics::{TempConIdType, WebWsStat, WsStat}};
 use leptos::{RwSignal, SignalGet, SignalGetUntracked, SignalSet, SignalUpdate, SignalWithUntracked};
 use tracing::warn;
 use tracing::trace;
@@ -24,7 +24,7 @@ impl LiveWsStats {
         Self::default()
     }
 
-    pub fn set_live_stats(&self, new_stats: HashMap<TempConIdType, WsStatTemp>) {
+    pub fn set_live_stats(&self, new_stats: HashMap<TempConIdType, WsStat>) {
         //let mut web_stats: HashMap<TempConIdType, WebWsStat> = HashMap::with_capacity(stats.len());
      
         self.stats.update(|stats| {
@@ -65,7 +65,7 @@ impl LiveWsStats {
         });
     }
 
-    pub fn inc_live_stat(&self, con_key: &TempConIdType, path: ClientMsgIndexType) {
+    pub fn inc_live_stat(&self, con_key: &TempConIdType, path: ClientPathType) {
         self.stats.with_untracked(|stats| {
             let stat = stats.get(con_key);
             let Some(stat) = stat else {

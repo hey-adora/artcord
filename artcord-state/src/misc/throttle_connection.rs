@@ -2,18 +2,35 @@ use chrono::{TimeDelta, Utc};
 use chrono::{DateTime, Days};
 use leptos::RwSignal;
 use serde::{Deserialize, Serialize};
+use strum::{EnumString, IntoStaticStr, VariantNames};
 use std::net::IpAddr;
 use std::{collections::HashMap, time::Instant};
 use tracing::{error, trace, warn};
 
-use crate::message::prod_client_msg::ClientMsgIndexType;
+use crate::message::prod_client_msg::ClientPathType;
 use crate::util::time::time_is_past;
 
 use super::throttle_threshold::ThrottleRanged;
 
-#[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq, IntoStaticStr, VariantNames, EnumString)]
+#[strum(serialize_all = "snake_case")]
 pub enum IpBanReason {
-    TooManyConnectionAttempts,
+    WsTooManyReconnections,
+    WsRouteBruteForceDetected,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub enum ConStatus {
+    Allow,
+    Blocked(u64, u64),
+    Banned((DateTime<Utc>, IpBanReason))
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct WebThrottleConnectionCount {
+    pub total_count: RwSignal<u64>,
+    pub count: RwSignal<u64>,
+    pub last_reset_at: RwSignal<DateTime<Utc>>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -22,6 +39,25 @@ pub struct LiveThrottleConnectionCount {
     pub count: u64,
     pub last_reset_at: DateTime<Utc>,
 }
+
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct WebThrottleConnection {
+    pub ws_connection_count: RwSignal<u64>,
+    pub ws_path_count: RwSignal<HashMap<ClientPathType, WebThrottleConnectionCount>>,
+    pub ws_total_blocked_connection_attempts: RwSignal<u64>,
+    pub ws_blocked_connection_attempts: RwSignal<u64>,
+    pub ws_blocked_connection_attempts_last_reset_at: RwSignal<DateTime<Utc>>,
+    pub ws_banned_until: RwSignal<Option<(DateTime<Utc>, IpBanReason)>>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct LiveThrottleConnection {
+    pub ws_path_count: HashMap<ClientPathType, LiveThrottleConnectionCount>,
+    pub throttle: ThrottleRanged,
+}
+
+
 
 impl Default for LiveThrottleConnectionCount {
     fn default() -> Self {
@@ -39,11 +75,6 @@ impl LiveThrottleConnectionCount {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-pub struct LiveThrottleConnection {
-    pub ws_path_count: HashMap<ClientMsgIndexType, LiveThrottleConnectionCount>,
-    pub throttle: ThrottleRanged,
-}
 
 impl LiveThrottleConnection {
     pub fn new(range: u64, time: DateTime<Utc>) -> Self {
@@ -54,7 +85,7 @@ impl LiveThrottleConnection {
     }
 
 
-    pub fn inc_path(&mut self, path: &ClientMsgIndexType) {
+    pub fn inc_path(&mut self, path: &ClientPathType) {
         let con_path = self.ws_path_count.get_mut(path);
         let Some(con_path) = con_path else {
             trace!("throttle: path inserted: {}", path);
@@ -73,19 +104,9 @@ impl LiveThrottleConnection {
 
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-pub enum ConStatus {
-    Allow,
-    Blocked(u64, u64),
-    Banned((DateTime<Utc>, IpBanReason))
-}
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-pub struct WebThrottleConnectionCount {
-    pub total_count: RwSignal<u64>,
-    pub count: RwSignal<u64>,
-    pub last_reset_at: RwSignal<DateTime<Utc>>,
-}
+
+
 
 impl From<LiveThrottleConnectionCount> for WebThrottleConnectionCount {
     fn from(value: LiveThrottleConnectionCount) -> Self {
@@ -113,8 +134,8 @@ impl WebThrottleConnectionCount {
     }
 
     pub fn from_live(
-        value: HashMap<ClientMsgIndexType, LiveThrottleConnectionCount>,
-    ) -> HashMap<ClientMsgIndexType, Self> {
+        value: HashMap<ClientPathType, LiveThrottleConnectionCount>,
+    ) -> HashMap<ClientPathType, Self> {
         value
             .into_iter()
             .fold(HashMap::new(), |mut a, (key, value)| {
@@ -122,20 +143,6 @@ impl WebThrottleConnectionCount {
                 a
             })
     }
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-pub struct WebThrottleConnection {
-    pub ws_connection_count: RwSignal<u64>,
-    // wrap hashmap in SocketAddr (maybe)
-    pub ws_path_count: RwSignal<HashMap<ClientMsgIndexType, WebThrottleConnectionCount>>,
-    pub ws_total_blocked_connection_attempts: RwSignal<u64>,
-    pub ws_blocked_connection_attempts: RwSignal<u64>,
-    pub ws_blocked_connection_attempts_last_reset_at: RwSignal<DateTime<Utc>>,
-    pub ws_banned_until: RwSignal<Option<(DateTime<Utc>, IpBanReason)>>,
-    // ws_proccesing: RwLock<bool>,
-    // ws_path_interval: RwLock<DateTime<chrono::Utc>>,
-    //ws_last_connection: RwLock<u64>,
 }
 
 impl From<LiveThrottleConnection> for WebThrottleConnection {

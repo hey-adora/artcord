@@ -58,11 +58,19 @@ cfg_if! {
         const WS_CON_THRESHOLD_RANGE: u64 = 5;
         const WS_CON_THRESHOLD: Threshold = Threshold::new_const(10, TimeDelta::try_minutes(1));
         const WS_CON_THRESHOLD_BAN_DURATION: TimeDelta = match TimeDelta::try_minutes(1) { Some(delta) => delta, None => panic!("invalid delta") };
+
+        const WS_BRUTE_BLOCK_THRESHOLD: Threshold = Threshold::new_const(10, TimeDelta::try_minutes(1));
+        const WS_BRUTE_BAN_THRESHOLD: Threshold = Threshold::new_const(10, TimeDelta::try_minutes(1));
+        const WS_BRUTE_THRESHOLD_BAN_DURATION: TimeDelta = match TimeDelta::try_minutes(1) { Some(delta) => delta, None => panic!("invalid delta") };
     } else {
         //const WS_MAX_FAILED_CON_ATTEMPTS: u64 = 1000;
         const WS_CON_THRESHOLD_RANGE: u64 = 1000;
         const WS_CON_THRESHOLD: Threshold = Threshold::new_const(1000, TimeDelta::try_minutes(1));
         const WS_CON_THRESHOLD_BAN_DURATION: TimeDelta = match TimeDelta::try_days(30) { Some(delta) => delta, None => panic!("invalid delta") };
+
+        const WS_BRUTE_BLOCK_THRESHOLD: Threshold = Threshold::new_const(1000, TimeDelta::try_minutes(1));
+        const WS_BRUTE_BAN_THRESHOLD: Threshold = Threshold::new_const(1000, TimeDelta::try_minutes(1));
+        const WS_BRUTE_THRESHOLD_BAN_DURATION: TimeDelta = match TimeDelta::try_days(30) { Some(delta) => delta, None => panic!("invalid delta") };
 
     }
 }
