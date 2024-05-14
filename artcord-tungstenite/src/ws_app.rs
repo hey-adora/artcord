@@ -65,8 +65,9 @@ use tracing::{error, trace};
 
 use crate::ws_app::on_connection::on_connection;
 use crate::ws_app::on_msg::on_ws_msg;
-use crate::ws_app::ws_statistic::create_admin_con_stat_task;
+use crate::ws_app::ws_statistic::create_stat_task;
 use crate::ws_app::ws_throttle::WsThrottle;
+use crate::WsThreshold;
 
 use self::on_connection::con_task::ConMsg;
 use self::ws_statistic::WsStatsMsg;
@@ -132,6 +133,7 @@ pub async fn create_ws(
     task_tracker: TaskTracker,
     cancellation_token: CancellationToken,
     addr: &str,
+    threshold: &WsThreshold,
     db: Arc<DB>,
 ) -> (JoinHandle<()>, mpsc::Sender<WsAppMsg>) {
     let ws_addr = String::from(addr);
@@ -144,6 +146,7 @@ pub async fn create_ws(
     let handle: JoinHandle<()> = task_tracker.spawn({
         let task_tracker = task_tracker.clone();
         let ws_tx = ws_tx.clone();
+        let threshold = threshold.clone();
         let mut throttle = WsThrottle::new();
         // let mut statistics
 
@@ -157,7 +160,7 @@ pub async fn create_ws(
 //             // }
 //         }
 
-        let (listener_task, admin_ws_stats_tx) = create_admin_con_stat_task(&task_tracker, &cancellation_token, db.clone()).await;
+        let (listener_task, admin_ws_stats_tx) = create_stat_task(&task_tracker, &cancellation_token, &threshold, db.clone()).await;
 
         let con_task = async move {
             //let mut listener_update_interval = time::interval(Duration::from_secs(2));
@@ -183,7 +186,7 @@ pub async fn create_ws(
                     // }
 
                     con = listener.accept() => {
-                        on_connection(con, &mut throttle, &cancellation_token, &db, &task_tracker, &ws_addr, &ws_tx, &admin_ws_stats_tx, Utc::now()).await;
+                        on_connection(con, &mut throttle, &cancellation_token, &db, &task_tracker, &ws_addr, &ws_tx, &admin_ws_stats_tx, &threshold, Utc::now()).await;
                     },
 
                     ws_msg = ws_recv.recv() => {

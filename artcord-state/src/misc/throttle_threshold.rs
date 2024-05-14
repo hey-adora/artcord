@@ -45,6 +45,7 @@ pub struct ThresholdTracker {
     pub started_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct Threshold {
     pub amount: u64,
     pub delta: TimeDelta,

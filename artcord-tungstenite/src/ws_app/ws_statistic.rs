@@ -7,13 +7,15 @@ use artcord_state::{
         prod_client_msg::ClientPathType, prod_perm_key::ProdMsgPermKey, prod_server_msg::ServerMsg
     }, misc::{throttle_connection::IpBanReason, throttle_threshold::{AllowCon, Threshold}}, model::ws_statistics::{DbWsStat, TempConIdType, WsStat, WsStatPath}
 };
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 use tokio::{select, sync::{mpsc, oneshot}, task::JoinHandle};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::{error, trace, warn};
 
-use crate::{WS_BRUTE_BAN_THRESHOLD, WS_BRUTE_BLOCK_THRESHOLD, WS_BRUTE_THRESHOLD_BAN_DURATION};
+// use crate::{WS_BRUTE_BAN_THRESHOLD, WS_BRUTE_BLOCK_THRESHOLD, WS_BRUTE_THRESHOLD_BAN_DURATION};
+
+use crate::WsThreshold;
 
 use super::{ws_throttle::WsStatsOnMsgErr, ConMsg};
 
@@ -54,29 +56,32 @@ pub enum WsStatsMsg {
     },
 }
 
-pub async fn create_admin_con_stat_task(
+pub async fn create_stat_task(
     task_tracker: &TaskTracker,
     cancelation_token: &CancellationToken,
+    threshold: &WsThreshold,
     db: Arc<DB>,
 ) -> (JoinHandle<()>, mpsc::Sender<WsStatsMsg>) {
     let (tx, rx) = mpsc::channel::<WsStatsMsg>(100);
-    let listener_task = task_tracker.spawn(admin_stat_task(rx, cancelation_token.clone(), db));
+    let listener_task = task_tracker.spawn(stat_task(rx, cancelation_token.clone(), threshold.clone(), db));
     (listener_task, tx)
 }
 
-pub async fn admin_stat_task(
+pub async fn stat_task(
     mut rx: mpsc::Receiver<WsStatsMsg>,
     cancelation_token: CancellationToken,
+    threshold: WsThreshold,
     db: Arc<DB>,
 ) {
     let mut listener_list: HashMap<TempConIdType, (WsRouteKey, mpsc::Sender<ConMsg>)> = HashMap::new();
     let mut con_list: HashMap<TempConIdType, mpsc::Sender<ConMsg>> = HashMap::new();
     let mut stats: HashMap<TempConIdType, WsStat> = HashMap::new();
 
+    
     loop {
         select! {
             msg = rx.recv() => {
-                let exit = on_msg(msg, &mut listener_list, &mut stats, &mut con_list, &*db).await;
+                let exit = on_msg(msg, &mut listener_list, &mut stats, &mut con_list, &*db, &threshold.ws_stat_threshold, threshold.ws_stat_ban_duration).await;
                 match exit {
                     Ok(exit) => {
                         if exit {
@@ -102,9 +107,14 @@ pub async fn admin_stat_task(
             return;
         }
     };
-    let result = db.ws_statistic_insert_many(unsaved_stats).await;
-    if let Err(err) = result {
-        error!("ws_stats: saving unsaved_stats {}", err);
+    if !unsaved_stats.is_empty() {
+        trace!("ws_stats: saving stats: {:#?}", unsaved_stats);
+        let result = db.ws_statistic_insert_many(unsaved_stats).await;
+        if let Err(err) = result {
+            error!("ws_stats: saving unsaved_stats {}", err);
+        }
+    } else {
+        trace!("ws_stats: no stats to save");
     }
 }
 
@@ -114,6 +124,8 @@ pub async fn on_msg(
     stats: &mut HashMap<TempConIdType, WsStat>,
     cons: &mut HashMap<TempConIdType, mpsc::Sender<ConMsg>>,
     db: &DB,
+    ban_threshold: &Threshold,
+    ban_duration: TimeDelta,
 ) -> Result<bool, WsStatsOnMsgErr> {
     let Some(msg) = msg else {
         return Ok(true);
@@ -128,9 +140,11 @@ pub async fn on_msg(
                 return Ok(false);
             };
 
+            trace!("stats: CheckThrottle: {:#?}", &stat);
+
             let path = stat.count.entry(path).or_insert_with(|| WsStatPath::new(Utc::now()));
 
-            let result = path.throttle.allow(&WS_BRUTE_BLOCK_THRESHOLD, &WS_BRUTE_BAN_THRESHOLD, IpBanReason::WsRouteBruteForceDetected, WS_BRUTE_THRESHOLD_BAN_DURATION, Utc::now());
+            let result = path.throttle.allow(&threshold, ban_threshold, IpBanReason::WsRouteBruteForceDetected, ban_duration, Utc::now());
 
             let result = match result {
                 AllowCon::Allow | AllowCon::Unbanned => true,

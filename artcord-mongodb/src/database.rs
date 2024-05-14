@@ -34,10 +34,10 @@ pub struct DB {
     collection_ws_statistic: mongodb::Collection<DbWsStat>,
 }
 
-const DATABASE_NAME: &'static str = "artcord";
+// const DATABASE_NAME: &'static str = "artcord";
 
 impl DB {
-    pub async fn new(mongo_url: impl AsRef<str>) -> Self {
+    pub async fn new(database_name: impl AsRef<str>, mongo_url: impl AsRef<str>) -> Self {
         cfg_if! {
             if #[cfg(feature = "development")] {
                 info!("Connecting to database: {}", mongo_url.as_ref());
@@ -50,7 +50,7 @@ impl DB {
         client_options.app_name = Some("My App".to_string());
         let client = Client::with_options(client_options).unwrap();
 
-        let database = client.database(DATABASE_NAME);
+        let database = client.database(database_name.as_ref());
 
         Self::migrate(&database).await.expect("migration failed");
 

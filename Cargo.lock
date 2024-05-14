@@ -566,14 +566,19 @@ dependencies = [
  "artcord-actix",
  "artcord-mongodb",
  "artcord-serenity",
+ "artcord-state",
  "artcord-tungstenite",
  "cfg-if",
+ "chrono",
  "dotenv",
  "futures",
+ "mongodb",
  "tokio",
+ "tokio-tungstenite",
  "tokio-util",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
@@ -744,6 +749,7 @@ dependencies = [
  "serde",
  "strum",
  "thiserror",
+ "tokio",
  "tracing",
  "tracing-subscriber",
  "uuid",

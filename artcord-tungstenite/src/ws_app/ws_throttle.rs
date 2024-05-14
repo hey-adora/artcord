@@ -17,6 +17,7 @@ use artcord_state::misc::throttle_connection::ConStatus;
 use artcord_state::misc::throttle_connection::IpBanReason;
 use artcord_state::misc::throttle_connection::LiveThrottleConnection;
 use artcord_state::misc::throttle_threshold::AllowCon;
+use artcord_state::misc::throttle_threshold::Threshold;
 use artcord_state::model::ws_statistics::TempConIdType;
 use artcord_state::util::time::time_is_past;
 use artcord_state::util::time::time_passed_days;
@@ -57,27 +58,26 @@ use tracing::instrument;
 use tracing::Instrument;
 use tracing::{error, trace};
 
-use crate::WS_CON_THRESHOLD;
-use crate::WS_CON_THRESHOLD_BAN_DURATION;
+// use crate::WS_CON_THRESHOLD;
+// use crate::WS_CON_THRESHOLD_BAN_DURATION;
 //use crate::WS_MAX_FAILED_CON_ATTEMPTS;
-use crate::WS_BAN_UNTIL_DAYS;
-use crate::WS_EXPIRE_RED_FLAGS_DAYS;
-use crate::WS_CON_THRESHOLD_RANGE;
-use crate::WS_LIMIT_MAX_RED_FLAGS;
+// use crate::WS_BAN_UNTIL_DAYS;
+// use crate::WS_EXPIRE_RED_FLAGS_DAYS;
+// use crate::WS_CON_THRESHOLD_RANGE;
+// use crate::WS_LIMIT_MAX_RED_FLAGS;
 //use crate::WS_MAX_FAILED_CON_ATTEMPTS_DELTA;
 //use crate::WS_MAX_FAILED_CON_ATTEMPTS_RATE;
 
+use crate::WsThreshold;
+
 use super::on_connection::con_task::ConMsg;
 use super::on_msg::WsMsgErr;
-
-
-
-
 
 pub struct WsThrottle {
     pub ips: HashMap<IpAddr, LiveThrottleConnection>,
     pub listener_list: HashMap<TempConIdType, (WsRouteKey, mpsc::Sender<ConMsg>)>,
 }
+
 
 impl WsThrottle {
     pub fn new() -> Self {
@@ -108,7 +108,11 @@ impl WsThrottle {
     //     }
     // }
 
-    pub async fn send_update_to_listeners(&mut self, ip: &IpAddr, msg: ServerMsg) -> Result<(), WsMsgErr> {
+    pub async fn send_update_to_listeners(
+        &mut self,
+        ip: &IpAddr,
+        msg: ServerMsg,
+    ) -> Result<(), WsMsgErr> {
         let mut to_remove: Vec<TempConIdType> = Vec::new();
         for (con_key, (ws_key, tx)) in self.listener_list.iter() {
             let msg: WsPackage<ServerMsg> = (ws_key.clone(), msg.clone());
@@ -116,7 +120,10 @@ impl WsThrottle {
             let msg = Message::binary(msg);
             let send_result = tx.send(ConMsg::Send(msg)).await;
             if let Err(err) = send_result {
-                debug!("ws({}): throttle: failed to send on_con update to {} {}", ip, con_key, err);
+                debug!(
+                    "ws({}): throttle: failed to send on_con update to {} {}",
+                    ip, con_key, err
+                );
                 to_remove.push(*con_key);
             }
         }
@@ -126,10 +133,19 @@ impl WsThrottle {
         Ok(())
     }
 
-    pub async fn add_listener(&mut self, con_key: TempConIdType, ws_key: WsRouteKey, tx: mpsc::Sender<ConMsg>) -> Result<bool, WsMsgErr> {
+    pub async fn add_listener(
+        &mut self,
+        con_key: TempConIdType,
+        ws_key: WsRouteKey,
+        tx: mpsc::Sender<ConMsg>,
+    ) -> Result<bool, WsMsgErr> {
         trace!("ws_app: listener added: {}", con_key);
 
-        let msg = if self.listener_list.insert(con_key, (ws_key, tx.clone())).is_some() {
+        let msg = if self
+            .listener_list
+            .insert(con_key, (ws_key, tx.clone()))
+            .is_some()
+        {
             ServerMsg::WsLiveThrottleCachedEntryUpdated(self.ips.clone())
         } else {
             ServerMsg::WsLiveThrottleCachedEntryAdded(self.ips.clone())
@@ -142,7 +158,12 @@ impl WsThrottle {
         Ok(false)
     }
 
-    pub async fn remove_listener(&mut self, con_key: TempConIdType, ws_key: WsRouteKey, tx: mpsc::Sender<ConMsg>) -> Result<bool, WsMsgErr> {
+    pub async fn remove_listener(
+        &mut self,
+        con_key: TempConIdType,
+        ws_key: WsRouteKey,
+        tx: mpsc::Sender<ConMsg>,
+    ) -> Result<bool, WsMsgErr> {
         trace!("ws_app: listener removed: {}", con_key);
         let Some((ws_key, tx)) = self.listener_list.remove(&con_key) else {
             debug!("ws_app: listener not found: {}", con_key);
@@ -179,7 +200,11 @@ impl WsThrottle {
         Ok(false)
     }
 
-    pub async fn on_disconnected(&mut self, ip: IpAddr, con_id: TempConIdType) -> Result<bool, WsMsgErr>  {
+    pub async fn on_disconnected(
+        &mut self,
+        ip: IpAddr,
+        con_id: TempConIdType,
+    ) -> Result<bool, WsMsgErr> {
         let ip_stats = self.ips.get_mut(&ip);
         let Some(ip_stats) = ip_stats else {
             error!("throttle: cant disconnect ip that doesnt exist");
@@ -189,8 +214,8 @@ impl WsThrottle {
         if ip_stats.throttle.amount == 0 {
             self.listener_list.remove(&con_id);
         }
-        
-        let msg = ServerMsg::WsLiveThrottleCachedDisconnected { ip } ;
+
+        let msg = ServerMsg::WsLiveThrottleCachedDisconnected { ip };
         for (_con_key, (ws_key, tx)) in self.listener_list.iter() {
             let msg: WsPackage<ServerMsg> = (ws_key.clone(), msg.clone());
             let msg = ServerMsg::as_bytes(msg)?;
@@ -201,14 +226,25 @@ impl WsThrottle {
         Ok(false)
     }
 
-    pub async fn on_connect(&mut self, ip: IpAddr, time: DateTime<Utc>) -> Result<bool, WsMsgErr> {
+    pub async fn on_connect(
+        &mut self,
+        ip: IpAddr,
+        threshold: &WsThreshold,
+        time: DateTime<Utc>,
+    ) -> Result<bool, WsMsgErr> {
         let Some(con) = self.ips.get_mut(&ip) else {
             trace!("ws({}): throttle: created new", &ip);
-            self.ips.insert(ip, LiveThrottleConnection::new(WS_CON_THRESHOLD_RANGE, time));
+            self.ips
+                .insert(ip, LiveThrottleConnection::new(threshold.ws_app_threshold_range, time));
             return Ok(false);
         };
 
-        let result = con.throttle.inc(&WS_CON_THRESHOLD, IpBanReason::WsTooManyReconnections, WS_CON_THRESHOLD_BAN_DURATION, time);
+        let result = con.throttle.inc(
+            &threshold.ws_app_threshold,
+            IpBanReason::WsTooManyReconnections,
+            threshold.ws_app_ban_duration,
+            time,
+        );
 
         match result {
             AllowCon::Allow => {
@@ -217,7 +253,11 @@ impl WsThrottle {
                 Ok(false)
             }
             AllowCon::Blocked => {
-                let msg = ServerMsg::WsLiveThrottleCachedBlocks { ip, total_blocks: con.throttle.tracker.total_amount, blocks: con.throttle.tracker.amount } ;
+                let msg = ServerMsg::WsLiveThrottleCachedBlocks {
+                    ip,
+                    total_blocks: con.throttle.tracker.total_amount,
+                    blocks: con.throttle.tracker.amount,
+                };
                 self.send_update_to_listeners(&ip, msg).await?;
                 Ok(true)
             }
@@ -226,12 +266,8 @@ impl WsThrottle {
                 self.send_update_to_listeners(&ip, msg).await?;
                 Ok(true)
             }
-            AllowCon::AlreadyBanned => {
-                Ok(true)
-            }
-            AllowCon::Unbanned => {
-                Ok(false)
-            }
+            AllowCon::AlreadyBanned => Ok(true),
+            AllowCon::Unbanned => Ok(false),
         }
     }
 }
