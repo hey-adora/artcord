@@ -2,8 +2,7 @@
 
 use chrono::{DateTime, TimeDelta, Utc};
 use tracing::error;
-use tokio::sync::mpsc;
-use tokio::sync::oneshot;
+use thiserror::Error;
 // pub struct TimeMachine {
 
 // }
@@ -14,18 +13,43 @@ use tokio::sync::oneshot;
 //     }
 // }
 
+
+
+// impl TestClock {
+//     pub async fn time(&self) -> Result<DateTime<Utc>, ClockErr> {
+//         let (time_tx, time_rx) = oneshot::channel::<DateTime<Utc>>();
+//         self.time_machine.send(time_tx).await?;
+//         Ok(time_rx.await?)
+//     }
+// }
+
 #[derive(Clone, Debug)]
-pub struct Clock {
-    time_machine: mpsc::Sender<oneshot::Sender<DateTime<Utc>>>
+pub struct Clock;
+
+impl Default for Clock {
+    fn default() -> Self {
+        Self
+    }
 }
 
 impl Clock {
-    pub async fn time(&self) -> Result<DateTime<Utc>, oneshot::error::RecvError> {
-        let (time_tx, time_rx) = oneshot::channel::<DateTime<Utc>>();
-        self.time_machine.send(time_tx);
-        time_rx.await
+    pub fn new() -> Self {
+        Self
     }
 }
+
+pub trait TimeMiddleware {
+    fn get_time(&self) -> impl std::future::Future<Output = DateTime<Utc>> + Send;
+}
+
+
+impl TimeMiddleware for Clock {
+    async fn get_time(&self) -> DateTime<Utc> {
+        Utc::now()
+    }
+}
+
+
 
 pub fn time_is_past(time: &DateTime<Utc>) -> bool {
     Utc::now() >= *time

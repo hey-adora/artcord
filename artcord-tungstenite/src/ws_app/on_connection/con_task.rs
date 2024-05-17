@@ -3,6 +3,7 @@ use crate::ws_app::on_connection::con_task::on_req::on_req;
 use crate::ws_app::ws_statistic::WsStatsMsg;
 use crate::ws_app::WsAppMsg;
 use artcord_mongodb::database::DB;
+use artcord_state::message::prod_client_msg::ClientThresholdMiddleware;
 use artcord_state::model::ws_statistics::TempConIdType;
 use futures::StreamExt;
 use std::net::{IpAddr, SocketAddr};
@@ -33,6 +34,7 @@ pub async fn con_task(
     ip: IpAddr,
     addr: SocketAddr,
     admin_ws_stats_tx: mpsc::Sender<WsStatsMsg>,
+    get_threshold: impl ClientThresholdMiddleware + Send + Sync + Copy + 'static,
 ) {
     trace!("task spawned!");
     let ws_stream = tokio_tungstenite::accept_async(stream).await;
@@ -60,8 +62,8 @@ pub async fn con_task(
         .send(WsStatsMsg::AddTrack {
             connection_key: con_id.clone(),
             tx: connection_task_tx.clone(),
-            ip: ip.to_string(),
-            addr: addr.to_string(),
+            ip,
+            addr,
         })
         .await;
     if let Err(err) = send_result {
@@ -86,7 +88,7 @@ pub async fn con_task(
         select! {
             result = client_in.next() => {
                 trace!("read finished");
-                let exit = on_req(result, &user_task_tracker, &db, &connection_task_tx, &admin_ws_stats_tx, &ws_app_tx, &con_id, &addr, &ip).await;
+                let exit = on_req(result, &user_task_tracker, &db, &connection_task_tx, &admin_ws_stats_tx, &ws_app_tx, &con_id, &addr, &ip, get_threshold).await;
                 if exit {
                     break;
                 }

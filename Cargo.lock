@@ -573,6 +573,7 @@ dependencies = [
  "dotenv",
  "futures",
  "mongodb",
+ "thiserror",
  "tokio",
  "tokio-tungstenite",
  "tokio-util",

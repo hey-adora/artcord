@@ -55,6 +55,8 @@ pub struct WsThreshold {
     pub ws_app_threshold: Threshold,
     pub ws_app_threshold_range: u64,
     pub ws_app_ban_duration: TimeDelta,
+    pub ws_app_con_flicker_threshold: Threshold,
+    pub ws_app_con_flicker_ban_duration: TimeDelta,
 
     pub ws_stat_threshold: Threshold,
     //pub ws_stat_threshold_range: u64,

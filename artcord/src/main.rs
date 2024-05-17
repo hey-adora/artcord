@@ -1,7 +1,9 @@
 use artcord_actix::server::create_server;
 use artcord_mongodb::database::DB;
 use artcord_serenity::create_bot::create_bot;
+use artcord_state::message::prod_client_msg::ProdThreshold;
 use artcord_state::misc::throttle_threshold::Threshold;
+use artcord_state::util::time::Clock;
 use artcord_tungstenite::ws_app::create_ws;
 use artcord_tungstenite::WsThreshold;
 use cfg_if::cfg_if;
@@ -57,26 +59,67 @@ async fn main() {
     //let gallery_root_dir = Arc::new(gallery_root_dir);
     let db = DB::new("artcord", mongodb_url).await;
     let db = Arc::new(db);
+    let time_machine = Clock::new();
 
     let task_tracker = TaskTracker::new();
     let cancelation_token = CancellationToken::new();
 
     let web_server = create_server(&gallery_root_dir, &assets_root_dir).await;
 
-    let threshold = WsThreshold {
-        ws_app_threshold: Threshold::new_const(10000, TimeDelta::try_minutes(1)),
-        ws_app_ban_duration: match TimeDelta::try_days(1) {
-            Some(delta) => delta,
-            None => panic!("invalid delta"),
-        },
-        ws_app_threshold_range: 5,
 
-        ws_stat_threshold: Threshold::new_const(10000, TimeDelta::try_minutes(1)),
-        ws_stat_ban_duration: match TimeDelta::try_days(1) {
-            Some(delta) => delta,
-            None => panic!("invalid delta"),
-        },
-    };
+// cfg_if! {
+//     if #[cfg(feature = "development")] {
+
+//     } else {
+
+//     }
+// }
+
+    cfg_if! {
+        if #[cfg(feature = "development")] {
+            let threshold = WsThreshold {
+                ws_app_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
+                ws_app_ban_duration: match TimeDelta::try_minutes(1) {
+                    Some(delta) => delta,
+                    None => panic!("invalid delta"),
+                },
+                ws_app_threshold_range: 5,
+                ws_app_con_flicker_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
+                ws_app_con_flicker_ban_duration: match TimeDelta::try_minutes(1) {
+                    Some(delta) => delta,
+                    None => panic!("invalid delta"),
+                },
+        
+                ws_stat_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
+                ws_stat_ban_duration: match TimeDelta::try_minutes(1) {
+                    Some(delta) => delta,
+                    None => panic!("invalid delta"),
+                },
+            };
+        } else {
+            let threshold = WsThreshold {
+                ws_app_threshold: Threshold::new_const(10000, TimeDelta::try_minutes(1)),
+                ws_app_ban_duration: match TimeDelta::try_days(1) {
+                    Some(delta) => delta,
+                    None => panic!("invalid delta"),
+                },
+                ws_app_threshold_range: 100,
+                ws_app_con_flicker_threshold: Threshold::new_const(10000, TimeDelta::try_minutes(1)),
+                ws_app_con_flicker_ban_duration: match TimeDelta::try_days(1) {
+                    Some(delta) => delta,
+                    None => panic!("invalid delta"),
+                },
+        
+                ws_stat_threshold: Threshold::new_const(10000, TimeDelta::try_minutes(1)),
+                ws_stat_ban_duration: match TimeDelta::try_days(1) {
+                    Some(delta) => delta,
+                    None => panic!("invalid delta"),
+                },
+            };
+        }
+    }
+
+    
 
     let (web_sockets_handle, web_sockets_channel) = create_ws(
         task_tracker.clone(),
@@ -84,6 +127,8 @@ async fn main() {
         "0.0.0.0:3420",
         &threshold,
         db.clone(),
+        time_machine,
+        ProdThreshold,
     )
     .await;
     //aaa
@@ -143,24 +188,36 @@ async fn main() {
 mod artcord_tests {
     use std::{str::FromStr, sync::Arc};
 
-    use chrono::TimeDelta;
-    use tokio::net::TcpStream;
-
+    use chrono::{DateTime, TimeDelta, Utc};
+    use tokio::{net::TcpStream, sync::Mutex};
+    use thiserror::Error;
     use artcord_mongodb::database::DB;
     use artcord_state::{
-        message::{prod_client_msg::ClientMsg, prod_server_msg::ServerMsg},
-        misc::throttle_threshold::Threshold,
+        message::{
+            prod_client_msg::{ClientMsg, ClientThresholdMiddleware},
+            prod_server_msg::ServerMsg,
+        },
+        misc::throttle_threshold::Threshold, util::time::TimeMiddleware,
     };
+    use tokio::sync::mpsc;
+    use tokio::sync::oneshot;
     use artcord_tungstenite::{ws_app::create_ws, WsThreshold};
     use futures::{stream::SplitSink, SinkExt, StreamExt};
     use mongodb::{bson::doc, options::ClientOptions};
     use tokio::select;
-    use tokio::sync::mpsc;
     use tokio_tungstenite::{connect_async, tungstenite::Message, WebSocketStream};
     use tokio_util::{sync::CancellationToken, task::TaskTracker};
-    use tracing::{debug, info, Level};
+    use tracing::{debug, info, error, Level};
     const MONGO_NAME: &'static str = "artcord_test";
     const MONGO_URL: &'static str = "mongodb://root:U2L63zXot4n5@localhost:27017";
+    const MSG_THRESHOLD_AMOUNT: u64 = 5;
+    const MSG_THRESHOLD_DELTA: TimeDelta = match TimeDelta::try_seconds(10) {
+        Some(delta) => delta,
+        None => panic!("failed to create delta"),
+    };
+
+    #[derive(Debug, PartialEq, Clone, Copy)]
+    pub struct DebugThreshold;
 
     struct Client {
         key: u128,
@@ -168,6 +225,34 @@ mod artcord_tests {
         //client_recv_tx: mpsc::Sender<(u128, ClientMsg)>,
         //server_send_tx: mpsc::Sender<(u128, ServerMsg)>,
         server_rx: mpsc::Receiver<(u128, ServerMsg)>,
+    }
+
+    #[derive(Clone, Debug)]
+    pub struct TestClock {
+        time_tx: mpsc::Sender<oneshot::Sender<DateTime<Utc>>>,
+    }
+
+    impl TestClock {
+        pub fn new() -> (Self, mpsc::Receiver<oneshot::Sender<DateTime<Utc>>>) {
+            let (time_tx, time_rx) = mpsc::channel(1);
+            (Self { time_tx }, time_rx)
+        }
+    }
+
+    impl TimeMiddleware for TestClock {
+        async fn get_time(&self) -> DateTime<Utc> {
+            let (time_tx, time_rx) = oneshot::channel::<DateTime<Utc>>();
+            self.time_tx.send(time_tx).await.unwrap();
+            time_rx.await.unwrap()
+        }
+    }
+
+    impl ClientThresholdMiddleware for DebugThreshold {
+        fn get_threshold(&self, msg: &ClientMsg) -> Threshold {
+            match msg {
+                _ => Threshold::new(MSG_THRESHOLD_AMOUNT, MSG_THRESHOLD_DELTA),
+            }
+        }
     }
 
     impl Client {
@@ -215,9 +300,12 @@ mod artcord_tests {
         drop_db(MONGO_NAME, MONGO_URL).await;
         let db = DB::new(MONGO_NAME, MONGO_URL).await;
         let db = Arc::new(db);
-
+        let (time_machine, mut time_rx) = TestClock::new();
+        let fake_date: Arc<Mutex<Option<DateTime<Utc>>>> = Arc::new(Mutex::new(None));
         let task_tracker = TaskTracker::new();
         let cancelation_token = CancellationToken::new();
+        let now = Utc::now();
+
         let threshold = WsThreshold {
             ws_app_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
             ws_app_ban_duration: match TimeDelta::try_minutes(1) {
@@ -225,6 +313,11 @@ mod artcord_tests {
                 None => panic!("invalid delta"),
             },
             ws_app_threshold_range: 5,
+            ws_app_con_flicker_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
+            ws_app_con_flicker_ban_duration: match TimeDelta::try_minutes(1) {
+                Some(delta) => delta,
+                None => panic!("invalid delta"),
+            },
 
             ws_stat_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
             ws_stat_ban_duration: match TimeDelta::try_minutes(1) {
@@ -233,18 +326,33 @@ mod artcord_tests {
             },
         };
 
+        task_tracker.spawn({
+            let fake_date = fake_date.clone();
+            async move {
+                while let Some(time_rx) = time_rx.recv().await {
+                    let Some(fake_date) = *fake_date.lock().await else {
+                        time_rx.send(now).unwrap();
+                        continue;
+                    };
+                    time_rx.send(fake_date).unwrap();
+                }
+            }
+        });
+
         let (web_sockets_handle, web_sockets_channel) = create_ws(
             task_tracker.clone(),
             cancelation_token.clone(),
             "0.0.0.0:3420",
             &threshold,
             db.clone(),
+            time_machine,
+            DebugThreshold,
         )
         .await;
 
         let mut client = client(task_tracker.clone(), cancelation_token.clone()).await;
 
-        for _ in 0..20 {
+        for _ in 0..4 {
             client
                 .send(ClientMsg::WsStatsWithPagination {
                     page: 0,
@@ -262,10 +370,44 @@ mod artcord_tests {
             })
             .await;
         let msg = client.recv().await;
-        //ServerMsg::
-        let result = matches!(msg, ServerMsg::Reset);
 
-        //assert!();
+        assert_eq!(
+            msg,
+            ServerMsg::WsStatsWithPagination {
+                total_count: 0,
+                latest: None,
+                stats: Vec::new()
+            }
+        );
+
+        client
+            .send(ClientMsg::WsStatsWithPagination {
+                page: 0,
+                amount: 10,
+            })
+            .await;
+        let msg = client.recv().await;
+
+        assert_eq!(msg, ServerMsg::TooManyRequests);
+
+        (*fake_date.lock().await) = Some(now + MSG_THRESHOLD_DELTA);
+
+        client
+            .send(ClientMsg::WsStatsWithPagination {
+                page: 0,
+                amount: 10,
+            })
+            .await;
+        let msg = client.recv().await;
+
+        assert_eq!(
+            msg,
+            ServerMsg::WsStatsWithPagination {
+                total_count: 0,
+                latest: None,
+                stats: Vec::new()
+            }
+        );
 
         info!("exiting...");
         cancelation_token.cancel();
@@ -354,5 +496,14 @@ mod artcord_tests {
         if db_exists {
             database.drop(None).await.unwrap();
         }
+    }
+
+    #[derive(Error, Debug)]
+    pub enum ClockErr {
+        #[error("failed to recv time: {0}")]
+        Recv(#[from] oneshot::error::RecvError),
+
+        #[error("failed to request time: {0}")]
+        Send(#[from] mpsc::error::SendError<oneshot::Sender<DateTime<Utc>>>),
     }
 }

@@ -10,13 +10,14 @@ use tracing::{error, trace, warn};
 use crate::message::prod_client_msg::ClientPathType;
 use crate::util::time::time_is_past;
 
-use super::throttle_threshold::ThrottleRanged;
+use super::throttle_threshold::{DbThrottleDoubleLayer, ThresholdTracker, ThrottleDoubleLayer, ThrottleRanged, ThrottleSimple};
 
 #[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq, IntoStaticStr, VariantNames, EnumString)]
 #[strum(serialize_all = "snake_case")]
 pub enum IpBanReason {
     WsTooManyReconnections,
     WsRouteBruteForceDetected,
+    WsConFlickerDetected,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -48,13 +49,16 @@ pub struct WebThrottleConnection {
     pub ws_total_blocked_connection_attempts: RwSignal<u64>,
     pub ws_blocked_connection_attempts: RwSignal<u64>,
     pub ws_blocked_connection_attempts_last_reset_at: RwSignal<DateTime<Utc>>,
-    pub ws_banned_until: RwSignal<Option<(DateTime<Utc>, IpBanReason)>>,
+    pub ws_con_banned_until: RwSignal<Option<(DateTime<Utc>, IpBanReason)>>,
+    pub ws_con_flicker_count: RwSignal<u64>,
+    pub ws_con_flicker_banned_until: RwSignal<Option<(DateTime<Utc>, IpBanReason)>>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct LiveThrottleConnection {
     pub ws_path_count: HashMap<ClientPathType, LiveThrottleConnectionCount>,
-    pub throttle: ThrottleRanged,
+    pub con_throttle: ThrottleRanged,
+    pub con_flicker_throttle: ThrottleSimple,
 }
 
 
@@ -77,10 +81,11 @@ impl LiveThrottleConnectionCount {
 
 
 impl LiveThrottleConnection {
-    pub fn new(range: u64, time: DateTime<Utc>) -> Self {
+    pub fn new(range: u64, started_at: DateTime<Utc>) -> Self {
         Self {
             ws_path_count: HashMap::new(),
-            throttle: ThrottleRanged::new(range, time)
+            con_throttle: ThrottleRanged::new(range, started_at),
+            con_flicker_throttle: ThrottleSimple::new(started_at),
         }
     }
 
@@ -148,18 +153,20 @@ impl WebThrottleConnectionCount {
 impl From<LiveThrottleConnection> for WebThrottleConnection {
     fn from(value: LiveThrottleConnection) -> Self {
         Self {
-            ws_connection_count: RwSignal::new(value.throttle.amount),
+            ws_connection_count: RwSignal::new(value.con_throttle.amount),
             ws_path_count: RwSignal::new(WebThrottleConnectionCount::from_live(
                 value.ws_path_count,
             )),
             ws_total_blocked_connection_attempts: RwSignal::new(
-                value.throttle.tracker.total_amount,
+                value.con_throttle.tracker.total_amount,
             ),
-            ws_blocked_connection_attempts: RwSignal::new(value.throttle.tracker.total_amount),
+            ws_blocked_connection_attempts: RwSignal::new(value.con_throttle.tracker.total_amount),
             ws_blocked_connection_attempts_last_reset_at: RwSignal::new(
-                value.throttle.tracker.started_at,
+                value.con_throttle.tracker.started_at,
             ),
-            ws_banned_until: RwSignal::new(value.throttle.banned_until),
+            ws_con_banned_until: RwSignal::new(value.con_throttle.banned_until),
+            ws_con_flicker_count: RwSignal::new(value.con_flicker_throttle.tracker.amount),
+            ws_con_flicker_banned_until: RwSignal::new(value.con_flicker_throttle.banned_until),
         }
     }
 }
@@ -172,7 +179,9 @@ impl Default for WebThrottleConnection {
             ws_total_blocked_connection_attempts: RwSignal::new(0),
             ws_blocked_connection_attempts: RwSignal::new(0),
             ws_blocked_connection_attempts_last_reset_at: RwSignal::new(Utc::now()),
-            ws_banned_until: RwSignal::new(None),
+            ws_con_banned_until: RwSignal::new(None),
+            ws_con_flicker_count: RwSignal::new(0),
+            ws_con_flicker_banned_until: RwSignal::new(None),
         }
     }
 }

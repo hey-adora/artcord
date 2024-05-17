@@ -24,6 +24,12 @@ pub struct DbThresholdTracker {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct ThrottleSimple {
+    pub banned_until: Option<(DateTime<Utc>, IpBanReason)>,
+    pub tracker: ThresholdTracker,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct ThrottleRanged {
     pub range: u64,
     pub amount: u64,
@@ -153,6 +159,40 @@ impl TryFrom<DbThrottleDoubleLayer> for ThrottleDoubleLayer {
 //     }
 // }
 
+impl ThrottleSimple {
+    pub fn new(started_at: DateTime<Utc>) -> Self {
+        Self {
+            banned_until: None,
+            tracker: ThresholdTracker::new(started_at),
+        }
+    }
+
+    pub fn is_banned(&mut self, time: &DateTime<Utc>) -> IsBanned {
+        is_banned(&mut self.banned_until, time)
+    }
+
+    pub fn allow(&mut self, treshold: &Threshold, ban_duration: &TimeDelta, ban_reason: &IpBanReason, time: &DateTime<Utc>) -> AllowCon {
+        match self.is_banned(time) {
+            IsBanned::Banned => {
+                return AllowCon::AlreadyBanned;
+            }
+            IsBanned::UnBanned => {
+                return AllowCon::Unbanned;
+            }
+            _ => {}
+        }
+        let allow = self.tracker.allow(treshold, time);
+        if !allow {
+            let ban = (*time + *ban_duration, *ban_reason);
+            self.banned_until = Some(ban);
+            return AllowCon::Banned(ban);
+
+        }
+
+        AllowCon::Allow
+    }
+}
+
 impl ThrottleRanged {
     pub fn new(range: u64, started_at: DateTime<Utc>) -> Self {
         Self {
@@ -163,16 +203,11 @@ impl ThrottleRanged {
         }
     }
 
-    fn ban(
-        &mut self,
-        ban_reason: IpBanReason,
-        ban_duration: TimeDelta,
-        time: DateTime<Utc>,
-    ) -> Option<DateTime<Utc>> {
-        ban(&mut self.banned_until, ban_reason, ban_duration, time)
+    pub fn ban(&mut self, ban_reason: IpBanReason, ban_until: DateTime<Utc>) {
+        self.banned_until = Some((ban_until, ban_reason));
     }
 
-    fn is_banned(&mut self, time: DateTime<Utc>) -> IsBanned {
+    pub fn is_banned(&mut self, time: &DateTime<Utc>) -> IsBanned {
         is_banned(&mut self.banned_until, time)
     }
 
@@ -191,7 +226,7 @@ impl ThrottleRanged {
         threshold: &Threshold,
         ban_reason: IpBanReason,
         ban_duration: TimeDelta,
-        time: DateTime<Utc>,
+        time: &DateTime<Utc>,
     ) -> AllowCon {
         let ban_status = self.is_banned(time);
         match ban_status {
@@ -210,10 +245,12 @@ impl ThrottleRanged {
             self.tracker.inc_total();
 
             if !self.tracker.allow(threshold, time) {
-                return self
-                    .ban(ban_reason, ban_duration, time)
-                    .map(|date| AllowCon::Banned((date, ban_reason)))
-                    .unwrap_or(AllowCon::AlreadyBanned);
+                let ban_until = *time + ban_duration;
+                self.ban(ban_reason, ban_until);
+                return AllowCon::Banned((ban_until, ban_reason));
+                // return self.banned_until
+                //     .map(|date| AllowCon::Banned((date, ban_reason)))
+                //     .unwrap_or(AllowCon::AlreadyBanned);
             }
 
             self.tracker.inc();
@@ -235,16 +272,11 @@ impl ThrottleDoubleLayer {
         }
     }
 
-    pub fn ban(
-        &mut self,
-        ban_reason: IpBanReason,
-        ban_duration: TimeDelta,
-        time: DateTime<Utc>,
-    ) -> Option<DateTime<Utc>> {
-        ban(&mut self.banned_until, ban_reason, ban_duration, time)
+    pub fn ban(&mut self, ban_reason: IpBanReason, ban_until: DateTime<Utc>) {
+        self.banned_until = Some((ban_until, ban_reason));
     }
 
-    pub fn is_banned(&mut self, time: DateTime<Utc>) -> IsBanned {
+    pub fn is_banned(&mut self, time: &DateTime<Utc>) -> IsBanned {
         is_banned(&mut self.banned_until, time)
     }
 
@@ -254,7 +286,7 @@ impl ThrottleDoubleLayer {
         ban_threshold: &Threshold,
         ban_reason: IpBanReason,
         ban_duration: TimeDelta,
-        time: DateTime<Utc>,
+        time: &DateTime<Utc>,
     ) -> AllowCon {
         let ban_status = self.is_banned(time);
         match ban_status {
@@ -272,10 +304,13 @@ impl ThrottleDoubleLayer {
 
         if !self.ban_tracker.allow(ban_threshold, time) {
             self.ban_tracker.inc_total();
-            return self
-                .ban(ban_reason, ban_duration, time)
-                .map(|date| AllowCon::Banned((date, ban_reason)))
-                .unwrap_or(AllowCon::AlreadyBanned);
+            let ban_until = *time + ban_duration;
+            self.ban(ban_reason, ban_until);
+            return AllowCon::Banned((ban_until, ban_reason));
+            // return self
+            //     .ban(ban_reason, ban_duration, time)
+            //     .map(|date| AllowCon::Banned((date, ban_reason)))
+            //     .unwrap_or(AllowCon::AlreadyBanned);
         }
 
         if !self.block_tracker.allow(block_threshold, time) {
@@ -293,14 +328,14 @@ impl ThrottleDoubleLayer {
 
 pub fn is_banned(
     banned_until: &mut Option<(DateTime<Utc>, IpBanReason)>,
-    time: DateTime<Utc>,
+    time: &DateTime<Utc>,
 ) -> IsBanned {
     let Some((date, _)) = banned_until else {
         trace!("throttle: ban check: entry doesnt exist");
         return IsBanned::NotBanned;
     };
 
-    let un_banned = time >= *date;
+    let un_banned = time >= date;
 
     trace!(
         "throttle: is banned: {}, state: {:#?}",
@@ -315,23 +350,23 @@ pub fn is_banned(
     IsBanned::Banned
 }
 
-pub fn ban(
-    banned_until: &mut Option<(DateTime<Utc>, IpBanReason)>,
-    ban_reason: IpBanReason,
-    ban_duration: TimeDelta,
-    time: DateTime<Utc>,
-) -> Option<DateTime<Utc>> {
-    trace!("throttle - banned: {:?}", ban_reason);
-    let Some(date) = time.checked_add_signed(ban_duration) else {
-        error!(
-            "throtte: failed to ban, failed to add {:?} to time",
-            ban_duration
-        );
-        return None;
-    };
-    *banned_until = Some((date.clone(), ban_reason));
-    Some(date)
-}
+// pub fn ban(
+//     banned_until: &mut Option<(DateTime<Utc>, IpBanReason)>,
+//     ban_reason: IpBanReason,
+//     ban_duration: TimeDelta,
+//     time: DateTime<Utc>,
+// ) -> Option<DateTime<Utc>> {
+//     trace!("throttle - banned: {:?}", ban_reason);
+//     let Some(date) = time.checked_add_signed(ban_duration) else {
+//         error!(
+//             "throtte: failed to ban, failed to add {:?} to time",
+//             ban_duration
+//         );
+//         return None;
+//     };
+//     *banned_until = Some((date.clone(), ban_reason));
+//     Some(date)
+// }
 
 impl ThresholdTracker {
     pub fn new(started_at: DateTime<Utc>) -> ThresholdTracker {
@@ -368,16 +403,16 @@ impl ThresholdTracker {
         self.amount >= threshold.amount
     }
 
-    pub fn delta_passed(&self, threshold: &Threshold, time: DateTime<Utc>) -> bool {
-        (time - self.started_at) >= threshold.delta
+    pub fn delta_passed(&self, threshold: &Threshold, time: &DateTime<Utc>) -> bool {
+        (*time - self.started_at) >= threshold.delta
     }
 
-    pub fn reset_threshold(&mut self, time: DateTime<Utc>) {
-        self.started_at = time;
+    pub fn reset_threshold(&mut self, time: &DateTime<Utc>) {
+        self.started_at = *time;
         self.amount = 0;
     }
 
-    pub fn allow(&mut self, threshold: &Threshold, time: DateTime<Utc>) -> bool {
+    pub fn allow(&mut self, threshold: &Threshold, time: &DateTime<Utc>) -> bool {
         if self.threshold_reatched(&threshold) {
             if self.delta_passed(&threshold, time) {
                 self.reset_threshold(time);
@@ -477,7 +512,7 @@ mod throttle_tests {
 
         let mut throttle = ThrottleRanged::new(10, started_at);
 
-        let result = throttle.inc(&threshold, ban_reason, ban_duration, now);
+        let result = throttle.inc(&threshold, ban_reason, ban_duration, &now);
 
         assert_eq!(
             (
@@ -490,10 +525,10 @@ mod throttle_tests {
         );
 
         for _ in 0..8 {
-            let _ = throttle.inc(&threshold, ban_reason, ban_duration, now);
+            let _ = throttle.inc(&threshold, ban_reason, ban_duration, &now);
         }
 
-        let result = throttle.inc(&threshold, ban_reason, ban_duration, now);
+        let result = throttle.inc(&threshold, ban_reason, ban_duration, &now);
 
         assert_eq!(
             (
@@ -505,7 +540,7 @@ mod throttle_tests {
             (AllowCon::Allow, 10, 0, 0)
         );
 
-        let result = throttle.inc(&threshold, ban_reason, ban_duration, now);
+        let result = throttle.inc(&threshold, ban_reason, ban_duration, &now);
 
         assert_eq!(
             (
@@ -518,10 +553,10 @@ mod throttle_tests {
         );
 
         for _ in 0..9 {
-            let _ = throttle.inc(&threshold, ban_reason, ban_duration, now);
+            let _ = throttle.inc(&threshold, ban_reason, ban_duration, &now);
         }
 
-        let result = throttle.inc(&threshold, ban_reason, ban_duration, now);
+        let result = throttle.inc(&threshold, ban_reason, ban_duration, &now);
 
         assert_eq!(
             (
@@ -542,7 +577,7 @@ mod throttle_tests {
         );
 
         let now = now.checked_add_signed(ban_duration).unwrap();
-        let result = throttle.inc(&threshold, ban_reason, ban_duration, now);
+        let result = throttle.inc(&threshold, ban_reason, ban_duration, &now);
 
         assert_eq!(
             (
@@ -554,7 +589,7 @@ mod throttle_tests {
             (AllowCon::Unbanned, 10, 11, 0,)
         );
 
-        let result = throttle.inc(&threshold, ban_reason, ban_duration, now);
+        let result = throttle.inc(&threshold, ban_reason, ban_duration, &now);
 
         assert_eq!(
             (
@@ -568,7 +603,7 @@ mod throttle_tests {
 
         throttle.dec();
 
-        let result = throttle.inc(&threshold, ban_reason, ban_duration, now);
+        let result = throttle.inc(&threshold, ban_reason, ban_duration, &now);
 
         assert_eq!(
             (
@@ -600,7 +635,7 @@ mod throttle_tests {
             &ban_threshold,
             ban_reason,
             ban_duration,
-            now,
+            &now,
         );
 
         assert_eq!(result, AllowCon::Allow);
@@ -611,7 +646,7 @@ mod throttle_tests {
                 &ban_threshold,
                 ban_reason,
                 ban_duration,
-                now,
+                &now,
             );
         }
 
@@ -620,7 +655,7 @@ mod throttle_tests {
             &ban_threshold,
             ban_reason,
             ban_duration,
-            now,
+            &now,
         );
 
         assert_eq!(
@@ -640,7 +675,7 @@ mod throttle_tests {
                 &ban_threshold,
                 ban_reason,
                 ban_duration,
-                now,
+                &now,
             );
         }
 
@@ -649,7 +684,7 @@ mod throttle_tests {
             &ban_threshold,
             ban_reason,
             ban_duration,
-            now,
+            &now,
         );
 
         assert_eq!(
@@ -677,7 +712,7 @@ mod throttle_tests {
             &ban_threshold,
             ban_reason,
             ban_duration,
-            now,
+            &now,
         );
 
         assert_eq!(
@@ -697,7 +732,7 @@ mod throttle_tests {
             &ban_threshold,
             ban_reason,
             ban_duration,
-            now,
+            &now,
         );
 
         assert_eq!(
@@ -716,7 +751,7 @@ mod throttle_tests {
             &ban_threshold,
             ban_reason,
             ban_duration,
-            now,
+            &now,
         );
 
         assert_eq!(

@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use artcord_leptos_web_sockets::{WsPackage, WsRouteKey};
 use artcord_mongodb::database::DB;
-use artcord_state::message::prod_client_msg::ClientMsg;
+use artcord_state::message::prod_client_msg::{ClientMsg, ClientThresholdMiddleware, ProdThreshold};
 use artcord_state::message::prod_perm_key::ProdMsgPermKey;
 use artcord_state::message::prod_server_msg::ServerMsg;
 use artcord_state::model::ws_statistics::TempConIdType;
@@ -40,6 +40,7 @@ pub async fn req_task(
     connection_key: TempConIdType,
     addr: SocketAddr,
     ip: IpAddr,
+    get_threshold: impl ClientThresholdMiddleware,
 ) {
     let user_task_result = async {
         // let client_msg = client_msg?;
@@ -52,7 +53,7 @@ pub async fn req_task(
         let res_key: WsRouteKey = client_msg.0;
         let data: ClientMsg = client_msg.1;
         let path_index = data.enum_index();
-        let path_throttle = data.get_throttle();
+        let path_throttle = get_threshold.get_threshold(&data);
 
         trace!("recv: {:#?}", data);
 

@@ -12,14 +12,17 @@ use artcord_mongodb::database::DBError;
 use artcord_mongodb::database::DB;
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_client_msg::ClientPathType;
+use artcord_state::message::prod_client_msg::ClientThresholdMiddleware;
 use artcord_state::message::prod_perm_key::ProdMsgPermKey;
 use artcord_state::message::prod_server_msg::ServerMsg;
+use artcord_state::misc::throttle_connection::IpBanReason;
 use artcord_state::model::ws_statistics;
-use artcord_state::model::ws_statistics::TempConIdType;
 use artcord_state::model::ws_statistics::DbWsStat;
+use artcord_state::model::ws_statistics::TempConIdType;
 use artcord_state::shared_global::throttle;
 use artcord_state::util::time::time_is_past;
 use artcord_state::util::time::time_passed_days;
+use artcord_state::util::time::TimeMiddleware;
 use chrono::DateTime;
 use chrono::Month;
 use chrono::Months;
@@ -79,9 +82,14 @@ pub mod ws_throttle;
 
 pub enum WsAppMsg {
     Stop,
+    Ban {
+        ip: IpAddr,
+        until: DateTime<Utc>,
+        reason: IpBanReason,
+    },
     Disconnected {
         connection_key: TempConIdType,
-        ip: IpAddr
+        ip: IpAddr,
     },
     AddListener {
         connection_key: TempConIdType,
@@ -119,6 +127,10 @@ pub enum WsAppMsg {
 // }
 
 pub struct WsApp {}
+
+pub trait GetUserAddrMiddleware {
+    fn get_addr(addr: SocketAddr) -> SocketAddr;
+}
 // "0.0.0.0:3420"
 
 // pub struct WsThrottleListenerKey {
@@ -135,10 +147,13 @@ pub async fn create_ws(
     addr: &str,
     threshold: &WsThreshold,
     db: Arc<DB>,
+    time_machine: impl TimeMiddleware + Clone + Send + 'static,
+    get_threshold: impl ClientThresholdMiddleware + Send + Sync + Copy + 'static,
 ) -> (JoinHandle<()>, mpsc::Sender<WsAppMsg>) {
     let ws_addr = String::from(addr);
     let try_socket = TcpListener::bind(&ws_addr).await;
     let listener = try_socket.expect("Failed to bind");
+    //let mut timer = time::interval(Duration::from_secs(60));
     trace!("ws({}): started", &ws_addr);
 
     let (ws_tx, mut ws_recv) = mpsc::channel::<WsAppMsg>(1);
@@ -160,7 +175,7 @@ pub async fn create_ws(
 //             // }
 //         }
 
-        let (listener_task, admin_ws_stats_tx) = create_stat_task(&task_tracker, &cancellation_token, &threshold, db.clone()).await;
+        let (listener_task, ws_stats_tx) = create_stat_task(ws_tx.clone(), &task_tracker, &cancellation_token, &threshold, db.clone(), time_machine.clone()).await;
 
         let con_task = async move {
             //let mut listener_update_interval = time::interval(Duration::from_secs(2));
@@ -185,8 +200,12 @@ pub async fn create_ws(
                     //     on_listener_update().await;
                     // }
 
+                    // _ = timer.tick() => {
+
+                    // }
+
                     con = listener.accept() => {
-                        on_connection(con, &mut throttle, &cancellation_token, &db, &task_tracker, &ws_addr, &ws_tx, &admin_ws_stats_tx, &threshold, Utc::now()).await;
+                        on_connection(con, &mut throttle, &cancellation_token, &db, &task_tracker, &ws_addr, &ws_tx, &ws_stats_tx, &threshold, &time_machine.get_time().await, get_threshold).await;
                     },
 
                     ws_msg = ws_recv.recv() => {
@@ -221,6 +240,13 @@ pub async fn create_ws(
     (handle, ws_tx)
     // let mut throttle = Throttle::new();
 }
+
+// async fn on_tick(throttle: &mut WsThrottle, time: DateTime<Utc>) {
+//     let result = throttle.check_for_unbans(time).await;
+//     if let Err(err) = result {
+//         error!("err: {}", err);
+//     }
+// }
 
 // async fn on_listener_update() {
 //     let reached_max = user_throttle_stats.reached_max_con(&ip, WS_LIMIT_MAX_CONNECTIONS, WS_MAX_FAILED_CON_ATTEMPTS, WS_MAX_FAILED_CON_ATTEMPTS_RATE, WS_BAN_UNTIL_DAYS);
@@ -541,8 +567,7 @@ pub enum WsResError {
     RwLock(String),
 }
 
-
-// #[cfg(test)] 
+// #[cfg(test)]
 // mod tests {
 //     #[bench]
 //     fn bench_add_two(b: &mut Bencher) {

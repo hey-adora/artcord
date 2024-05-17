@@ -35,7 +35,7 @@ pub async fn live_ws_stats(
             .send(WsStatsMsg::AddListener {
                 connection_key,
                 tx: connection_tx.clone(),
-                addr: addr.to_string(),
+                addr,
                 ws_key,
             })
             .await?;

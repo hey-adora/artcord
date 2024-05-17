@@ -63,7 +63,9 @@ pub fn ThrottleCached() -> impl IntoView {
                         <th>"WsTotalBlockedCons"</th>
                         <th>"WsBlockedCons"</th>
                         <th>"WsBlockedConsResetAt"</th>
-                        <th>"WsBannedUntil"</th>
+                        <th>"WsConBannedUntil"</th>
+                        <th>"WsConFlickerCount"</th>
+                        <th>"WsConFlickerBannedUntil"</th>
                         <WsPathTableHeaderView/>
                     </tr>
                     <For each=move || live_throttle_cache.ips.get().into_iter() key=|item| item.0.clone() let:item>
@@ -73,7 +75,9 @@ pub fn ThrottleCached() -> impl IntoView {
                             <td>{move || item.1.ws_total_blocked_connection_attempts.get()}</td>
                             <td>{move || item.1.ws_blocked_connection_attempts.get()}</td>
                             <td>{move || format!("{:?}", item.1.ws_blocked_connection_attempts_last_reset_at.get()) }</td>
-                            <td>{move || item.1.ws_banned_until.get().map(|date| format!("{:?}", date)).unwrap_or("None".to_string())}</td>
+                            <td>{move || item.1.ws_con_banned_until.get().map(|date| format!("{:?}", date)).unwrap_or("None".to_string())}</td>
+                            <td>{move || item.1.ws_con_flicker_count.get()}</td>
+                            <td>{move || item.1.ws_con_flicker_banned_until.get().map(|date| format!("{:?}", date)).unwrap_or("None".to_string())}</td>
                             { move || live_connection_count_view(item.1.ws_path_count.get()) }
                         </tr>
                     </For>

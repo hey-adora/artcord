@@ -76,6 +76,20 @@ pub enum ClientMsg {
     LiveWsThrottleCache(bool),
 }
 
+#[derive(Deserialize, Serialize, Debug, PartialEq, Clone, Copy)]
+pub struct ProdThreshold;
+
+pub trait ClientThresholdMiddleware {
+    fn get_threshold(&self, msg: &ClientMsg) -> Threshold;
+}
+
+impl ClientThresholdMiddleware for ProdThreshold {
+    fn get_threshold(&self, msg: &ClientMsg) -> Threshold {
+        match msg {
+            _ => Threshold::new_const(5, TimeDelta::try_seconds(10)),
+        }
+    }
+}
 
 
 impl artcord_leptos_web_sockets::Send for ClientMsg {
@@ -103,23 +117,23 @@ impl ClientMsg {
     //     }
     // }
 
-    pub const fn get_throttle(&self) -> Threshold {
-        match self {
-            _ => Threshold::new_const(5, TimeDelta::try_seconds(10)),
-            //WsPath::Gallery => (1, Duration::from_secs(5)),
-            // WsPath::UserGallery => (1, Duration::from_secs(5)),
-            // WsPath::User => (1, Duration::from_secs(5)),
-            // WsPath::Login => (1, Duration::from_secs(5)),
-            // WsPath::Register => (1, Duration::from_secs(5)),
-            // WsPath::Logout => (1, Duration::from_secs(30)),
-            // WsPath::WsStatsPaged => (1, Duration::from_secs(1)),
-            // WsPath::WsStatsTotalCount => (1, Duration::from_secs(1)),
-            // //WsPath::WsStatsFirstPage => (1, Duration::from_secs(1)),
-            // WsPath::WsStatsWithPagination => (1, Duration::from_secs(1)),
-            // WsPath::LiveWsStats => (1, Duration::from_secs(1)),
-            // WsPath::WsStatsRanged => (1, Duration::from_secs(1)),
-        }
-    }
+    // pub const fn get_throttle(&self) -> Threshold {
+    //     match self {
+    //         _ => Threshold::new_const(5, TimeDelta::try_seconds(10)),
+    //         //WsPath::Gallery => (1, Duration::from_secs(5)),
+    //         // WsPath::UserGallery => (1, Duration::from_secs(5)),
+    //         // WsPath::User => (1, Duration::from_secs(5)),
+    //         // WsPath::Login => (1, Duration::from_secs(5)),
+    //         // WsPath::Register => (1, Duration::from_secs(5)),
+    //         // WsPath::Logout => (1, Duration::from_secs(30)),
+    //         // WsPath::WsStatsPaged => (1, Duration::from_secs(1)),
+    //         // WsPath::WsStatsTotalCount => (1, Duration::from_secs(1)),
+    //         // //WsPath::WsStatsFirstPage => (1, Duration::from_secs(1)),
+    //         // WsPath::WsStatsWithPagination => (1, Duration::from_secs(1)),
+    //         // WsPath::LiveWsStats => (1, Duration::from_secs(1)),
+    //         // WsPath::WsStatsRanged => (1, Duration::from_secs(1)),
+    //     }
+    // }
 
     pub fn as_vec(package: &WsPackage<Self>) -> Result<Vec<u8>, bincode::Error> {
         let a = bincode::serialize::<WsPackage<Self>>(package);

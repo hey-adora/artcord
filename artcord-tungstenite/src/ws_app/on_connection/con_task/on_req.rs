@@ -2,6 +2,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
 use artcord_mongodb::database::DB;
+use artcord_state::message::prod_client_msg::ClientThresholdMiddleware;
 use artcord_state::model::ws_statistics::TempConIdType;
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message;
@@ -27,6 +28,7 @@ pub async fn on_req(
     connection_key: &TempConIdType,
     addr: &SocketAddr,
     ip: &IpAddr,
+    get_threshold: impl ClientThresholdMiddleware + Send + Sync + 'static,
 ) -> bool {
     let Some(result) = result else {
         trace!("read.next() returned None");
@@ -50,6 +52,7 @@ pub async fn on_req(
         connection_key.clone(),
         addr.clone(),
         ip.clone(),
+        get_threshold
     ));
 
     false

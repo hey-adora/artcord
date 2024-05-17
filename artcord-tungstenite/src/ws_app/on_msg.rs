@@ -30,6 +30,9 @@ pub async fn on_ws_msg(msg: Option<WsAppMsg>, throttle: &mut WsThrottle) -> Resu
         WsAppMsg::RemoveListener { connection_key, tx, ws_key} => {
             throttle.remove_listener(connection_key, ws_key, tx).await?;
         }
+        WsAppMsg::Ban { ip, until, reason } => {
+            throttle.on_ban(&ip, reason, until).await?;
+        }
     }
     Ok(false)
 }

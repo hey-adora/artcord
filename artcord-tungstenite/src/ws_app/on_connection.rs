@@ -3,7 +3,7 @@ pub mod con_task;
 use std::{io, net::SocketAddr, sync::Arc};
 
 use artcord_mongodb::database::DB;
-use artcord_state::misc::throttle_threshold::Threshold;
+use artcord_state::{message::prod_client_msg::ClientThresholdMiddleware, misc::throttle_threshold::Threshold};
 use chrono::{DateTime, TimeDelta, Utc};
 use tokio::{net::TcpStream, sync::mpsc};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
@@ -25,7 +25,8 @@ pub async fn on_connection(
     ws_app_tx: &mpsc::Sender<WsAppMsg>,
     admin_ws_stats_tx: &mpsc::Sender<WsStatsMsg>,
     threshold: &WsThreshold,
-    time: DateTime<Utc>,
+    time: &DateTime<Utc>,
+    get_threshold: impl ClientThresholdMiddleware + Send + Sync + Copy + 'static,
 ) {
     let (stream, user_addr) = match con {
         Ok(result) => result,
@@ -60,6 +61,7 @@ pub async fn on_connection(
             ip,
             user_addr,
             admin_ws_stats_tx.clone(),
+            get_threshold,
         )
         .instrument(tracing::trace_span!(
             "ws",

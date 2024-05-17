@@ -5,11 +5,13 @@ use serde::de::value;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use strum::VariantNames;
+use std::net::IpAddr;
 use std::num::TryFromIntError;
 use std::sync::mpsc;
 use std::{collections::HashMap, fmt::Debug, str::FromStr};
 use tracing::error;
 use thiserror::Error;
+use std::net::SocketAddr;
 
 use crate::message::prod_client_msg::ClientPathType;
 use crate::message::prod_client_msg::ClientMsg;
@@ -21,11 +23,11 @@ pub type WebStatPathType = HashMap<ClientPathType, RwSignal<u64>>;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct WsStat {
-    pub ip: String,
-    pub addr: String,
+    pub ip: IpAddr,
+    pub addr: SocketAddr,
     pub count:  HashMap<ClientPathType, WsStatPath>,
     pub connected_at: DateTime<Utc>,
-    pub throttle: ThrottleDoubleLayer,
+    //pub throttle: ThrottleDoubleLayer,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -43,7 +45,7 @@ pub struct DbWsStat {
     pub req_count: Vec<DbWsStatPath>,
     pub connected_at: i64,
     pub disconnected_at: i64,
-    pub throttle: DbThrottleDoubleLayer,
+    //pub throttle: DbThrottleDoubleLayer,
     pub modified_at: i64,
     pub created_at: i64,
 }
@@ -115,12 +117,12 @@ impl DbWsStat {
         Ok(
             Self {
                 id: con_key,
-                ip: value.ip,
-                addr: value.addr,
+                ip: value.ip.to_string(),
+                addr: value.addr.to_string(),
                 req_count,
                 connected_at: value.connected_at.timestamp_millis(),
                 disconnected_at: disconnected_at.timestamp_millis(),
-                throttle: value.throttle.try_into()?,
+                //throttle: value.throttle.try_into()?,
                 modified_at: time.timestamp_millis(),
                 created_at: time.timestamp_millis(),
             }
@@ -162,13 +164,13 @@ impl TryFrom<DbWsStatPath> for WsStatPath {
 }
 
 impl WsStat {
-    pub fn new(ip: String, addr: String, started_at: DateTime<Utc>) -> Self {
+    pub fn new(ip: IpAddr, addr: SocketAddr, started_at: DateTime<Utc>) -> Self {
         Self {
             ip,
             addr,
             count: HashMap::new(),
             connected_at: started_at,
-            throttle: ThrottleDoubleLayer::new(started_at),
+            //throttle: ThrottleDoubleLayer::new(started_at),
         }
     }
 }
@@ -191,10 +193,10 @@ impl TryFrom<DbWsStat> for WsStat {
 
         Ok(
             Self {
-                ip: value.ip,
-                addr: value.addr,
+                ip: IpAddr::from_str(&value.ip)?,
+                addr: SocketAddr::from_str(&value.addr)?,
                 count,
-                throttle: value.throttle.try_into()?,
+                //throttle: value.throttle.try_into()?,
                 connected_at: DateTime::<Utc>::from_timestamp_millis(value.connected_at).ok_or(WsStatDbToTempTryFromError::InvalidDate(value.connected_at))?,
             }
         )
@@ -208,7 +210,7 @@ impl From<WsStat> for WebWsStat {
             prev
         });
         WebWsStat {
-            addr: value.addr,
+            addr: value.addr.to_string(),
             count: RwSignal::new(count_map),
         }
     }
@@ -241,6 +243,9 @@ pub enum DbWsStatPathFromError {
 
 #[derive(Error, Debug)]
 pub enum WsStatDbToTempTryFromError {
+    #[error("failed to parse string to socket_addr: {0}")]
+    InvalidSocketAddr(#[from] std::net::AddrParseError),
+
     #[error("failed to convert path from database: {0}")]
     DbWsStatTempCountItem(#[from] DbWsStatTempCountItemError),
     
