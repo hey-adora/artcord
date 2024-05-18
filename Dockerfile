@@ -25,3 +25,4 @@ RUN code-server --install-extension hbenl.vscode-test-explorer
 RUN code-server --install-extension ms-azuretools.vscode-docker
 RUN printf "{\"workbench.colorTheme\":\"Default Dark Modern\",\"rust-analyzer.check.command\":\"clippy\",\"files.autoSave\":\"off\"}" > /home/crab/.local/share/code-server/User/settings.json
 RUN printf "[{\"key\":\"ctrl+s\",\"command\":\"workbench.action.files.saveFiles\"},{\"key\":\"ctrl+s\",\"command\":\"-workbench.action.files.save\"}]" > /home/crab/.local/share/code-server/User/keybindings.json
+ENTRYPOINT [ "/app/docker.sh" ]

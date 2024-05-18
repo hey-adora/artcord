@@ -6,7 +6,7 @@ services:
       - ".:/app"
     depends_on:
       - mongo
-    entrypoint: /app/docker.sh
+#    entrypoint: /app/docker.sh
     working_dir: /app
     build: .
     ports:
