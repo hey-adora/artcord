@@ -11,7 +11,7 @@ use chrono::{DateTime, TimeDelta, Utc};
 use tokio::{select, sync::{mpsc, oneshot}, task::JoinHandle};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
-use tracing::{debug, error, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 // use crate::{WS_BRUTE_BAN_THRESHOLD, WS_BRUTE_BLOCK_THRESHOLD, WS_BRUTE_THRESHOLD_BAN_DURATION};
 
@@ -79,11 +79,12 @@ pub async fn stat_task(
     db: Arc<DB>,
     time_machine: impl TimeMiddleware,
 ) {
+    
     let mut listener_list: HashMap<TempConIdType, (WsRouteKey, mpsc::Sender<ConMsg>)> = HashMap::new();
     //let mut con_list: HashMap<TempConIdType, mpsc::Sender<ConMsg>> = HashMap::new();
     let mut stats: HashMap<TempConIdType, WsStat> = HashMap::new();
 
-    
+    info!("ws stats started");
     loop {
         select! {
             msg = rx.recv() => {

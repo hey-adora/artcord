@@ -62,6 +62,7 @@ use tokio_tungstenite::WebSocketStream;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use tracing::debug;
+use tracing::info;
 use tracing::instrument;
 use tracing::Instrument;
 use tracing::{error, trace};
@@ -181,14 +182,17 @@ pub async fn create_ws(
 
         let con_task = {
             async move {
+                info!("ws started");
                 let ws_app_task_tracker = TaskTracker::new();
                 loop {
                     select! {
                         con = listener.accept() => {
+                            trace!("con accepted");
                             on_connection(con, &mut throttle, cancellation_token.clone(), db.clone(), &ws_app_task_tracker, &ws_addr, ws_tx.clone(), ws_stats_tx.clone(), &threshold, &time_machine.get_time().await, get_threshold.clone(), &socket_addr_middleware).await;
                         },
     
                         ws_msg = ws_recv.recv() => {
+                            trace!("ws recved msg");
                             let exit = on_ws_msg(ws_msg, &mut throttle).await;
                             let exit = match exit {
                                 Ok(exit) => exit,
@@ -203,6 +207,7 @@ pub async fn create_ws(
                         },
     
                         _ = cancellation_token.cancelled() => {
+                            trace!("ws canceled");
                             break;
                         }
                     }

@@ -386,21 +386,35 @@ mod artcord_tests {
         )
         .await;
 
+        debug!("ONE 1");
+
         let (clinet_1_result_tx, mut client_1_result_rx) = mpsc::channel(100);
+        debug!("ONE 2");
         let mut client = create_client(root_task_tracker.clone(), cancelation_token.clone(), clinet_1_result_tx).await;
-        assert_eq!(client_1_result_rx.recv().await.unwrap(), Ok(DebugClientMsg::Connected));
+        debug!("ONE 3");
+        
+        debug!("ONE 4");
         let ((mut addr, return_tx)) = addr_rx.recv().await.unwrap();
+        debug!("ONE 5");
         let client_1_ip = IpAddr::V4(Ipv4Addr::new(1, 1, 1, 69));
+        debug!("ONE 6");
         addr.set_ip(client_1_ip);
+        debug!("ONE 7");
         return_tx.send(addr).unwrap();
+        assert_eq!(client_1_result_rx.recv().await.unwrap(), Ok(DebugClientMsg::Connected));
+
+        debug!("TWO");
 
         let (client_2_result_tx, mut client_2_result_rx) = mpsc::channel(100);
         let mut client2 = create_client(root_task_tracker.clone(), cancelation_token.clone(), client_2_result_tx).await;
-        assert_eq!(client_2_result_rx.recv().await.unwrap(), Ok(DebugClientMsg::Connected));
+        
         let ((mut addr, return_tx)) = addr_rx.recv().await.unwrap();
         let client_2_ip = IpAddr::V4(Ipv4Addr::new(1, 4, 2, 0));
         addr.set_ip(client_2_ip);
         return_tx.send(addr).unwrap();
+        assert_eq!(client_2_result_rx.recv().await.unwrap(), Ok(DebugClientMsg::Connected));
+
+        debug!("THREE");
 
         client2.send(ClientMsg::LiveWsThrottleCache(true)).await;
         client2.send(ClientMsg::LiveWsStats(true)).await;
@@ -594,13 +608,18 @@ mod artcord_tests {
         // let (server_send_tx, mut server_recv_tx) = mpsc::channel::<(u128, ServerMsg)>(1);
 
         task_tracker.spawn(async move {
+            debug!("client 1");
             let url = url::Url::parse("ws://localhost:3420").unwrap();
+            debug!("client 2");
             let con = connect_async(url).await;
+            debug!("client 3");
             let Ok((ws_stream, res)) = con else {
                 let _ = result.send(Err(ClientErr::FailedToConnect)).await;
                 return;
             };
+            debug!("client 4");
             let _ = result.send(Ok(DebugClientMsg::Connected)).await;
+            debug!("client 5");
             let (mut write, mut read) = ws_stream.split();
 
             loop {
