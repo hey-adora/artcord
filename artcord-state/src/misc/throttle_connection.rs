@@ -3,6 +3,7 @@ use chrono::{DateTime, Days};
 use leptos::RwSignal;
 use serde::{Deserialize, Serialize};
 use strum::{EnumString, IntoStaticStr, VariantNames};
+//use tokio::sync::broadcast;
 use std::net::IpAddr;
 use std::{collections::HashMap, time::Instant};
 use tracing::{error, trace, warn};
@@ -59,6 +60,8 @@ pub struct LiveThrottleConnection {
     pub ws_path_count: HashMap<ClientPathType, LiveThrottleConnectionCount>,
     pub con_throttle: ThrottleRanged,
     pub con_flicker_throttle: ThrottleSimple,
+    pub banned_until: Option<(DateTime<Utc>, IpBanReason)>,
+    //pub cons_brodcast: broadcast::Sender<ConMsg>
 }
 
 
@@ -86,6 +89,7 @@ impl LiveThrottleConnection {
             ws_path_count: HashMap::new(),
             con_throttle: ThrottleRanged::new(range, started_at),
             con_flicker_throttle: ThrottleSimple::new(started_at),
+            banned_until: None,
         }
     }
 
@@ -164,9 +168,9 @@ impl From<LiveThrottleConnection> for WebThrottleConnection {
             ws_blocked_connection_attempts_last_reset_at: RwSignal::new(
                 value.con_throttle.tracker.started_at,
             ),
-            ws_con_banned_until: RwSignal::new(value.con_throttle.banned_until),
+            ws_con_banned_until: RwSignal::new(value.banned_until),
             ws_con_flicker_count: RwSignal::new(value.con_flicker_throttle.tracker.amount),
-            ws_con_flicker_banned_until: RwSignal::new(value.con_flicker_throttle.banned_until),
+            ws_con_flicker_banned_until: RwSignal::new(value.banned_until),
         }
     }
 }

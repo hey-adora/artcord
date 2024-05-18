@@ -129,8 +129,19 @@ pub enum WsAppMsg {
 pub struct WsApp {}
 
 pub trait GetUserAddrMiddleware {
-    fn get_addr(addr: SocketAddr) -> SocketAddr;
+    fn get_addr(&self, addr: SocketAddr) -> impl std::future::Future<Output = SocketAddr> + Send ;
 }
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub struct ProdUserAddrMiddleware;
+
+impl GetUserAddrMiddleware for ProdUserAddrMiddleware {
+    async fn get_addr(&self, addr: SocketAddr) -> SocketAddr {
+        addr
+    }
+}
+
+
 // "0.0.0.0:3420"
 
 // pub struct WsThrottleListenerKey {
@@ -142,13 +153,14 @@ pub trait GetUserAddrMiddleware {
 //
 
 pub async fn create_ws(
-    task_tracker: TaskTracker,
+    root_task_tracker: TaskTracker,
     cancellation_token: CancellationToken,
     addr: &str,
     threshold: &WsThreshold,
     db: Arc<DB>,
     time_machine: impl TimeMiddleware + Clone + Send + 'static,
-    get_threshold: impl ClientThresholdMiddleware + Send + Sync + Copy + 'static,
+    get_threshold: impl ClientThresholdMiddleware + Send + Sync + Clone + 'static,
+    socket_addr_middleware: impl GetUserAddrMiddleware + Send + Sync + Clone + 'static,
 ) -> (JoinHandle<()>, mpsc::Sender<WsAppMsg>) {
     let ws_addr = String::from(addr);
     let try_socket = TcpListener::bind(&ws_addr).await;
@@ -158,57 +170,48 @@ pub async fn create_ws(
 
     let (ws_tx, mut ws_recv) = mpsc::channel::<WsAppMsg>(1);
 
-    let handle: JoinHandle<()> = task_tracker.spawn({
-        let task_tracker = task_tracker.clone();
+    let handle: JoinHandle<()> = root_task_tracker.spawn({
+       
         let ws_tx = ws_tx.clone();
         let threshold = threshold.clone();
         let mut throttle = WsThrottle::new();
-        // let mut statistics
 
-//         let (test1, test2) = mpsc::channel::<u32>(1);
-//         let aa =move || {            let a = test2;
-// };
-//         loop {
-//
-//             // select! {
-//             //
-//             // }
-//         }
+        let stats_cencelation_token = CancellationToken::new();
+        let (listener_task, ws_stats_tx) = create_stat_task(ws_tx.clone(), &root_task_tracker, &stats_cencelation_token, &threshold, db.clone(), time_machine.clone()).await;
 
-        let (listener_task, ws_stats_tx) = create_stat_task(ws_tx.clone(), &task_tracker, &cancellation_token, &threshold, db.clone(), time_machine.clone()).await;
-
-        let con_task = async move {
-            //let mut listener_update_interval = time::interval(Duration::from_secs(2));
-            // run taks
-            loop {
-                // let handle_con = async {};
-                //
-                // let handle_msg = async {
-                //     let result = ws_recv.recv();
-                //     // .....
-                // };
-                //
-                // let (stream, user_addr) = match listener.accept().await {
-                //     Ok(result) => result,
-                //     Err(err) => {
-                //         trace!("ws({}): error accepting connection: {}", &ws_addr, err);
-                //         return;
-                //     }
-                // };
-                select! {
-                    // _ = listener_update_interval.tick() => {
-                    //     on_listener_update().await;
-                    // }
-
-                    // _ = timer.tick() => {
-
-                    // }
-
-                    con = listener.accept() => {
-                        on_connection(con, &mut throttle, &cancellation_token, &db, &task_tracker, &ws_addr, &ws_tx, &ws_stats_tx, &threshold, &time_machine.get_time().await, get_threshold).await;
-                    },
-
-                    ws_msg = ws_recv.recv() => {
+        let con_task = {
+            async move {
+                let ws_app_task_tracker = TaskTracker::new();
+                loop {
+                    select! {
+                        con = listener.accept() => {
+                            on_connection(con, &mut throttle, cancellation_token.clone(), db.clone(), &ws_app_task_tracker, &ws_addr, ws_tx.clone(), ws_stats_tx.clone(), &threshold, &time_machine.get_time().await, get_threshold.clone(), &socket_addr_middleware).await;
+                        },
+    
+                        ws_msg = ws_recv.recv() => {
+                            let exit = on_ws_msg(ws_msg, &mut throttle).await;
+                            let exit = match exit {
+                                Ok(exit) => exit,
+                                Err(err) => {
+                                    error!("ws_app: on_ws_msg error: {}", err);
+                                    continue;
+                                }
+                            };
+                            if exit {
+                                break;
+                            }
+                        },
+    
+                        _ = cancellation_token.cancelled() => {
+                            break;
+                        }
+                    }
+                }
+                debug!("ws app exiting...");
+                ws_app_task_tracker.close();
+                let handle_last_requests = async {
+                    loop {
+                        let ws_msg = ws_recv.recv().await;
                         let exit = on_ws_msg(ws_msg, &mut throttle).await;
                         let exit = match exit {
                             Ok(exit) => exit,
@@ -220,21 +223,33 @@ pub async fn create_ws(
                         if exit {
                             break;
                         }
-                    },
+                    }
+                };
+                select! {
+                    _ = ws_app_task_tracker.wait() => {
 
-                    _ = cancellation_token.cancelled() => {
-                        break;
+                    }
+                    _ = handle_last_requests => {
+
                     }
                 }
+
+                stats_cencelation_token.cancel();
+
+                debug!("ws app exited.")
             }
         };
 
-        async move {
-            let result = join!(listener_task, con_task);
-            if let Err(err) = result.0 {
-                error!("ws: join error: {}", err);
-            }
-        }
+       
+
+        // async move {
+        //     let result = join!(listener_task, con_task);
+        //     if let Err(err) = result.0 {
+        //         error!("ws: join error: {}", err);
+        //     }
+        // }
+
+        con_task
     });
 
     (handle, ws_tx)

@@ -28,7 +28,7 @@ pub async fn on_req(
     connection_key: &TempConIdType,
     addr: &SocketAddr,
     ip: &IpAddr,
-    get_threshold: impl ClientThresholdMiddleware + Send + Sync + 'static,
+    get_threshold: &(impl ClientThresholdMiddleware + Send + Clone + Sync + 'static),
 ) -> bool {
     let Some(result) = result else {
         trace!("read.next() returned None");
@@ -52,7 +52,7 @@ pub async fn on_req(
         connection_key.clone(),
         addr.clone(),
         ip.clone(),
-        get_threshold
+        get_threshold.clone(),
     ));
 
     false

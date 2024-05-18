@@ -10,11 +10,11 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use tokio::net::TcpStream;
 use tokio::select;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
-use tracing::{error, trace};
+use tracing::{debug, error, trace};
 
 pub mod on_msg;
 pub mod on_req;
@@ -34,7 +34,7 @@ pub async fn con_task(
     ip: IpAddr,
     addr: SocketAddr,
     admin_ws_stats_tx: mpsc::Sender<WsStatsMsg>,
-    get_threshold: impl ClientThresholdMiddleware + Send + Sync + Copy + 'static,
+    get_threshold: impl ClientThresholdMiddleware + Send + Sync + Clone + 'static,
 ) {
     trace!("task spawned!");
     let ws_stream = tokio_tungstenite::accept_async(stream).await;
@@ -88,7 +88,7 @@ pub async fn con_task(
         select! {
             result = client_in.next() => {
                 trace!("read finished");
-                let exit = on_req(result, &user_task_tracker, &db, &connection_task_tx, &admin_ws_stats_tx, &ws_app_tx, &con_id, &addr, &ip, get_threshold).await;
+                let exit = on_req(result, &user_task_tracker, &db, &connection_task_tx, &admin_ws_stats_tx, &ws_app_tx, &con_id, &addr, &ip, &get_threshold).await;
                 if exit {
                     break;
                 }
@@ -115,11 +115,17 @@ pub async fn con_task(
         }
     }
 
+    let (finished_tx, finished_rx) = oneshot::channel();
     let send_result = admin_ws_stats_tx
         .send(WsStatsMsg::StopTrack {
             connection_key: con_id.clone(),
+            finished_tx
         })
         .await;
+    if let Err(err) = send_result {
+        error!("error stoping track: {}", err);
+    }
+    let send_result = finished_rx.await;
     if let Err(err) = send_result {
         error!("error stoping track: {}", err);
     }
@@ -130,9 +136,11 @@ pub async fn con_task(
     // if let Err(err) = send_result {
     //     error!("error sending disc to ws_app: {}", err);
     // }
-
+    
+    debug!("ws: user({}): exiting..., tasks left: {}", ip, user_task_tracker.len());
     user_task_tracker.close();
     user_task_tracker.wait().await;
+    trace!("disconnected");
     let send_result = ws_app_tx.send(WsAppMsg::Disconnected { ip, connection_key: con_id}).await;
     if let Err(err) = send_result {
         error!("failed to send disconnect to ws: {}", err);

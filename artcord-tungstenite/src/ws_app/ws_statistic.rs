@@ -11,7 +11,7 @@ use chrono::{DateTime, TimeDelta, Utc};
 use tokio::{select, sync::{mpsc, oneshot}, task::JoinHandle};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
-use tracing::{error, trace, warn};
+use tracing::{debug, error, trace, warn};
 
 // use crate::{WS_BRUTE_BAN_THRESHOLD, WS_BRUTE_BLOCK_THRESHOLD, WS_BRUTE_THRESHOLD_BAN_DURATION};
 
@@ -19,6 +19,7 @@ use crate::WsThreshold;
 
 use super::{ws_throttle::WsStatsOnMsgErr, ConMsg, WsAppMsg};
 
+#[derive(Debug)]
 pub enum WsStatsMsg {
     CheckThrottle {
         connection_key: TempConIdType,
@@ -53,19 +54,20 @@ pub enum WsStatsMsg {
 
     StopTrack {
         connection_key: TempConIdType,
+        finished_tx: oneshot::Sender<()>,
     },
 }
 
 pub async fn create_stat_task(
     ws_app_tx: mpsc::Sender<WsAppMsg>,
-    task_tracker: &TaskTracker,
+    root_task_tracker: &TaskTracker,
     cancelation_token: &CancellationToken,
     threshold: &WsThreshold,
     db: Arc<DB>,
     time_machine: impl TimeMiddleware + Send + 'static,
 ) -> (JoinHandle<()>, mpsc::Sender<WsStatsMsg>) {
     let (tx, rx) = mpsc::channel::<WsStatsMsg>(100);
-    let listener_task = task_tracker.spawn(stat_task(ws_app_tx, rx, cancelation_token.clone(), threshold.clone(), db, time_machine));
+    let listener_task = root_task_tracker.spawn(stat_task(ws_app_tx, rx, cancelation_token.clone(), threshold.clone(), db, time_machine));
     (listener_task, tx)
 }
 
@@ -103,6 +105,7 @@ pub async fn stat_task(
             },
         }
     }
+    debug!("ws app stats exiting...");
 
     let unsaved_stats = match DbWsStat::from_hashmap_ws_stats(stats, time_machine.get_time().await) {
         Ok(stats) => stats,
@@ -120,6 +123,7 @@ pub async fn stat_task(
     } else {
         trace!("ws_stats: no stats to save");
     }
+    debug!("ws app stats exited.");
 }
 
 pub async fn on_msg(
@@ -137,6 +141,8 @@ pub async fn on_msg(
         return Ok(true);
     };
 
+    trace!("ws stats: msg recv: {:#?}", &msg);
+
     match msg {
         WsStatsMsg::CheckThrottle { connection_key, path, threshold, result_tx } => {
             let stat = stats.get_mut(&connection_key);
@@ -150,7 +156,7 @@ pub async fn on_msg(
 
             let path = stat.count.entry(path).or_insert_with(|| WsStatPath::new(time));
 
-            let result = path.throttle.allow(&threshold, ban_threshold, IpBanReason::WsRouteBruteForceDetected, ban_duration, &time);
+            let result = path.throttle.allow(&threshold, ban_threshold, IpBanReason::WsRouteBruteForceDetected, ban_duration, &time,&mut stat.banned_until);
 
             let result = match result {
                 AllowCon::Allow | AllowCon::Unbanned => true,
@@ -263,7 +269,7 @@ pub async fn on_msg(
             trace!("admin stats: removed from recv: {}", &connection_key);
             list.remove(&connection_key);
         }
-        WsStatsMsg::StopTrack { connection_key } => {
+        WsStatsMsg::StopTrack { connection_key, finished_tx } => {
             trace!("admin stats: removed from track: {}", &connection_key);
             let stat = stats.get(&connection_key);
             let Some(stat) = stat else {
@@ -291,6 +297,7 @@ pub async fn on_msg(
             list.remove(&connection_key);
 
             send_to_listeners(list, update_msg).await?;
+            finished_tx.send(()).map_err(|_| WsStatsOnMsgErr::SendDiscSync)?;
         }
     }
 

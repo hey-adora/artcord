@@ -15,6 +15,7 @@ use std::net::SocketAddr;
 
 use crate::message::prod_client_msg::ClientPathType;
 use crate::message::prod_client_msg::ClientMsg;
+use crate::misc::throttle_connection::IpBanReason;
 use crate::misc::throttle_threshold::{DbThrottleDoubleLayer, DbThrottleDoubleLayerFromError, ThrottleDoubleLayer, ThrottleDoubleLayerFromError};
 
 pub type TempConIdType = u128;
@@ -27,6 +28,7 @@ pub struct WsStat {
     pub addr: SocketAddr,
     pub count:  HashMap<ClientPathType, WsStatPath>,
     pub connected_at: DateTime<Utc>,
+    pub banned_until: Option<(DateTime<Utc>, IpBanReason)>,
     //pub throttle: ThrottleDoubleLayer,
 }
 
@@ -170,6 +172,7 @@ impl WsStat {
             addr,
             count: HashMap::new(),
             connected_at: started_at,
+            banned_until: None,
             //throttle: ThrottleDoubleLayer::new(started_at),
         }
     }
@@ -198,6 +201,7 @@ impl TryFrom<DbWsStat> for WsStat {
                 count,
                 //throttle: value.throttle.try_into()?,
                 connected_at: DateTime::<Utc>::from_timestamp_millis(value.connected_at).ok_or(WsStatDbToTempTryFromError::InvalidDate(value.connected_at))?,
+                banned_until: None,
             }
         )
     }

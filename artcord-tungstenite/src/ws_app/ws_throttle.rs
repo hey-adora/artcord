@@ -112,7 +112,7 @@ impl WsThrottle {
     pub async fn check_for_unbans(&mut self, time: DateTime<Utc>) -> Result<(), WsMsgErr> {
         let mut unbanned_ips: Vec<IpAddr> = Vec::new();
         for (ip, con) in self.ips.iter_mut() {
-            let result = con.con_throttle.is_banned(&time);
+            let result = con.con_throttle.is_banned(&mut con.banned_until, &time, );
             if let IsBanned::UnBanned = result {
                 unbanned_ips.push(*ip);
             }
@@ -135,7 +135,7 @@ impl WsThrottle {
             error!("throttle: cant be banned because it doesnt exist in the list");
             return Ok(());
         };
-        ip_stats.con_throttle.ban(ban_reason, until);
+        ip_stats.con_throttle.ban(&mut ip_stats.banned_until, ban_reason, until, );
         let msg = ServerMsg::WsLiveThrottleCachedBanned { ip: *ip, date: until, reason: ban_reason };
         Self::send_update_to_listeners(&mut self.listener_list, msg).await?;
         Ok(())
@@ -265,7 +265,7 @@ impl WsThrottle {
         };
 
         if con.con_throttle.amount == 0 {
-            let allow = con.con_flicker_throttle.allow(&ws_threshold.ws_app_con_flicker_threshold, &ws_threshold.ws_app_con_flicker_ban_duration, &IpBanReason::WsConFlickerDetected, time);
+            let allow = con.con_flicker_throttle.allow(&ws_threshold.ws_app_con_flicker_threshold, &ws_threshold.ws_app_con_flicker_ban_duration, &IpBanReason::WsConFlickerDetected, time, &mut con.banned_until);
             match allow {
                 AllowCon::Banned((until, reason)) => {
                     let msg = ServerMsg::WsLiveThrottleCachedFlickerBanned { ip, date: until, reason };
@@ -292,6 +292,7 @@ impl WsThrottle {
             IpBanReason::WsTooManyReconnections,
             ws_threshold.ws_app_ban_duration,
             &time,
+            &mut con.banned_until
         );
 
        
@@ -349,6 +350,9 @@ pub enum WsStatsOnMsgErr {
 
     #[error("checl_throttle send error")]
     SendCheckThrottle,
+
+    #[error("dsync sync send error")]
+    SendDiscSync,
 
     #[error("Send error: {0}")]
     SendToWsApp(#[from] tokio::sync::mpsc::error::SendError<WsAppMsg>),

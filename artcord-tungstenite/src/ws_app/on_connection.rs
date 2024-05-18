@@ -13,20 +13,21 @@ use crate::WsThreshold;
 
 use self::con_task::con_task;
 
-use super::{ws_statistic::WsStatsMsg, ws_throttle::WsThrottle, WsAppMsg};
+use super::{ws_statistic::WsStatsMsg, ws_throttle::WsThrottle, GetUserAddrMiddleware, WsAppMsg};
 
 pub async fn on_connection(
     con: Result<(TcpStream, SocketAddr), io::Error>,
     throttle: &mut WsThrottle,
-    cancellation_token: &CancellationToken,
-    db: &Arc<DB>,
+    cancellation_token: CancellationToken,
+    db: Arc<DB>,
     task_tracker: &TaskTracker,
     ws_addr: &str,
-    ws_app_tx: &mpsc::Sender<WsAppMsg>,
-    admin_ws_stats_tx: &mpsc::Sender<WsStatsMsg>,
+    ws_app_tx: mpsc::Sender<WsAppMsg>,
+    admin_ws_stats_tx: mpsc::Sender<WsStatsMsg>,
     threshold: &WsThreshold,
     time: &DateTime<Utc>,
-    get_threshold: impl ClientThresholdMiddleware + Send + Sync + Copy + 'static,
+    get_threshold: impl ClientThresholdMiddleware + Send + Sync + Clone + 'static,
+    socket_addr_middleware: &(impl GetUserAddrMiddleware + Send + Sync + Clone + 'static),
 ) {
     let (stream, user_addr) = match con {
         Ok(result) => result,
@@ -36,7 +37,9 @@ pub async fn on_connection(
         }
     };
 
+    let user_addr = socket_addr_middleware.get_addr(user_addr).await;
     let ip = user_addr.ip();
+    
     let reach_max_con = match throttle
         .on_connect(ip, threshold, time, )
         .await
@@ -55,12 +58,12 @@ pub async fn on_connection(
     task_tracker.spawn(
         con_task(
             stream,
-            cancellation_token.clone(),
-            db.clone(),
-            ws_app_tx.clone(),
+            cancellation_token,
+            db,
+            ws_app_tx,
             ip,
             user_addr,
-            admin_ws_stats_tx.clone(),
+            admin_ws_stats_tx,
             get_threshold,
         )
         .instrument(tracing::trace_span!(

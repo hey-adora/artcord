@@ -10,8 +10,8 @@ use super::throttle_connection::IpBanReason;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct DbThrottleDoubleLayer {
-    pub banned_until: Option<i64>,
-    pub banned_reason: Option<String>,
+    //pub banned_until: Option<i64>,
+    //pub banned_reason: Option<String>,
     pub block_tracker: DbThresholdTracker,
     pub ban_tracker: DbThresholdTracker,
 }
@@ -25,7 +25,7 @@ pub struct DbThresholdTracker {
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct ThrottleSimple {
-    pub banned_until: Option<(DateTime<Utc>, IpBanReason)>,
+    //pub banned_until: Option<(DateTime<Utc>, IpBanReason)>,
     pub tracker: ThresholdTracker,
 }
 
@@ -33,13 +33,13 @@ pub struct ThrottleSimple {
 pub struct ThrottleRanged {
     pub range: u64,
     pub amount: u64,
-    pub banned_until: Option<(DateTime<Utc>, IpBanReason)>,
+    //pub banned_until: Option<(DateTime<Utc>, IpBanReason)>,
     pub tracker: ThresholdTracker,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct ThrottleDoubleLayer {
-    pub banned_until: Option<(DateTime<Utc>, IpBanReason)>,
+    //pub banned_until: Option<(DateTime<Utc>, IpBanReason)>,
     pub block_tracker: ThresholdTracker,
     pub ban_tracker: ThresholdTracker,
 }
@@ -102,16 +102,16 @@ impl TryFrom<DbThresholdTracker> for ThresholdTracker {
 impl TryFrom<ThrottleDoubleLayer> for DbThrottleDoubleLayer {
     type Error = ThrottleDoubleLayerFromError;
     fn try_from(value: ThrottleDoubleLayer) -> Result<Self, Self::Error> {
-        let (banned_until, banned_reason) = value
-            .banned_until
-            .map(|(a, b)| {
-                let b: &'static str = b.into();
-                (Some(a.timestamp_millis()), Some(b.to_string()))
-            })
-            .unwrap_or((None, None));
+        // let (banned_until, banned_reason) = value
+        //     .banned_until
+        //     .map(|(a, b)| {
+        //         let b: &'static str = b.into();
+        //         (Some(a.timestamp_millis()), Some(b.to_string()))
+        //     })
+        //     .unwrap_or((None, None));
         Ok(Self {
-            banned_until,
-            banned_reason,
+       //     banned_until,
+        //    banned_reason,
             ban_tracker: value.ban_tracker.try_into()?,
             block_tracker: value.block_tracker.try_into()?,
         })
@@ -121,26 +121,26 @@ impl TryFrom<ThrottleDoubleLayer> for DbThrottleDoubleLayer {
 impl TryFrom<DbThrottleDoubleLayer> for ThrottleDoubleLayer {
     type Error = DbThrottleDoubleLayerFromError;
     fn try_from(value: DbThrottleDoubleLayer) -> Result<Self, Self::Error> {
-        if value.banned_reason.is_some() && value.banned_until.is_none() {
-            return Err(DbThrottleDoubleLayerFromError::MissingBannedDate);
-        }
+        // if value.banned_reason.is_some() && value.banned_until.is_none() {
+        //     return Err(DbThrottleDoubleLayerFromError::MissingBannedDate);
+        // }
 
-        if value.banned_reason.is_none() && value.banned_until.is_some() {
-            return Err(DbThrottleDoubleLayerFromError::MissingBannedReason);
-        }
+        // if value.banned_reason.is_none() && value.banned_until.is_some() {
+        //     return Err(DbThrottleDoubleLayerFromError::MissingBannedReason);
+        // }
 
-        let banned_until = if let (Some(a), Some(b)) = (value.banned_until, value.banned_reason) {
-            Some((
-                DateTime::<Utc>::from_timestamp_millis(a)
-                    .ok_or(DbThrottleDoubleLayerFromError::InvalidDate(a))?,
-                IpBanReason::from_str(&b)?,
-            ))
-        } else {
-            None
-        };
+        // let banned_until = if let (Some(a), Some(b)) = (value.banned_until, value.banned_reason) {
+        //     Some((
+        //         DateTime::<Utc>::from_timestamp_millis(a)
+        //             .ok_or(DbThrottleDoubleLayerFromError::InvalidDate(a))?,
+        //         IpBanReason::from_str(&b)?,
+        //     ))
+        // } else {
+        //     None
+        // };
 
         Ok(Self {
-            banned_until,
+            //banned_until,
             ban_tracker: value.ban_tracker.try_into()?,
             block_tracker: value.block_tracker.try_into()?,
         })
@@ -162,17 +162,17 @@ impl TryFrom<DbThrottleDoubleLayer> for ThrottleDoubleLayer {
 impl ThrottleSimple {
     pub fn new(started_at: DateTime<Utc>) -> Self {
         Self {
-            banned_until: None,
+            //banned_until: None,
             tracker: ThresholdTracker::new(started_at),
         }
     }
 
-    pub fn is_banned(&mut self, time: &DateTime<Utc>) -> IsBanned {
-        is_banned(&mut self.banned_until, time)
+    pub fn is_banned(&mut self, banned_until: &mut Option<(DateTime<Utc>, IpBanReason)>, time: &DateTime<Utc>) -> IsBanned {
+        is_banned(banned_until, time)
     }
 
-    pub fn allow(&mut self, treshold: &Threshold, ban_duration: &TimeDelta, ban_reason: &IpBanReason, time: &DateTime<Utc>) -> AllowCon {
-        match self.is_banned(time) {
+    pub fn allow(&mut self, treshold: &Threshold, ban_duration: &TimeDelta, ban_reason: &IpBanReason, time: &DateTime<Utc>, banned_until: &mut Option<(DateTime<Utc>, IpBanReason)>) -> AllowCon {
+        match self.is_banned(banned_until, time) {
             IsBanned::Banned => {
                 return AllowCon::AlreadyBanned;
             }
@@ -184,7 +184,7 @@ impl ThrottleSimple {
         let allow = self.tracker.allow(treshold, time);
         if !allow {
             let ban = (*time + *ban_duration, *ban_reason);
-            self.banned_until = Some(ban);
+            *banned_until = Some(ban);
             return AllowCon::Banned(ban);
 
         }
@@ -198,17 +198,17 @@ impl ThrottleRanged {
         Self {
             range,
             tracker: ThresholdTracker::new(started_at),
-            banned_until: None,
+            //banned_until: None,
             amount: 0,
         }
     }
 
-    pub fn ban(&mut self, ban_reason: IpBanReason, ban_until: DateTime<Utc>) {
-        self.banned_until = Some((ban_until, ban_reason));
+    pub fn ban(&mut self, banned_until: &mut Option<(DateTime<Utc>, IpBanReason)>, ban_reason: IpBanReason, ban_until: DateTime<Utc>) {
+        *banned_until = Some((ban_until, ban_reason));
     }
 
-    pub fn is_banned(&mut self, time: &DateTime<Utc>) -> IsBanned {
-        is_banned(&mut self.banned_until, time)
+    pub fn is_banned(&mut self, banned_until: &mut Option<(DateTime<Utc>, IpBanReason)>, time: &DateTime<Utc>) -> IsBanned {
+        is_banned(banned_until, time)
     }
 
     // pub fn inc(&mut self) {
@@ -227,8 +227,9 @@ impl ThrottleRanged {
         ban_reason: IpBanReason,
         ban_duration: TimeDelta,
         time: &DateTime<Utc>,
+        banned_until: &mut Option<(DateTime<Utc>, IpBanReason)>,
     ) -> AllowCon {
-        let ban_status = self.is_banned(time);
+        let ban_status = self.is_banned(banned_until, time);
         match ban_status {
             IsBanned::Banned => {
                 self.tracker.inc_total();
@@ -246,7 +247,7 @@ impl ThrottleRanged {
 
             if !self.tracker.allow(threshold, time) {
                 let ban_until = *time + ban_duration;
-                self.ban(ban_reason, ban_until);
+                self.ban(banned_until, ban_reason, ban_until);
                 return AllowCon::Banned((ban_until, ban_reason));
                 // return self.banned_until
                 //     .map(|date| AllowCon::Banned((date, ban_reason)))
@@ -266,18 +267,18 @@ impl ThrottleRanged {
 impl ThrottleDoubleLayer {
     pub fn new(started_at: DateTime<Utc>) -> Self {
         Self {
-            banned_until: None,
+          //  banned_until: None,
             block_tracker: ThresholdTracker::new(started_at),
             ban_tracker: ThresholdTracker::new(started_at),
         }
     }
 
-    pub fn ban(&mut self, ban_reason: IpBanReason, ban_until: DateTime<Utc>) {
-        self.banned_until = Some((ban_until, ban_reason));
+    pub fn ban(&mut self, banned_until: &mut Option<(DateTime<Utc>, IpBanReason)>, ban_reason: IpBanReason, ban_until: DateTime<Utc>) {
+        *banned_until = Some((ban_until, ban_reason));
     }
 
-    pub fn is_banned(&mut self, time: &DateTime<Utc>) -> IsBanned {
-        is_banned(&mut self.banned_until, time)
+    pub fn is_banned(&mut self, banned_until: &mut Option<(DateTime<Utc>, IpBanReason)>, time: &DateTime<Utc>) -> IsBanned {
+        is_banned(banned_until, time)
     }
 
     pub fn allow(
@@ -287,8 +288,9 @@ impl ThrottleDoubleLayer {
         ban_reason: IpBanReason,
         ban_duration: TimeDelta,
         time: &DateTime<Utc>,
+        banned_until: &mut Option<(DateTime<Utc>, IpBanReason)>,
     ) -> AllowCon {
-        let ban_status = self.is_banned(time);
+        let ban_status = self.is_banned(banned_until, time);
         match ban_status {
             IsBanned::Banned => {
                 self.ban_tracker.inc_total();
@@ -305,7 +307,7 @@ impl ThrottleDoubleLayer {
         if !self.ban_tracker.allow(ban_threshold, time) {
             self.ban_tracker.inc_total();
             let ban_until = *time + ban_duration;
-            self.ban(ban_reason, ban_until);
+            self.ban(banned_until, ban_reason, ban_until);
             return AllowCon::Banned((ban_until, ban_reason));
             // return self
             //     .ban(ban_reason, ban_duration, time)
@@ -493,6 +495,7 @@ pub enum DbThresholdTrackerFromError {
 mod throttle_tests {
     use chrono::{TimeDelta, Utc};
     use tracing::Level;
+    use chrono::DateTime;
 
     use crate::misc::{throttle_connection::IpBanReason, throttle_threshold::AllowCon};
 
@@ -509,10 +512,11 @@ mod throttle_tests {
         let ban_reason = IpBanReason::WsTooManyReconnections;
         let ban_duration = TimeDelta::try_seconds(10).unwrap();
         let threshold = Threshold::new(10, TimeDelta::try_seconds(10).unwrap());
-
+        let mut banned_until: Option<(DateTime<Utc>, IpBanReason)> = None;
+        
         let mut throttle = ThrottleRanged::new(10, started_at);
 
-        let result = throttle.inc(&threshold, ban_reason, ban_duration, &now);
+        let result = throttle.inc(&threshold, ban_reason, ban_duration, &now, &mut banned_until);
 
         assert_eq!(
             (
@@ -525,10 +529,10 @@ mod throttle_tests {
         );
 
         for _ in 0..8 {
-            let _ = throttle.inc(&threshold, ban_reason, ban_duration, &now);
+            let _ = throttle.inc(&threshold, ban_reason, ban_duration, &now, &mut banned_until);
         }
 
-        let result = throttle.inc(&threshold, ban_reason, ban_duration, &now);
+        let result = throttle.inc(&threshold, ban_reason, ban_duration, &now, &mut banned_until);
 
         assert_eq!(
             (
@@ -540,7 +544,7 @@ mod throttle_tests {
             (AllowCon::Allow, 10, 0, 0)
         );
 
-        let result = throttle.inc(&threshold, ban_reason, ban_duration, &now);
+        let result = throttle.inc(&threshold, ban_reason, ban_duration, &now, &mut banned_until);
 
         assert_eq!(
             (
@@ -553,10 +557,10 @@ mod throttle_tests {
         );
 
         for _ in 0..9 {
-            let _ = throttle.inc(&threshold, ban_reason, ban_duration, &now);
+            let _ = throttle.inc(&threshold, ban_reason, ban_duration, &now, &mut banned_until);
         }
 
-        let result = throttle.inc(&threshold, ban_reason, ban_duration, &now);
+        let result = throttle.inc(&threshold, ban_reason, ban_duration, &now, &mut banned_until);
 
         assert_eq!(
             (
@@ -577,7 +581,7 @@ mod throttle_tests {
         );
 
         let now = now.checked_add_signed(ban_duration).unwrap();
-        let result = throttle.inc(&threshold, ban_reason, ban_duration, &now);
+        let result = throttle.inc(&threshold, ban_reason, ban_duration, &now, &mut banned_until);
 
         assert_eq!(
             (
@@ -589,7 +593,7 @@ mod throttle_tests {
             (AllowCon::Unbanned, 10, 11, 0,)
         );
 
-        let result = throttle.inc(&threshold, ban_reason, ban_duration, &now);
+        let result = throttle.inc(&threshold, ban_reason, ban_duration, &now, &mut banned_until);
 
         assert_eq!(
             (
@@ -603,7 +607,7 @@ mod throttle_tests {
 
         throttle.dec();
 
-        let result = throttle.inc(&threshold, ban_reason, ban_duration, &now);
+        let result = throttle.inc(&threshold, ban_reason, ban_duration, &now, &mut banned_until);
 
         assert_eq!(
             (
@@ -628,6 +632,7 @@ mod throttle_tests {
         let ban_duration = TimeDelta::try_seconds(10).unwrap();
         let block_threshold = Threshold::new(10, TimeDelta::try_seconds(10).unwrap());
         let ban_threshold = Threshold::new(10, TimeDelta::try_seconds(10).unwrap());
+        let mut banned_until: Option<(DateTime<Utc>, IpBanReason)> = None;
 
         let mut throttle = ThrottleDoubleLayer::new(started_at);
         let result = throttle.allow(
@@ -636,6 +641,7 @@ mod throttle_tests {
             ban_reason,
             ban_duration,
             &now,
+            &mut banned_until,
         );
 
         assert_eq!(result, AllowCon::Allow);
@@ -647,6 +653,7 @@ mod throttle_tests {
                 ban_reason,
                 ban_duration,
                 &now,
+                &mut banned_until,
             );
         }
 
@@ -656,6 +663,7 @@ mod throttle_tests {
             ban_reason,
             ban_duration,
             &now,
+            &mut banned_until,
         );
 
         assert_eq!(
@@ -676,6 +684,7 @@ mod throttle_tests {
                 ban_reason,
                 ban_duration,
                 &now,
+                &mut banned_until,
             );
         }
 
@@ -685,6 +694,7 @@ mod throttle_tests {
             ban_reason,
             ban_duration,
             &now,
+            &mut banned_until,
         );
 
         assert_eq!(
@@ -713,6 +723,7 @@ mod throttle_tests {
             ban_reason,
             ban_duration,
             &now,
+            &mut banned_until,
         );
 
         assert_eq!(
@@ -733,6 +744,7 @@ mod throttle_tests {
             ban_reason,
             ban_duration,
             &now,
+            &mut banned_until,
         );
 
         assert_eq!(
@@ -752,6 +764,7 @@ mod throttle_tests {
             ban_reason,
             ban_duration,
             &now,
+            &mut banned_until,
         );
 
         assert_eq!(
