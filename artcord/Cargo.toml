@@ -12,7 +12,7 @@ artcord-actix = { path = "../artcord-actix" }
 artcord-tungstenite = { path = "../artcord-tungstenite" }
 artcord-mongodb = { path = "../artcord-mongodb" }
 artcord-serenity = { path = "../artcord-serenity" }
-tokio = { version = "1.36.0", features = ["full"] }
+tokio = { version = "1.37.0", features = ["full"] }
 dotenv = { version = "0.15.0" }
 actix-web = { version = "4.5.1", features = ["macros"] }
 futures = "0.3.30"

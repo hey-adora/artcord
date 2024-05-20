@@ -286,7 +286,7 @@ impl ThrottleDoubleLayer {
         block_threshold: &Threshold,
         ban_threshold: &Threshold,
         ban_reason: IpBanReason,
-        ban_duration: TimeDelta,
+        ban_duration: &TimeDelta,
         time: &DateTime<Utc>,
         banned_until: &mut Option<(DateTime<Utc>, IpBanReason)>,
     ) -> AllowCon {
@@ -306,7 +306,7 @@ impl ThrottleDoubleLayer {
 
         if !self.ban_tracker.allow(ban_threshold, time) {
             self.ban_tracker.inc_total();
-            let ban_until = *time + ban_duration;
+            let ban_until = *time + *ban_duration;
             self.ban(banned_until, ban_reason, ban_until);
             return AllowCon::Banned((ban_until, ban_reason));
             // return self
@@ -639,7 +639,7 @@ mod throttle_tests {
             &block_threshold,
             &ban_threshold,
             ban_reason,
-            ban_duration,
+            &ban_duration,
             &now,
             &mut banned_until,
         );
@@ -651,7 +651,7 @@ mod throttle_tests {
                 &block_threshold,
                 &ban_threshold,
                 ban_reason,
-                ban_duration,
+                &ban_duration,
                 &now,
                 &mut banned_until,
             );
@@ -661,7 +661,7 @@ mod throttle_tests {
             &block_threshold,
             &ban_threshold,
             ban_reason,
-            ban_duration,
+            &ban_duration,
             &now,
             &mut banned_until,
         );
@@ -682,7 +682,7 @@ mod throttle_tests {
                 &block_threshold,
                 &ban_threshold,
                 ban_reason,
-                ban_duration,
+                &ban_duration,
                 &now,
                 &mut banned_until,
             );
@@ -692,7 +692,7 @@ mod throttle_tests {
             &block_threshold,
             &ban_threshold,
             ban_reason,
-            ban_duration,
+            &ban_duration,
             &now,
             &mut banned_until,
         );
@@ -721,7 +721,7 @@ mod throttle_tests {
             &block_threshold,
             &ban_threshold,
             ban_reason,
-            ban_duration,
+            &ban_duration,
             &now,
             &mut banned_until,
         );
@@ -742,7 +742,7 @@ mod throttle_tests {
             &block_threshold,
             &ban_threshold,
             ban_reason,
-            ban_duration,
+            &ban_duration,
             &now,
             &mut banned_until,
         );
@@ -762,7 +762,7 @@ mod throttle_tests {
             &block_threshold,
             &ban_threshold,
             ban_reason,
-            ban_duration,
+            &ban_duration,
             &now,
             &mut banned_until,
         );

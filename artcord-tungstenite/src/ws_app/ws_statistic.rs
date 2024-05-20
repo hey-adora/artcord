@@ -157,7 +157,7 @@ pub async fn on_msg(
 
             let path = stat.count.entry(path).or_insert_with(|| WsStatPath::new(time));
 
-            let result = path.throttle.allow(&threshold, ban_threshold, IpBanReason::WsRouteBruteForceDetected, ban_duration, &time,&mut stat.banned_until);
+            let result = path.throttle.allow(&threshold, ban_threshold, IpBanReason::WsRouteBruteForceDetected, &ban_duration, &time,&mut stat.banned_until);
 
             let result = match result {
                 AllowCon::Allow | AllowCon::Unbanned => true,

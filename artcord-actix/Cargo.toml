@@ -14,7 +14,7 @@ actix-web-actors = { version = "4.3.0", features = [] }
 actix = { version = "0.13.3", features = [] }
 uuid = { version = "1.7.0", features = ["v4", "serde"] }
 futures = "0.3.30"
-tokio = { version = "1.36.0", features = ["full"] }
+tokio = { version = "1.37.0", features = ["full"] }
 thiserror = "1.0.57"
 artcord-state = { path = "../artcord-state" }
 artcord-mongodb = { path = "../artcord-mongodb" }

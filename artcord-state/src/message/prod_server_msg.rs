@@ -2,8 +2,8 @@ use std::{collections::HashMap, net::{IpAddr, SocketAddr}, str::FromStr};
 
 use crate::{
     aggregation::server_msg_img::AggImg,
-    misc::{registration_invalid::RegistrationInvalidMsg, throttle_connection::{IpBanReason, LiveThrottleConnection}},
-    model::{user::User, ws_statistics::{TempConIdType, DbWsStat, WsStat}},
+    misc::{registration_invalid::RegistrationInvalidMsg, throttle_connection::{IpBanReason, TempThrottleConnection}},
+    model::{user::User, ws_statistics::{DbWsStat, TempConIdType, WsStat}},
 };
 
 use artcord_leptos_web_sockets::WsPackage;
@@ -16,9 +16,9 @@ use super::prod_client_msg::ClientPathType;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub enum ServerMsg { 
-    WsLiveThrottleCachedEntryAdded(HashMap<IpAddr, LiveThrottleConnection>),
+    WsLiveThrottleCachedEntryAdded(HashMap<IpAddr, TempThrottleConnection>),
     WsLivThrottleCachedEntryRemoved,
-    WsLiveThrottleCachedEntryUpdated(HashMap<IpAddr, LiveThrottleConnection>),
+    WsLiveThrottleCachedEntryUpdated(HashMap<IpAddr, TempThrottleConnection>),
     WsLiveThrottleCachedEntryNotFound,
     WsLiveThrottleCachedIncPath { ip: IpAddr, path: ClientPathType },
     WsLiveThrottleCachedConnected { ip: IpAddr },

@@ -43,17 +43,17 @@ pub async fn on_req(
         }
     };
 
-    user_task_tracker.spawn(req_task(
-        client_msg,
-        db.clone(),
-        connection_task_tx.clone(),
-        admin_ws_stats_tx.clone(),
-        ws_app_tx.clone(),
-        connection_key.clone(),
-        addr.clone(),
-        ip.clone(),
-        get_threshold.clone(),
-    ));
+    // user_task_tracker.spawn(req_task(
+    //     client_msg,
+    //     db.clone(),
+    //     connection_task_tx.clone(),
+    //     admin_ws_stats_tx.clone(),
+    //     ws_app_tx.clone(),
+    //     connection_key.clone(),
+    //     addr.clone(),
+    //     ip.clone(),
+    //     get_threshold.clone(),
+    // ));
 
     false
 }

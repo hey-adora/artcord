@@ -2,6 +2,8 @@ use crate::ws_app::ws_throttle::WsThrottle;
 use crate::ws_app::WsAppMsg;
 use artcord_leptos_web_sockets::WsPackage;
 use artcord_state::message::prod_server_msg::ServerMsg;
+use chrono::DateTime;
+use chrono::Utc;
 use tokio_tungstenite::tungstenite::Message;
 use tracing::trace;
 use tracing::debug;
@@ -9,14 +11,14 @@ use thiserror::Error;
 
 use super::on_connection::con_task::ConMsg;
 
-pub async fn on_ws_msg(msg: Option<WsAppMsg>, throttle: &mut WsThrottle) -> Result<bool, WsMsgErr> {
+pub async fn on_ws_msg(msg: Option<WsAppMsg>, throttle: &mut WsThrottle, time: DateTime<Utc>) -> Result<bool, WsMsgErr> {
     let Some(msg) = msg else {
         trace!("ws_recv channel closed");
         return Ok(true);
     };
     match msg {
         WsAppMsg::Inc { ip, path } => {
-            throttle.on_inc(ip, path).await?;
+            throttle.on_inc(ip, path, time).await?;
         }
         WsAppMsg::Disconnected { connection_key, ip } => {
             throttle.on_disconnected(ip, connection_key).await?;

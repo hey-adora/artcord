@@ -16,6 +16,13 @@ use artcord_state::message::prod_client_msg::ClientThresholdMiddleware;
 use artcord_state::message::prod_perm_key::ProdMsgPermKey;
 use artcord_state::message::prod_server_msg::ServerMsg;
 use artcord_state::misc::throttle_connection::IpBanReason;
+use artcord_state::misc::throttle_connection::LiveThrottleConnectionCount;
+use artcord_state::misc::throttle_connection::PathStat;
+use artcord_state::misc::throttle_connection::TempThrottleConnection;
+use artcord_state::misc::throttle_threshold::AllowCon;
+use artcord_state::misc::throttle_threshold::Threshold;
+use artcord_state::misc::throttle_threshold::ThrottleRanged;
+use artcord_state::misc::throttle_threshold::ThrottleSimple;
 use artcord_state::model::ws_statistics;
 use artcord_state::model::ws_statistics::DbWsStat;
 use artcord_state::model::ws_statistics::TempConIdType;
@@ -41,6 +48,7 @@ use tokio::net::TcpStream;
 use tokio::select;
 use tokio::sync::broadcast;
 use tokio::sync::oneshot;
+use tokio::sync::watch;
 use tokio::sync::Mutex;
 use tokio::sync::RwLock;
 use tokio::task;
@@ -74,12 +82,15 @@ use crate::ws_app::ws_throttle::WsThrottle;
 use crate::WsThreshold;
 
 use self::on_connection::con_task::ConMsg;
+use self::on_connection::con_task::GlobalConMsg;
 use self::ws_statistic::WsStatsMsg;
 
 pub mod on_connection;
 mod on_msg;
 pub mod ws_statistic;
 pub mod ws_throttle;
+
+pub type GlobalConChannel = (broadcast::Sender<GlobalConMsg>, broadcast::Receiver<GlobalConMsg>);
 
 pub enum WsAppMsg {
     Stop,
@@ -136,12 +147,146 @@ pub trait GetUserAddrMiddleware {
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct ProdUserAddrMiddleware;
 
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PathStats {
+    pub paths: HashMap<ClientPathType, PathStat>,
+}
+
+#[derive(Debug)]
+pub struct LiveThrottleConnection {
+    pub ws_path_count: HashMap<ClientPathType, LiveThrottleConnectionCount>,
+    pub con_throttle: ThrottleRanged,
+    pub con_flicker_throttle: ThrottleSimple,
+    //pub ip_stats_tx: watch::Sender<HashMap<ClientPathType, LiveThrottleConnectionCount>>,
+    //pub ip_stats_rx: watch::Receiver<HashMap<ClientPathType, LiveThrottleConnectionCount>>,
+    pub banned_until: Option<(DateTime<Utc>, IpBanReason)>,
+    //pub cons_brodcast: broadcast::Sender<ConMsg>
+}
+
+pub type IpStatsChannel = (
+    watch::Sender<HashMap<ClientPathType, LiveThrottleConnectionCount>>,
+    watch::Receiver<HashMap<ClientPathType, LiveThrottleConnectionCount>>,
+);
+
+
+impl LiveThrottleConnection {
+
+    pub fn to_temp(value: &HashMap<IpAddr, LiveThrottleConnection>) -> HashMap<IpAddr, TempThrottleConnection> {
+        value
+            .into_iter()
+            .fold(HashMap::new(), |mut a, (key, value)| {
+                a.insert(*key, value.into());
+                a
+            })
+    }
+
+    pub fn new(range: u64, started_at: DateTime<Utc>) -> (IpStatsChannel, Self) {
+        let (ip_stats_tx, ip_stats_rx) =
+            watch::channel(HashMap::<ClientPathType, LiveThrottleConnectionCount>::new());
+        let con = Self {
+            ws_path_count: HashMap::new(),
+            con_throttle: ThrottleRanged::new(range, started_at),
+            con_flicker_throttle: ThrottleSimple::new(started_at),
+            banned_until: None,
+            // ip_stats_tx: ip_stats_tx.clone(),
+            // ip_stats_rx: ip_stats_rx.clone(),
+        };
+        ((ip_stats_tx, ip_stats_rx), con)
+    }
+    
+
+    pub fn inc_path(&mut self, path: &ClientPathType, time: DateTime<Utc>) {
+        let con_path = self.ws_path_count.get_mut(path);
+        let Some(con_path) = con_path else {
+            trace!("throttle: path inserted: {}", path);
+            self.ws_path_count
+                .insert(*path, LiveThrottleConnectionCount::new(time));
+            return;
+        };
+        trace!(
+            "throttle: path '{}' incremented from: {}, to: {}",
+            path,
+            con_path.total_count,
+            con_path.total_count + 1
+        );
+        con_path.total_count += 1;
+    }
+}
+
+impl From<&LiveThrottleConnection> for TempThrottleConnection {
+    fn from(value: &LiveThrottleConnection) -> Self {
+        Self {
+            banned_until: value.banned_until,
+            con_flicker_throttle: value.con_flicker_throttle.clone(),
+            con_throttle: value.con_throttle.clone(),
+            //ip_stats: value.ip_stats_rx.borrow().clone(),
+            ws_path_count: value.ws_path_count.clone(),
+        }
+    }
+}
+
 impl GetUserAddrMiddleware for ProdUserAddrMiddleware {
     async fn get_addr(&self, addr: SocketAddr) -> SocketAddr {
         addr
     }
 }
 
+
+
+impl PathStats {
+    pub fn new() -> Self {
+        Self {
+            paths: HashMap::new()
+        }
+    }
+
+    pub async fn inc_path(
+        &mut self,
+        path: ClientPathType,
+        block_threshold: Threshold,
+        ban_threshold: &Threshold,
+        ban_duration: &TimeDelta,
+        banned_until: &mut Option<(DateTime<Utc>, IpBanReason)>,
+        time: &DateTime<Utc>,
+    ) -> AllowCon {
+        let path = self
+            .paths
+            .entry(path)
+            .or_insert_with(|| PathStat::new(*time));
+
+        let result = path.throttle.allow(
+            &block_threshold,
+            ban_threshold,
+            IpBanReason::WsRouteBruteForceDetected,
+            ban_duration,
+            time,
+            banned_until,
+        );
+
+        path.total_count += 1;
+
+        match &result {
+            AllowCon::Allow => {
+                path.total_allow_count += 1;
+            }
+            AllowCon::Unbanned => {
+                path.total_allow_count += 1;
+            }
+            AllowCon::Blocked => {
+                path.total_blocked_count += 1;
+            }
+            AllowCon::Banned(_) => {
+                path.total_banned_count += 1;
+            }
+            AllowCon::AlreadyBanned => {
+                path.total_banned_count += 1;
+            }
+        }
+
+        result
+    }
+}
 
 // "0.0.0.0:3420"
 
@@ -159,7 +304,7 @@ pub async fn create_ws(
     addr: &str,
     threshold: &WsThreshold,
     db: Arc<DB>,
-    time_machine: impl TimeMiddleware + Clone + Send + 'static,
+    time_middleware: impl TimeMiddleware + Clone + Sync + Send + 'static,
     get_threshold: impl ClientThresholdMiddleware + Send + Sync + Clone + 'static,
     socket_addr_middleware: impl GetUserAddrMiddleware + Send + Sync + Clone + 'static,
 ) -> (JoinHandle<()>, mpsc::Sender<WsAppMsg>) {
@@ -178,22 +323,24 @@ pub async fn create_ws(
         let mut throttle = WsThrottle::new();
 
         let stats_cencelation_token = CancellationToken::new();
-        let (listener_task, ws_stats_tx) = create_stat_task(ws_tx.clone(), &root_task_tracker, &stats_cencelation_token, &threshold, db.clone(), time_machine.clone()).await;
+        let (listener_task, ws_stats_tx) = create_stat_task(ws_tx.clone(), &root_task_tracker, &stats_cencelation_token, &threshold, db.clone(), time_middleware.clone()).await;
+
 
         let con_task = {
             async move {
                 info!("ws started");
                 let ws_app_task_tracker = TaskTracker::new();
+                let global_con_channel = broadcast::channel::<GlobalConMsg>(1000);
                 loop {
                     select! {
                         con = listener.accept() => {
                             trace!("con accepted");
-                            on_connection(con, &mut throttle, cancellation_token.clone(), db.clone(), &ws_app_task_tracker, &ws_addr, ws_tx.clone(), ws_stats_tx.clone(), &threshold, &time_machine.get_time().await, get_threshold.clone(), &socket_addr_middleware).await;
+                            on_connection(con, &mut throttle, cancellation_token.clone(), db.clone(), &ws_app_task_tracker, &ws_addr, ws_tx.clone(), ws_stats_tx.clone(), &threshold, get_threshold.clone(), &socket_addr_middleware, time_middleware.clone(), &global_con_channel).await;
                         },
     
                         ws_msg = ws_recv.recv() => {
                             trace!("ws recved msg");
-                            let exit = on_ws_msg(ws_msg, &mut throttle).await;
+                            let exit = on_ws_msg(ws_msg, &mut throttle, time_middleware.get_time().await).await;
                             let exit = match exit {
                                 Ok(exit) => exit,
                                 Err(err) => {
@@ -217,7 +364,7 @@ pub async fn create_ws(
                 let handle_last_requests = async {
                     loop {
                         let ws_msg = ws_recv.recv().await;
-                        let exit = on_ws_msg(ws_msg, &mut throttle).await;
+                        let exit = on_ws_msg(ws_msg, &mut throttle, time_middleware.get_time().await).await;
                         let exit = match exit {
                             Ok(exit) => exit,
                             Err(err) => {

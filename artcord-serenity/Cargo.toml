@@ -10,7 +10,7 @@ artcord-state = { path = "../artcord-state" }
 artcord-mongodb = { path = "../artcord-mongodb" }
 chrono = "0.4.35"
 bson = { version = "2.7.0", features = ["serde_with", "serde_with-3", "chrono"] }
-tokio = { version = "1.36.0", features = ["full"] }
+tokio = { version = "1.37.0", features = ["full"] }
 reqwest = "0.12.2"
 mongodb = "2.8.2"
 image = "0.25.0"

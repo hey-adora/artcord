@@ -4,7 +4,9 @@ use std::sync::Arc;
 
 use artcord_leptos_web_sockets::{WsPackage, WsRouteKey};
 use artcord_mongodb::database::DB;
-use artcord_state::message::prod_client_msg::{ClientMsg, ClientThresholdMiddleware, ProdThreshold};
+use artcord_state::message::prod_client_msg::{
+    ClientMsg, ClientThresholdMiddleware, ProdThreshold,
+};
 use artcord_state::message::prod_perm_key::ProdMsgPermKey;
 use artcord_state::message::prod_server_msg::ServerMsg;
 use artcord_state::model::ws_statistics::TempConIdType;
@@ -35,7 +37,7 @@ pub async fn req_task(
     client_msg: Message,
     db: Arc<DB>,
     connection_task_tx: mpsc::Sender<ConMsg>,
-    admin_ws_stats_tx: mpsc::Sender<WsStatsMsg>,
+  //  admin_ws_stats_tx: mpsc::Sender<WsStatsMsg>,
     ws_app_tx: mpsc::Sender<WsAppMsg>,
     connection_key: TempConIdType,
     addr: SocketAddr,
@@ -57,35 +59,47 @@ pub async fn req_task(
 
         trace!("recv: {:#?}", data);
 
-        admin_ws_stats_tx
-            .send(WsStatsMsg::Inc {
-                connection_key: connection_key.clone(),
+        let (allow_tx, allow_rx) = oneshot::channel();
+        connection_task_tx
+            .send(ConMsg::CheckThrottle {
                 path: data.enum_index(),
+                block_threshold: path_throttle,
+                allow_tx,
             })
             .await?;
 
-        ws_app_tx
-            .send(WsAppMsg::Inc {
-                ip: ip.clone(),
-                path: data.enum_index(),
-            })
-            .await?;
+        let allow = allow_rx.await?;
 
-        let (throttle_tx, throttle_rx) = oneshot::channel::<bool>();
-        admin_ws_stats_tx
-            .send(WsStatsMsg::CheckThrottle {
-                connection_key,
-                path: path_index,
-                result_tx: throttle_tx,
-                threshold: path_throttle,
-            })
-            .await?;
 
-        let result = throttle_rx.await?;
+        // admin_ws_stats_tx
+        //     .send(WsStatsMsg::Inc {
+        //         connection_key: connection_key.clone(),
+        //         path: data.enum_index(),
+        //     })
+        //     .await?;
+
+        // ws_app_tx
+        //     .send(WsAppMsg::Inc {
+        //         ip: ip.clone(),
+        //         path: data.enum_index(),
+        //     })
+        //     .await?;
+
+        // let (throttle_tx, throttle_rx) = oneshot::channel::<bool>();
+        // admin_ws_stats_tx
+        //     .send(WsStatsMsg::CheckThrottle {
+        //         connection_key,
+        //         path: path_index,
+        //         result_tx: throttle_tx,
+        //         threshold: path_throttle,
+        //     })
+        //     .await?;
+
+        // let result = throttle_rx.await?;
         // sleep(Duration::from_secs(5)).await;
 
         let get_response_data = async {
-            if !result {
+            if !allow {
                 return Ok(Some(ServerMsg::TooManyRequests));
             }
             // if let ClientMsg::LiveWsStats(listener_state) = data {
@@ -145,18 +159,18 @@ pub async fn req_task(
                     )
                     .await
                 }
-                ClientMsg::LiveWsStats(listener_state) => {
-                    live_ws_stats(
-                        db,
-                        listener_state,
-                        connection_key,
-                        res_key,
-                        addr,
-                        &connection_task_tx,
-                        admin_ws_stats_tx,
-                    )
-                    .await
-                }
+                // ClientMsg::LiveWsStats(listener_state) => {
+                //     live_ws_stats(
+                //         db,
+                //         listener_state,
+                //         connection_key,
+                //         res_key,
+                //         addr,
+                //         &connection_task_tx,
+                //         admin_ws_stats_tx,
+                //     )
+                //     .await
+                // }
                 ClientMsg::User { user_id } => ws_handle_user(db, user_id).await,
                 ClientMsg::UserGalleryInit {
                     amount,
