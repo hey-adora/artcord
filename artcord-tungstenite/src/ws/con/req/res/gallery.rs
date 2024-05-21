@@ -8,13 +8,14 @@ use artcord_state::message::{
 };
 use thiserror::Error;
 
-use crate::ws::WsResError;
+use super::ResErr;
 
-pub async fn ws_handle_main_gallery(
+
+pub async fn gallery(
     db: Arc<DB>,
     amount: u32,
     from: i64,
-) -> Result<Option<ServerMsg>, WsResError> {
+) -> Result<Option<ServerMsg>, ResErr> {
     let result = db.img_aggregate_gallery(amount, from).await?;
 
     // let server_package = WsPackage::<u128, ProdMsgPermKey, ServerMsg> {
@@ -24,17 +25,3 @@ pub async fn ws_handle_main_gallery(
     // Ok(server_package)
     Ok(Some(ServerMsg::GalleryMain(result)))
 }
-
-// #[derive(Error, Debug)]
-// pub enum WsHandleMainGalleryError {
-//     #[error("Mongodb error: {0}")]
-//     MongoDB(#[from] mongodb::error::Error),
-//     // #[error("Bcrypt error: {0}")]
-//     // Bcrypt(#[from] bcrypt::BcryptError),
-//
-//     // #[error("JWT error: {0}")]
-//     // JWT(#[from] jsonwebtoken::errors::Error),
-//
-//     // #[error("RwLock error: {0}")]
-//     // RwLock(String),
-// }

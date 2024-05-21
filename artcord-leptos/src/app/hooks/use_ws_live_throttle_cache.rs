@@ -73,29 +73,29 @@ impl LiveThrottleCache {
                     if con.ws_connection_count.get_untracked() != new_con.con_throttle.amount {
                         con.ws_connection_count.set(new_con.con_throttle.amount);
                     }
-                    for (new_path_index, new_path_count) in new_con.ws_path_count {
-                            let updated = con.ws_path_count.with_untracked(|con_path_count| {
-                                let con_path_count = con_path_count.get(&new_path_index);
-                                let Some(con_path_count) = con_path_count else {
-                                    return false;
-                                };
-                                if con_path_count.total_count.get_untracked() != new_path_count.total_count {
-                                    con_path_count.total_count.set(new_path_count.total_count);
-                                }
-                                if con_path_count.count.get_untracked() != new_path_count.count {
-                                    con_path_count.count.set(new_path_count.count);
-                                }
-                                if con_path_count.last_reset_at.get_untracked() != new_path_count.last_reset_at {
-                                    con_path_count.last_reset_at.set(new_path_count.last_reset_at);
-                                }
-                                true
-                            });
-                            if !updated {
-                                con.ws_path_count.update(|con_path_count| {
-                                    con_path_count.insert(new_path_index, new_path_count.into());
-                                });
-                            }
-                    }
+                    // for (new_path_index, new_path_count) in new_con.ws_path_count {
+                    //         let updated = con.ws_path_count.with_untracked(|con_path_count| {
+                    //             let con_path_count = con_path_count.get(&new_path_index);
+                    //             let Some(con_path_count) = con_path_count else {
+                    //                 return false;
+                    //             };
+                    //             if con_path_count.total_count.get_untracked() != new_path_count.total_count {
+                    //                 con_path_count.total_count.set(new_path_count.total_count);
+                    //             }
+                    //             if con_path_count.count.get_untracked() != new_path_count.count {
+                    //                 con_path_count.count.set(new_path_count.count);
+                    //             }
+                    //             if con_path_count.last_reset_at.get_untracked() != new_path_count.last_reset_at {
+                    //                 con_path_count.last_reset_at.set(new_path_count.last_reset_at);
+                    //             }
+                    //             true
+                    //         });
+                    //         if !updated {
+                    //             con.ws_path_count.update(|con_path_count| {
+                    //                 con_path_count.insert(new_path_index, new_path_count.into());
+                    //             });
+                    //         }
+                    // }
                     if con.ws_total_blocked_connection_attempts.get_untracked() != new_con.con_throttle.tracker.total_amount {
                         con.ws_total_blocked_connection_attempts.set(new_con.con_throttle.tracker.total_amount);
                     }
@@ -116,7 +116,7 @@ impl LiveThrottleCache {
                         
                     // }
                 } else {
-                    ips.insert(ip, new_con.into());
+                    //ips.insert(ip, new_con.into());
                 }
             }
         });

@@ -2,10 +2,11 @@ use artcord_actix::server::create_server;
 use artcord_mongodb::database::DB;
 use artcord_serenity::create_bot::create_bot;
 use artcord_state::message::prod_client_msg::ProdThreshold;
+use artcord_state::misc::throttle_connection::IpBanReason;
 use artcord_state::misc::throttle_threshold::Threshold;
 use artcord_state::util::time::Clock;
-use artcord_tungstenite::ws_app::create_ws;
-use artcord_tungstenite::ws_app::ProdUserAddrMiddleware;
+use artcord_tungstenite::ws::ProdUserAddrMiddleware;
+use artcord_tungstenite::ws::Ws;
 use artcord_tungstenite::WsThreshold;
 use cfg_if::cfg_if;
 use chrono::TimeDelta;
@@ -78,40 +79,42 @@ async fn main() {
     cfg_if! {
         if #[cfg(feature = "development")] {
             let threshold = WsThreshold {
-                ws_app_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
-                ws_app_ban_duration: match TimeDelta::try_minutes(1) {
+                ws_max_con_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
+                ws_max_con_ban_duration: match TimeDelta::try_minutes(1) {
                     Some(delta) => delta,
                     None => panic!("invalid delta"),
                 },
-                ws_app_threshold_range: 5,
-                ws_app_con_flicker_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
-                ws_app_con_flicker_ban_duration: match TimeDelta::try_minutes(1) {
+                ws_max_con_threshold_range: 5,
+                ws_max_con_ban_reason: IpBanReason::WsTooManyReconnections,
+                ws_con_flicker_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
+                ws_con_flicker_ban_duration: match TimeDelta::try_minutes(1) {
                     Some(delta) => delta,
                     None => panic!("invalid delta"),
                 },
-
-                ws_stat_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
-                ws_stat_ban_duration: match TimeDelta::try_minutes(1) {
+                ws_con_flicker_ban_reason: IpBanReason::WsConFlickerDetected,
+                ws_req_ban_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
+                ws_req_ban_duration: match TimeDelta::try_minutes(1) {
                     Some(delta) => delta,
                     None => panic!("invalid delta"),
                 },
             };
         } else {
             let threshold = WsThreshold {
-                ws_app_threshold: Threshold::new_const(10000, TimeDelta::try_minutes(1)),
-                ws_app_ban_duration: match TimeDelta::try_days(1) {
+                ws_max_con_threshold: Threshold::new_const(10000, TimeDelta::try_minutes(1)),
+                ws_max_con_ban_duration: match TimeDelta::try_days(1) {
                     Some(delta) => delta,
                     None => panic!("invalid delta"),
                 },
-                ws_app_threshold_range: 100,
-                ws_app_con_flicker_threshold: Threshold::new_const(10000, TimeDelta::try_minutes(1)),
-                ws_app_con_flicker_ban_duration: match TimeDelta::try_days(1) {
+                ws_max_con_threshold_range: 100,
+                ws_max_con_ban_reason: IpBanReason::WsTooManyReconnections,
+                ws_con_flicker_threshold: Threshold::new_const(10000, TimeDelta::try_minutes(1)),
+                ws_con_flicker_ban_duration: match TimeDelta::try_days(1) {
                     Some(delta) => delta,
                     None => panic!("invalid delta"),
                 },
-
-                ws_stat_threshold: Threshold::new_const(10000, TimeDelta::try_minutes(1)),
-                ws_stat_ban_duration: match TimeDelta::try_days(1) {
+                ws_con_flicker_ban_reason: IpBanReason::WsConFlickerDetected,
+                ws_req_ban_threshold: Threshold::new_const(10000, TimeDelta::try_minutes(1)),
+                ws_req_ban_duration: match TimeDelta::try_days(1) {
                     Some(delta) => delta,
                     None => panic!("invalid delta"),
                 },
@@ -119,17 +122,19 @@ async fn main() {
         }
     }
 
-    let (web_sockets_handle, web_sockets_channel) = create_ws(
-        task_tracker.clone(),
-        cancelation_token.clone(),
-        "0.0.0.0:3420",
-        &threshold,
-        db.clone(),
-        time_machine,
-        ProdThreshold,
-        ProdUserAddrMiddleware,
-    )
-    .await;
+    let web_sockets_handle = task_tracker.spawn(
+        Ws::create(
+            task_tracker.clone(),
+            cancelation_token.clone(),
+            "0.0.0.0:3420".to_string(),
+            threshold,
+            db.clone(),
+            time_machine,
+            ProdThreshold,
+            ProdUserAddrMiddleware,
+        )
+    );
+
     //aaa
     if let Some(discord_bot_token) = discord_bot_token {
         let mut discord_bot = create_bot(
@@ -193,11 +198,11 @@ mod artcord_tests {
             prod_client_msg::{ClientMsg, ClientThresholdMiddleware},
             prod_server_msg::ServerMsg,
         },
-        misc::throttle_threshold::Threshold,
+        misc::{throttle_connection::IpBanReason, throttle_threshold::Threshold},
         util::time::TimeMiddleware,
     };
-    use artcord_tungstenite::ws_app::GetUserAddrMiddleware;
-    use artcord_tungstenite::{ws_app::create_ws, WsThreshold};
+    use artcord_tungstenite::ws::{GetUserAddrMiddleware, Ws};
+    use artcord_tungstenite::{ WsThreshold};
     use chrono::{DateTime, TimeDelta, Utc};
     use futures::{stream::SplitSink, SinkExt, StreamExt};
     use mongodb::{bson::doc, options::ClientOptions};
@@ -340,20 +345,21 @@ mod artcord_tests {
         let now = Utc::now();
 
         let threshold = WsThreshold {
-            ws_app_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
-            ws_app_ban_duration: match TimeDelta::try_minutes(1) {
+            ws_max_con_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
+            ws_max_con_ban_duration: match TimeDelta::try_minutes(1) {
                 Some(delta) => delta,
                 None => panic!("invalid delta"),
             },
-            ws_app_threshold_range: 5,
-            ws_app_con_flicker_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
-            ws_app_con_flicker_ban_duration: match TimeDelta::try_minutes(1) {
+            ws_max_con_threshold_range: 5,
+            ws_max_con_ban_reason: IpBanReason::WsTooManyReconnections,
+            ws_con_flicker_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
+            ws_con_flicker_ban_duration: match TimeDelta::try_minutes(1) {
                 Some(delta) => delta,
                 None => panic!("invalid delta"),
             },
-
-            ws_stat_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
-            ws_stat_ban_duration: match TimeDelta::try_minutes(1) {
+            ws_con_flicker_ban_reason: IpBanReason::WsConFlickerDetected,
+            ws_req_ban_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
+            ws_req_ban_duration: match TimeDelta::try_minutes(1) {
                 Some(delta) => delta,
                 None => panic!("invalid delta"),
             },
@@ -374,17 +380,18 @@ mod artcord_tests {
 
         let (mut addr_rx, addr_middleware) = TestUserAddrMiddleware::new();
 
-        let (web_sockets_handle, web_sockets_channel) = create_ws(
-            root_task_tracker.clone(),
-            cancelation_token.clone(),
-            "0.0.0.0:3420",
-            &threshold,
-            db.clone(),
-            time_machine,
-            DebugThreshold,
-            addr_middleware,
-        )
-        .await;
+        let web_sockets_handle = root_task_tracker.spawn(
+            Ws::create(
+                root_task_tracker.clone(),
+                cancelation_token.clone(),
+                "0.0.0.0:3420".to_string(),
+                threshold,
+                db.clone(),
+                time_machine,
+                DebugThreshold,
+                addr_middleware,
+            )
+        );
 
         debug!("ONE 1");
 

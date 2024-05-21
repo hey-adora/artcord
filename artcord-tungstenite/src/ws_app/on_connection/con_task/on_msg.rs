@@ -8,7 +8,7 @@ use tokio_tungstenite::{tungstenite::Message, WebSocketStream};
 use tracing::{debug, trace};
 use thiserror::Error;
 
-use crate::ws_app::PathStats;
+use crate::ws::PathStats;
 
 use super::{ConMsg, GlobalConMsg};
 

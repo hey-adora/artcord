@@ -3,7 +3,7 @@ use std::sync::Arc;
 use artcord_mongodb::database::DB;
 use artcord_state::message::prod_server_msg::{ServerMsg};
 
-use crate::ws_app::WsResError;
+use crate::ws::WsResError;
 
 pub async fn ws_handle_user(db: Arc<DB>, user_id: String) -> Result<Option<ServerMsg>, WsResError> {
     Ok(Some(

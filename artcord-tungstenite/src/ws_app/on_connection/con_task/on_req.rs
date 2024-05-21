@@ -9,7 +9,7 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_util::task::TaskTracker;
 use tracing::{debug, trace};
 
-use crate::ws_app::{ws_statistic::WsStatsMsg, WsAppMsg};
+use crate::ws::{ws_statistic::WsStatsMsg, WsAppMsg};
 
 use self::req_task::req_task;
 

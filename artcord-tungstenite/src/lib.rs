@@ -9,6 +9,7 @@ use artcord_mongodb::database::DB;
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_perm_key::ProdMsgPermKey;
 use artcord_state::message::prod_server_msg::ServerMsg;
+use artcord_state::misc::throttle_connection::IpBanReason;
 use artcord_state::misc::throttle_threshold::Threshold;
 use artcord_state::util::time::time_is_past;
 use artcord_state::util::time::time_passed_days;
@@ -48,20 +49,22 @@ use tracing::instrument;
 use tracing::Instrument;
 use tracing::{error, trace};
 
-pub mod ws_app;
+pub mod ws;
+
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct WsThreshold {
-    pub ws_app_threshold: Threshold,
-    pub ws_app_threshold_range: u64,
-    pub ws_app_ban_duration: TimeDelta,
-    pub ws_app_con_flicker_threshold: Threshold,
-    pub ws_app_con_flicker_ban_duration: TimeDelta,
-
-    pub ws_stat_threshold: Threshold,
-    //pub ws_stat_threshold_range: u64,
-    pub ws_stat_ban_duration: TimeDelta,
+    pub ws_max_con_threshold: Threshold,
+    pub ws_max_con_threshold_range: u64,
+    pub ws_max_con_ban_duration: TimeDelta,
+    pub ws_max_con_ban_reason: IpBanReason,
+    pub ws_con_flicker_threshold: Threshold,
+    pub ws_con_flicker_ban_duration: TimeDelta,
+    pub ws_con_flicker_ban_reason: IpBanReason,
+    pub ws_req_ban_threshold: Threshold,
+    pub ws_req_ban_duration: TimeDelta,
 }
+
 
 // cfg_if! {
 //     if #[cfg(feature = "development")] {

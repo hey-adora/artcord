@@ -171,12 +171,18 @@ impl ThrottleSimple {
         is_banned(banned_until, time)
     }
 
+    pub fn inc(&mut self) {
+        self.tracker.inc_total();
+        self.tracker.inc();
+    }
+
     pub fn allow(&mut self, treshold: &Threshold, ban_duration: &TimeDelta, ban_reason: &IpBanReason, time: &DateTime<Utc>, banned_until: &mut Option<(DateTime<Utc>, IpBanReason)>) -> AllowCon {
         match self.is_banned(banned_until, time) {
             IsBanned::Banned => {
                 return AllowCon::AlreadyBanned;
             }
             IsBanned::UnBanned => {
+                self.tracker.reset_threshold(time);
                 return AllowCon::Unbanned;
             }
             _ => {}
@@ -415,8 +421,8 @@ impl ThresholdTracker {
     }
 
     pub fn allow(&mut self, threshold: &Threshold, time: &DateTime<Utc>) -> bool {
-        if self.threshold_reatched(&threshold) {
-            if self.delta_passed(&threshold, time) {
+        if self.threshold_reatched(threshold) {
+            if self.delta_passed(threshold, time) {
                 self.reset_threshold(time);
             } else {
                 return false;

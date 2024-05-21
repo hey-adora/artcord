@@ -18,7 +18,7 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::{debug, trace};
 
-use crate::ws_app::{ws_statistic::WsStatsMsg, ConMsg, WsResError};
+use crate::ws::{ws_statistic::WsStatsMsg, ConMsg, WsResError};
 
 pub async fn live_ws_stats(
     db: Arc<DB>,

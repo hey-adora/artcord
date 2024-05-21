@@ -18,10 +18,8 @@ use super::throttle_threshold::{
     ThrottleRanged, ThrottleSimple,
 };
 
-
-
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-pub struct PathStat {
+pub struct WsReqStat {
     pub total_count: u64,
     pub total_allow_count: u64,
     pub total_blocked_count: u64,
@@ -76,7 +74,7 @@ pub struct WebThrottleConnection {
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct TempThrottleConnection {
-    pub ws_path_count: HashMap<ClientPathType, LiveThrottleConnectionCount>,
+    // pub ws_path_count: HashMap<ClientPathType, LiveThrottleConnectionCount>,
     pub con_throttle: ThrottleRanged,
     pub con_flicker_throttle: ThrottleSimple,
     //pub ip_stats: HashMap<ClientPathType, LiveThrottleConnectionCount>,
@@ -85,7 +83,7 @@ pub struct TempThrottleConnection {
 }
 
 
-impl PathStat {
+impl WsReqStat {
     pub fn new(time: DateTime<Utc>) -> Self {
         Self {
             total_count: 0,
@@ -164,26 +162,26 @@ impl WebThrottleConnectionCount {
 
 
 
-impl From<TempThrottleConnection> for WebThrottleConnection {
-    fn from(value: TempThrottleConnection) -> Self {
-        Self {
-            ws_connection_count: RwSignal::new(value.con_throttle.amount),
-            ws_path_count: RwSignal::new(WebThrottleConnectionCount::from_live(
-                value.ws_path_count,
-            )),
-            ws_total_blocked_connection_attempts: RwSignal::new(
-                value.con_throttle.tracker.total_amount,
-            ),
-            ws_blocked_connection_attempts: RwSignal::new(value.con_throttle.tracker.total_amount),
-            ws_blocked_connection_attempts_last_reset_at: RwSignal::new(
-                value.con_throttle.tracker.started_at,
-            ),
-            ws_con_banned_until: RwSignal::new(value.banned_until),
-            ws_con_flicker_count: RwSignal::new(value.con_flicker_throttle.tracker.amount),
-            ws_con_flicker_banned_until: RwSignal::new(value.banned_until),
-        }
-    }
-}
+// impl From<TempThrottleConnection> for WebThrottleConnection {
+//     fn from(value: TempThrottleConnection) -> Self {
+//         Self {
+//             ws_connection_count: RwSignal::new(value.con_throttle.amount),
+//             ws_path_count: RwSignal::new(WebThrottleConnectionCount::from_live(
+//                 value.ws_path_count,
+//             )),
+//             ws_total_blocked_connection_attempts: RwSignal::new(
+//                 value.con_throttle.tracker.total_amount,
+//             ),
+//             ws_blocked_connection_attempts: RwSignal::new(value.con_throttle.tracker.total_amount),
+//             ws_blocked_connection_attempts_last_reset_at: RwSignal::new(
+//                 value.con_throttle.tracker.started_at,
+//             ),
+//             ws_con_banned_until: RwSignal::new(value.banned_until),
+//             ws_con_flicker_count: RwSignal::new(value.con_flicker_throttle.tracker.amount),
+//             ws_con_flicker_banned_until: RwSignal::new(value.banned_until),
+//         }
+//     }
+// }
 
 // impl From<LiveThrottleConnection> for WebThrottleConnection {
 //     fn from(value: LiveThrottleConnection) -> Self {
@@ -237,14 +235,14 @@ impl WebThrottleConnection {
     //         })
     // }
 
-    pub fn from_temp(
-        value: HashMap<IpAddr, TempThrottleConnection>,
-    ) -> HashMap<IpAddr, WebThrottleConnection> {
-        value
-            .into_iter()
-            .fold(HashMap::new(), |mut a, (key, value)| {
-                a.insert(key, value.into());
-                a
-            })
-    }
+    // pub fn from_temp(
+    //     value: HashMap<IpAddr, TempThrottleConnection>,
+    // ) -> HashMap<IpAddr, WebThrottleConnection> {
+    //     value
+    //         .into_iter()
+    //         .fold(HashMap::new(), |mut a, (key, value)| {
+    //             a.insert(key, value.into());
+    //             a
+    //         })
+    // }
 }
