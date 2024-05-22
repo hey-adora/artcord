@@ -386,9 +386,25 @@ impl DB {
 
         let mut output: Vec<f64> = Vec::new();
 
+        //let first = stats.first();
+        // let Some(first) = first else {
+        //     return Ok(output);
+        // };
+
+        // let created_at = first
+        //         .get_document("_id")
+        //         .and_then(|_id|_id.get_str("date"))
+        //         .map(|date| {
+        //             NaiveDate::parse_from_str(date, "%Y-%m-%d")
+        //                 .map(|date| DateTime::<Utc>::from_naive_utc_and_offset(date.into(), Utc))
+        //         })??
+        //         .timestamp_millis();
+
+     
+
         let mut prev_created_at: Option<i64> = None;
         for stat in stats {
-            debug!("db: graph: {}", stat);
+            
             let created_at = stat
                 .get_document("_id")
                 .and_then(|_id|_id.get_str("date"))
@@ -400,6 +416,8 @@ impl DB {
             let count = stat.get_i32("count")? as f64;
 
             //debug!("db: graph: {}", stat);
+
+            
 
             if let Some(prev_created_at) = prev_created_at {
                 //debug!("({} - {}) / {} > 1 = {} | {} {}", created_at, prev_created_at, DAY_IN_MS, (created_at - prev_created_at) / DAY_IN_MS > 1, created_at - prev_created_at, (created_at - prev_created_at) / DAY_IN_MS);
@@ -417,6 +435,19 @@ impl DB {
             //output.push(doc);
         }
 
+        //let created_at = 1715990400000;
+        
+        if let Some(created_at) = prev_created_at {
+            let diff = from - created_at;
+            if diff > 0 {
+                for day_i in (created_at + DAY_IN_MS..from).step_by(DAY_IN_MS as usize) {
+                    output.push(day_i as f64);
+                    output.push(0.0);
+                }
+            }
+        }
+
+        //debug!("db: graph: {}", stat);
         Ok(output)
     }
 }
