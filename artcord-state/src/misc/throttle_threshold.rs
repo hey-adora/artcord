@@ -427,6 +427,10 @@ impl ThresholdTracker {
             } else {
                 return false;
             }
+        } else {
+            if self.delta_passed(threshold, time) {
+                self.reset_threshold(time);
+            }
         }
         true
     }

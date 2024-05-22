@@ -129,8 +129,8 @@ pub struct Ws<
     root_cancellation_token: CancellationToken,
     ws_addr: String,
     ws_threshold: WsThreshold,
-    ws_tx: mpsc::Sender<WsAppMsg>,
-    ws_rx: mpsc::Receiver<WsAppMsg>,
+    // ws_tx: mpsc::Sender<WsAppMsg>,
+    // ws_rx: mpsc::Receiver<WsAppMsg>,
     global_con_tx: broadcast::Sender<GlobalConMsg>,
     global_con_rx: broadcast::Receiver<GlobalConMsg>,
     db: Arc<DB>,
@@ -166,7 +166,7 @@ impl<
     ) {
         let try_socket = TcpListener::bind(ws_addr.clone()).await;
         let tcp_listener = try_socket.expect("Failed to bind");
-        let (ws_tx, ws_rx) = mpsc::channel::<WsAppMsg>(1);
+        
         let (global_con_tx, global_con_rx) = broadcast::channel::<GlobalConMsg>(1000);
 
         let mut ws = Self {
@@ -176,8 +176,8 @@ impl<
             root_cancellation_token,
             ws_addr,
             ws_threshold,
-            ws_tx,
-            ws_rx,
+            // ws_tx,
+            // ws_rx,
             global_con_tx,
             global_con_rx,
             db,
@@ -193,16 +193,20 @@ impl<
 
     pub async fn run(&mut self) {
         info!("ws started");
+        let (ws_tx, mut ws_rx) = mpsc::channel::<WsAppMsg>(1);
 
         //self.root_cancellation_token.is_cancelled()
         loop {
             select! {
                 con = self.tcp_listener.accept() => {
                     trace!("con accepted");
-                    self.on_con(con).await;
+                    let result = self.on_con(&ws_tx, con).await;
+                    if let Err(err) = result {
+                        error!("on_con err: {}", err);
+                    }
                 },
 
-                ws_msg = self.ws_rx.recv() => {
+                ws_msg = ws_rx.recv() => {
                     trace!("ws recved msg");
                     let exit = self.on_msg(ws_msg).await;
                     let exit = match exit {
@@ -224,15 +228,16 @@ impl<
                 }
             }
         }
-        debug!("ws app exiting...");
+        trace!("ws app exiting...");
         self.ws_task_tracker.close();
-
+        drop(ws_tx);
         loop {
             select! {
-                _ =  self.ws_task_tracker.wait() => {
-                    break;
-                }
-                ws_msg = self.ws_rx.recv() => {
+                // _ =  self.ws_task_tracker.wait() => {
+                //     trace!("ws app exiting... all tasks closed");
+                //     break;
+                // }
+                ws_msg = ws_rx.recv() => {
                     let exit = self.on_msg(ws_msg).await;
                     let exit = match exit {
                         Ok(exit) => exit,
@@ -242,17 +247,19 @@ impl<
                         }
                     };
                     if exit {
+                        trace!("ws app exiting... channel closed");
                         break;
                     }
                 }
             }
         }
 
-        debug!("ws app exited.");
+        trace!("ws app exited.");
     }
 
     pub async fn on_con(
         &mut self,
+        ws_tx: &mpsc::Sender<WsAppMsg>,
         con: Result<(TcpStream, SocketAddr), io::Error>,
     ) -> Result<(), WsOnConErr> {
         let (stream, user_addr) = match con {
@@ -317,7 +324,7 @@ impl<
                 stream,
                 self.root_cancellation_token.clone(),
                 self.db.clone(),
-                self.ws_tx.clone(),
+                ws_tx.clone(),
                 ip,
                 user_addr,
                 (self.global_con_tx.clone(), self.global_con_tx.subscribe()),
@@ -346,7 +353,7 @@ impl<
 
         match msg {
             WsAppMsg::Disconnected { connection_key, ip } => {
-                self.throttle.dec_con(ip, connection_key);
+                self.throttle.dec_con(&ip);
             }
             WsAppMsg::Stop => {
                 return Ok(true);

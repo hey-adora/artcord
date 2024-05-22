@@ -4,8 +4,8 @@ use tokio_tungstenite::tungstenite::Message;
 
 use crate::ws::{con::ConMsg, WsAppMsg};
 
-pub mod ws_req_stats;
-pub mod ws_ip_stats;
+pub mod req_throttle;
+pub mod ws_throttle;
 pub mod user;
 pub mod auth;
 pub mod gallery;

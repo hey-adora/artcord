@@ -69,21 +69,21 @@ pub async fn req_task(
             }
 
             let response_data: Result<Option<ServerMsg>, ResErr> = match data {
-                ClientMsg::WsStatsTotalCount { from } => res::ws_req_stats::total_count(db, from).await,
+                ClientMsg::WsStatsTotalCount { from } => res::req_throttle::total_count(db, from).await,
                 ClientMsg::WsStatsRange {
                     from,
                     to,
                     unique_ip,
-                } => res::ws_req_stats::ranged(db, from, to, unique_ip).await,
+                } => res::req_throttle::ranged(db, from, to, unique_ip).await,
                 //ClientMsg::WsStatsFirstPage {  amount } => ws_stats_first_page(db, amount).await,
                 ClientMsg::WsStatsPaged { page, amount, from } => {
-                    res::ws_req_stats::paged(db, page, amount, from).await
+                    res::req_throttle::paged(db, page, amount, from).await
                 }
                 ClientMsg::WsStatsWithPagination { page, amount } => {
-                    res::ws_req_stats::pagination(db, page, amount).await
+                    res::req_throttle::pagination(db, page, amount).await
                 }
                 ClientMsg::LiveWsThrottleCache(listener_state) => {
-                    res::ws_ip_stats::ws_throttle_cached(
+                    res::ws_throttle::ws_throttle_cached(
                         db,
                         listener_state,
                         connection_key,

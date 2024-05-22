@@ -37,11 +37,12 @@ pub mod tracker;
 
 #[derive(Debug, Clone)]
 pub enum GlobalConMsg {
-    AddIpStatListener {
-        msg_author: TempConIdType,
-        con_tx: mpsc::Sender<ConMsg>,
-        current_state_tx: mpsc::Sender<HashMap<ClientPathType, WsReqStat>>,
-    },
+    // AddIpStatListener {
+    //     msg_author: TempConIdType,
+    //     con_id: TempConIdType,
+    //     con_tx: mpsc::Sender<ConMsg>,
+    //     current_state_tx: mpsc::Sender<HashMap<ClientPathType, WsReqStat>>,
+    // },
 }
 
 #[derive(Debug)]
@@ -53,11 +54,26 @@ pub enum ConMsg {
         block_threshold: Threshold,
         allow_tx: oneshot::Sender<bool>,
     },
-    AddIpStatListener {
-        msg_author: TempConIdType,
-        con_tx: mpsc::Sender<ConMsg>,
-        current_state_tx: mpsc::Sender<HashMap<ClientPathType, WsReqStat>>,
+    AddWsThrottleListener {
+        //msg_author: TempConIdType,
+        //con_id: TempConIdType,
+        //con_tx: mpsc::Sender<ConMsg>,
+        //current_state_tx: mpsc::Sender<HashMap<ClientPathType, WsReqStat>>,
     },
+    // AddWsThrottleListener {
+    //     msg_author: TempConIdType,
+    //     con_id: TempConIdType,
+    //     con_tx: mpsc::Sender<ConMsg>,
+    //     current_state_tx: mpsc::Sender<HashMap<ClientPathType, WsReqStat>>,
+    // },
+    // RemoveWsThrottleListener {
+    //     msg_author: TempConIdType,
+    // },
+    // AddReqThrottleListener {
+    //     msg_author: TempConIdType,
+    //     con_tx: mpsc::Sender<ConMsg>,
+    //     current_state_tx: mpsc::Sender<HashMap<ClientPathType, WsReqStat>>,
+    // },
 }
 
 #[derive(Debug)]
@@ -257,17 +273,17 @@ impl<
                     .map_err(|_| ReqOnMsgErr::ThrottleCheckSend)?;
                 //let stats = &mut *ip_stats_rx.borrow_mut();
             }
-            ConMsg::AddIpStatListener {
-                msg_author,
-                con_tx,
-                current_state_tx,
-            } => {
-                if self.con_id == msg_author {
-                    return Ok(false);
-                }
-                current_state_tx.send(self.stats.paths.clone()).await?;
-                self.stats_listeners.insert(msg_author, con_tx);
-            }
+            // ConMsg::AddReqThrottleListener {
+            //     msg_author,
+            //     con_tx,
+            //     current_state_tx,
+            // } => {
+            //     if self.con_id == msg_author {
+            //         return Ok(false);
+            //     }
+            //     current_state_tx.send(self.stats.paths.clone()).await?;
+            //     self.stats_listeners.insert(msg_author, con_tx);
+            // }
         }
         Ok(false)
     }
@@ -277,6 +293,7 @@ impl<
     }
 
     pub async fn on_req(&mut self, msg: Message) {
+        //debug!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
         self.con_task_tracker.spawn(req_task(
             msg,
             self.db.clone(),

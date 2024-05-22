@@ -97,20 +97,27 @@ impl WsThrottle {
             .ban(&mut ip_stats.banned_until, ban_reason, until);
     }
 
-    pub fn dec_con(&mut self, ip: IpAddr, con_id: TempConIdType) {
-        let ip_stats = self.ips.get_mut(&ip);
+    pub fn dec_con(&mut self, ip: &IpAddr) {
+        let ip_stats = self.ips.get_mut(ip);
         let Some(ip_stats) = ip_stats else {
             error!("throttle: cant disconnect ip that doesnt exist");
             return;
         };
         ip_stats.dec();
+        if ip_stats.con_throttle.amount == 0 {
+            self.ips.remove(&ip);
+        }
+        trace!("throttle on DEC: {:#?}", self);
     }
 
     pub fn get_amounts(&mut self, ip: IpAddr) -> Option<(u64, u64)> {
         let Some(con) = self.ips.get_mut(&ip) else {
             return None;
         };
-        Some((con.con_throttle.tracker.total_amount, con.con_throttle.tracker.amount))
+        Some((
+            con.con_throttle.tracker.total_amount,
+            con.con_throttle.tracker.amount,
+        ))
     }
 
     pub fn inc_con(
@@ -119,14 +126,11 @@ impl WsThrottle {
         ws_threshold: &WsThreshold,
         time: &DateTime<Utc>,
     ) -> AllowCon {
-        let Some(con) = self.ips.get_mut(&ip) else {
-            trace!("ws({}): throttle: created new", &ip);
-            let con = WsThrottleCon::new(ws_threshold.ws_max_con_threshold_range, *time);
-            self.ips.insert(ip, con);
-            return AllowCon::Allow;
-        };
+        let con = self.ips.entry(ip).or_insert_with(|| WsThrottleCon::new(ws_threshold.ws_max_con_threshold_range, *time));
 
-        con.inc(ws_threshold, time)
+        let result = con.inc(ws_threshold, time);
+        trace!("throttle on INC: {:#?}", self);
+        result
     }
 }
 
@@ -185,6 +189,9 @@ impl WsThrottleCon {
 
         if matches!(result, AllowCon::Allow) {
             self.con_flicker_throttle.inc();
+            if allow == AllowCon::Unbanned {
+                return allow;
+            }
         }
 
         result
@@ -205,6 +212,120 @@ impl From<&WsThrottleCon> for TempThrottleConnection {
 pub enum WsThrottleErr {
     #[error("MainGallery error: {0}")]
     Serialization(#[from] bincode::Error),
+}
+
+#[cfg(test)]
+mod throttle_tests {
+    use std::net::{IpAddr, Ipv4Addr};
+    use std::str::FromStr;
+    use artcord_state::misc::{
+        throttle_connection::IpBanReason,
+        throttle_threshold::{AllowCon, Threshold},
+    };
+    use chrono::{TimeDelta, Utc};
+    use tracing::trace;
+
+    use crate::WsThreshold;
+
+    use super::WsThrottle;
+
+    #[test]
+    fn ws_throttle_test() {
+        let _ = tracing_subscriber::fmt()
+            .event_format(
+                tracing_subscriber::fmt::format()
+                    .with_file(true)
+                    .with_line_number(true),
+            )
+            .with_env_filter(tracing_subscriber::EnvFilter::from_str("artcord=trace").unwrap())
+            .try_init();
+
+        let mut throttle = WsThrottle::new();
+        let mut time = Utc::now();
+        let ws_threshold = WsThreshold {
+            ws_max_con_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
+            ws_max_con_ban_duration: match TimeDelta::try_minutes(1) {
+                Some(delta) => delta,
+                None => panic!("invalid delta"),
+            },
+            ws_max_con_threshold_range: 5,
+            ws_max_con_ban_reason: IpBanReason::WsTooManyReconnections,
+            ws_con_flicker_threshold: Threshold::new_const(20, TimeDelta::try_minutes(1)),
+            ws_con_flicker_ban_duration: match TimeDelta::try_minutes(1) {
+                Some(delta) => delta,
+                None => panic!("invalid delta"),
+            },
+            ws_con_flicker_ban_reason: IpBanReason::WsConFlickerDetected,
+            ws_req_ban_threshold: Threshold::new_const(1, TimeDelta::try_minutes(1)),
+            ws_req_ban_duration: match TimeDelta::try_minutes(1) {
+                Some(delta) => delta,
+                None => panic!("invalid delta"),
+            },
+        };
+        let ip = IpAddr::V4(Ipv4Addr::new(1, 1, 1, 69));
+        for _ in 0..5 {
+            let con_1 = throttle.inc_con(ip, &ws_threshold, &time);
+            time += TimeDelta::try_minutes(1).unwrap();
+            assert_eq!(con_1, AllowCon::Allow);
+        }
+        //time += TimeDelta::try_minutes(10).unwrap();
+        let con_1 = throttle.inc_con(ip, &ws_threshold, &time);
+        assert_eq!(con_1, AllowCon::Blocked);
+
+        //time += TimeDelta::try_minutes(2).unwrap();
+
+        throttle.dec_con(&ip);
+
+        let con_1 = throttle.inc_con(ip, &ws_threshold, &time);
+        assert_eq!(con_1, AllowCon::Allow);
+
+        for _ in 0..19 {
+            throttle.dec_con(&ip);
+            let con_1 = throttle.inc_con(ip, &ws_threshold, &time);
+            assert_eq!(con_1, AllowCon::Allow);
+        }
+
+        throttle.dec_con(&ip);
+
+        let con_1 = throttle.inc_con(ip, &ws_threshold, &time);
+        assert_eq!(con_1, AllowCon::Banned((time + TimeDelta::try_minutes(1).unwrap(), IpBanReason::WsConFlickerDetected)));
+
+        let con_1 = throttle.inc_con(ip, &ws_threshold, &time);
+        assert_eq!(con_1, AllowCon::AlreadyBanned);
+
+        time += TimeDelta::try_minutes(1).unwrap();
+
+        let con_1 = throttle.inc_con(ip, &ws_threshold, &time);
+        assert_eq!(con_1, AllowCon::Unbanned);
+
+        for _ in 0..10 {
+            let con_1 = throttle.inc_con(ip, &ws_threshold, &time);
+            assert_eq!(con_1, AllowCon::Blocked);
+        }
+
+        let con_1 = throttle.inc_con(ip, &ws_threshold, &time);
+        assert_eq!(con_1, AllowCon::Banned((time + TimeDelta::try_minutes(1).unwrap(), IpBanReason::WsTooManyReconnections)));
+        
+        let con_1 = throttle.inc_con(ip, &ws_threshold, &time);
+        assert_eq!(con_1, AllowCon::AlreadyBanned);
+
+        time += TimeDelta::try_minutes(1).unwrap();
+
+        throttle.dec_con(&ip);
+
+        let con_1 = throttle.inc_con(ip, &ws_threshold, &time);
+        assert_eq!(con_1, AllowCon::Unbanned);
+
+        for _ in 0..5 {
+            throttle.dec_con(&ip);
+        }
+
+        let ip_exists = throttle.ips.get(&ip).is_some();
+        assert!(!ip_exists);
+
+        //trace!("throttle: {:#?}", throttle);
+        
+    }
 }
 
 // #[derive(Error, Debug)]
