@@ -26,6 +26,13 @@ impl DB {
                     .options(opts)
                     .build()
             },
+            {
+                let opts = IndexOptions::builder().unique(true).build();
+                IndexModel::builder()
+                    .keys(doc! { DbWsStatFieldName::ConId.name(): -1 })
+                    .options(opts)
+                    .build()
+            },
             // {
             //     let opts = IndexOptions::builder().unique(true).build();
             //     IndexModel::builder()
@@ -38,7 +45,7 @@ impl DB {
         let collection = database.collection::<DbWsStat>(COLLECTION_WS_STATISTIC_NAME);
 
         collection
-            .create_indexes([index1.0], None)
+            .create_indexes([index1.0, index1.1], None)
             .await
             .expect("Failed to create collection index.");
 

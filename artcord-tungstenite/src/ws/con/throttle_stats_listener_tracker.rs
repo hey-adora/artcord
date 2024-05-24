@@ -11,7 +11,7 @@ use tracing::{error, trace};
 use super::ConMsg;
 
 #[derive(Debug, Clone)]
-pub struct ConTracker {
+pub struct ThrottleStatsListenerTracker {
     pub cons: HashMap<TempConIdType, (WsRouteKey, mpsc::Sender<ConMsg>)>,
 }
 
@@ -21,7 +21,7 @@ pub struct ConTracker {
 //     AlreadyExisted,
 // }
 
-impl ConTracker {
+impl ThrottleStatsListenerTracker {
     pub fn new() -> Self {
         Self {
              cons: HashMap::new(),
@@ -32,6 +32,9 @@ impl ConTracker {
         &mut self,
         msg: ServerMsg,
     ) -> Result<(), ConTrackerErr> {
+        // if self.cons.is_empty() {
+        //     return Ok(());
+        // }
         let mut to_remove: Vec<TempConIdType> = Vec::new();
         for (con_key, (ws_key, tx)) in self.cons.iter() {
             let msg: WsPackage<ServerMsg> = (ws_key.clone(), msg.clone());

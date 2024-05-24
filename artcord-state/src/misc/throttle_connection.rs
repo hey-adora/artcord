@@ -18,14 +18,14 @@ use super::throttle_threshold::{
     ThrottleRanged, ThrottleSimple,
 };
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-pub struct WsReqStat {
-    pub total_count: u64,
-    pub total_allow_count: u64,
-    pub total_blocked_count: u64,
-    pub total_banned_count: u64,
-    pub throttle: ThrottleDoubleLayer,
-}
+// #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+// pub struct WsReqStat {
+//     pub total_count: u64,
+//     pub total_allow_count: u64,
+//     pub total_blocked_count: u64,
+//     pub total_banned_count: u64,
+//     pub throttle: ThrottleDoubleLayer,
+// }
 
 
 #[derive(
@@ -83,17 +83,17 @@ pub struct TempThrottleConnection {
 }
 
 
-impl WsReqStat {
-    pub fn new(time: DateTime<Utc>) -> Self {
-        Self {
-            total_count: 0,
-            total_allow_count: 0,
-            total_banned_count: 0,
-            total_blocked_count: 0,
-            throttle: ThrottleDoubleLayer::new(time),
-        }
-    }
-}
+// impl WsReqStat {
+//     pub fn new(time: DateTime<Utc>) -> Self {
+//         Self {
+//             total_count: 0,
+//             total_allow_count: 0,
+//             total_banned_count: 0,
+//             total_blocked_count: 0,
+//             throttle: ThrottleDoubleLayer::new(time),
+//         }
+//     }
+// }
 
 // impl Default for LiveThrottleConnectionCount {
 //     fn default() -> Self {

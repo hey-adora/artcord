@@ -30,7 +30,17 @@ pub enum ServerMsg {
     WsLiveThrottleCachedFlickerInc { ip: IpAddr },
     WsLiveThrottleCachedFlickerBanned { ip: IpAddr, date: DateTime<Utc>, reason: IpBanReason },
     WsLiveThrottleCachedFlickerUnban { ip: IpAddr },
-    WsLiveStatsStarted(HashMap<TempConIdType, WsStat>),
+
+    WsLiveStatsConnected(WsStat),
+    WsLiveStatsDisconnected{ con_id: TempConIdType },
+    WsLiveStatsConReqAllowed { con_id: TempConIdType, path: ClientPathType, total_amount: u64 },
+    WsLiveStatsConReqBlocked { con_id: TempConIdType, path: ClientPathType, total_amount: u64 },
+    WsLiveStatsConReqBanned { con_id: TempConIdType, path: ClientPathType, total_amount: u64 },
+    WsLiveStatsConBanned { con_id: TempConIdType, date: DateTime<Utc>, reason: IpBanReason, total_amount: u64 },
+    WsLiveStatsConUnbanned{ con_id: TempConIdType },
+
+
+    WsLiveStatsStarted(Vec<WsStat>),
     WsLiveStatsUpdateRemoveStat { con_key: TempConIdType },
     WsLiveStatsUpdateAddedStat { con_key: TempConIdType, stat: WsStat },
     WsLiveStatsUpdateInc { con_key: TempConIdType, path: ClientPathType },

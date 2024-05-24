@@ -18,7 +18,6 @@ use artcord_state::message::prod_server_msg::ServerMsg;
 use artcord_state::misc::throttle_connection::IpBanReason;
 use artcord_state::misc::throttle_connection::LiveThrottleConnectionCount;
 use artcord_state::misc::throttle_connection::TempThrottleConnection;
-use artcord_state::misc::throttle_connection::WsReqStat;
 use artcord_state::misc::throttle_threshold::AllowCon;
 use artcord_state::misc::throttle_threshold::Threshold;
 use artcord_state::misc::throttle_threshold::ThrottleRanged;
@@ -78,8 +77,8 @@ use crate::ws::con::GlobalConMsg;
 use crate::ws::throttle::WsThrottle;
 use crate::WsThreshold;
 
-use self::con::tracker::ConTracker;
-use self::con::tracker::ConTrackerErr;
+use self::con::throttle_stats_listener_tracker::ThrottleStatsListenerTracker;
+use self::con::throttle_stats_listener_tracker::ConTrackerErr;
 use self::con::Con;
 use self::con::ConMsg;
 
@@ -103,14 +102,15 @@ pub enum WsAppMsg {
         ip: IpAddr,
     },
     AddListener {
-        connection_key: TempConIdType,
-        tx: mpsc::Sender<ConMsg>,
+        con_id: TempConIdType,
+        con_tx: mpsc::Sender<ConMsg>,
         ws_key: WsRouteKey,
+        done_tx: oneshot::Sender<()>,
     },
     RemoveListener {
-        connection_key: TempConIdType,
-        tx: mpsc::Sender<ConMsg>,
-        ws_key: WsRouteKey,
+        con_id: TempConIdType,
+        // tx: mpsc::Sender<ConMsg>,
+        // ws_key: WsRouteKey,
     },
     // Inc {
     //     ip: IpAddr,
@@ -135,7 +135,7 @@ pub struct Ws<
     global_con_rx: broadcast::Receiver<GlobalConMsg>,
     db: Arc<DB>,
     throttle: WsThrottle,
-    con_tracker: ConTracker,
+    listener_tracker: ThrottleStatsListenerTracker,
     time_middleware: TimeMiddlewareType,
     threshold_middleware: ThresholdMiddlewareType,
     socket_middleware: SocketAddrMiddlewareType,
@@ -166,7 +166,7 @@ impl<
     ) {
         let try_socket = TcpListener::bind(ws_addr.clone()).await;
         let tcp_listener = try_socket.expect("Failed to bind");
-        
+
         let (global_con_tx, global_con_rx) = broadcast::channel::<GlobalConMsg>(1000);
 
         let mut ws = Self {
@@ -182,7 +182,7 @@ impl<
             global_con_rx,
             db,
             throttle: WsThrottle::new(),
-            con_tracker: ConTracker::new(),
+            listener_tracker: ThrottleStatsListenerTracker::new(),
             time_middleware,
             threshold_middleware,
             socket_middleware,
@@ -277,22 +277,22 @@ impl<
 
         let allow: bool = match self.throttle.inc_con(ip, &self.ws_threshold, &time) {
             AllowCon::Allow => {
-                if !self.con_tracker.cons.is_empty() {
+                if !self.listener_tracker.cons.is_empty() {
                     let msg = ServerMsg::WsLiveThrottleCachedConnected { ip };
-                    self.con_tracker.send(msg).await?;
+                    self.listener_tracker.send(msg).await?;
                 }
                 true
             }
             AllowCon::AlreadyBanned => false,
             AllowCon::Blocked => {
-                if !self.con_tracker.cons.is_empty() {
-                    if let Some((total_amount, amount)) = self.throttle.get_amounts(ip) {
+                if !self.listener_tracker.cons.is_empty() {
+                    if let Some((total_amount, amount)) = self.throttle.get_amounts(&ip) {
                         let msg = ServerMsg::WsLiveThrottleCachedBlocks {
                             ip,
                             total_blocks: total_amount,
                             blocks: amount,
                         };
-                        self.con_tracker.send(msg).await?;
+                        self.listener_tracker.send(msg).await?;
                     } else {
                         error!("ws({}): ip amounts not found for: {}", &self.ws_addr, ip);
                     }
@@ -300,22 +300,27 @@ impl<
                 false
             }
             AllowCon::Unbanned => {
-                if !self.con_tracker.cons.is_empty() {
+                if !self.listener_tracker.cons.is_empty() {
                     let msg = ServerMsg::WsLiveThrottleCachedUnban { ip };
-                    self.con_tracker.send(msg).await?;
+                    self.listener_tracker.send(msg).await?;
                 }
                 true
             }
             AllowCon::Banned((date, reason)) => {
-                if !self.con_tracker.cons.is_empty() {
+                if !self.listener_tracker.cons.is_empty() {
                     let msg = ServerMsg::WsLiveThrottleCachedBanned { ip, date, reason };
-                    self.con_tracker.send(msg).await?;
+                    self.listener_tracker.send(msg).await?;
                 }
                 false
             }
         };
         if !allow {
             debug!("ws({}): dont connect", &self.ws_addr);
+            return Ok(());
+        };
+
+        let Some((ip_con_tx, ip_con_rx)) = self.throttle.get_ip_channel(&ip) else {
+            error!("ws({}): failed to copy ip_con cahnnel", &self.ws_addr);
             return Ok(());
         };
 
@@ -328,10 +333,13 @@ impl<
                 ip,
                 user_addr,
                 (self.global_con_tx.clone(), self.global_con_tx.subscribe()),
+                ip_con_tx,
+                ip_con_rx,
                 self.ws_threshold.ws_req_ban_threshold.clone(),
                 self.ws_threshold.ws_req_ban_duration.clone(),
                 self.time_middleware.clone(),
                 self.threshold_middleware.clone(),
+                self.listener_tracker.clone(),
             )
             .instrument(tracing::trace_span!(
                 "ws",
@@ -359,18 +367,23 @@ impl<
                 return Ok(true);
             }
             WsAppMsg::AddListener {
-                connection_key,
-                tx,
+                con_id: connection_key,
+                con_tx: tx,
                 ws_key,
+                done_tx,
             } => {
-                self.con_tracker.cons.insert(connection_key, (ws_key, tx));
+                self.listener_tracker.cons.insert(connection_key, (ws_key, tx));
+                let send_result = done_tx.send(()).map_err(|_| WsMsgErr::ListenerDoneTx);
+                if let Err(err) = send_result {
+                    debug!("ws add listener err: {}", err);
+                }
             }
             WsAppMsg::RemoveListener {
-                connection_key,
-                tx,
-                ws_key,
+                con_id: connection_key,
+                // tx,
+                // ws_key,
             } => {
-                self.con_tracker.cons.remove(&connection_key);
+                self.listener_tracker.cons.remove(&connection_key);
             }
             WsAppMsg::Ban { ip, until, reason } => {
                 self.throttle.on_ban(&ip, reason, until);
@@ -394,6 +407,9 @@ pub enum WsOnConErr {
 
 #[derive(Error, Debug)]
 pub enum WsMsgErr {
+    #[error("failed to send done_tx msg back")]
+    ListenerDoneTx,
+
     #[error("MainGallery error: {0}")]
     Serialization(#[from] bincode::Error),
 

@@ -17,7 +17,6 @@ use artcord_state::misc::throttle_connection::ConStatus;
 use artcord_state::misc::throttle_connection::IpBanReason;
 use artcord_state::misc::throttle_connection::LiveThrottleConnectionCount;
 use artcord_state::misc::throttle_connection::TempThrottleConnection;
-use artcord_state::misc::throttle_connection::WsReqStat;
 use artcord_state::misc::throttle_threshold::AllowCon;
 use artcord_state::misc::throttle_threshold::IsBanned;
 use artcord_state::misc::throttle_threshold::Threshold;
@@ -65,25 +64,33 @@ use tracing::instrument;
 use tracing::Instrument;
 use tracing::{error, trace};
 
+use super::con::throttle_stats_listener_tracker::ThrottleStatsListenerTracker;
 use super::con::ConMsg;
+use super::con::GlobalConMsg;
+use super::con::IpConMsg;
 use super::WsAppMsg;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct WsThrottle {
     pub ips: HashMap<IpAddr, WsThrottleCon>,
+    //pub stats_listeners: ThrottleStatsListenerTracker,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct WsThrottleCon {
     pub con_throttle: ThrottleRanged,
     pub con_flicker_throttle: ThrottleSimple,
     pub banned_until: Option<(DateTime<Utc>, IpBanReason)>,
+    pub ip_con_tx: broadcast::Sender<IpConMsg>,
+    pub ip_con_rx: broadcast::Receiver<IpConMsg>,
+    //pub stats_listeners: broadcast::Receiver<GlobalConMsg>,
 }
 
 impl WsThrottle {
     pub fn new() -> Self {
         Self {
             ips: HashMap::new(),
+            //stats_listeners: ThrottleStatsListenerTracker::new(),
         }
     }
     pub fn on_ban(&mut self, ip: &IpAddr, ban_reason: IpBanReason, until: DateTime<Utc>) {
@@ -110,13 +117,23 @@ impl WsThrottle {
         trace!("throttle on DEC: {:#?}", self);
     }
 
-    pub fn get_amounts(&mut self, ip: IpAddr) -> Option<(u64, u64)> {
-        let Some(con) = self.ips.get_mut(&ip) else {
+    pub fn get_amounts(&mut self, ip: &IpAddr) -> Option<(u64, u64)> {
+        let Some(con) = self.ips.get_mut(ip) else {
             return None;
         };
         Some((
             con.con_throttle.tracker.total_amount,
             con.con_throttle.tracker.amount,
+        ))
+    }
+
+    pub fn get_ip_channel(&mut self, ip: &IpAddr) -> Option<(broadcast::Sender<IpConMsg>, broadcast::Receiver<IpConMsg>)> {
+        let Some(con) = self.ips.get_mut(ip) else {
+            return None;
+        };
+        Some((
+            con.ip_con_tx.clone(),
+            con.ip_con_rx.resubscribe(),
         ))
     }
 
@@ -147,11 +164,14 @@ impl WsThrottleCon {
     }
 
     pub fn new(range: u64, started_at: DateTime<Utc>) -> Self {
+        let (con_broadcast_tx, con_broadcast_rx) = broadcast::channel(10);
         let con = Self {
             //path_stats: HashMap::new(),
             con_throttle: ThrottleRanged::new(range, started_at),
             con_flicker_throttle: ThrottleSimple::new(started_at),
             banned_until: None,
+            ip_con_tx: con_broadcast_tx,
+            ip_con_rx: con_broadcast_rx,
             // ip_stats_tx: ip_stats_tx.clone(),
             // ip_stats_rx: ip_stats_rx.clone(),
         };

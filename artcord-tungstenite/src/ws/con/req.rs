@@ -69,18 +69,18 @@ pub async fn req_task(
             }
 
             let response_data: Result<Option<ServerMsg>, ResErr> = match data {
-                ClientMsg::WsStatsTotalCount { from } => res::req_throttle::total_count(db, from).await,
+                ClientMsg::WsStatsTotalCount { from } => res::ws_stats::total_count(db, from).await,
                 ClientMsg::WsStatsRange {
                     from,
                     to,
                     unique_ip,
-                } => res::req_throttle::ranged(db, from, to, unique_ip).await,
+                } => res::ws_stats::ranged(db, from, to, unique_ip).await,
                 //ClientMsg::WsStatsFirstPage {  amount } => ws_stats_first_page(db, amount).await,
                 ClientMsg::WsStatsPaged { page, amount, from } => {
-                    res::req_throttle::paged(db, page, amount, from).await
+                    res::ws_stats::paged(db, page, amount, from).await
                 }
                 ClientMsg::WsStatsWithPagination { page, amount } => {
-                    res::req_throttle::pagination(db, page, amount).await
+                    res::ws_stats::pagination(db, page, amount).await
                 }
                 ClientMsg::LiveWsThrottleCache(listener_state) => {
                     res::ws_throttle::ws_throttle_cached(
@@ -93,18 +93,14 @@ pub async fn req_task(
                     )
                     .await
                 }
-                // ClientMsg::LiveWsStats(listener_state) => {
-                //     live_ws_stats(
-                //         db,
-                //         listener_state,
-                //         connection_key,
-                //         res_key,
-                //         addr,
-                //         &connection_task_tx,
-                //         admin_ws_stats_tx,
-                //     )
-                //     .await
-                // }
+                ClientMsg::LiveWsStats(listener_state) => {
+                    res::ws_stats::live(
+                        listener_state,
+                        &connection_task_tx,
+                        res_key
+                    )
+                    .await
+                }
                 ClientMsg::User { user_id } => res::user::user(db, user_id).await,
                 ClientMsg::UserGalleryInit {
                     amount,
@@ -133,9 +129,9 @@ pub async fn req_task(
         let response: WsPackage<ServerMsg> = (res_key, response_data);
         #[cfg(feature = "development")]
         {
-            let mut output = format!("{:?}", &response);
-            output.truncate(100);
-            trace!("sent: {}", output);
+            // let mut output = format!("{:?}", &response);
+            // output.truncate(100);
+            trace!("sent res: {:#?}", response);
         }
         let response = ServerMsg::as_bytes(response)?;
         let response = Message::Binary(response);

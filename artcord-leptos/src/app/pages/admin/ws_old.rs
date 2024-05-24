@@ -266,7 +266,7 @@ pub fn WsOld() -> impl IntoView {
                 let count = count
                     .iter()
                     .find(|v| v.path == *path)
-                    .map(|v| v.count)
+                    .map(|v| v.throttle.block_tracker.total_amount)
                     .unwrap_or(0_i64);
                 view! {
                     <th class="border border-mid-purple ">{count}</th>

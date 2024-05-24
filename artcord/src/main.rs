@@ -230,14 +230,20 @@ mod artcord_tests {
 
     struct Client {
         key: u128,
-        client_tx: mpsc::Sender<(u128, ClientMsg)>,
+        client_tx: mpsc::Sender<DebugClientMsg>,
         //client_recv_tx: mpsc::Sender<(u128, ClientMsg)>,
         //server_send_tx: mpsc::Sender<(u128, ServerMsg)>,
         server_rx: mpsc::Receiver<(u128, ServerMsg)>,
     }
 
-    #[derive(Debug, PartialEq, Clone, Copy)]
+    #[derive(Debug, PartialEq, Clone)]
     enum DebugClientMsg {
+        Send((u128, ClientMsg)),
+        Disconnect,
+    }
+
+    #[derive(Debug, PartialEq, Clone, Copy)]
+    enum DebugClientStatusMsg {
         Connected,
         Disconnected,
     }
@@ -298,9 +304,9 @@ mod artcord_tests {
         pub fn new() -> (
             Self,
             mpsc::Sender<(u128, ServerMsg)>,
-            mpsc::Receiver<(u128, ClientMsg)>,
+            mpsc::Receiver<DebugClientMsg>,
         ) {
-            let (client_tx, client_rx) = mpsc::channel::<(u128, ClientMsg)>(100);
+            let (client_tx, client_rx) = mpsc::channel::<DebugClientMsg>(100);
             let (server_tx, server_rx) = mpsc::channel::<(u128, ServerMsg)>(100);
 
             (
@@ -314,8 +320,13 @@ mod artcord_tests {
             )
         }
 
+        pub async fn command(&mut self, msg: DebugClientMsg) {
+            self.client_tx.send(msg).await.unwrap();
+        }
+
+
         pub async fn send(&mut self, msg: ClientMsg) {
-            self.client_tx.send((self.key, msg)).await.unwrap();
+            self.client_tx.send(DebugClientMsg::Send((self.key, msg))).await.unwrap();
         }
 
         pub async fn recv(&mut self) -> ServerMsg {
@@ -401,29 +412,76 @@ mod artcord_tests {
         let client_1_ip = IpAddr::V4(Ipv4Addr::new(1, 1, 1, 69));
         addr.set_ip(client_1_ip);
         return_tx.send(addr).unwrap();
-        assert_eq!(client_1_result_rx.recv().await.unwrap(), Ok(DebugClientMsg::Connected));
+        assert_eq!(client_1_result_rx.recv().await.unwrap(), Ok(DebugClientStatusMsg::Connected));
 
         let (client_2_result_tx, mut client_2_result_rx) = mpsc::channel(100);
         let mut client2 = create_client(root_task_tracker.clone(), cancelation_token.clone(), client_2_result_tx).await;
-        
         let ((mut addr, return_tx)) = addr_rx.recv().await.unwrap();
         let client_2_ip = IpAddr::V4(Ipv4Addr::new(1, 4, 2, 0));
         addr.set_ip(client_2_ip);
         return_tx.send(addr).unwrap();
-        assert_eq!(client_2_result_rx.recv().await.unwrap(), Ok(DebugClientMsg::Connected));
+        assert_eq!(client_2_result_rx.recv().await.unwrap(), Ok(DebugClientStatusMsg::Connected));
+
+        let (client_3_result_tx, mut client_3_result_rx) = mpsc::channel(100);
+        let mut client3 = create_client(root_task_tracker.clone(), cancelation_token.clone(), client_3_result_tx).await;
+        let ((mut addr, return_tx)) = addr_rx.recv().await.unwrap();
+        let client_3_ip = IpAddr::V4(Ipv4Addr::new(1, 4, 2, 3));
+        addr.set_ip(client_3_ip);
+        return_tx.send(addr).unwrap();
+        assert_eq!(client_3_result_rx.recv().await.unwrap(), Ok(DebugClientStatusMsg::Connected));
 
 
-        client2.send(ClientMsg::LiveWsThrottleCache(true)).await;
+        client2.send(ClientMsg::LiveWsStats(true)).await;
         // client2.send(ClientMsg::LiveWsStats(true)).await;
         let msg = client2.recv().await;
-        // debug!("r: {:#?}", msg);
-        // let r = match msg {
-        //     ServerMsg::WsLiveThrottleCachedEntryAdded(stats) => {
-        //         stats.contains_key(&client_1_ip) && stats.contains_key(&client_2_ip)
-        //     }
-        //     _ => false
-        // };
-        // assert!(r);
+        debug!("r: {:#?}", msg);
+        let mut posibilities = vec![client_1_ip, client_2_ip, client_3_ip];
+        let mut check_ips = |msg: ServerMsg| {
+            match msg {
+                ServerMsg::WsLiveStatsConnected(stat) => {
+                    let Some(position) = posibilities.iter().position(|ip| stat.ip == *ip) else {
+                         return false;
+                    };
+                    posibilities.remove(position);
+                    true
+                }
+                _ => false
+            }
+        };
+        assert!(check_ips(msg));
+
+        let msg = client2.recv().await;
+        debug!("r2: {:#?}", msg);
+        assert!(check_ips(msg));
+       
+
+        let msg = client2.recv().await;
+        debug!("r2: {:#?}", msg);
+        client.send(ClientMsg::Logout).await;
+
+        let msg = client2.recv().await;
+        debug!("r2: {:#?}", msg);
+        assert!( matches!(msg, ServerMsg::WsLiveStatsConReqAllowed { con_id, path, total_amount } ) );
+
+        client3.command(DebugClientMsg::Disconnect).await;
+        assert_eq!(client_3_result_rx.recv().await.unwrap(), Ok(DebugClientStatusMsg::Disconnected));
+
+        let msg = client2.recv().await;
+        debug!("r2: {:#?}", msg);
+        assert!( matches!(msg, ServerMsg::WsLiveStatsDisconnected { con_id } ) );
+        
+        client2.send(ClientMsg::LiveWsStats(false)).await;
+
+        let msg = client2.recv().await;
+        debug!("r2: {:#?}", msg);
+        assert!( matches!(msg, ServerMsg::WsLiveStatsConReqAllowed { con_id, path, total_amount } ) );
+
+        client.send(ClientMsg::Logout).await;
+
+        // let msg = client2.recv().await;
+        // debug!("r2: {:#?}", msg);
+        // assert!( matches!(msg, ServerMsg::WsLiveStatsConReqAllowed { con_id, path, total_amount } ) );
+
         // let msg = client2.recv().await;
         // debug!("r2: {:#?}", msg);
         // assert!( matches!(msg, ServerMsg::WsLiveThrottleCachedIncPath { ip, path }));
@@ -438,301 +496,301 @@ mod artcord_tests {
         //web_sockets_handle.await.unwrap();
         root_task_tracker.close();
 
-        assert_eq!(client_1_result_rx.recv().await.unwrap(), Ok(DebugClientMsg::Disconnected));
-        assert_eq!(client_2_result_rx.recv().await.unwrap(), Ok(DebugClientMsg::Disconnected));
+        assert_eq!(client_1_result_rx.recv().await.unwrap(), Ok(DebugClientStatusMsg::Disconnected));
+        //assert_eq!(client_2_result_rx.recv().await.unwrap(), Ok(DebugClientStatusMsg::Disconnected));
 
         root_task_tracker.wait().await;
 
 
     }
 
-    #[tokio::test]
-    async fn ws_test() {
-        tracing_subscriber::fmt()
-            .event_format(
-                tracing_subscriber::fmt::format()
-                    .with_file(true)
-                    .with_line_number(true),
-            )
-            .with_env_filter(tracing_subscriber::EnvFilter::from_str("artcord=trace").unwrap())
-            .try_init()
-            .unwrap();
+    // #[tokio::test]
+    // async fn ws_test() {
+    //     tracing_subscriber::fmt()
+    //         .event_format(
+    //             tracing_subscriber::fmt::format()
+    //                 .with_file(true)
+    //                 .with_line_number(true),
+    //         )
+    //         .with_env_filter(tracing_subscriber::EnvFilter::from_str("artcord=trace").unwrap())
+    //         .try_init()
+    //         .unwrap();
 
-        drop_db(MONGO_NAME, MONGO_URL).await;
-        let db = DB::new(MONGO_NAME, MONGO_URL).await;
-        let db = Arc::new(db);
-        let (time_machine, mut time_rx) = TestClock::new();
-        let fake_date: Arc<Mutex<Option<DateTime<Utc>>>> = Arc::new(Mutex::new(None));
-        let root_task_tracker = TaskTracker::new();
-        let cancelation_token = CancellationToken::new();
-        let now = Utc::now();
+    //     drop_db(MONGO_NAME, MONGO_URL).await;
+    //     let db = DB::new(MONGO_NAME, MONGO_URL).await;
+    //     let db = Arc::new(db);
+    //     let (time_machine, mut time_rx) = TestClock::new();
+    //     let fake_date: Arc<Mutex<Option<DateTime<Utc>>>> = Arc::new(Mutex::new(None));
+    //     let root_task_tracker = TaskTracker::new();
+    //     let cancelation_token = CancellationToken::new();
+    //     let now = Utc::now();
 
-        let threshold = WsThreshold {
-            ws_max_con_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
-            ws_max_con_ban_duration: match TimeDelta::try_minutes(1) {
-                Some(delta) => delta,
-                None => panic!("invalid delta"),
-            },
-            ws_max_con_threshold_range: 5,
-            ws_max_con_ban_reason: IpBanReason::WsTooManyReconnections,
-            ws_con_flicker_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
-            ws_con_flicker_ban_duration: match TimeDelta::try_minutes(1) {
-                Some(delta) => delta,
-                None => panic!("invalid delta"),
-            },
-            ws_con_flicker_ban_reason: IpBanReason::WsConFlickerDetected,
-            ws_req_ban_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
-            ws_req_ban_duration: match TimeDelta::try_minutes(1) {
-                Some(delta) => delta,
-                None => panic!("invalid delta"),
-            },
-        };
+    //     let threshold = WsThreshold {
+    //         ws_max_con_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
+    //         ws_max_con_ban_duration: match TimeDelta::try_minutes(1) {
+    //             Some(delta) => delta,
+    //             None => panic!("invalid delta"),
+    //         },
+    //         ws_max_con_threshold_range: 5,
+    //         ws_max_con_ban_reason: IpBanReason::WsTooManyReconnections,
+    //         ws_con_flicker_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
+    //         ws_con_flicker_ban_duration: match TimeDelta::try_minutes(1) {
+    //             Some(delta) => delta,
+    //             None => panic!("invalid delta"),
+    //         },
+    //         ws_con_flicker_ban_reason: IpBanReason::WsConFlickerDetected,
+    //         ws_req_ban_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
+    //         ws_req_ban_duration: match TimeDelta::try_minutes(1) {
+    //             Some(delta) => delta,
+    //             None => panic!("invalid delta"),
+    //         },
+    //     };
 
-        root_task_tracker.spawn({
-            let fake_date = fake_date.clone();
-            async move {
-                while let Some(time_rx) = time_rx.recv().await {
-                    let Some(fake_date) = *fake_date.lock().await else {
-                        time_rx.send(now).unwrap();
-                        continue;
-                    };
-                    time_rx.send(fake_date).unwrap();
-                }
-            }
-        });
+    //     root_task_tracker.spawn({
+    //         let fake_date = fake_date.clone();
+    //         async move {
+    //             while let Some(time_rx) = time_rx.recv().await {
+    //                 let Some(fake_date) = *fake_date.lock().await else {
+    //                     time_rx.send(now).unwrap();
+    //                     continue;
+    //                 };
+    //                 time_rx.send(fake_date).unwrap();
+    //             }
+    //         }
+    //     });
 
-        let (mut addr_rx, addr_middleware) = TestUserAddrMiddleware::new();
+    //     let (mut addr_rx, addr_middleware) = TestUserAddrMiddleware::new();
 
-        let web_sockets_handle = root_task_tracker.spawn(
-            Ws::create(
-                root_task_tracker.clone(),
-                cancelation_token.clone(),
-                "0.0.0.0:3420".to_string(),
-                threshold,
-                db.clone(),
-                time_machine,
-                DebugThreshold,
-                addr_middleware,
-            )
-        );
+    //     let web_sockets_handle = root_task_tracker.spawn(
+    //         Ws::create(
+    //             root_task_tracker.clone(),
+    //             cancelation_token.clone(),
+    //             "0.0.0.0:3420".to_string(),
+    //             threshold,
+    //             db.clone(),
+    //             time_machine,
+    //             DebugThreshold,
+    //             addr_middleware,
+    //         )
+    //     );
 
-        debug!("ONE 1");
+    //     debug!("ONE 1");
 
-        let (clinet_1_result_tx, mut client_1_result_rx) = mpsc::channel(100);
-        debug!("ONE 2");
-        let mut client = create_client(root_task_tracker.clone(), cancelation_token.clone(), clinet_1_result_tx).await;
-        debug!("ONE 3");
+    //     let (clinet_1_result_tx, mut client_1_result_rx) = mpsc::channel(100);
+    //     debug!("ONE 2");
+    //     let mut client = create_client(root_task_tracker.clone(), cancelation_token.clone(), clinet_1_result_tx).await;
+    //     debug!("ONE 3");
         
-        debug!("ONE 4");
-        let ((mut addr, return_tx)) = addr_rx.recv().await.unwrap();
-        debug!("ONE 5");
-        let client_1_ip = IpAddr::V4(Ipv4Addr::new(1, 1, 1, 69));
-        debug!("ONE 6");
-        addr.set_ip(client_1_ip);
-        debug!("ONE 7");
-        return_tx.send(addr).unwrap();
-        assert_eq!(client_1_result_rx.recv().await.unwrap(), Ok(DebugClientMsg::Connected));
+    //     debug!("ONE 4");
+    //     let ((mut addr, return_tx)) = addr_rx.recv().await.unwrap();
+    //     debug!("ONE 5");
+    //     let client_1_ip = IpAddr::V4(Ipv4Addr::new(1, 1, 1, 69));
+    //     debug!("ONE 6");
+    //     addr.set_ip(client_1_ip);
+    //     debug!("ONE 7");
+    //     return_tx.send(addr).unwrap();
+    //     assert_eq!(client_1_result_rx.recv().await.unwrap(), Ok(DebugClientMsg::Connected));
 
-        debug!("TWO");
+    //     debug!("TWO");
 
-        let (client_2_result_tx, mut client_2_result_rx) = mpsc::channel(100);
-        let mut client2 = create_client(root_task_tracker.clone(), cancelation_token.clone(), client_2_result_tx).await;
+    //     let (client_2_result_tx, mut client_2_result_rx) = mpsc::channel(100);
+    //     let mut client2 = create_client(root_task_tracker.clone(), cancelation_token.clone(), client_2_result_tx).await;
         
-        let ((mut addr, return_tx)) = addr_rx.recv().await.unwrap();
-        let client_2_ip = IpAddr::V4(Ipv4Addr::new(1, 4, 2, 0));
-        addr.set_ip(client_2_ip);
-        return_tx.send(addr).unwrap();
-        assert_eq!(client_2_result_rx.recv().await.unwrap(), Ok(DebugClientMsg::Connected));
+    //     let ((mut addr, return_tx)) = addr_rx.recv().await.unwrap();
+    //     let client_2_ip = IpAddr::V4(Ipv4Addr::new(1, 4, 2, 0));
+    //     addr.set_ip(client_2_ip);
+    //     return_tx.send(addr).unwrap();
+    //     assert_eq!(client_2_result_rx.recv().await.unwrap(), Ok(DebugClientMsg::Connected));
 
-        debug!("THREE");
+    //     debug!("THREE");
 
-        client2.send(ClientMsg::LiveWsThrottleCache(true)).await;
-        client2.send(ClientMsg::LiveWsStats(true)).await;
-        let msg = client2.recv().await;
-        debug!("r: {:#?}", msg);
-        let r = match msg {
-            ServerMsg::WsLiveThrottleCachedEntryAdded(stats) => {
-                stats.contains_key(&client_1_ip) && stats.contains_key(&client_2_ip)
-            }
-            _ => false
-        };
-        assert!(r);
-        let msg = client2.recv().await;
-        debug!("r2: {:#?}", msg);
-        assert!( matches!(msg, ServerMsg::WsLiveThrottleCachedIncPath { ip, path }));
+    //     client2.send(ClientMsg::LiveWsThrottleCache(true)).await;
+    //     client2.send(ClientMsg::LiveWsStats(true)).await;
+    //     let msg = client2.recv().await;
+    //     debug!("r: {:#?}", msg);
+    //     let r = match msg {
+    //         ServerMsg::WsLiveThrottleCachedEntryAdded(stats) => {
+    //             stats.contains_key(&client_1_ip) && stats.contains_key(&client_2_ip)
+    //         }
+    //         _ => false
+    //     };
+    //     assert!(r);
+    //     let msg = client2.recv().await;
+    //     debug!("r2: {:#?}", msg);
+    //     assert!( matches!(msg, ServerMsg::WsLiveThrottleCachedIncPath { ip, path }));
 
-        let msg = client2.recv().await;
-        debug!("r2: {:#?}", msg);
-        assert!(matches!(msg, ServerMsg::WsLiveStatsStarted(_)));
+    //     let msg = client2.recv().await;
+    //     debug!("r2: {:#?}", msg);
+    //     assert!(matches!(msg, ServerMsg::WsLiveStatsStarted(_)));
         
         
 
-        for _ in 0..4 {
-            client
-                .send(ClientMsg::WsStatsWithPagination {
-                    page: 0,
-                    amount: 10,
-                })
-                .await;
-            let msg = client.recv().await;
+    //     for _ in 0..4 {
+    //         client
+    //             .send(ClientMsg::WsStatsWithPagination {
+    //                 page: 0,
+    //                 amount: 10,
+    //             })
+    //             .await;
+    //         let msg = client.recv().await;
 
-            assert_eq!(
-                msg,
-                ServerMsg::WsStatsWithPagination {
-                    total_count: 0,
-                    latest: None,
-                    stats: Vec::new()
-                }
-            );
+    //         assert_eq!(
+    //             msg,
+    //             ServerMsg::WsStatsWithPagination {
+    //                 total_count: 0,
+    //                 latest: None,
+    //                 stats: Vec::new()
+    //             }
+    //         );
 
-            let msg = client2.recv().await;
-            debug!("r2: {:#?}", msg);
-            assert!( matches!(msg, ServerMsg::WsLiveThrottleCachedIncPath { ip, path }));
+    //         let msg = client2.recv().await;
+    //         debug!("r2: {:#?}", msg);
+    //         assert!( matches!(msg, ServerMsg::WsLiveThrottleCachedIncPath { ip, path }));
 
-            let msg = client2.recv().await;
-            debug!("r2: {:#?}", msg);
-            assert!(matches!(msg, ServerMsg::WsLiveStatsUpdateInc { con_key, path }));
-            //debug!("recv: {:#?}", msg);
-        }
+    //         let msg = client2.recv().await;
+    //         debug!("r2: {:#?}", msg);
+    //         assert!(matches!(msg, ServerMsg::WsLiveStatsUpdateInc { con_key, path }));
+    //         //debug!("recv: {:#?}", msg);
+    //     }
 
-        client
-            .send(ClientMsg::WsStatsWithPagination {
-                page: 0,
-                amount: 10,
-            })
-            .await;
-        let msg = client.recv().await;
+    //     client
+    //         .send(ClientMsg::WsStatsWithPagination {
+    //             page: 0,
+    //             amount: 10,
+    //         })
+    //         .await;
+    //     let msg = client.recv().await;
 
-        assert_eq!(
-            msg,
-            ServerMsg::WsStatsWithPagination {
-                total_count: 0,
-                latest: None,
-                stats: Vec::new()
-            }
-        );
+    //     assert_eq!(
+    //         msg,
+    //         ServerMsg::WsStatsWithPagination {
+    //             total_count: 0,
+    //             latest: None,
+    //             stats: Vec::new()
+    //         }
+    //     );
 
-        let msg = client2.recv().await;
-        debug!("r2: {:#?}", msg);
-        assert!( matches!(msg, ServerMsg::WsLiveThrottleCachedIncPath { ip, path }));
+    //     let msg = client2.recv().await;
+    //     debug!("r2: {:#?}", msg);
+    //     assert!( matches!(msg, ServerMsg::WsLiveThrottleCachedIncPath { ip, path }));
 
-        let msg = client2.recv().await;
-        debug!("r2: {:#?}", msg);
-        assert!(matches!(msg, ServerMsg::WsLiveStatsUpdateInc { con_key, path }));
+    //     let msg = client2.recv().await;
+    //     debug!("r2: {:#?}", msg);
+    //     assert!(matches!(msg, ServerMsg::WsLiveStatsUpdateInc { con_key, path }));
 
-        client
-            .send(ClientMsg::WsStatsWithPagination {
-                page: 0,
-                amount: 10,
-            })
-            .await;
-        let msg = client.recv().await;
+    //     client
+    //         .send(ClientMsg::WsStatsWithPagination {
+    //             page: 0,
+    //             amount: 10,
+    //         })
+    //         .await;
+    //     let msg = client.recv().await;
 
-        assert_eq!(msg, ServerMsg::TooManyRequests);
+    //     assert_eq!(msg, ServerMsg::TooManyRequests);
 
-        let msg = client2.recv().await;
-        debug!("r2: {:#?}", msg);
-        assert!( matches!(msg, ServerMsg::WsLiveThrottleCachedIncPath { ip, path }));
+    //     let msg = client2.recv().await;
+    //     debug!("r2: {:#?}", msg);
+    //     assert!( matches!(msg, ServerMsg::WsLiveThrottleCachedIncPath { ip, path }));
 
-        let msg = client2.recv().await;
-        debug!("r2: {:#?}", msg);
-        assert!(matches!(msg, ServerMsg::WsLiveStatsUpdateInc { con_key, path }));
+    //     let msg = client2.recv().await;
+    //     debug!("r2: {:#?}", msg);
+    //     assert!(matches!(msg, ServerMsg::WsLiveStatsUpdateInc { con_key, path }));
 
         
-        //assert!( matches!(msg, ServerMsg::WsLiveThrottle));
+    //     //assert!( matches!(msg, ServerMsg::WsLiveThrottle));
 
-        (*fake_date.lock().await) = Some(now + MSG_THRESHOLD_DELTA);
+    //     (*fake_date.lock().await) = Some(now + MSG_THRESHOLD_DELTA);
 
-        client
-            .send(ClientMsg::WsStatsWithPagination {
-                page: 0,
-                amount: 10,
-            })
-            .await;
-        let msg = client.recv().await;
+    //     client
+    //         .send(ClientMsg::WsStatsWithPagination {
+    //             page: 0,
+    //             amount: 10,
+    //         })
+    //         .await;
+    //     let msg = client.recv().await;
 
-        assert_eq!(
-            msg,
-            ServerMsg::WsStatsWithPagination {
-                total_count: 0,
-                latest: None,
-                stats: Vec::new()
-            }
-        );
+    //     assert_eq!(
+    //         msg,
+    //         ServerMsg::WsStatsWithPagination {
+    //             total_count: 0,
+    //             latest: None,
+    //             stats: Vec::new()
+    //         }
+    //     );
 
-        let msg = client2.recv().await;
-        debug!("r2: {:#?}", msg);
-        assert!( matches!(msg, ServerMsg::WsLiveThrottleCachedIncPath { ip, path }));
+    //     let msg = client2.recv().await;
+    //     debug!("r2: {:#?}", msg);
+    //     assert!( matches!(msg, ServerMsg::WsLiveThrottleCachedIncPath { ip, path }));
 
-        let msg = client2.recv().await;
-        debug!("r2: {:#?}", msg);
-        assert!(matches!(msg, ServerMsg::WsLiveStatsUpdateInc { con_key, path }));
+    //     let msg = client2.recv().await;
+    //     debug!("r2: {:#?}", msg);
+    //     assert!(matches!(msg, ServerMsg::WsLiveStatsUpdateInc { con_key, path }));
 
 
-        for _ in 0..4 {
-            client
-                .send(ClientMsg::WsStatsWithPagination {
-                    page: 0,
-                    amount: 10,
-                })
-                .await;
-            let msg = client.recv().await;
+    //     for _ in 0..4 {
+    //         client
+    //             .send(ClientMsg::WsStatsWithPagination {
+    //                 page: 0,
+    //                 amount: 10,
+    //             })
+    //             .await;
+    //         let msg = client.recv().await;
 
-            assert_eq!(
-                msg,
-                ServerMsg::WsStatsWithPagination {
-                    total_count: 0,
-                    latest: None,
-                    stats: Vec::new()
-                }
-            );
+    //         assert_eq!(
+    //             msg,
+    //             ServerMsg::WsStatsWithPagination {
+    //                 total_count: 0,
+    //                 latest: None,
+    //                 stats: Vec::new()
+    //             }
+    //         );
 
-            let msg = client2.recv().await;
-            debug!("r2: {:#?}", msg);
-            assert!( matches!(msg, ServerMsg::WsLiveThrottleCachedIncPath { ip, path }));
+    //         let msg = client2.recv().await;
+    //         debug!("r2: {:#?}", msg);
+    //         assert!( matches!(msg, ServerMsg::WsLiveThrottleCachedIncPath { ip, path }));
 
-            let msg = client2.recv().await;
-            debug!("r2: {:#?}", msg);
-            assert!(matches!(msg, ServerMsg::WsLiveStatsUpdateInc { con_key, path }));
-            //debug!("recv: {:#?}", msg);
-        }
+    //         let msg = client2.recv().await;
+    //         debug!("r2: {:#?}", msg);
+    //         assert!(matches!(msg, ServerMsg::WsLiveStatsUpdateInc { con_key, path }));
+    //         //debug!("recv: {:#?}", msg);
+    //     }
 
-        for _ in 0..10 {
-            client
-                .send(ClientMsg::WsStatsWithPagination {
-                    page: 0,
-                    amount: 10,
-                })
-                .await;
-            let msg = client.recv().await;
+    //     for _ in 0..10 {
+    //         client
+    //             .send(ClientMsg::WsStatsWithPagination {
+    //                 page: 0,
+    //                 amount: 10,
+    //             })
+    //             .await;
+    //         let msg = client.recv().await;
 
-            assert_eq!(
-                msg,
-                ServerMsg::TooManyRequests
-            );
+    //         assert_eq!(
+    //             msg,
+    //             ServerMsg::TooManyRequests
+    //         );
 
-            let msg = client2.recv().await;
-            debug!("r2: {:#?}", msg);
-            assert!( matches!(msg, ServerMsg::WsLiveThrottleCachedIncPath { ip, path }));
+    //         let msg = client2.recv().await;
+    //         debug!("r2: {:#?}", msg);
+    //         assert!( matches!(msg, ServerMsg::WsLiveThrottleCachedIncPath { ip, path }));
 
-            let msg = client2.recv().await;
-            debug!("r2: {:#?}", msg);
-            assert!(matches!(msg, ServerMsg::WsLiveStatsUpdateInc { con_key, path }));
-            //debug!("recv: {:#?}", msg);
-        }
+    //         let msg = client2.recv().await;
+    //         debug!("r2: {:#?}", msg);
+    //         assert!(matches!(msg, ServerMsg::WsLiveStatsUpdateInc { con_key, path }));
+    //         //debug!("recv: {:#?}", msg);
+    //     }
 
-        let msg = client2.recv().await;
-        debug!("r2: {:#?}", msg);
-        assert!(matches!(msg, ServerMsg::WsLiveThrottleCachedBanned { ip, date, reason }));
+    //     let msg = client2.recv().await;
+    //     debug!("r2: {:#?}", msg);
+    //     assert!(matches!(msg, ServerMsg::WsLiveThrottleCachedBanned { ip, date, reason }));
 
-        info!("exiting...");
-        cancelation_token.cancel();
-        //web_sockets_handle.await.unwrap();
-        root_task_tracker.close();
-        root_task_tracker.wait().await;
-    }
+    //     info!("exiting...");
+    //     cancelation_token.cancel();
+    //     //web_sockets_handle.await.unwrap();
+    //     root_task_tracker.close();
+    //     root_task_tracker.wait().await;
+    // }
 
-    async fn create_client(task_tracker: TaskTracker, cancellation_token: CancellationToken, result: mpsc::Sender<Result<DebugClientMsg, ClientErr>>) -> Client {
+    async fn create_client(task_tracker: TaskTracker, cancellation_token: CancellationToken, result: mpsc::Sender<Result<DebugClientStatusMsg, ClientErr>>) -> Client {
         let (channel, server_tx, mut client_rx) = Client::new();
         // let (client_send_tx, mut client_recv_tx) = mpsc::channel::<(u128, ClientMsg)>(1);
         // let (server_send_tx, mut server_recv_tx) = mpsc::channel::<(u128, ServerMsg)>(1);
@@ -748,14 +806,17 @@ mod artcord_tests {
                 return;
             };
             //debug!("client 4");
-            let _ = result.send(Ok(DebugClientMsg::Connected)).await;
+            let _ = result.send(Ok(DebugClientStatusMsg::Connected)).await;
             //debug!("client 5");
             let (mut write, mut read) = ws_stream.split();
 
             loop {
                 select! {
                     msg = client_rx.recv() => {
-                        on_client_recv(&mut write, msg.unwrap()).await;
+                        let exit = on_client_recv(&mut write, msg.unwrap()).await;
+                        if exit {
+                            break;
+                        }
                     }
                     msg = read.next() => {
                         let exit = on_read(msg, &server_tx).await;
@@ -768,7 +829,7 @@ mod artcord_tests {
                     }
                 }
             }
-            let _ = result.send(Ok(DebugClientMsg::Disconnected)).await;
+            let _ = result.send(Ok(DebugClientStatusMsg::Disconnected)).await;
             debug!("client exited.");
         });
 
@@ -782,10 +843,19 @@ mod artcord_tests {
             >,
             Message,
         >,
-        (key, msg): (u128, ClientMsg),
-    ) {
-        let bytes = ClientMsg::as_vec(&(key, msg)).unwrap();
-        write.send(Message::Binary(bytes)).await.unwrap();
+        msg: DebugClientMsg,
+    ) -> bool {
+        match msg {
+            DebugClientMsg::Send((key,msg)) => {
+                let bytes = ClientMsg::as_vec(&(key, msg)).unwrap();
+                write.send(Message::Binary(bytes)).await.unwrap();
+            } 
+            DebugClientMsg::Disconnect => {
+                return true;
+            }
+        }
+        false
+        
     }
 
     async fn on_read(

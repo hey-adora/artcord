@@ -24,11 +24,12 @@ impl LiveWsStats {
         Self::default()
     }
 
-    pub fn set_live_stats(&self, new_stats: HashMap<TempConIdType, WsStat>) {
+    pub fn set_live_stats(&self, new_stats: Vec<WsStat>) {
         //let mut web_stats: HashMap<TempConIdType, WebWsStat> = HashMap::with_capacity(stats.len());
      
         self.stats.update(|stats| {
-            for (new_path, new_stat) in new_stats {
+            for new_stat in new_stats {
+                let new_path = new_stat.con_id;
                 let stat = stats.get(&new_path);
                 let Some(stat) = stat else {
                     stats.insert(new_path, new_stat.into());
@@ -40,8 +41,8 @@ impl LiveWsStats {
                             return false;
                         };
 
-                        if path_count.get_untracked() != new_path_count.total_count {
-                            path_count.set(new_path_count.total_count);
+                        if path_count.get_untracked() != new_path_count.throttle.block_tracker.total_amount {
+                            path_count.set(new_path_count.throttle.block_tracker.total_amount);
                         }
 
                         true
@@ -49,7 +50,7 @@ impl LiveWsStats {
                     
                     if !updated {
                         stat.count.update(|stat_count| {
-                            stat_count.insert(new_path_index, RwSignal::new(new_path_count.total_count));
+                            stat_count.insert(new_path_index, RwSignal::new(new_path_count.throttle.block_tracker.total_amount));
                         });
                     }
                 }
