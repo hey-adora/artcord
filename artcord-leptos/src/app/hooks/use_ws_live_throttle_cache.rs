@@ -193,30 +193,30 @@ pub fn use_ws_live_throttle_cache(ws: WsRuntime<ServerMsg, ClientMsg>, live_thro
         .recv()
         .start(move |server_msg, _| match server_msg {
             WsRecvResult::Ok(server_msg) => match server_msg {
-                ServerMsg::WsLiveThrottleCachedEntryAdded(stats) => {
-                    live_throttle_cache.on_start(stats.clone());
-                }
-                ServerMsg::WsLiveThrottleCachedEntryUpdated(stats) => {
-                    live_throttle_cache.on_start(stats.clone());
-                }
-                ServerMsg::WsLiveThrottleCachedIncPath { ip, path } => {
-                    live_throttle_cache.on_inc(ip, path);
-                }
-                ServerMsg::WsLiveThrottleCachedConnected { ip } => {
-                    live_throttle_cache.on_con(ip);
-                }
-                ServerMsg::WsLiveThrottleCachedDisconnected { ip } => {
-                    live_throttle_cache.on_disc(ip);
-                }
-                ServerMsg::WsLiveThrottleCachedBlocks { ip, total_blocks, blocks } => {
-                    live_throttle_cache.on_blocks(ip, *total_blocks, *blocks);
-                }
-                ServerMsg::WsLiveThrottleCachedBanned { ip, date, reason } => {
-                    live_throttle_cache.on_ban(ip, *date, reason.clone());
-                }
-                ServerMsg::WsLiveThrottleCachedUnban { ip } => {
-                    live_throttle_cache.on_un_ban(ip);
-                }
+                // ServerMsg::WsLiveThrottleCachedEntryAdded(stats) => {
+                //     live_throttle_cache.on_start(stats.clone());
+                // }
+                // ServerMsg::WsLiveThrottleCachedEntryUpdated(stats) => {
+                //     live_throttle_cache.on_start(stats.clone());
+                // }
+                // ServerMsg::WsLiveThrottleCachedIncPath { ip, path } => {
+                //     live_throttle_cache.on_inc(ip, path);
+                // }
+                // ServerMsg::WsLiveThrottleCachedConnected { ip } => {
+                //     live_throttle_cache.on_con(ip);
+                // }
+                // ServerMsg::WsLiveThrottleCachedDisconnected { ip } => {
+                //     live_throttle_cache.on_disc(ip);
+                // }
+                // ServerMsg::WsLiveThrottleCachedBlocks { ip, total_blocks, blocks } => {
+                //     live_throttle_cache.on_blocks(ip, *total_blocks, *blocks);
+                // }
+                // ServerMsg::WsLiveThrottleCachedBanned { ip, date, reason } => {
+                //     live_throttle_cache.on_ban(ip, *date, reason.clone());
+                // }
+                // ServerMsg::WsLiveThrottleCachedUnban { ip } => {
+                //     live_throttle_cache.on_un_ban(ip);
+                // }
                 _ => {}
             },
             WsRecvResult::TimeOut => {}

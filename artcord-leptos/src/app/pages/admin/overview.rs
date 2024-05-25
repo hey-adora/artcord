@@ -56,7 +56,7 @@ pub fn Overview() -> impl IntoView {
                     page.set_old_stats_pagination(*stats);
                     selected_state.set(LoadingNotFound::Loaded);
                 }
-                ServerMsg::WsStatsGraph(stats) => {
+                ServerMsg::WsSavedStatsGraph(stats) => {
                     canvas_data.set(stats.clone());
                     selected_state.set(LoadingNotFound::Loaded);
                 }

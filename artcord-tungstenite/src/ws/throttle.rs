@@ -78,6 +78,11 @@ pub struct WsThrottle {
 
 #[derive(Debug)]
 pub struct WsThrottleCon {
+    pub total_allow_amount: u64,
+    pub total_block_amount: u64,
+    pub total_banned_amount: u64,
+    pub total_already_banned_amount: u64,
+    pub total_unbanned_amount: u64,
     pub con_throttle: ThrottleRanged,
     pub con_flicker_throttle: ThrottleSimple,
     pub banned_until: Option<(DateTime<Utc>, IpBanReason)>,
@@ -117,6 +122,34 @@ impl WsThrottle {
         trace!("throttle on DEC: {:#?}", self);
     }
 
+    pub fn get_total_allowed(&mut self, ip: &IpAddr) -> Option<u64> {
+        let Some(con) = self.ips.get_mut(ip) else {
+            return None;
+        };
+        Some(con.total_allow_amount)
+    }
+
+    pub fn get_total_blocked(&mut self, ip: &IpAddr) -> Option<u64> {
+        let Some(con) = self.ips.get_mut(ip) else {
+            return None;
+        };
+        Some(con.total_block_amount)
+    }
+
+    pub fn get_total_banned(&mut self, ip: &IpAddr) -> Option<u64> {
+        let Some(con) = self.ips.get_mut(ip) else {
+            return None;
+        };
+        Some(con.total_banned_amount)
+    }
+
+    pub fn get_total_unbanned(&mut self, ip: &IpAddr) -> Option<u64> {
+        let Some(con) = self.ips.get_mut(ip) else {
+            return None;
+        };
+        Some(con.total_unbanned_amount)
+    }
+
     pub fn get_amounts(&mut self, ip: &IpAddr) -> Option<(u64, u64)> {
         let Some(con) = self.ips.get_mut(ip) else {
             return None;
@@ -146,6 +179,23 @@ impl WsThrottle {
         let con = self.ips.entry(ip).or_insert_with(|| WsThrottleCon::new(ws_threshold.ws_max_con_threshold_range, *time));
 
         let result = con.inc(ws_threshold, time);
+        match result {
+            AllowCon::Allow => {
+                con.total_allow_amount += 1;
+            }
+            AllowCon::Blocked => {
+                con.total_block_amount += 1;
+            }
+            AllowCon::Banned(_) => {
+                con.total_banned_amount += 1;
+            }
+            AllowCon::AlreadyBanned => {
+                con.total_already_banned_amount += 1;
+            }
+            AllowCon::Unbanned => {
+                con.total_unbanned_amount += 1;
+            }
+        }
         trace!("throttle on INC: {:#?}", self);
         result
     }
@@ -167,6 +217,11 @@ impl WsThrottleCon {
         let (con_broadcast_tx, con_broadcast_rx) = broadcast::channel(10);
         let con = Self {
             //path_stats: HashMap::new(),
+            total_allow_amount: 0,
+            total_block_amount: 0,
+            total_banned_amount: 0,
+            total_already_banned_amount: 0,
+            total_unbanned_amount: 0,
             con_throttle: ThrottleRanged::new(range, started_at),
             con_flicker_throttle: ThrottleSimple::new(started_at),
             banned_until: None,

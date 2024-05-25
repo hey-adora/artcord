@@ -39,7 +39,7 @@ pub async fn paged(
 ) -> Result<Option<ServerMsg>, ResErr> {
     let imgs = db.ws_statistic_paged_latest(page, amount, from).await?;
 
-    Ok(Some(ServerMsg::WsStatsPage(imgs)))
+    Ok(Some(ServerMsg::WsSavedStatsPage(imgs)))
 }
 
 pub async fn ranged(
@@ -50,7 +50,7 @@ pub async fn ranged(
 ) -> Result<Option<ServerMsg>, ResErr> {
     let imgs = db.ws_statistic_ranged_latest(from, to, unique_ip).await?;
 
-    Ok(Some(ServerMsg::WsStatsGraph(imgs)))
+    Ok(Some(ServerMsg::WsSavedStatsGraph(imgs)))
 }
 
 pub async fn total_count(
@@ -59,7 +59,8 @@ pub async fn total_count(
 ) -> Result<Option<ServerMsg>, ResErr> {
     let amount = db.ws_statistic_total_amount(from).await?;
 
-    Ok(Some(ServerMsg::WsStatsTotalCount(amount) ))
+    //Ok(Some(ServerMsg::WsStatsTotalCount(amount) ))
+    Ok(None)
 }
 
 pub async fn pagination(
@@ -69,6 +70,6 @@ pub async fn pagination(
 ) -> Result<Option<ServerMsg>, ResErr> {
     let (total_count, latest, stats) = db.ws_statistic_with_pagination_latest(page, amount).await?;
 
-    Ok(Some(ServerMsg::WsStatsWithPagination { total_count, latest, stats } ))
+    Ok(Some(ServerMsg::WsSavedStatsWithPagination { total_count, latest, stats } ))
 }
 

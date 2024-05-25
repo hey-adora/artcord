@@ -114,19 +114,19 @@ pub fn use_ws_live_stats(ws: WsRuntime<ServerMsg, ClientMsg>, live_stats: LiveWs
         .recv()
         .start(move |server_msg, _| match server_msg {
             WsRecvResult::Ok(server_msg) => match server_msg {
-                ServerMsg::WsLiveStatsStarted(stats) => {
-                    live_stats.set_live_stats(stats.clone());
-                }
-                ServerMsg::WsLiveStatsUpdateAddedStat { con_key, stat } => {
-                    live_stats.add_live_stat(con_key.clone(), stat.clone().into());
-                }
-                ServerMsg::WsLiveStatsUpdateInc { con_key, path } => {
-                    live_stats.inc_live_stat(con_key, *path);
-                }
-                ServerMsg::WsLiveStatsUpdateRemoveStat { con_key } => {
-                    live_stats.remove_live_stat(con_key);
-                }
-                ServerMsg::WsStatsPage(stats) => {}
+                // ServerMsg::WsLiveStatsStarted(stats) => {
+                //     live_stats.set_live_stats(stats.clone());
+                // }
+                // ServerMsg::WsLiveStatsUpdateAddedStat { con_key, stat } => {
+                //     live_stats.add_live_stat(con_key.clone(), stat.clone().into());
+                // }
+                // ServerMsg::WsLiveStatsUpdateInc { con_key, path } => {
+                //     live_stats.inc_live_stat(con_key, *path);
+                // }
+                // ServerMsg::WsLiveStatsUpdateRemoveStat { con_key } => {
+                //     live_stats.remove_live_stat(con_key);
+                // }
+                ServerMsg::WsSavedStatsPage(stats) => {}
                 _ => {}
             },
             WsRecvResult::TimeOut => {}

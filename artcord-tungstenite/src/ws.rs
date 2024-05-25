@@ -77,8 +77,8 @@ use crate::ws::con::GlobalConMsg;
 use crate::ws::throttle::WsThrottle;
 use crate::WsThreshold;
 
-use self::con::throttle_stats_listener_tracker::ThrottleStatsListenerTracker;
 use self::con::throttle_stats_listener_tracker::ConTrackerErr;
+use self::con::throttle_stats_listener_tracker::ThrottleStatsListenerTracker;
 use self::con::Con;
 use self::con::ConMsg;
 
@@ -278,42 +278,57 @@ impl<
         let allow: bool = match self.throttle.inc_con(ip, &self.ws_threshold, &time) {
             AllowCon::Allow => {
                 if !self.listener_tracker.cons.is_empty() {
-                    let msg = ServerMsg::WsLiveThrottleCachedConnected { ip };
-                    self.listener_tracker.send(msg).await?;
+                    if let Some(total_amount) = self.throttle.get_total_allowed(&ip) {
+                        let msg = ServerMsg::WsLiveStatsIpConnectionAllowed { ip, total_amount };
+                        self.listener_tracker.send(msg).await?;
+                    } else {
+                        error!("ws({}): missing ip entry: {}", &self.ws_addr, ip);
+                    }
                 }
                 true
             }
             AllowCon::AlreadyBanned => false,
             AllowCon::Blocked => {
                 if !self.listener_tracker.cons.is_empty() {
-                    if let Some((total_amount, amount)) = self.throttle.get_amounts(&ip) {
-                        let msg = ServerMsg::WsLiveThrottleCachedBlocks {
-                            ip,
-                            total_blocks: total_amount,
-                            blocks: amount,
-                        };
+                    if let Some(total_amount) = self.throttle.get_total_blocked(&ip) {
+                        let msg = ServerMsg::WsLiveStatsIpConnectionBlocked { ip, total_amount };
                         self.listener_tracker.send(msg).await?;
                     } else {
-                        error!("ws({}): ip amounts not found for: {}", &self.ws_addr, ip);
+                        error!("ws({}): missing ip entry: {}", &self.ws_addr, ip);
                     }
                 }
                 false
             }
             AllowCon::Unbanned => {
                 if !self.listener_tracker.cons.is_empty() {
-                    let msg = ServerMsg::WsLiveThrottleCachedUnban { ip };
+                    if let Some(total_amount) = self.throttle.get_total_unbanned(&ip) {
+                        let msg = ServerMsg::WsLiveStatsIpConnectionUnbanned { ip, total_amount };
+                        self.listener_tracker.send(msg).await?;
+                    } else {
+                        error!("ws({}): missing ip entry: {}", &self.ws_addr, ip);
+                    }
+
+                    let msg = ServerMsg::WsLiveStatsIpUnbanned { ip };
                     self.listener_tracker.send(msg).await?;
                 }
                 true
             }
             AllowCon::Banned((date, reason)) => {
                 if !self.listener_tracker.cons.is_empty() {
-                    let msg = ServerMsg::WsLiveThrottleCachedBanned { ip, date, reason };
+                    if let Some(total_amount) = self.throttle.get_total_banned(&ip) {
+                        let msg = ServerMsg::WsLiveStatsIpConnectionBanned { ip, total_amount };
+                        self.listener_tracker.send(msg).await?;
+                    } else {
+                        error!("ws({}): missing ip entry: {}", &self.ws_addr, ip);
+                    }
+
+                    let msg = ServerMsg::WsLiveStatsIpBanned { ip, date, reason };
                     self.listener_tracker.send(msg).await?;
                 }
                 false
             }
         };
+        
         if !allow {
             debug!("ws({}): dont connect", &self.ws_addr);
             return Ok(());
@@ -372,7 +387,9 @@ impl<
                 ws_key,
                 done_tx,
             } => {
-                self.listener_tracker.cons.insert(connection_key, (ws_key, tx));
+                self.listener_tracker
+                    .cons
+                    .insert(connection_key, (ws_key, tx));
                 let send_result = done_tx.send(()).map_err(|_| WsMsgErr::ListenerDoneTx);
                 if let Err(err) = send_result {
                     debug!("ws add listener err: {}", err);

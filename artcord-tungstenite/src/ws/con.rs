@@ -378,11 +378,10 @@ impl<
                         if !self.listener_tracker.cons.is_empty() {
                             if let Some(stat) = self.stats.count.get(&path) {
                                 self.listener_tracker
-                                    .send(ServerMsg::WsLiveStatsConBanned {
-                                        con_id: self.con_id,
+                                    .send(ServerMsg::WsLiveStatsIpBanned {
+                                        ip: self.ip,
                                         date,
                                         reason,
-                                        total_amount: stat.total_banned_count,
                                     })
                                     .await?;
 
@@ -426,8 +425,8 @@ impl<
                         if !self.listener_tracker.cons.is_empty() {
                             if let Some(stat) = self.stats.count.get(&path) {
                                 self.listener_tracker
-                                    .send(ServerMsg::WsLiveStatsConUnbanned {
-                                        con_id: self.con_id,
+                                    .send(ServerMsg::WsLiveStatsIpUnbanned {
+                                        ip: self.ip,
                                     })
                                     .await?;
                             } else {

@@ -42,13 +42,13 @@ pub fn WsOld() -> impl IntoView {
         .recv()
         .start(move |server_msg, _| match server_msg {
             WsRecvResult::Ok(server_msg) => match server_msg {
-                ServerMsg::WsStatsTotalCount(stats) => {
-                    page.set_old_stats_pagination(*stats);
-                }
-                ServerMsg::WsStatsPage(stats) => {
+                // ServerMsg::WsStatsTotalCount(stats) => {
+                //     page.set_old_stats_pagination(*stats);
+                // }
+                ServerMsg::WsSavedStatsPage(stats) => {
                     page.set_old_stats_paged(stats.clone());
                 }
-                ServerMsg::WsStatsWithPagination {
+                ServerMsg::WsSavedStatsWithPagination {
                     total_count,
                     latest,
                     stats,
