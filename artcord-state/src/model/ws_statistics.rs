@@ -19,7 +19,7 @@ use crate::misc::throttle_connection::IpBanReason;
 use crate::misc::throttle_threshold::{AllowCon, DbThrottleDoubleLayer, DbThrottleDoubleLayerFromError, Threshold, ThrottleDoubleLayer, ThrottleDoubleLayerFromError};
 
 pub type TempConIdType = u128;
-pub type WebStatPathType = HashMap<ClientPathType, RwSignal<u64>>;
+
 
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
@@ -33,12 +33,7 @@ pub struct WsStat {
     //pub throttle: ThrottleDoubleLayer,
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub struct WebWsStat {
-    pub addr: String,
-    // pub is_connected: RwSignal<bool>,
-    pub count: RwSignal<WebStatPathType>,
-}
+
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, FieldName)]
 pub struct DbWsStat {
@@ -287,18 +282,7 @@ impl TryFrom<DbWsStat> for WsStat {
     }
 }
 
-impl From<WsStat> for WebWsStat {
-    fn from(value: WsStat) -> Self {
-        let count_map = value.count.iter().fold(WebStatPathType::new(), |mut prev, (key, value)| {
-            prev.insert(*key, RwSignal::new(value.throttle.block_tracker.total_amount));
-            prev
-        });
-        WebWsStat {
-            addr: value.addr.to_string(),
-            count: RwSignal::new(count_map),
-        }
-    }
-}
+
 
 #[derive(Error, Debug)]
 pub enum DbWsStatTempCountItemError {

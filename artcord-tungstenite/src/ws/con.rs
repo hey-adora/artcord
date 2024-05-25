@@ -1,6 +1,6 @@
 use crate::ws::con::req::res::ResErr;
 use crate::ws::{GlobalConChannel, WsAppMsg};
-use artcord_leptos_web_sockets::WsRouteKey;
+use artcord_leptos_web_sockets::{WsPackage, WsRouteKey};
 use artcord_mongodb::database::DB;
 use artcord_state::message::prod_client_msg::{
     ClientMsg, ClientPathType, ClientThresholdMiddleware,
@@ -26,7 +26,7 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::WebSocketStream;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
-use tracing::{debug, error, trace};
+use tracing::{debug, error, trace, Instrument};
 
 use self::req::req_task;
 use self::throttle_stats_listener_tracker::{ConTrackerErr, ThrottleStatsListenerTracker};
@@ -196,6 +196,7 @@ impl<
             select! {
 
                 msg = self.ws_stream_rx.next() => {
+                    trace!("recv msg from stream");
                     let Some(msg) = msg else {
                         trace!("connection msg channel closed");
                         break;
@@ -210,8 +211,10 @@ impl<
                     };
 
                     self.on_req(msg).await;
+                    trace!("recv msg from stream finished");
                 },
                 msg = self.ip_con_rx.recv() => {
+                    trace!("recv msg from ip con: {:#?}", &msg);
                     let msg = match msg {
                         Ok(msg) => msg,
                         Err(err) => {
@@ -229,11 +232,15 @@ impl<
                             continue;
                         }
                     };
+                    trace!("recv msg from ip con finished");
                     if exit {
                         break;
                     }
+
+
                 },
                 msg = self.global_con_rx.recv() => {
+                    trace!("recv msg from global con: {:#?}", &msg);
                     let msg = match msg {
                         Ok(msg) => msg,
                         Err(err) => {
@@ -251,11 +258,15 @@ impl<
                             continue;
                         }
                     };
+                    trace!("recv msg from global con finished");
                     if exit {
                         break;
                     }
+
                 },
                 msg = self.con_rx.recv() => {
+
+                    trace!("recv msg from con_rx");
                     let Some(msg) = msg else {
                         trace!("connection msg channel closed");
                         break;
@@ -269,10 +280,12 @@ impl<
                             continue;
                         }
                     };
+                    trace!("recv msg from finished");
                     if exit {
                         break;
                     }
                 },
+
 
                 _ = self.cancellation_token.cancelled() => {
                     break;
@@ -280,10 +293,7 @@ impl<
             }
         }
 
-        let result = self.on_disconnect().await;
-        if let Err(err) = result {
-            error!("con on disconnect err: {}", err);
-        }
+        self.on_disconnect().await;
     }
 
     pub async fn on_msg(&mut self, msg: ConMsg) -> Result<bool, ConErr> {
@@ -314,12 +324,23 @@ impl<
                         done_tx,
                     })
                     .await?;
-                done_rx.await.map_err(ConErr::DoneTxErr)?;
+                let con_stats = done_rx.await.map_err(ConErr::DoneTxErr)?;
                 self.global_con_tx.send(GlobalConMsg::AddIpStatListener {
                     ws_key,
                     con_id: self.con_id,
                     con_tx: self.con_tx.clone(),
                 })?;
+
+                let msg = ServerMsg::WsLiveStatsIpConnections(con_stats);
+                let msg: WsPackage<ServerMsg> = (ws_key, msg);
+                let msg = ServerMsg::as_bytes(msg)?;
+                let msg = Message::Binary(msg);
+                let send_result = self.ws_stream_tx.send(msg).await;
+                if let Err(err) = send_result {
+                    debug!("failed to send msg: {}", err);
+                    return Ok(true);
+                }
+
                 // while let Some(ws_stat) = current_global_state_rx.recv().await {
                 //     stats.push(ws_stat);
                 // }
@@ -425,9 +446,7 @@ impl<
                         if !self.listener_tracker.cons.is_empty() {
                             if let Some(stat) = self.stats.count.get(&path) {
                                 self.listener_tracker
-                                    .send(ServerMsg::WsLiveStatsIpUnbanned {
-                                        ip: self.ip,
-                                    })
+                                    .send(ServerMsg::WsLiveStatsIpUnbanned { ip: self.ip })
                                     .await?;
                             } else {
                                 error!(
@@ -475,9 +494,13 @@ impl<
                 self.listener_tracker
                     .cons
                     .insert(con_id, (ws_key, con_tx.clone()));
-                self.listener_tracker
-                    .send(ServerMsg::WsLiveStatsConnected(self.stats.clone()))
-                    .await?;
+
+                let msg = ServerMsg::WsLiveStatsConnected(self.stats.clone());
+                let msg: WsPackage<ServerMsg> = (ws_key, msg);
+                let msg = ServerMsg::as_bytes(msg)?;
+                let msg = Message::Binary(msg);
+
+                con_tx.send(ConMsg::Send(msg)).await?;
                 // current_global_state_tx.
             }
             GlobalConMsg::RemoveIpStatListener { con_id } => {
@@ -494,16 +517,28 @@ impl<
 
     pub async fn on_req(&mut self, msg: Message) {
         //debug!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-        self.con_task_tracker.spawn(req_task(
-            msg,
-            self.db.clone(),
-            self.con_tx.clone(),
-            self.ws_app_tx.clone(),
-            self.con_id,
-            self.addr,
-            self.ip,
-            self.threshold_middleware.clone(),
-        ));
+        let msg_name = match &msg {
+            Message::Binary(_) => "binary",
+            Message::Close(_) => "close",
+            Message::Frame(_) => "frame",
+            Message::Ping(_) => "ping",
+            Message::Pong(_) => "pong",
+            Message::Text(_) => "text",
+        };
+
+        self.con_task_tracker.spawn(
+            req_task(
+                msg,
+                self.db.clone(),
+                self.con_tx.clone(),
+                self.ws_app_tx.clone(),
+                self.con_id,
+                self.addr,
+                self.ip,
+                self.threshold_middleware.clone(),
+            )
+            .instrument(tracing::trace_span!("req", "{}", msg_name,)),
+        );
     }
 
     pub async fn prepare(&mut self) -> Result<(), ConErr> {
@@ -515,51 +550,81 @@ impl<
         Ok(())
     }
 
-    pub async fn on_disconnect(&mut self) -> Result<(), ConErr> {
-        debug!(
-            "ws: user({}): exiting..., tasks left: {}",
+    pub async fn on_disconnect(&mut self) {
+        trace!(
+            "ws: user({} - {}): exiting..., tasks left: {}",
             self.ip,
+            self.con_id,
             self.con_task_tracker.len()
         );
-
+        self.con_rx.close();
+        debug!("1");
         if !self.cancellation_token.is_cancelled() {
+            debug!("2");
             if self.is_listening {
-                self.ws_app_tx
+                debug!("3");
+                let send_result = self
+                    .ws_app_tx
                     .send(WsAppMsg::RemoveListener {
                         con_id: self.con_id,
                     })
-                    .await?;
-                self.global_con_tx
-                    .send(GlobalConMsg::RemoveIpStatListener {
-                        con_id: self.con_id,
-                    })?;
+                    .await;
+                if let Err(err) = send_result {
+                    error!("on disconnect error: {}", err);
+                }
+                debug!("4");
+                let send_result = self.global_con_tx.send(GlobalConMsg::RemoveIpStatListener {
+                    con_id: self.con_id,
+                });
+                debug!("6");
+                if let Err(err) = send_result {
+                    error!("on disconnect error: {}", err);
+                }
             }
+            debug!("7");
             if !self.listener_tracker.cons.is_empty() {
-                self.listener_tracker
+                debug!("8");
+                if self.is_listening {
+                    debug!("9");
+                    self.listener_tracker.cons.remove(&self.con_id);
+                }
+                debug!("10");
+                let send_result = self
+                    .listener_tracker
                     .send(ServerMsg::WsLiveStatsDisconnected {
                         con_id: self.con_id,
                     })
-                    .await?;
+                    .await;
+                if let Err(err) = send_result {
+                    error!("on disconnect error: {}", err);
+                }
             }
+            debug!("11");
+        }
+        debug!("12");
+        self.con_task_tracker.close();
+        debug!("13");
+        self.con_task_tracker.wait().await;
+        debug!("14");
+        //trace!("disconnected");
+        let send_result = self
+            .ws_app_tx
+            .send(WsAppMsg::Disconnected { ip: self.ip })
+            .await;
+
+        if let Err(err) = send_result {
+            error!("on disconnect error: {}", err);
         }
 
-        self.con_task_tracker.close();
-        self.con_task_tracker.wait().await;
         trace!("disconnected");
-        self.ws_app_tx
-            .send(WsAppMsg::Disconnected {
-                ip: self.ip,
-                connection_key: self.con_id,
-            })
-            .await?;
-
-        trace!("disconnected");
-        Ok(())
     }
 }
 
 #[derive(Error, Debug)]
 pub enum ConErr {
+    #[error("serialization error: {0}")]
+    Serialization(#[from] bincode::Error),
+
     #[error("error from con tracker: {0}")]
     ConTrackerErr(#[from] ConTrackerErr),
 
@@ -568,6 +633,9 @@ pub enum ConErr {
 
     #[error("failed to recv oneshot done_tx from ws.")]
     DoneTxErr(#[from] oneshot::error::RecvError),
+
+    #[error("failed to send con msg: {0}")]
+    SendConMsgErr(#[from] mpsc::error::SendError<ConMsg>),
 
     #[error("failed to send stats: {0}")]
     SendStatsErr(#[from] mpsc::error::SendError<WsStat>),

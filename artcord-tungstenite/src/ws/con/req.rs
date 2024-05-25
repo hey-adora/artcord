@@ -36,7 +36,9 @@ pub async fn req_task(
     ip: IpAddr,
     get_threshold: impl ClientThresholdMiddleware,
 ) {
+    trace!("started");
     let user_task_result = async {
+        
         // let client_msg = client_msg?;
         let client_msg: Result<Vec<u8>, ResErr> = match client_msg {
             Message::Binary(client_msg) => Ok(client_msg),
@@ -61,7 +63,7 @@ pub async fn req_task(
             .await?;
 
         let allow = allow_rx.await?;
-
+        trace!("allow: {}", allow);
 
         let get_response_data = async {
             if !allow {
@@ -141,6 +143,7 @@ pub async fn req_task(
         Ok::<(), ResErr>(())
     }
     .await;
+    
     if let Err(err) = user_task_result {
         debug!("res error: {}", &err);
         let send_result = connection_task_tx
@@ -154,4 +157,7 @@ pub async fn req_task(
         }
         // connection_task_tx.send(WsConnectionMsg::Stop);
     }
+
+    trace!("ended");
+    
 }

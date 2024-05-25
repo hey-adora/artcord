@@ -30,16 +30,19 @@ impl ThrottleStatsListenerTracker {
 
     pub async fn send(
         &mut self,
-        msg: ServerMsg,
+        msg_org: ServerMsg,
     ) -> Result<(), ConTrackerErr> {
         // if self.cons.is_empty() {
         //     return Ok(());
         // }
+
         let mut to_remove: Vec<TempConIdType> = Vec::new();
+        trace!("sending {:#?} to listeners: {:#?}", &msg_org, &self.cons);
         for (con_key, (ws_key, tx)) in self.cons.iter() {
-            let msg: WsPackage<ServerMsg> = (ws_key.clone(), msg.clone());
+            let msg: WsPackage<ServerMsg> = (ws_key.clone(), msg_org.clone());
             let msg = ServerMsg::as_bytes(msg)?;
             let msg = Message::binary(msg);
+            trace!("sending {:#?} to listener: {}", &msg_org, &con_key);
             let send_result = tx.send(ConMsg::Send(msg)).await;
             if let Err(err) = send_result {
                 debug!(
@@ -50,8 +53,10 @@ impl ThrottleStatsListenerTracker {
             }
         }
         for con_key in to_remove {
+            trace!("removing listener: {}", &con_key);
             self.cons.remove(&con_key);
         }
+        trace!("sending msg to listeners finished");
         Ok(())
     }
 

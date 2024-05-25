@@ -3,7 +3,7 @@ use std::{collections::HashMap, net::{IpAddr, SocketAddr}, str::FromStr};
 use crate::{
     aggregation::server_msg_img::AggImg,
     misc::{registration_invalid::RegistrationInvalidMsg, throttle_connection::{IpBanReason, TempThrottleConnection}},
-    model::{user::User, ws_statistics::{DbWsStat, TempConIdType, WsStat}},
+    model::{user::User, ws_statistics::{DbWsStat, TempConIdType, WsStat}}, ws::WsIpStat,
 };
 
 use artcord_leptos_web_sockets::WsPackage;
@@ -31,7 +31,9 @@ pub enum ServerMsg {
     // WsLiveThrottleCachedFlickerBanned { ip: IpAddr, date: DateTime<Utc>, reason: IpBanReason },
     // WsLiveThrottleCachedFlickerUnban { ip: IpAddr },
 
+    WsLiveStatsIpConnections(Vec<WsIpStat>),
     WsLiveStatsConnected(WsStat),
+
     WsLiveStatsDisconnected{ con_id: TempConIdType },
     WsLiveStatsConReqAllowed { con_id: TempConIdType, path: ClientPathType, total_amount: u64 },
     WsLiveStatsConReqBlocked { con_id: TempConIdType, path: ClientPathType, total_amount: u64 },
@@ -39,7 +41,7 @@ pub enum ServerMsg {
 
     WsLiveStatsIpBanned { ip: IpAddr, date: DateTime<Utc>, reason: IpBanReason },
     WsLiveStatsIpUnbanned{ ip: IpAddr },
-
+    
     WsLiveStatsIpConnectionAllowed{ ip: IpAddr, total_amount: u64 },
     WsLiveStatsIpConnectionBlocked{ ip: IpAddr, total_amount: u64 },
     WsLiveStatsIpConnectionBanned{ ip: IpAddr, total_amount: u64 },

@@ -28,6 +28,7 @@ use artcord_state::model::ws_statistics::TempConIdType;
 use artcord_state::util::time::time_is_past;
 use artcord_state::util::time::time_passed_days;
 use artcord_state::util::time::TimeMiddleware;
+use artcord_state::ws::WsIpStat;
 use chrono::DateTime;
 use chrono::Month;
 use chrono::Months;
@@ -90,6 +91,7 @@ pub type GlobalConChannel = (
     broadcast::Receiver<GlobalConMsg>,
 );
 
+#[derive(Debug)]
 pub enum WsAppMsg {
     Stop,
     Ban {
@@ -98,14 +100,14 @@ pub enum WsAppMsg {
         reason: IpBanReason,
     },
     Disconnected {
-        connection_key: TempConIdType,
+      //  connection_key: TempConIdType,
         ip: IpAddr,
     },
     AddListener {
         con_id: TempConIdType,
         con_tx: mpsc::Sender<ConMsg>,
         ws_key: WsRouteKey,
-        done_tx: oneshot::Sender<()>,
+        done_tx: oneshot::Sender<Vec<WsIpStat>>,
     },
     RemoveListener {
         con_id: TempConIdType,
@@ -207,8 +209,9 @@ impl<
                 },
 
                 ws_msg = ws_rx.recv() => {
-                    trace!("ws recved msg");
+                    trace!("ws recved msg: {:#?}", &ws_msg);
                     let exit = self.on_msg(ws_msg).await;
+                    trace!("ws recved msg finished");
                     let exit = match exit {
                         Ok(exit) => exit,
                         Err(err) => {
@@ -358,8 +361,7 @@ impl<
             )
             .instrument(tracing::trace_span!(
                 "ws",
-                "{}-{}",
-                self.ws_addr,
+                "{}",
                 user_addr.to_string()
             )),
         );
@@ -375,7 +377,7 @@ impl<
         };
 
         match msg {
-            WsAppMsg::Disconnected { connection_key, ip } => {
+            WsAppMsg::Disconnected { ip } => {
                 self.throttle.dec_con(&ip);
             }
             WsAppMsg::Stop => {
@@ -390,7 +392,11 @@ impl<
                 self.listener_tracker
                     .cons
                     .insert(connection_key, (ws_key, tx));
-                let send_result = done_tx.send(()).map_err(|_| WsMsgErr::ListenerDoneTx);
+                let mut cons: Vec<WsIpStat> = Vec::new();
+                for (_, con) in self.throttle.ips.iter() {
+                    cons.push(con.stats.clone());
+                }
+                let send_result = done_tx.send(cons).map_err(|_| WsMsgErr::ListenerDoneTx);
                 if let Err(err) = send_result {
                     debug!("ws add listener err: {}", err);
                 }

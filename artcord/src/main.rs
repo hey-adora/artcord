@@ -12,6 +12,7 @@ use cfg_if::cfg_if;
 use chrono::TimeDelta;
 use dotenv::dotenv;
 use futures::try_join;
+use tracing::Instrument;
 use std::{env, sync::Arc};
 use tokio::select;
 use tokio::signal;
@@ -122,17 +123,22 @@ async fn main() {
         }
     }
 
+    let ws_ip = "0.0.0.0:3420".to_string();
     let web_sockets_handle = task_tracker.spawn(
         Ws::create(
             task_tracker.clone(),
             cancelation_token.clone(),
-            "0.0.0.0:3420".to_string(),
+            ws_ip.clone(),
             threshold,
             db.clone(),
             time_machine,
             ProdThreshold,
             ProdUserAddrMiddleware,
-        )
+        ).instrument(tracing::trace_span!(
+            "ws",
+            "{}",
+            ws_ip,
+        ))
     );
 
     //aaa

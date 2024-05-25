@@ -1,10 +1,9 @@
 use artcord_leptos_web_sockets::channel::WsRecvResult;
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_server_msg::ServerMsg;
-use artcord_state::model::ws_statistics::WebStatPathType;
 use leptos::*;
 
-use crate::app::global_state::GlobalState;
+use crate::app::{global_state::GlobalState, hooks::use_ws_live_stats::WebStatPathType};
 use crate::app::hooks::use_ws_live_stats::use_ws_live_stats;
 
 use super::WsPathTableHeaderView;
@@ -27,7 +26,34 @@ pub fn WsLive() -> impl IntoView {
             .map(|path| {
                 let count = count.get(&path).cloned();
                 view! {
-                    <th>{move || count.map(|count| count.get()).unwrap_or(0u64)}</th>
+                    <th>//{
+                        {
+                            match count {
+                                Some(stats) => {
+                                    view! {
+                                        <span>{ move || stats.total_allowed.get() }</span>
+                                        <span>{ move || stats.total_blocked.get() }</span>
+                                        <span>{ move || stats.total_banned.get() }</span>
+                                    }
+                                }
+                                None => {
+                                    view! {
+                                        <span>{ "0" }</span>
+                                        <span>{ "0" }</span>
+                                        <span>{ "0" }</span>
+                                    }
+                                }
+                            }
+                        }
+                    //     move || count.map(|count| view! { 
+                    //     <span>{ move || "count.total_allowed.get().to_string()" }</span>
+                    //     <span>{ move || "count.total_blocked.get().to_string()" }</span>
+                    //     <span>{ move || "count.total_banned.get().to_string()" }</span>
+                    //  } ).unwrap_or( view! {
+                    //     <span>"0"</span>
+                    //     <span>"0"</span>
+                    //     <span>"0"</span>  })}
+                    </th>
                 }
             })
             .collect_view()

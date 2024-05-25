@@ -6,7 +6,6 @@ use artcord_state::message::prod_server_msg::ServerMsg;
 use artcord_state::misc::throttle_connection::{
     LiveThrottleConnectionCount, WebThrottleConnectionCount,
 };
-use artcord_state::model::ws_statistics::WebStatPathType;
 use leptos::*;
 
 use crate::app::hooks::use_ws_live_stats::use_ws_live_stats;

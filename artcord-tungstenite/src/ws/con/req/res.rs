@@ -12,10 +12,10 @@ pub mod gallery;
 
 #[derive(Error, Debug)]
 pub enum ResErr {
-    #[error("Invalid client msg error: {0}")]
+    #[error("Invalid client msg type (not binary) error: {0}")]
     InvalidClientMsg(Message),
 
-    #[error("MainGallery error: {0}")]
+    #[error("serialization error: {0}")]
     Serialization(#[from] bincode::Error),
 
     #[error("oneshot recv error: {0}")]

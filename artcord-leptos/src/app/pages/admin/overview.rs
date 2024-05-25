@@ -52,10 +52,10 @@ pub fn Overview() -> impl IntoView {
         .recv()
         .start(move |server_msg, _| match server_msg {
             WsRecvResult::Ok(server_msg) => match server_msg {
-                ServerMsg::WsStatsTotalCount(stats) => {
-                    page.set_old_stats_pagination(*stats);
-                    selected_state.set(LoadingNotFound::Loaded);
-                }
+                // ServerMsg::WsStatsTotalCount(stats) => {
+                //     page.set_old_stats_pagination(*stats);
+                //     selected_state.set(LoadingNotFound::Loaded);
+                // }
                 ServerMsg::WsSavedStatsGraph(stats) => {
                     canvas_data.set(stats.clone());
                     selected_state.set(LoadingNotFound::Loaded);
