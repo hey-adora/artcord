@@ -32,9 +32,10 @@ pub enum ServerMsg {
     // WsLiveThrottleCachedFlickerUnban { ip: IpAddr },
 
     WsLiveStatsIpConnections(Vec<WsIpStat>),
-    WsLiveStatsConnected(WsStat),
 
+    WsLiveStatsConnected(WsStat),
     WsLiveStatsDisconnected{ con_id: TempConIdType },
+
     WsLiveStatsConReqAllowed { con_id: TempConIdType, path: ClientPathType, total_amount: u64 },
     WsLiveStatsConReqBlocked { con_id: TempConIdType, path: ClientPathType, total_amount: u64 },
     WsLiveStatsConReqBanned { con_id: TempConIdType, path: ClientPathType, total_amount: u64 },
@@ -45,7 +46,7 @@ pub enum ServerMsg {
     WsLiveStatsIpConnectionAllowed{ ip: IpAddr, total_amount: u64 },
     WsLiveStatsIpConnectionBlocked{ ip: IpAddr, total_amount: u64 },
     WsLiveStatsIpConnectionBanned{ ip: IpAddr, total_amount: u64 },
-    WsLiveStatsIpConnectionUnbanned{ ip: IpAddr, total_amount: u64 },
+    //WsLiveStatsIpConnectionUnbanned{ ip: IpAddr },
 
     WsSavedStatsWithPagination { total_count: u64, latest: Option<i64>, stats: Vec<DbWsStat> },
     WsSavedStatsPage(Vec<DbWsStat>),

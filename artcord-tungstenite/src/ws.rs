@@ -304,12 +304,13 @@ impl<
             }
             AllowCon::Unbanned => {
                 if !self.listener_tracker.cons.is_empty() {
-                    if let Some(total_amount) = self.throttle.get_total_unbanned(&ip) {
-                        let msg = ServerMsg::WsLiveStatsIpConnectionUnbanned { ip, total_amount };
-                        self.listener_tracker.send(msg).await?;
-                    } else {
-                        error!("ws({}): missing ip entry: {}", &self.ws_addr, ip);
-                    }
+                    // if let Some(total_amount) = self.throttle.get_total_unbanned(&ip) {
+                       
+                    // } else {
+                    //     error!("ws({}): missing ip entry: {}", &self.ws_addr, ip);
+                    // }
+                    // let msg = ServerMsg::WsLiveStatsIpUnbanned { ip };
+                    // self.listener_tracker.send(msg).await?;
 
                     let msg = ServerMsg::WsLiveStatsIpUnbanned { ip };
                     self.listener_tracker.send(msg).await?;

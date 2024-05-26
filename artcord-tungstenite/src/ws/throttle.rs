@@ -139,12 +139,12 @@ impl WsThrottle {
         Some(con.stats.total_banned_amount)
     }
 
-    pub fn get_total_unbanned(&mut self, ip: &IpAddr) -> Option<u64> {
-        let Some(con) = self.ips.get_mut(ip) else {
-            return None;
-        };
-        Some(con.stats.total_unbanned_amount)
-    }
+    // pub fn get_total_unbanned(&mut self, ip: &IpAddr) -> Option<u64> {
+    //     let Some(con) = self.ips.get_mut(ip) else {
+    //         return None;
+    //     };
+    //     Some(con.stats.total_unbanned_amount)
+    // }
 
     pub fn get_amounts(&mut self, ip: &IpAddr) -> Option<(u64, u64)> {
         let Some(con) = self.ips.get_mut(ip) else {
@@ -189,7 +189,7 @@ impl WsThrottle {
                 con.stats.total_already_banned_amount += 1;
             }
             AllowCon::Unbanned => {
-                con.stats.total_unbanned_amount += 1;
+                //con.stats.total_unbanned_amount += 1;
             }
         }
         trace!("throttle on INC: {:#?}", self);

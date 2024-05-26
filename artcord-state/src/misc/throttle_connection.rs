@@ -45,12 +45,6 @@ pub enum ConStatus {
     Banned((DateTime<Utc>, IpBanReason)),
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-pub struct WebThrottleConnectionCount {
-    pub total_count: RwSignal<u64>,
-    pub count: RwSignal<u64>,
-    pub last_reset_at: RwSignal<DateTime<Utc>>,
-}
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct LiveThrottleConnectionCount {
@@ -70,6 +64,14 @@ pub struct WebThrottleConnection {
     pub ws_con_banned_until: RwSignal<Option<(DateTime<Utc>, IpBanReason)>>,
     pub ws_con_flicker_count: RwSignal<u64>,
     pub ws_con_flicker_banned_until: RwSignal<Option<(DateTime<Utc>, IpBanReason)>>,
+}
+
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct WebThrottleConnectionCount {
+    pub total_count: RwSignal<u64>,
+    pub count: RwSignal<u64>,
+    pub last_reset_at: RwSignal<DateTime<Utc>>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]

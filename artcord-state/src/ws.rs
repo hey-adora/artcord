@@ -12,7 +12,7 @@ pub struct WsIpStat {
     pub total_block_amount: u64,
     pub total_banned_amount: u64,
     pub total_already_banned_amount: u64,
-    pub total_unbanned_amount: u64,
+    //pub total_unbanned_amount: u64,
     pub banned_until: Option<(DateTime<Utc>, IpBanReason)>,
 }
 
@@ -24,7 +24,7 @@ impl WsIpStat {
             total_block_amount: 0,
             total_banned_amount: 0,
             total_already_banned_amount: 0,
-            total_unbanned_amount: 0,
+            //total_unbanned_amount: 0,
             banned_until: None,
         }
     }
