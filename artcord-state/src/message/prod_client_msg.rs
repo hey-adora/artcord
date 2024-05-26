@@ -64,7 +64,7 @@ pub enum ClientMsg {
         amount: u64,
         from: i64,
     },
-    WsStatsRange {
+    WsStatsGraph {
         from: i64,
         to: i64,
         unique_ip: bool,

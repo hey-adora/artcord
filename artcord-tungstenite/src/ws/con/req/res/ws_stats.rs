@@ -42,13 +42,13 @@ pub async fn paged(
     Ok(Some(ServerMsg::WsSavedStatsPage(imgs)))
 }
 
-pub async fn ranged(
+pub async fn graph(
     db: Arc<DB>,
     from: i64,
     to: i64,
     unique_ip: bool,
 ) -> Result<Option<ServerMsg>, ResErr> {
-    let imgs = db.ws_statistic_ranged_latest(from, to, unique_ip).await?;
+    let imgs = db.ws_stats_graph(from, to, unique_ip).await?;
 
     Ok(Some(ServerMsg::WsSavedStatsGraph(imgs)))
 }

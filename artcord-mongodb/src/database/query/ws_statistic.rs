@@ -327,7 +327,7 @@ impl DB {
         // Ok(result)
     }
 
-    pub async fn ws_statistic_ranged_latest(
+    pub async fn ws_stats_graph(
         &self,
         from: i64,
         to: i64,
@@ -451,6 +451,11 @@ impl DB {
                     output.push(day_i as f64);
                     output.push(0.0);
                 }
+            }
+        } else {
+            for day_i in (to..from).step_by(DAY_IN_MS as usize) {
+                output.push(day_i as f64);
+                output.push(0.0);
             }
         }
 

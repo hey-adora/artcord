@@ -70,7 +70,7 @@ pub fn Overview() -> impl IntoView {
         });
 
     let fetch = move |selected_days: u64, selected_unique: bool| {
-        let _ = ws_old_ws_stats.sender().send(ClientMsg::WsStatsRange {
+        let _ = ws_old_ws_stats.sender().send(ClientMsg::WsStatsGraph {
             from: Utc::now().timestamp_millis(),
             to: Utc::now().checked_sub_days(Days::new(selected_days)).map(|to| to.timestamp_millis()).unwrap_or_default(),
             unique_ip: selected_unique,
