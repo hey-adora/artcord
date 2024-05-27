@@ -61,7 +61,7 @@ pub fn ThrottleCached() -> impl IntoView {
 
                 view! {
                     <th>
-                        <div class="flex gap-2" >
+                        <div class="flex gap-2 justify-center" >
                             {
                                 gen_view()
                             }
