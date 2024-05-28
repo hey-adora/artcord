@@ -12,7 +12,6 @@ use cfg_if::cfg_if;
 use chrono::TimeDelta;
 use dotenv::dotenv;
 use futures::try_join;
-use tracing::Instrument;
 use std::{env, sync::Arc};
 use tokio::select;
 use tokio::signal;
@@ -21,6 +20,7 @@ use tokio_util::task::TaskTracker;
 use tracing::error;
 use tracing::info;
 use tracing::trace;
+use tracing::Instrument;
 
 #[actix_web::main]
 async fn main() {
@@ -134,11 +134,8 @@ async fn main() {
             time_machine,
             ProdThreshold,
             ProdUserAddrMiddleware,
-        ).instrument(tracing::trace_span!(
-            "ws",
-            "{}",
-            ws_ip,
-        ))
+        )
+        .instrument(tracing::trace_span!("ws", "{}", ws_ip,)),
     );
 
     //aaa
@@ -196,7 +193,11 @@ async fn main() {
 
 #[cfg(test)]
 mod artcord_tests {
-    use std::{net::{IpAddr, Ipv4Addr}, str::FromStr, sync::Arc};
+    use std::{
+        net::{IpAddr, Ipv4Addr},
+        str::FromStr,
+        sync::Arc,
+    };
 
     use artcord_mongodb::database::DB;
     use artcord_state::{
@@ -208,7 +209,7 @@ mod artcord_tests {
         util::time::TimeMiddleware,
     };
     use artcord_tungstenite::ws::{GetUserAddrMiddleware, Ws};
-    use artcord_tungstenite::{ WsThreshold};
+    use artcord_tungstenite::WsThreshold;
     use chrono::{DateTime, TimeDelta, Utc};
     use futures::{stream::SplitSink, SinkExt, StreamExt};
     use mongodb::{bson::doc, options::ClientOptions};
@@ -230,11 +231,15 @@ mod artcord_tests {
         Some(delta) => delta,
         None => panic!("failed to create delta"),
     };
+    const REQ_BAN_DURATION: TimeDelta = match TimeDelta::try_minutes(1) {
+        Some(delta) => delta,
+        None => panic!("invalid delta"),
+    };
 
     #[derive(Debug, PartialEq, Clone, Copy)]
     pub struct DebugThreshold;
 
-    struct Client {
+    struct Connection {
         key: u128,
         client_tx: mpsc::Sender<DebugClientMsg>,
         //client_recv_tx: mpsc::Sender<(u128, ClientMsg)>,
@@ -306,7 +311,7 @@ mod artcord_tests {
         }
     }
 
-    impl Client {
+    impl Connection {
         pub fn new() -> (
             Self,
             mpsc::Sender<(u128, ServerMsg)>,
@@ -330,9 +335,11 @@ mod artcord_tests {
             self.client_tx.send(msg).await.unwrap();
         }
 
-
         pub async fn send(&mut self, msg: ClientMsg) {
-            self.client_tx.send(DebugClientMsg::Send((self.key, msg))).await.unwrap();
+            self.client_tx
+                .send(DebugClientMsg::Send((self.key, msg)))
+                .await
+                .unwrap();
         }
 
         pub async fn recv(&mut self) -> ServerMsg {
@@ -340,7 +347,6 @@ mod artcord_tests {
             msg
         }
     }
-
 
     #[tokio::test]
     async fn ws_throttle_req_test() {
@@ -378,10 +384,7 @@ mod artcord_tests {
             },
             ws_con_flicker_ban_reason: IpBanReason::WsConFlickerDetected,
             ws_req_ban_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
-            ws_req_ban_duration: match TimeDelta::try_minutes(1) {
-                Some(delta) => delta,
-                None => panic!("invalid delta"),
-            },
+            ws_req_ban_duration: REQ_BAN_DURATION,
         };
 
         root_task_tracker.spawn({
@@ -399,90 +402,257 @@ mod artcord_tests {
 
         let (mut addr_rx, addr_middleware) = TestUserAddrMiddleware::new();
 
-        let web_sockets_handle = root_task_tracker.spawn(
-            Ws::create(
-                root_task_tracker.clone(),
-                cancelation_token.clone(),
-                "0.0.0.0:3420".to_string(),
-                threshold,
-                db.clone(),
-                time_machine,
-                DebugThreshold,
-                addr_middleware,
-            )
-        );
+        let web_sockets_handle = root_task_tracker.spawn(Ws::create(
+            root_task_tracker.clone(),
+            cancelation_token.clone(),
+            "0.0.0.0:3420".to_string(),
+            threshold,
+            db.clone(),
+            time_machine,
+            DebugThreshold,
+            addr_middleware,
+        ));
 
         let (clinet_1_result_tx, mut client_1_result_rx) = mpsc::channel(100);
-        let mut client = create_client(root_task_tracker.clone(), cancelation_token.clone(), clinet_1_result_tx).await;
+        let mut client = create_connection(
+            root_task_tracker.clone(),
+            cancelation_token.clone(),
+            clinet_1_result_tx,
+        )
+        .await;
         let ((mut addr, return_tx)) = addr_rx.recv().await.unwrap();
         let client_1_ip = IpAddr::V4(Ipv4Addr::new(1, 1, 1, 69));
         addr.set_ip(client_1_ip);
         return_tx.send(addr).unwrap();
-        assert_eq!(client_1_result_rx.recv().await.unwrap(), Ok(DebugClientStatusMsg::Connected));
+        assert_eq!(
+            client_1_result_rx.recv().await.unwrap(),
+            Ok(DebugClientStatusMsg::Connected)
+        );
 
         let (client_2_result_tx, mut client_2_result_rx) = mpsc::channel(100);
-        let mut client2 = create_client(root_task_tracker.clone(), cancelation_token.clone(), client_2_result_tx).await;
+        let mut client2 = create_connection(
+            root_task_tracker.clone(),
+            cancelation_token.clone(),
+            client_2_result_tx,
+        )
+        .await;
         let ((mut addr, return_tx)) = addr_rx.recv().await.unwrap();
         let client_2_ip = IpAddr::V4(Ipv4Addr::new(1, 4, 2, 0));
         addr.set_ip(client_2_ip);
         return_tx.send(addr).unwrap();
-        assert_eq!(client_2_result_rx.recv().await.unwrap(), Ok(DebugClientStatusMsg::Connected));
+        assert_eq!(
+            client_2_result_rx.recv().await.unwrap(),
+            Ok(DebugClientStatusMsg::Connected)
+        );
 
-        let (client_3_result_tx, mut client_3_result_rx) = mpsc::channel(100);
-        let mut client3 = create_client(root_task_tracker.clone(), cancelation_token.clone(), client_3_result_tx).await;
-        let ((mut addr, return_tx)) = addr_rx.recv().await.unwrap();
         let client_3_ip = IpAddr::V4(Ipv4Addr::new(1, 4, 2, 3));
-        addr.set_ip(client_3_ip);
-        return_tx.send(addr).unwrap();
-        assert_eq!(client_3_result_rx.recv().await.unwrap(), Ok(DebugClientStatusMsg::Connected));
 
+        let mut posibilities = vec![client_1_ip, client_2_ip, client_3_ip];
+        let mut check_ips = |msg: ServerMsg| match msg {
+            ServerMsg::WsLiveStatsConnected(stat) => {
+                let Some(position) = posibilities.iter().position(|ip| stat.ip == *ip) else {
+                    return false;
+                };
+                posibilities.remove(position);
+                true
+            }
+            _ => false,
+        };
 
         client2.send(ClientMsg::LiveWsStats(true)).await;
         // client2.send(ClientMsg::LiveWsStats(true)).await;
         let msg = client2.recv().await;
         debug!("r: {:#?}", msg);
-        let mut posibilities = vec![client_1_ip, client_2_ip, client_3_ip];
-        let mut check_ips = |msg: ServerMsg| {
-            match msg {
-                ServerMsg::WsLiveStatsConnected(stat) => {
-                    let Some(position) = posibilities.iter().position(|ip| stat.ip == *ip) else {
-                         return false;
-                    };
-                    posibilities.remove(position);
-                    true
+        assert!(matches!(msg, ServerMsg::WsLiveStatsIpConnections(_)));
+
+        let (client_3_result_tx, mut client_3_result_rx) = mpsc::channel(100);
+        let mut client3 = create_connection(
+            root_task_tracker.clone(),
+            cancelation_token.clone(),
+            client_3_result_tx,
+        )
+        .await;
+        let ((mut addr, return_tx)) = addr_rx.recv().await.unwrap();
+
+        addr.set_ip(client_3_ip);
+        return_tx.send(addr).unwrap();
+        assert_eq!(
+            client_3_result_rx.recv().await.unwrap(),
+            Ok(DebugClientStatusMsg::Connected)
+        );
+
+        // let msg = client2.recv().await;
+        // debug!("r: {:#?}", msg);
+        // assert!(matches!(msg, ServerMsg::WsLiveStatsConnected(_)));
+
+        let msg = client2.recv().await;
+        debug!("r: {:#?}", msg);
+        assert!(check_ips(msg));
+
+        let msg = client2.recv().await;
+        debug!("r2: {:#?}", msg);
+        assert!(check_ips(msg));
+
+        let msg = client2.recv().await;
+        debug!("r2: {:#?}", msg);
+        assert!(matches!(
+            msg,
+            ServerMsg::WsLiveStatsIpConnectionAllowed { ip, total_amount }
+        ));
+
+        let msg = client2.recv().await;
+        debug!("r2: {:#?}", msg);
+        assert!(check_ips(msg));
+
+        for _ in 0..5 {
+            client.send(ClientMsg::Logout).await;
+            let msg = client2.recv().await;
+            debug!("r2: {:#?}", msg);
+            assert!(matches!(
+                msg,
+                ServerMsg::WsLiveStatsConReqAllowed {
+                    con_id,
+                    path,
+                    total_amount
                 }
-                _ => false
+            ));
+        }
+
+        client.send(ClientMsg::Logout).await;
+        let msg = client2.recv().await;
+        debug!("r2: {:#?}", msg);
+        assert!(matches!(
+            msg,
+            ServerMsg::WsLiveStatsConReqBlocked {
+                con_id,
+                path,
+                total_amount
             }
-        };
-        assert!(check_ips(msg));
+        ));
 
-        let msg = client2.recv().await;
-        debug!("r2: {:#?}", msg);
-        assert!(check_ips(msg));
-       
+        (*fake_date.lock().await) = Some(now + MSG_THRESHOLD_DELTA);
 
-        let msg = client2.recv().await;
-        debug!("r2: {:#?}", msg);
+        for _ in 0..5 {
+            client.send(ClientMsg::Logout).await;
+            let msg = client2.recv().await;
+            debug!("r2: {:#?}", msg);
+            assert!(matches!(
+                msg,
+                ServerMsg::WsLiveStatsConReqAllowed {
+                    con_id,
+                    path,
+                    total_amount
+                }
+            ));
+        }
+
+        for _ in 0..9 {
+            client.send(ClientMsg::Logout).await;
+            let msg = client2.recv().await;
+            debug!("r2: {:#?}", msg);
+            assert!(matches!(
+                msg,
+                ServerMsg::WsLiveStatsConReqBlocked {
+                    con_id,
+                    path,
+                    total_amount
+                }
+            ));
+        }
+
         client.send(ClientMsg::Logout).await;
 
         let msg = client2.recv().await;
         debug!("r2: {:#?}", msg);
-        assert!( matches!(msg, ServerMsg::WsLiveStatsConReqAllowed { con_id, path, total_amount } ) );
-
-        client3.command(DebugClientMsg::Disconnect).await;
-        assert_eq!(client_3_result_rx.recv().await.unwrap(), Ok(DebugClientStatusMsg::Disconnected));
+        assert!(matches!(
+            msg,
+            ServerMsg::WsLiveStatsIpBanned { ip, date, reason }
+        ));
 
         let msg = client2.recv().await;
         debug!("r2: {:#?}", msg);
-        assert!( matches!(msg, ServerMsg::WsLiveStatsDisconnected { con_id } ) );
-        
+        assert!(matches!(
+            msg,
+            ServerMsg::WsLiveStatsConReqBanned {
+                con_id,
+                path,
+                total_amount
+            }
+        ));
+
+        {
+            let time = &mut (*fake_date.lock().await);
+            *time = time.map(|time| time + REQ_BAN_DURATION);
+        }
+
+        client.send(ClientMsg::Logout).await;
+
+        let msg = client2.recv().await;
+        debug!("r2: {:#?}", msg);
+        assert!(matches!(msg, ServerMsg::WsLiveStatsIpUnbanned { ip }));
+
+        let msg = client2.recv().await;
+        debug!("r2: {:#?}", msg);
+        assert!(matches!(
+            msg,
+            ServerMsg::WsLiveStatsConReqAllowed {
+                con_id,
+                path,
+                total_amount
+            }
+        ));
+
+        client3.command(DebugClientMsg::Disconnect).await;
+        assert_eq!(
+            client_3_result_rx.recv().await.unwrap(),
+            Ok(DebugClientStatusMsg::Disconnected)
+        );
+
+        let msg = client2.recv().await;
+        debug!("r2: {:#?}", msg);
+        assert!(matches!(msg, ServerMsg::WsLiveStatsDisconnected { con_id }));
+
         client2.send(ClientMsg::LiveWsStats(false)).await;
 
         let msg = client2.recv().await;
         debug!("r2: {:#?}", msg);
-        assert!( matches!(msg, ServerMsg::WsLiveStatsConReqAllowed { con_id, path, total_amount } ) );
+        assert!(matches!(
+            msg,
+            ServerMsg::WsLiveStatsConReqAllowed {
+                con_id,
+                path,
+                total_amount
+            }
+        ));
+
 
         client.send(ClientMsg::Logout).await;
+        client2.send(ClientMsg::LiveWsStats(true)).await;
+        let msg = client2.recv().await;
+        debug!("r: {:#?}", msg);
+        assert!(matches!(msg, ServerMsg::WsLiveStatsIpConnections(_)));
+
+        let mut posibilities = vec![client_1_ip, client_2_ip];
+        let mut check_ips = |msg: ServerMsg| match msg {
+            ServerMsg::WsLiveStatsConnected(stat) => {
+                let Some(position) = posibilities.iter().position(|ip| stat.ip == *ip) else {
+                    return false;
+                };
+                posibilities.remove(position);
+                true
+            }
+            _ => false,
+        };
+        
+        let msg = client2.recv().await;
+        debug!("r2: {:#?}", msg);
+        assert!(check_ips(msg));
+
+        let msg = client2.recv().await;
+        debug!("r2: {:#?}", msg);
+        assert!(check_ips(msg));
+
+        //client.send(ClientMsg::Logout).await;
 
         // let msg = client2.recv().await;
         // debug!("r2: {:#?}", msg);
@@ -495,19 +665,19 @@ mod artcord_tests {
         // let msg = client2.recv().await;
         // debug!("r2: {:#?}", msg);
         // assert!(matches!(msg, ServerMsg::WsLiveStatsStarted(_)));
-        
-        
+
         info!("exiting...");
         cancelation_token.cancel();
         //web_sockets_handle.await.unwrap();
         root_task_tracker.close();
 
-        assert_eq!(client_1_result_rx.recv().await.unwrap(), Ok(DebugClientStatusMsg::Disconnected));
+        assert_eq!(
+            client_1_result_rx.recv().await.unwrap(),
+            Ok(DebugClientStatusMsg::Disconnected)
+        );
         //assert_eq!(client_2_result_rx.recv().await.unwrap(), Ok(DebugClientStatusMsg::Disconnected));
 
         root_task_tracker.wait().await;
-
-
     }
 
     // #[tokio::test]
@@ -586,7 +756,7 @@ mod artcord_tests {
     //     debug!("ONE 2");
     //     let mut client = create_client(root_task_tracker.clone(), cancelation_token.clone(), clinet_1_result_tx).await;
     //     debug!("ONE 3");
-        
+
     //     debug!("ONE 4");
     //     let ((mut addr, return_tx)) = addr_rx.recv().await.unwrap();
     //     debug!("ONE 5");
@@ -601,7 +771,7 @@ mod artcord_tests {
 
     //     let (client_2_result_tx, mut client_2_result_rx) = mpsc::channel(100);
     //     let mut client2 = create_client(root_task_tracker.clone(), cancelation_token.clone(), client_2_result_tx).await;
-        
+
     //     let ((mut addr, return_tx)) = addr_rx.recv().await.unwrap();
     //     let client_2_ip = IpAddr::V4(Ipv4Addr::new(1, 4, 2, 0));
     //     addr.set_ip(client_2_ip);
@@ -628,8 +798,6 @@ mod artcord_tests {
     //     let msg = client2.recv().await;
     //     debug!("r2: {:#?}", msg);
     //     assert!(matches!(msg, ServerMsg::WsLiveStatsStarted(_)));
-        
-        
 
     //     for _ in 0..4 {
     //         client
@@ -702,7 +870,6 @@ mod artcord_tests {
     //     debug!("r2: {:#?}", msg);
     //     assert!(matches!(msg, ServerMsg::WsLiveStatsUpdateInc { con_key, path }));
 
-        
     //     //assert!( matches!(msg, ServerMsg::WsLiveThrottle));
 
     //     (*fake_date.lock().await) = Some(now + MSG_THRESHOLD_DELTA);
@@ -731,7 +898,6 @@ mod artcord_tests {
     //     let msg = client2.recv().await;
     //     debug!("r2: {:#?}", msg);
     //     assert!(matches!(msg, ServerMsg::WsLiveStatsUpdateInc { con_key, path }));
-
 
     //     for _ in 0..4 {
     //         client
@@ -796,8 +962,12 @@ mod artcord_tests {
     //     root_task_tracker.wait().await;
     // }
 
-    async fn create_client(task_tracker: TaskTracker, cancellation_token: CancellationToken, result: mpsc::Sender<Result<DebugClientStatusMsg, ClientErr>>) -> Client {
-        let (channel, server_tx, mut client_rx) = Client::new();
+    async fn create_connection(
+        task_tracker: TaskTracker,
+        cancellation_token: CancellationToken,
+        result: mpsc::Sender<Result<DebugClientStatusMsg, ClientErr>>,
+    ) -> Connection {
+        let (channel, server_tx, mut client_rx) = Connection::new();
         // let (client_send_tx, mut client_recv_tx) = mpsc::channel::<(u128, ClientMsg)>(1);
         // let (server_send_tx, mut server_recv_tx) = mpsc::channel::<(u128, ServerMsg)>(1);
 
@@ -852,16 +1022,15 @@ mod artcord_tests {
         msg: DebugClientMsg,
     ) -> bool {
         match msg {
-            DebugClientMsg::Send((key,msg)) => {
+            DebugClientMsg::Send((key, msg)) => {
                 let bytes = ClientMsg::as_vec(&(key, msg)).unwrap();
                 write.send(Message::Binary(bytes)).await.unwrap();
-            } 
+            }
             DebugClientMsg::Disconnect => {
                 return true;
             }
         }
         false
-        
     }
 
     async fn on_read(
@@ -901,10 +1070,8 @@ mod artcord_tests {
         }
     }
 
-
     #[derive(Error, Debug, PartialEq)]
     pub enum ClientErr {
-
         #[error("failed to connect")]
         FailedToConnect,
     }
