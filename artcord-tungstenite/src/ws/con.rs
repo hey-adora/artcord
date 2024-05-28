@@ -448,6 +448,13 @@ impl<
                                 self.listener_tracker
                                     .send(ServerMsg::WsLiveStatsIpUnbanned { ip: self.ip })
                                     .await?;
+                                self.listener_tracker
+                                    .send(ServerMsg::WsLiveStatsConReqAllowed {
+                                        con_id: self.con_id,
+                                        path,
+                                        total_amount: stat.total_allowed_count,
+                                    })
+                                    .await?;
                             } else {
                                 error!(
                                     "failed to send path update, missing ip entry for: {} in {:#?}",
