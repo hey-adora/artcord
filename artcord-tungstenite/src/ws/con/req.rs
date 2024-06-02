@@ -56,7 +56,7 @@ pub async fn req_task(
         let (allow_tx, allow_rx) = oneshot::channel();
         connection_task_tx
             .send(ConMsg::CheckThrottle {
-                path: data.enum_index(),
+                path: path_index,
                 block_threshold: path_throttle,
                 allow_tx,
             })

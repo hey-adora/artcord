@@ -6,7 +6,7 @@ use artcord_state::model::auto_reaction::AutoReaction;
 use artcord_state::model::img::Img;
 use artcord_state::model::migration::Migration;
 use artcord_state::model::user::User;
-use artcord_state::model::{acc::Acc, ws_statistics::DbWsStat};
+use artcord_state::model::{acc::Acc, ws_statistics::DbReqStat};
 use cfg_if::cfg_if;
 
 use mongodb::options::ClientOptions;
@@ -31,7 +31,7 @@ pub struct DB {
     collection_acc: mongodb::Collection<Acc>,
     collection_acc_session: mongodb::Collection<AccSession>,
     collection_migration: mongodb::Collection<Migration>,
-    collection_ws_statistic: mongodb::Collection<DbWsStat>,
+    collection_ws_statistic: mongodb::Collection<DbReqStat>,
 }
 
 // const DATABASE_NAME: &'static str = "artcord";

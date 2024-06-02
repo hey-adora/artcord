@@ -7,14 +7,15 @@ use artcord_state::message::prod_client_msg::{
 };
 use artcord_state::message::prod_server_msg::ServerMsg;
 use artcord_state::misc::throttle_connection::{IpBanReason, LiveThrottleConnectionCount};
-use artcord_state::misc::throttle_threshold::Threshold;
-use artcord_state::model::ws_statistics::{TempConIdType, WsStat};
+use artcord_state::misc::throttle_threshold::{AllowCon, Threshold};
+use artcord_state::model::ws_statistics::{ReqStat, TempConIdType};
 use artcord_state::util::time::TimeMiddleware;
 use chrono::{DateTime, TimeDelta, Utc};
 use enum_index::EnumIndex;
 use futures::stream::{SplitSink, SplitStream};
 use futures::SinkExt;
 use futures::StreamExt;
+use tokio_tungstenite::tungstenite::protocol::CloseFrame;
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
@@ -34,8 +35,35 @@ use self::throttle_stats_listener_tracker::{ConTrackerErr, ThrottleStatsListener
 pub mod req;
 pub mod throttle_stats_listener_tracker;
 
+#[derive(Debug)]
+pub enum IpDataSyncMsg {
+    CheckThrottle {
+        path: usize,
+        block_threshold: Threshold,
+        allow_tx: oneshot::Sender<AllowCon>,
+    },
+    // IncThrottle {
+    //     author_id: TempConIdType,
+    //     path: usize,
+    //     block_threshold: Threshold,
+    // },
+    // AddIpStatListener {
+    //     msg_author: TempConIdType,
+    //     con_id: TempConIdType,
+    //     con_tx: mpsc::Sender<ConMsg>,
+    //     current_state_tx: mpsc::Sender<HashMap<ClientPathType, WsReqStat>>,
+    // },
+}
+
 #[derive(Debug, Clone)]
 pub enum IpConMsg {
+    Disconnect,
+    // IncThrottle {
+    //     author_id: TempConIdType,
+    //     path: usize,
+    //     block_threshold: Threshold,
+    // },
+
     // AddIpStatListener {
     //     msg_author: TempConIdType,
     //     con_id: TempConIdType,
@@ -95,6 +123,7 @@ pub struct Con<
     ThresholdMiddlewareType: ClientThresholdMiddleware + Send + Clone + Sync + 'static,
 > {
     con_id: TempConIdType,
+    con_stream_closed: bool,
     ws_stream_tx: SplitSink<WebSocketStream<TcpStream>, Message>,
     ws_stream_rx: SplitStream<WebSocketStream<TcpStream>>,
     ip_con_tx: broadcast::Sender<IpConMsg>,
@@ -103,17 +132,19 @@ pub struct Con<
     global_con_rx: broadcast::Receiver<GlobalConMsg>,
     con_tx: mpsc::Sender<ConMsg>,
     con_rx: mpsc::Receiver<ConMsg>,
+    ip_data_sync_tx: mpsc::Sender<IpDataSyncMsg>,
     ws_app_tx: mpsc::Sender<WsAppMsg>,
     cancellation_token: CancellationToken,
     db: Arc<DB>,
     ip: IpAddr,
     addr: SocketAddr,
-    stats: WsStat,
+    //ip_req_stats: ReqStat,
+    local_req_stats: ReqStat,
     listener_tracker: ThrottleStatsListenerTracker,
     is_listening: bool,
     ban_threshold: Threshold,
     ban_duration: TimeDelta,
-    //banned_until: Option<(DateTime<Utc>, IpBanReason)>,
+    banned_until: Option<(DateTime<Utc>, IpBanReason)>,
     con_task_tracker: TaskTracker,
     time_middleware: TimeMiddlewareType,
     threshold_middleware: ThresholdMiddlewareType,
@@ -135,6 +166,7 @@ impl<
         (global_con_tx, mut global_con_rx): GlobalConChannel,
         ip_con_tx: broadcast::Sender<IpConMsg>,
         ip_con_rx: broadcast::Receiver<IpConMsg>,
+        ip_data_sync_tx: mpsc::Sender<IpDataSyncMsg>,
         ban_threshold: Threshold,
         ban_duration: TimeDelta,
         time_middleware: TimeMiddlewareType,
@@ -158,14 +190,17 @@ impl<
         let con_id: TempConIdType = uuid::Uuid::new_v4().as_u128();
 
         let mut con = Self {
-            stats: WsStat::new(con_id, ip.clone(), addr.clone(), time),
+            local_req_stats: ReqStat::new(),
+            //ip_req_stats: ReqStat::new(),
             con_id,
+            con_stream_closed: false,
             ws_stream_tx: ws_stream_write,
             ws_stream_rx: ws_stream_read,
             ip_con_tx,
             ip_con_rx,
             global_con_tx,
             global_con_rx,
+            ip_data_sync_tx,
             con_tx,
             con_rx,
             ws_app_tx,
@@ -177,7 +212,7 @@ impl<
             is_listening: false,
             ban_threshold,
             ban_duration,
-            //banned_until: None,
+            banned_until: None,
             con_task_tracker: TaskTracker::new(),
             time_middleware,
             threshold_middleware,
@@ -199,18 +234,23 @@ impl<
                     trace!("recv msg from stream");
                     let Some(msg) = msg else {
                         trace!("connection msg channel closed");
+                        self.con_stream_closed = true;
                         break;
                     };
 
                     let msg = match msg {
                         Ok(msg) => msg,
                         Err(err) => {
-                            error!("error receiving from stream: {}", err);
+                            debug!("error receiving from stream: {}", err);
                             continue;
                         }
                     };
 
-                    self.on_req(msg).await;
+                    let exit = self.on_req(msg).await;
+                    if exit {
+                        self.con_stream_closed = true;
+                        break;
+                    }
                     trace!("recv msg from stream finished");
                 },
                 msg = self.ip_con_rx.recv() => {
@@ -331,7 +371,7 @@ impl<
                     con_tx: self.con_tx.clone(),
                 })?;
 
-                let msg = ServerMsg::WsLiveStatsIpConnections(con_stats);
+                let msg = ServerMsg::WsLiveStatsIpCons(con_stats);
                 let msg: WsPackage<ServerMsg> = (ws_key, msg);
                 let msg = ServerMsg::as_bytes(msg)?;
                 let msg = Message::Binary(msg);
@@ -363,22 +403,86 @@ impl<
                 allow_tx,
             } => {
                 let time = self.time_middleware.get_time().await;
-                let result = self
-                    .stats
-                    .inc_path(
-                        path,
-                        block_threshold,
-                        &self.ban_threshold,
-                        &self.ban_duration,
-                        &time,
-                    )
-                    .await;
+                let result = {
+                    let (result_tx, result_rx) = oneshot::channel::<AllowCon>();
+
+                    self.ip_data_sync_tx
+                        .send(IpDataSyncMsg::CheckThrottle {
+                            path,
+                            block_threshold: block_threshold.clone(),
+                            allow_tx: result_tx,
+                        })
+                        .await?;
+
+                    let result_a = result_rx.await?;
+
+                    match result_a {
+                        AllowCon::UnbannedAndAllow | AllowCon::UnbannedAndBlocked => {
+                            self.banned_until = None;
+                        }
+                        _ => {}
+                    }
+
+                    let result_b = self
+                        .local_req_stats
+                        .inc_path(
+                            path,
+                            &block_threshold,
+                            &self.ban_threshold,
+                            &self.ban_duration,
+                            &mut self.banned_until,
+                            &time,
+                        )
+                        .await;
+
+                    // if allow {
+
+                    // }
+
+                    // if let AllowCon::Allow = a {
+                    //     let b = self
+                    //         .local_req_statse
+                    //         .inc_path(
+                    //             path,
+                    //             &block_threshold,
+                    //             &self.ban_threshold,
+                    //             &self.ban_duration,
+                    //             &mut self.banned_until,
+                    //             &time,
+                    //         )
+                    //         .await;
+
+                    //     b
+                    // } else {
+                    //     a
+                    // }
+
+                    let result = result_a.compare_pick_worst(result_b);
+
+                    result
+                };
+
+                trace!("check throttle result: {:?}", result);
+
+                // let result_b = self.ip_req_stats.inc_path(
+                //     path,
+                //     &block_threshold,
+                //     &self.ban_threshold,
+                //     &self.ban_duration,
+                //     &mut self.banned_until,
+                //     &time,
+                // ).await;
+
+                //let result = result_a.compare_pick_worst(result_b);
+                //let result = result_a;
+                //self.ip_con_tx.send(IpConMsg::IncThrottle { path, block_threshold, author_id: self.con_id })?;
+
                 let result = match result {
                     artcord_state::misc::throttle_threshold::AllowCon::Allow => {
                         if !self.listener_tracker.cons.is_empty() {
-                            if let Some(stat) = self.stats.count.get(&path) {
+                            if let Some(stat) = self.local_req_stats.count.get(&path) {
                                 self.listener_tracker
-                                    .send(ServerMsg::WsLiveStatsConReqAllowed {
+                                    .send(ServerMsg::WsLiveStatsReqAllowed {
                                         con_id: self.con_id,
                                         path,
                                         total_amount: stat.total_allowed_count,
@@ -387,7 +491,7 @@ impl<
                             } else {
                                 error!(
                                     "failed to send path update, missing ip entry for: {} in {:#?}",
-                                    &path, &self.stats
+                                    &path, &self.local_req_stats
                                 );
                             }
                         }
@@ -396,8 +500,24 @@ impl<
                     }
                     artcord_state::misc::throttle_threshold::AllowCon::AlreadyBanned => false,
                     artcord_state::misc::throttle_threshold::AllowCon::Banned((date, reason)) => {
+                        self.ws_app_tx
+                            .send(WsAppMsg::Ban {
+                                ip: self.ip,
+                                date,
+                                reason,
+                            })
+                            .await?;
+
                         if !self.listener_tracker.cons.is_empty() {
-                            if let Some(stat) = self.stats.count.get(&path) {
+                            if let Some(stat) = self.local_req_stats.count.get(&path) {
+                                self.listener_tracker
+                                    .send(ServerMsg::WsLiveStatsReqBanned {
+                                        con_id: self.con_id,
+                                        path,
+                                        total_amount: stat.total_banned_count,
+                                    })
+                                    .await?;
+
                                 self.listener_tracker
                                     .send(ServerMsg::WsLiveStatsIpBanned {
                                         ip: self.ip,
@@ -405,18 +525,10 @@ impl<
                                         reason,
                                     })
                                     .await?;
-
-                                self.listener_tracker
-                                    .send(ServerMsg::WsLiveStatsConReqBanned {
-                                        con_id: self.con_id,
-                                        path,
-                                        total_amount: stat.total_banned_count,
-                                    })
-                                    .await?;
                             } else {
                                 error!(
                                     "failed to send path update, missing ip entry for: {} in {:#?}",
-                                    &path, &self.stats
+                                    &path, &self.local_req_stats
                                 );
                             }
                         }
@@ -425,9 +537,9 @@ impl<
                     }
                     artcord_state::misc::throttle_threshold::AllowCon::Blocked => {
                         if !self.listener_tracker.cons.is_empty() {
-                            if let Some(stat) = self.stats.count.get(&path) {
+                            if let Some(stat) = self.local_req_stats.count.get(&path) {
                                 self.listener_tracker
-                                    .send(ServerMsg::WsLiveStatsConReqBlocked {
+                                    .send(ServerMsg::WsLiveStatsReqBlocked {
                                         con_id: self.con_id,
                                         path,
                                         total_amount: stat.total_blocked_count,
@@ -436,29 +548,52 @@ impl<
                             } else {
                                 error!(
                                     "failed to send path update, missing ip entry for: {} in {:#?}",
-                                    &path, &self.stats
+                                    &path, &self.local_req_stats
                                 );
                             }
                         }
                         false
                     }
-                    artcord_state::misc::throttle_threshold::AllowCon::Unbanned => {
+                    artcord_state::misc::throttle_threshold::AllowCon::UnbannedAndBlocked => {
                         if !self.listener_tracker.cons.is_empty() {
-                            if let Some(stat) = self.stats.count.get(&path) {
+                            if let Some(stat) = self.local_req_stats.count.get(&path) {
+                                self.listener_tracker
+                                    .send(ServerMsg::WsLiveStatsReqBlocked {
+                                        con_id: self.con_id,
+                                        path,
+                                        total_amount: stat.total_blocked_count,
+                                    })
+                                    .await?;
                                 self.listener_tracker
                                     .send(ServerMsg::WsLiveStatsIpUnbanned { ip: self.ip })
                                     .await?;
+                            } else {
+                                error!(
+                                    "failed to send path update, missing ip entry for: {} in {:#?}",
+                                    &path, &self.local_req_stats
+                                );
+                            }
+                        }
+                        false
+                    }
+                    artcord_state::misc::throttle_threshold::AllowCon::UnbannedAndAllow => {
+                        if !self.listener_tracker.cons.is_empty() {
+                            if let Some(stat) = self.local_req_stats.count.get(&path) {
                                 self.listener_tracker
-                                    .send(ServerMsg::WsLiveStatsConReqAllowed {
+                                    .send(ServerMsg::WsLiveStatsReqAllowed {
                                         con_id: self.con_id,
                                         path,
                                         total_amount: stat.total_allowed_count,
                                     })
                                     .await?;
+
+                                self.listener_tracker
+                                    .send(ServerMsg::WsLiveStatsIpUnbanned { ip: self.ip })
+                                    .await?;
                             } else {
                                 error!(
                                     "failed to send path update, missing ip entry for: {} in {:#?}",
-                                    &path, &self.stats
+                                    &path, &self.local_req_stats
                                 );
                             }
                         }
@@ -502,7 +637,13 @@ impl<
                     .cons
                     .insert(con_id, (ws_key, con_tx.clone()));
 
-                let msg = ServerMsg::WsLiveStatsConnected(self.stats.clone());
+                let msg = ServerMsg::WsLiveStatsConnected {
+                    ip: self.ip,
+                    socket_addr: self.addr,
+                    con_id: self.con_id,
+                    banned_until: self.banned_until,
+                    req_stat: self.local_req_stats.clone(),
+                };
                 let msg: WsPackage<ServerMsg> = (ws_key, msg);
                 let msg = ServerMsg::as_bytes(msg)?;
                 let msg = Message::Binary(msg);
@@ -519,14 +660,43 @@ impl<
     }
 
     pub async fn on_ip_msg(&mut self, msg: IpConMsg) -> Result<bool, ConErr> {
+        match msg {
+            IpConMsg::Disconnect => {
+                return Ok(true);
+            }
+        }
+        // match msg {
+        //     IpConMsg::IncThrottle {
+        //         path,
+        //         block_threshold,
+        //         author_id,
+        //     } => {
+        //         if self.con_id == author_id {
+        //             return Ok(false);
+        //         }
+        //         let time = self.time_middleware.get_time().await;
+        //         // self.ip_req_stats
+        //         //     .inc_path(
+        //         //         path,
+        //         //         &block_threshold,
+        //         //         &self.ban_threshold,
+        //         //         &self.ban_duration,
+        //         //         &mut self.banned_until,
+        //         //         &time,
+        //         //     )
+        //         //     .await;
+        //     }
+        // }
         Ok(false)
     }
 
-    pub async fn on_req(&mut self, msg: Message) {
+    pub async fn on_req(&mut self, msg: Message) -> bool {
         //debug!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
         let msg_name = match &msg {
             Message::Binary(_) => "binary",
-            Message::Close(_) => "close",
+            Message::Close(_) => {
+                return true;
+            }
             Message::Frame(_) => "frame",
             Message::Ping(_) => "ping",
             Message::Pong(_) => "pong",
@@ -546,13 +716,20 @@ impl<
             )
             .instrument(tracing::trace_span!("req", "{}", msg_name,)),
         );
+
+        false
     }
 
     pub async fn prepare(&mut self) -> Result<(), ConErr> {
         if !self.listener_tracker.cons.is_empty() {
-            self.listener_tracker
-                .send(ServerMsg::WsLiveStatsConnected(self.stats.clone()))
-                .await?;
+            let msg = ServerMsg::WsLiveStatsConnected {
+                ip: self.ip,
+                socket_addr: self.addr,
+                con_id: self.con_id,
+                banned_until: self.banned_until,
+                req_stat: self.local_req_stats.clone(),
+            };
+            self.listener_tracker.send(msg).await?;
         }
         Ok(())
     }
@@ -564,12 +741,25 @@ impl<
             self.con_id,
             self.con_task_tracker.len()
         );
+
+        if !self.con_stream_closed {
+            let close_frame = CloseFrame {
+                code: tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Normal,
+                reason: std::borrow::Cow::Borrowed("boom"),
+            };
+            let send_result = self.ws_stream_tx.send(Message::Close(Some(close_frame))).await;
+            if let Err(err) = send_result {
+                error!("on disconnect error: {}", err);
+            }
+        }
+
         self.con_rx.close();
-        debug!("1");
+
+        //debug!("1");
         if !self.cancellation_token.is_cancelled() {
-            debug!("2");
+            //debug!("2");
             if self.is_listening {
-                debug!("3");
+                //debug!("3");
                 let send_result = self
                     .ws_app_tx
                     .send(WsAppMsg::RemoveListener {
@@ -579,23 +769,23 @@ impl<
                 if let Err(err) = send_result {
                     error!("on disconnect error: {}", err);
                 }
-                debug!("4");
+                //debug!("4");
                 let send_result = self.global_con_tx.send(GlobalConMsg::RemoveIpStatListener {
                     con_id: self.con_id,
                 });
-                debug!("6");
+                //debug!("6");
                 if let Err(err) = send_result {
                     error!("on disconnect error: {}", err);
                 }
             }
-            debug!("7");
+            //debug!("7");
             if !self.listener_tracker.cons.is_empty() {
-                debug!("8");
+                //debug!("8");
                 if self.is_listening {
-                    debug!("9");
+                    //debug!("9");
                     self.listener_tracker.cons.remove(&self.con_id);
                 }
-                debug!("10");
+                //debug!("10");
                 let send_result = self
                     .listener_tracker
                     .send(ServerMsg::WsLiveStatsDisconnected {
@@ -606,13 +796,13 @@ impl<
                     error!("on disconnect error: {}", err);
                 }
             }
-            debug!("11");
+            //debug!("11");
         }
-        debug!("12");
+        //debug!("12");
         self.con_task_tracker.close();
-        debug!("13");
+        //debug!("13");
         self.con_task_tracker.wait().await;
-        debug!("14");
+        //debug!("14");
         //trace!("disconnected");
         let send_result = self
             .ws_app_tx
@@ -623,7 +813,7 @@ impl<
             error!("on disconnect error: {}", err);
         }
 
-        trace!("disconnected");
+        debug!("disconnected");
     }
 }
 
@@ -641,15 +831,21 @@ pub enum ConErr {
     #[error("failed to recv oneshot done_tx from ws.")]
     DoneTxErr(#[from] oneshot::error::RecvError),
 
+    #[error("failed to send ip data sync msg: {0}")]
+    SendIpDataSyncErr(#[from] mpsc::error::SendError<IpDataSyncMsg>),
+
     #[error("failed to send con msg: {0}")]
     SendConMsgErr(#[from] mpsc::error::SendError<ConMsg>),
 
     #[error("failed to send stats: {0}")]
-    SendStatsErr(#[from] mpsc::error::SendError<WsStat>),
+    SendStatsErr(#[from] mpsc::error::SendError<ReqStat>),
 
     #[error("failed to send ws_msg: {0}")]
     SendWsMsgErr(#[from] mpsc::error::SendError<WsAppMsg>),
 
     #[error("failed to send global con msg: {0}")]
     SendGlobalConErr(#[from] broadcast::error::SendError<GlobalConMsg>),
+
+    #[error("failed to send ip con msg: {0}")]
+    SendIpConErr(#[from] broadcast::error::SendError<IpConMsg>),
 }

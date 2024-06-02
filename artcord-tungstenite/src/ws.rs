@@ -23,7 +23,7 @@ use artcord_state::misc::throttle_threshold::Threshold;
 use artcord_state::misc::throttle_threshold::ThrottleRanged;
 use artcord_state::misc::throttle_threshold::ThrottleSimple;
 use artcord_state::model::ws_statistics;
-use artcord_state::model::ws_statistics::DbWsStat;
+use artcord_state::model::ws_statistics::DbReqStat;
 use artcord_state::model::ws_statistics::TempConIdType;
 use artcord_state::util::time::time_is_past;
 use artcord_state::util::time::time_passed_days;
@@ -82,6 +82,7 @@ use self::con::throttle_stats_listener_tracker::ConTrackerErr;
 use self::con::throttle_stats_listener_tracker::ThrottleStatsListenerTracker;
 use self::con::Con;
 use self::con::ConMsg;
+use self::con::IpConMsg;
 
 pub mod con;
 pub mod throttle;
@@ -96,9 +97,12 @@ pub enum WsAppMsg {
     Stop,
     Ban {
         ip: IpAddr,
-        until: DateTime<Utc>,
+        date: DateTime<Utc>,
         reason: IpBanReason,
     },
+    // UnBan {
+    //     ip: IpAddr,
+    // },
     Disconnected {
       //  connection_key: TempConIdType,
         ip: IpAddr,
@@ -200,6 +204,12 @@ impl<
         //self.root_cancellation_token.is_cancelled()
         loop {
             select! {
+                
+                _ = self.root_cancellation_token.cancelled() => {
+                    debug!("ws canceled");
+                    break;
+                }
+
                 con = self.tcp_listener.accept() => {
                     trace!("con accepted");
                     let result = self.on_con(&ws_tx, con).await;
@@ -220,15 +230,12 @@ impl<
                         }
                     };
                     if exit {
-                        trace!("ws_rx closed");
+                        debug!("ws_rx closed");
                         break;
                     }
                 },
 
-                _ = self.root_cancellation_token.cancelled() => {
-                    trace!("ws canceled");
-                    break;
-                }
+             
             }
         }
         trace!("ws app exiting...");
@@ -257,7 +264,7 @@ impl<
             }
         }
 
-        trace!("ws app exited.");
+        debug!("ws app exited.");
     }
 
     pub async fn on_con(
@@ -278,11 +285,11 @@ impl<
 
         let time = self.time_middleware.get_time().await;
 
-        let allow: bool = match self.throttle.inc_con(ip, &self.ws_threshold, &time) {
+        let allow: bool = match self.throttle.inc_con(ip, &self.ws_threshold, &self.ws_task_tracker, &self.root_cancellation_token, &time, &self.time_middleware) {
             AllowCon::Allow => {
                 if !self.listener_tracker.cons.is_empty() {
                     if let Some(total_amount) = self.throttle.get_total_allowed(&ip) {
-                        let msg = ServerMsg::WsLiveStatsIpConnectionAllowed { ip, total_amount };
+                        let msg = ServerMsg::WsLiveStatsConAllowed { ip, total_amount };
                         self.listener_tracker.send(msg).await?;
                     } else {
                         error!("ws({}): missing ip entry: {}", &self.ws_addr, ip);
@@ -294,7 +301,7 @@ impl<
             AllowCon::Blocked => {
                 if !self.listener_tracker.cons.is_empty() {
                     if let Some(total_amount) = self.throttle.get_total_blocked(&ip) {
-                        let msg = ServerMsg::WsLiveStatsIpConnectionBlocked { ip, total_amount };
+                        let msg = ServerMsg::WsLiveStatsConBlocked { ip, total_amount };
                         self.listener_tracker.send(msg).await?;
                     } else {
                         error!("ws({}): missing ip entry: {}", &self.ws_addr, ip);
@@ -302,8 +309,28 @@ impl<
                 }
                 false
             }
-            AllowCon::Unbanned => {
+            AllowCon::UnbannedAndBlocked => {
                 if !self.listener_tracker.cons.is_empty() {
+                    if let Some(total_amount) = self.throttle.get_total_blocked(&ip) {
+                        let msg = ServerMsg::WsLiveStatsConBlocked { ip, total_amount };
+                        self.listener_tracker.send(msg).await?;
+                    } else {
+                        error!("ws({}): missing ip entry: {}", &self.ws_addr, ip);
+                    }
+
+                    let msg = ServerMsg::WsLiveStatsIpUnbanned { ip };
+                    self.listener_tracker.send(msg).await?;
+                }
+                false
+            }
+            AllowCon::UnbannedAndAllow => {
+                if !self.listener_tracker.cons.is_empty() {
+                    if let Some(total_amount) = self.throttle.get_total_allowed(&ip) {
+                        let msg = ServerMsg::WsLiveStatsConAllowed { ip, total_amount };
+                        self.listener_tracker.send(msg).await?;
+                    } else {
+                        error!("ws({}): missing ip entry: {}", &self.ws_addr, ip);
+                    }
                     // if let Some(total_amount) = self.throttle.get_total_unbanned(&ip) {
                        
                     // } else {
@@ -320,7 +347,7 @@ impl<
             AllowCon::Banned((date, reason)) => {
                 if !self.listener_tracker.cons.is_empty() {
                     if let Some(total_amount) = self.throttle.get_total_banned(&ip) {
-                        let msg = ServerMsg::WsLiveStatsIpConnectionBanned { ip, total_amount };
+                        let msg = ServerMsg::WsLiveStatsConBanned { ip, total_amount };
                         self.listener_tracker.send(msg).await?;
                     } else {
                         error!("ws({}): missing ip entry: {}", &self.ws_addr, ip);
@@ -338,10 +365,12 @@ impl<
             return Ok(());
         };
 
-        let Some((ip_con_tx, ip_con_rx)) = self.throttle.get_ip_channel(&ip) else {
+        let Some((ip_con_tx, ip_con_rx, ip_data_sync_tx)) = self.throttle.get_ip_channel(&ip) else {
             error!("ws({}): failed to copy ip_con cahnnel", &self.ws_addr);
             return Ok(());
         };
+
+        //let task_handle: JoinHandle<()> = self.ws_task_tracker.spawn(async {});
 
         self.ws_task_tracker.spawn(
             Con::connect(
@@ -354,6 +383,7 @@ impl<
                 (self.global_con_tx.clone(), self.global_con_tx.subscribe()),
                 ip_con_tx,
                 ip_con_rx,
+                ip_data_sync_tx,
                 self.ws_threshold.ws_req_ban_threshold.clone(),
                 self.ws_threshold.ws_req_ban_duration.clone(),
                 self.time_middleware.clone(),
@@ -361,7 +391,7 @@ impl<
                 self.listener_tracker.clone(),
             )
             .instrument(tracing::trace_span!(
-                "ws",
+                "con",
                 "{}",
                 user_addr.to_string()
             )),
@@ -379,7 +409,7 @@ impl<
 
         match msg {
             WsAppMsg::Disconnected { ip } => {
-                self.throttle.dec_con(&ip);
+                self.throttle.dec_con(&ip, &time);
             }
             WsAppMsg::Stop => {
                 return Ok(true);
@@ -409,9 +439,13 @@ impl<
             } => {
                 self.listener_tracker.cons.remove(&connection_key);
             }
-            WsAppMsg::Ban { ip, until, reason } => {
-                self.throttle.on_ban(&ip, reason, until);
+            WsAppMsg::Ban { ip, date: until, reason } => {
+                self.throttle.ban(&ip, reason, until)?;
+                debug!("ip {} is banned: {:#?}", ip, &self.throttle.ips); 
             }
+            // WsAppMsg::UnBan { ip } => {
+            //     self.throttle.unban(&ip);
+            // }
         }
         Ok(false)
     }
@@ -439,6 +473,9 @@ pub enum WsMsgErr {
 
     #[error("Send error: {0}")]
     Send(#[from] tokio::sync::mpsc::error::SendError<tokio_tungstenite::tungstenite::Message>),
+
+    #[error("Send error: {0}")]
+    IpSend(#[from] tokio::sync::broadcast::error::SendError<IpConMsg>),
 
     #[error("Send error: {0}")]
     ConnectionSend(#[from] tokio::sync::mpsc::error::SendError<ConMsg>),

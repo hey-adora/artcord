@@ -17,14 +17,17 @@ use artcord_state::misc::throttle_connection::ConStatus;
 use artcord_state::misc::throttle_connection::IpBanReason;
 use artcord_state::misc::throttle_connection::LiveThrottleConnectionCount;
 use artcord_state::misc::throttle_connection::TempThrottleConnection;
+use artcord_state::misc::throttle_threshold::is_banned;
 use artcord_state::misc::throttle_threshold::AllowCon;
 use artcord_state::misc::throttle_threshold::IsBanned;
 use artcord_state::misc::throttle_threshold::Threshold;
 use artcord_state::misc::throttle_threshold::ThrottleRanged;
 use artcord_state::misc::throttle_threshold::ThrottleSimple;
+use artcord_state::model::ws_statistics::ReqStat;
 use artcord_state::model::ws_statistics::TempConIdType;
 use artcord_state::util::time::time_is_past;
 use artcord_state::util::time::time_passed_days;
+use artcord_state::util::time::TimeMiddleware;
 use artcord_state::ws::WsIpStat;
 use chrono::DateTime;
 use chrono::Days;
@@ -69,6 +72,7 @@ use super::con::throttle_stats_listener_tracker::ThrottleStatsListenerTracker;
 use super::con::ConMsg;
 use super::con::GlobalConMsg;
 use super::con::IpConMsg;
+use super::con::IpDataSyncMsg;
 use super::WsAppMsg;
 
 #[derive(Debug)]
@@ -84,7 +88,97 @@ pub struct WsThrottleCon {
     pub con_flicker_throttle: ThrottleSimple,
     pub ip_con_tx: broadcast::Sender<IpConMsg>,
     pub ip_con_rx: broadcast::Receiver<IpConMsg>,
+    pub ip_data_sync_tx: mpsc::Sender<IpDataSyncMsg>,
+    pub ip_data_sync_task: JoinHandle<()>,
+    //pub ip_req
     //pub stats_listeners: broadcast::Receiver<GlobalConMsg>,
+}
+
+#[derive(Debug)]
+pub struct WsIpTask<TimeMiddlewareType: TimeMiddleware + Clone + Sync + Send + 'static> {
+    stats: ReqStat,
+    banned_until: Option<(DateTime<Utc>, IpBanReason)>,
+    cancelation_token: CancellationToken,
+    time_middleware: TimeMiddlewareType,
+    ban_threshold: Threshold,
+    ban_duration: TimeDelta,
+    data_sync_rx: mpsc::Receiver<IpDataSyncMsg>,
+    //pub ip_req
+    //pub stats_listeners: broadcast::Receiver<GlobalConMsg>,
+}
+
+impl<TimeMiddlewareType: TimeMiddleware + Clone + Sync + Send + 'static>
+    WsIpTask<TimeMiddlewareType>
+{
+    pub async fn manage_ip(
+        cancelation_token: CancellationToken,
+        data_sync_rx: mpsc::Receiver<IpDataSyncMsg>,
+        time_middleware: TimeMiddlewareType,
+        ban_threshold: Threshold,
+        ban_duration: TimeDelta,
+    ) {
+        let mut task = Self {
+            stats: ReqStat::new(),
+            banned_until: None,
+            cancelation_token,
+            time_middleware,
+            ban_duration,
+            ban_threshold,
+            data_sync_rx,
+        };
+
+        task.run().await;
+    }
+
+    pub async fn run(&mut self) {
+        trace!("task is running");
+        loop {
+            select! {
+                msg = self.data_sync_rx.recv() => {
+                    let Some(msg) = msg else {
+                        break;
+                    };
+                    let exit = self.on_msg(msg).await;
+                    if exit {
+                        break;
+                    }
+                }
+                _ = self.cancelation_token.cancelled() => {
+                    break;
+                }
+            }
+        }
+        trace!("task exited");
+    }
+
+    async fn on_msg(&mut self, msg: IpDataSyncMsg) -> bool {
+        trace!("recv: {:#?}", &msg);
+        match msg {
+            IpDataSyncMsg::CheckThrottle {
+                path,
+                block_threshold,
+                allow_tx,
+            } => {
+                let time = self.time_middleware.get_time().await;
+                let allow = self.stats
+                    .inc_path(
+                        path,
+                        &block_threshold,
+                        &self.ban_threshold,
+                        &self.ban_duration,
+                        &mut self.banned_until,
+                        &time,
+                    )
+                    .await;
+                let send_result = allow_tx.send(allow);
+                if send_result.is_err() {
+                    error!("failed to send AllowCon");
+                }
+            }
+        }
+        trace!("recv finished");
+        false
+    }
 }
 
 impl WsThrottle {
@@ -94,25 +188,39 @@ impl WsThrottle {
             //stats_listeners: ThrottleStatsListenerTracker::new(),
         }
     }
-    pub fn on_ban(&mut self, ip: &IpAddr, ban_reason: IpBanReason, until: DateTime<Utc>) {
-        let ip_stats = self.ips.get_mut(&ip);
+    pub fn ban(&mut self, ip: &IpAddr, ban_reason: IpBanReason, until: DateTime<Utc>) -> Result<(), tokio::sync::broadcast::error::SendError<IpConMsg>>{
+        let ip_stats = self.ips.get_mut(ip);
+        let Some(ip_stats) = ip_stats else {
+            error!("throttle: cant be banned because it doesnt exist in the list");
+            return Ok(());
+        };
+        ip_stats
+            .con_throttle
+            .ban(&mut ip_stats.stats.banned_until, ban_reason, until);
+        ip_stats.ip_con_tx.send(IpConMsg::Disconnect)?;
+
+        Ok(())
+    }
+
+    pub fn unban(&mut self, ip: &IpAddr) {
+        let ip_stats = self.ips.get_mut(ip);
         let Some(ip_stats) = ip_stats else {
             error!("throttle: cant be banned because it doesnt exist in the list");
             return;
         };
         ip_stats
             .con_throttle
-            .ban(&mut ip_stats.stats.banned_until, ban_reason, until);
+            .unban(&mut ip_stats.stats.banned_until);
     }
 
-    pub fn dec_con(&mut self, ip: &IpAddr) {
+    pub fn dec_con(&mut self, ip: &IpAddr, time: &DateTime<Utc>) {
         let ip_stats = self.ips.get_mut(ip);
         let Some(ip_stats) = ip_stats else {
             error!("throttle: cant disconnect ip that doesnt exist");
             return;
         };
         ip_stats.dec();
-        if ip_stats.con_throttle.amount == 0 {
+        if ip_stats.con_throttle.amount == 0 && ip_stats.is_banned(time) != IsBanned::Banned {
             self.ips.remove(&ip);
         }
         trace!("throttle on DEC: {:#?}", self);
@@ -156,43 +264,72 @@ impl WsThrottle {
         ))
     }
 
-    pub fn get_ip_channel(&mut self, ip: &IpAddr) -> Option<(broadcast::Sender<IpConMsg>, broadcast::Receiver<IpConMsg>)> {
+    pub fn get_ip_channel(
+        &mut self,
+        ip: &IpAddr,
+    ) -> Option<(
+        broadcast::Sender<IpConMsg>,
+        broadcast::Receiver<IpConMsg>,
+        mpsc::Sender<IpDataSyncMsg>,
+    )> {
         let Some(con) = self.ips.get_mut(ip) else {
             return None;
         };
+
         Some((
             con.ip_con_tx.clone(),
             con.ip_con_rx.resubscribe(),
+            con.ip_data_sync_tx.clone(),
         ))
     }
 
-    pub fn inc_con(
+    pub fn inc_con<TimeMiddlewareType: TimeMiddleware + Clone + Sync + Send + 'static>(
         &mut self,
         ip: IpAddr,
         ws_threshold: &WsThreshold,
+        task_tracker: &TaskTracker,
+        cancellation_token: &CancellationToken,
         time: &DateTime<Utc>,
+        time_middleware: &TimeMiddlewareType,
+        // ban_threshold: &Threshold,
+        // ban_duration: &TimeDelta,
     ) -> AllowCon {
-        let con = self.ips.entry(ip).or_insert_with(|| WsThrottleCon::new(ip, ws_threshold.ws_max_con_threshold_range, *time));
+        let con = self.ips.entry(ip).or_insert_with(|| {
+            WsThrottleCon::new(
+                ip,
+                ws_threshold.ws_max_con_threshold_range,
+                task_tracker,
+                cancellation_token.clone(),
+                *time,
+                time_middleware.clone(),
+                ws_threshold.ws_req_ban_threshold.clone(),
+                ws_threshold.ws_req_ban_duration.clone(),
+            )
+        });
 
         let result = con.inc(ws_threshold, time);
         match result {
             AllowCon::Allow => {
                 con.stats.total_allow_amount += 1;
             }
-            AllowCon::Blocked => {
+            AllowCon::Blocked | AllowCon::UnbannedAndBlocked => {
                 con.stats.total_block_amount += 1;
             }
+            // AllowCon::Blocked => {
+            //     con.stats.total_block_amount += 1;
+            // }
             AllowCon::Banned(_) => {
                 con.stats.total_banned_amount += 1;
             }
             AllowCon::AlreadyBanned => {
                 con.stats.total_already_banned_amount += 1;
             }
-            AllowCon::Unbanned => {
+
+            AllowCon::UnbannedAndAllow => {
                 //con.stats.total_unbanned_amount += 1;
             }
         }
-        trace!("throttle on INC: {:#?}", self);
+        trace!("throttle result {:?} and INC: {:#?}", result, self);
         result
     }
 }
@@ -209,21 +346,48 @@ impl WsThrottleCon {
             })
     }
 
-    pub fn new(ip: IpAddr, range: u64, started_at: DateTime<Utc>) -> Self {
-        let (con_broadcast_tx, con_broadcast_rx) = broadcast::channel(10);
+    pub fn new<TimeMiddlewareType: TimeMiddleware + Clone + Sync + Send + 'static>(
+        ip: IpAddr,
+        range: u64,
+        task_tracker: &TaskTracker,
+        cancelation_token: CancellationToken,
+        started_at: DateTime<Utc>,
+        time_middleware: TimeMiddlewareType,
+        ban_threshold: Threshold,
+        ban_duration: TimeDelta,
+    ) -> Self {
+        
+        let (con_broadcast_tx, con_broadcast_rx) = broadcast::channel(1);
+        let (ip_data_sync_tx, ip_data_sync_rx) = mpsc::channel(1);
+        let ip_data_sync_task = task_tracker.spawn(
+            WsIpTask::manage_ip(
+                cancelation_token,
+                ip_data_sync_rx,
+                time_middleware,
+                ban_threshold,
+                ban_duration,
+            )
+            .instrument(tracing::trace_span!("ip_sync", "{}", ip)),
+        );
         let con = Self {
             //path_stats: HashMap::new(),
             stats: WsIpStat::new(ip),
             con_throttle: ThrottleRanged::new(range, started_at),
             con_flicker_throttle: ThrottleSimple::new(started_at),
-            
+
             ip_con_tx: con_broadcast_tx,
             ip_con_rx: con_broadcast_rx,
+            ip_data_sync_tx,
+            ip_data_sync_task,
             // ip_stats_tx: ip_stats_tx.clone(),
             // ip_stats_rx: ip_stats_rx.clone(),
         };
         // ((ip_stats_tx, ip_stats_rx), con)
         con
+    }
+
+    pub fn is_banned(&mut self, time: &DateTime<Utc>) -> IsBanned {
+        is_banned(&mut self.stats.banned_until, time)
     }
 
     pub fn dec(&mut self) {
@@ -238,6 +402,8 @@ impl WsThrottleCon {
             time,
             &mut self.stats.banned_until,
         );
+
+        trace!("throttle: flicker throttle result: {:?}", allow);
 
         if matches!(
             allow,
@@ -254,14 +420,33 @@ impl WsThrottleCon {
             &mut self.stats.banned_until,
         );
 
-        if matches!(result, AllowCon::Allow) {
-            self.con_flicker_throttle.inc();
-            if allow == AllowCon::Unbanned {
-                return allow;
-            }
-        }
+        trace!("throttle: result: {:?}", result);
 
-        result
+        match result {
+            AllowCon::Allow => {
+                self.con_flicker_throttle.inc();
+                if allow == AllowCon::UnbannedAndAllow {
+                    allow
+                } else {
+                    result
+                }
+            }
+            AllowCon::Blocked => {
+                if allow == AllowCon::UnbannedAndAllow {
+                    AllowCon::UnbannedAndBlocked
+                } else {
+                    result
+                }
+            }
+            // AllowCon::Blocked => {
+            //     if allow == AllowCon::Unbanned {
+            //         AllowCon::UnbannedAndBlocked
+            //     } else {
+            //         result
+            //     }
+            // }
+            _ => result,
+        }
     }
 }
 
@@ -283,28 +468,32 @@ pub enum WsThrottleErr {
 
 #[cfg(test)]
 mod throttle_tests {
-    use std::net::{IpAddr, Ipv4Addr};
-    use std::str::FromStr;
-    use artcord_state::misc::{
+    use artcord_state::{misc::{
         throttle_connection::IpBanReason,
         throttle_threshold::{AllowCon, Threshold},
-    };
+    }, util::time::Clock};
     use chrono::{TimeDelta, Utc};
-    use tracing::trace;
+    use std::net::{IpAddr, Ipv4Addr};
+    use std::str::FromStr;
+    use tokio_util::{sync::CancellationToken, task::TaskTracker};
+    use tracing::{debug, trace};
 
     use crate::WsThreshold;
 
     use super::WsThrottle;
 
-    #[test]
-    fn ws_throttle_test() {
+    #[tokio::test]
+    async fn ws_throttle_test() {
         let _ = tracing_subscriber::fmt()
             .event_format(
                 tracing_subscriber::fmt::format()
                     .with_file(true)
                     .with_line_number(true),
             )
-            .with_env_filter(tracing_subscriber::EnvFilter::from_str("artcord=trace").unwrap())
+            .with_env_filter(
+                tracing_subscriber::EnvFilter::try_from_env("RUST_LOG")
+                    .unwrap_or(tracing_subscriber::EnvFilter::from_str("artcord=trace").unwrap()),
+            )
             .try_init();
 
         let mut throttle = WsThrottle::new();
@@ -330,68 +519,92 @@ mod throttle_tests {
             },
         };
         let ip = IpAddr::V4(Ipv4Addr::new(1, 1, 1, 69));
+        let task_tracker = TaskTracker::new();
+        let cancellation_token = CancellationToken::new();
+        let time_middleware = Clock::new();
+
         for _ in 0..5 {
-            let con_1 = throttle.inc_con(ip, &ws_threshold, &time);
+            let con_1 =
+                throttle.inc_con(ip, &ws_threshold, &task_tracker, &cancellation_token, &time, &time_middleware);
             time += TimeDelta::try_minutes(1).unwrap();
             assert_eq!(con_1, AllowCon::Allow);
         }
         //time += TimeDelta::try_minutes(10).unwrap();
-        let con_1 = throttle.inc_con(ip, &ws_threshold, &time);
+        let con_1 = throttle.inc_con(ip, &ws_threshold, &task_tracker, &cancellation_token, &time, &time_middleware);
         assert_eq!(con_1, AllowCon::Blocked);
 
         //time += TimeDelta::try_minutes(2).unwrap();
 
-        throttle.dec_con(&ip);
+        throttle.dec_con(&ip, &time);
 
-        let con_1 = throttle.inc_con(ip, &ws_threshold, &time);
+        let con_1 = throttle.inc_con(ip, &ws_threshold, &task_tracker, &cancellation_token, &time, &time_middleware);
         assert_eq!(con_1, AllowCon::Allow);
 
         for _ in 0..19 {
-            throttle.dec_con(&ip);
-            let con_1 = throttle.inc_con(ip, &ws_threshold, &time);
+            throttle.dec_con(&ip, &time);
+            let con_1 =
+                throttle.inc_con(ip, &ws_threshold, &task_tracker, &cancellation_token, &time, &time_middleware);
             assert_eq!(con_1, AllowCon::Allow);
         }
 
-        throttle.dec_con(&ip);
+        throttle.dec_con(&ip, &time);
 
-        let con_1 = throttle.inc_con(ip, &ws_threshold, &time);
-        assert_eq!(con_1, AllowCon::Banned((time + TimeDelta::try_minutes(1).unwrap(), IpBanReason::WsConFlickerDetected)));
+        let con_1 = throttle.inc_con(ip, &ws_threshold, &task_tracker, &cancellation_token, &time, &time_middleware);
+        assert_eq!(
+            con_1,
+            AllowCon::Banned((
+                time + TimeDelta::try_minutes(1).unwrap(),
+                IpBanReason::WsConFlickerDetected
+            ))
+        );
 
-        let con_1 = throttle.inc_con(ip, &ws_threshold, &time);
+        let con_1 = throttle.inc_con(ip, &ws_threshold, &task_tracker, &cancellation_token, &time, &time_middleware);
         assert_eq!(con_1, AllowCon::AlreadyBanned);
 
         time += TimeDelta::try_minutes(1).unwrap();
 
-        let con_1 = throttle.inc_con(ip, &ws_threshold, &time);
-        assert_eq!(con_1, AllowCon::Unbanned);
+        let con_1 = throttle.inc_con(ip, &ws_threshold, &task_tracker, &cancellation_token, &time, &time_middleware);
+        assert_eq!(con_1, AllowCon::UnbannedAndAllow);
 
         for _ in 0..10 {
-            let con_1 = throttle.inc_con(ip, &ws_threshold, &time);
+            let con_1 =
+                throttle.inc_con(ip, &ws_threshold, &task_tracker, &cancellation_token, &time, &time_middleware);
             assert_eq!(con_1, AllowCon::Blocked);
         }
 
-        let con_1 = throttle.inc_con(ip, &ws_threshold, &time);
-        assert_eq!(con_1, AllowCon::Banned((time + TimeDelta::try_minutes(1).unwrap(), IpBanReason::WsTooManyReconnections)));
-        
-        let con_1 = throttle.inc_con(ip, &ws_threshold, &time);
+        let con_1 = throttle.inc_con(ip, &ws_threshold, &task_tracker, &cancellation_token, &time, &time_middleware);
+        assert_eq!(
+            con_1,
+            AllowCon::Banned((
+                time + TimeDelta::try_minutes(1).unwrap(),
+                IpBanReason::WsTooManyReconnections
+            ))
+        );
+
+        let con_1 = throttle.inc_con(ip, &ws_threshold, &task_tracker, &cancellation_token, &time, &time_middleware);
         assert_eq!(con_1, AllowCon::AlreadyBanned);
 
         time += TimeDelta::try_minutes(1).unwrap();
 
-        throttle.dec_con(&ip);
+        debug!("ONE: {:#?}", throttle);
+        let con_1 = throttle.inc_con(ip, &ws_threshold, &task_tracker, &cancellation_token, &time, &time_middleware);
+        assert_eq!(con_1, AllowCon::UnbannedAndBlocked);
+        debug!("TWO: {:#?}", throttle);
 
-        let con_1 = throttle.inc_con(ip, &ws_threshold, &time);
-        assert_eq!(con_1, AllowCon::Unbanned);
+        throttle.dec_con(&ip, &time);
+        debug!("THREE: {:#?}", throttle);
+
+        let con_1 = throttle.inc_con(ip, &ws_threshold, &task_tracker, &cancellation_token, &time, &time_middleware);
+        assert_eq!(con_1, AllowCon::Allow);
 
         for _ in 0..5 {
-            throttle.dec_con(&ip);
+            throttle.dec_con(&ip, &time);
         }
 
         let ip_exists = throttle.ips.get(&ip).is_some();
         assert!(!ip_exists);
 
         //trace!("throttle: {:#?}", throttle);
-        
     }
 }
 

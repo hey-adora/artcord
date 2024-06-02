@@ -23,25 +23,25 @@ pub type TempConIdType = u128;
 
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
-pub struct WsStat {
-    pub con_id: TempConIdType,
-    pub ip: IpAddr,
-    pub addr: SocketAddr,
-    pub count:  HashMap<ClientPathType, WsStatPath>,
-    pub connected_at: DateTime<Utc>,
-    pub banned_until: Option<(DateTime<Utc>, IpBanReason)>,
+pub struct ReqStat {
+    // pub con_id: TempConIdType,
+    // pub ip: IpAddr,
+    // pub addr: SocketAddr,
+    pub count:  HashMap<ClientPathType, ReqStatPath>,
+    // pub connected_at: DateTime<Utc>,
+    // pub banned_until: Option<(DateTime<Utc>, IpBanReason)>,
     //pub throttle: ThrottleDoubleLayer,
 }
 
 
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, FieldName)]
-pub struct DbWsStat {
+pub struct DbReqStat {
     pub id: String,
     pub con_id: String,
     pub ip: String,
     pub addr: String,
-    pub req_count: Vec<DbWsStatPath>,
+    pub req_count: Vec<DbReqStatPath>,
     pub connected_at: i64,
     pub disconnected_at: i64,
     //pub throttle: DbThrottleDoubleLayer,
@@ -50,7 +50,7 @@ pub struct DbWsStat {
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
-pub struct WsStatPath {
+pub struct ReqStatPath {
     // pub total_count: u64,
     // pub count: u64,
     pub total_allowed_count: u64,
@@ -63,7 +63,7 @@ pub struct WsStatPath {
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
-pub struct DbWsStatPath {
+pub struct DbReqStatPath {
     pub path: String,
     pub total_allowed_count: i64,
     pub total_blocked_count: i64,
@@ -102,7 +102,7 @@ pub struct DbWsStatPath {
 //     }
 // }
 
-impl WsStatPath {
+impl ReqStatPath {
     pub fn new(time: DateTime<Utc>) -> Self {
         Self {
             // total_count: 0,
@@ -120,22 +120,22 @@ impl WsStatPath {
     
 }
 
-impl DbWsStat {
-    pub fn from_hashmap_ws_stats(temp_stats: HashMap<TempConIdType, WsStat>, time: DateTime<Utc>) -> Result<Vec<Self>, DbWsStatPathFromError> {
-        temp_stats.into_iter().map(|(con_id, connection_temp_stats)| DbWsStat::from_ws_stat(connection_temp_stats, uuid::Uuid::from_u128(con_id).to_string(), time, time)).collect()
-    }
+impl DbReqStat {
+    // pub fn from_hashmap_ws_stats(temp_stats: HashMap<TempConIdType, WsStat>, time: DateTime<Utc>) -> Result<Vec<Self>, DbWsStatPathFromError> {
+    //     temp_stats.into_iter().map(|(con_id, connection_temp_stats)| DbWsStat::from_ws_stat(connection_temp_stats, uuid::Uuid::from_u128(con_id).to_string(), time, time)).collect()
+    // }
 
-    pub fn from_ws_stat(value: WsStat, con_id: String, disconnected_at: DateTime<Utc>, time: DateTime<Utc>) -> Result<Self, DbWsStatPathFromError> {
-        let req_count: Vec<DbWsStatPath> = value.count.into_iter().map(|v| v.try_into()).collect::<Result<Vec<DbWsStatPath>, DbWsStatPathFromError>>()?;
+    pub fn from_ws_stat(value: ReqStat, ip: IpAddr, addr: SocketAddr, con_id: String, connected_at: DateTime<Utc>, disconnected_at: DateTime<Utc>, time: DateTime<Utc>) -> Result<Self, DbWsStatPathFromError> {
+        let req_count: Vec<DbReqStatPath> = value.count.into_iter().map(|v| v.try_into()).collect::<Result<Vec<DbReqStatPath>, DbWsStatPathFromError>>()?;
 
         Ok(
             Self {
                 id: uuid::Uuid::new_v4().to_string(),
                 con_id,
-                ip: value.ip.to_string(),
-                addr: value.addr.to_string(),
+                ip: ip.to_string(),
+                addr: addr.to_string(),
                 req_count,
-                connected_at: value.connected_at.timestamp_millis(),
+                connected_at: connected_at.timestamp_millis(),
                 disconnected_at: disconnected_at.timestamp_millis(),
                 //throttle: value.throttle.try_into()?,
                 modified_at: time.timestamp_millis(),
@@ -148,9 +148,9 @@ impl DbWsStat {
 
 /////////////////////////////
 
-impl TryFrom<(ClientPathType, WsStatPath)> for DbWsStatPath {
+impl TryFrom<(ClientPathType, ReqStatPath)> for DbReqStatPath {
     type Error = DbWsStatPathFromError;
-    fn try_from((path, value): (ClientPathType, WsStatPath)) -> Result<Self, Self::Error> {
+    fn try_from((path, value): (ClientPathType, ReqStatPath)) -> Result<Self, Self::Error> {
         let path = ClientMsg::VARIANTS.get(path).ok_or(DbWsStatPathFromError::InvalidClientMsgEnumIndex(path))?;
         Ok(
             Self {
@@ -170,9 +170,9 @@ impl TryFrom<(ClientPathType, WsStatPath)> for DbWsStatPath {
     }
 }
 
-impl TryFrom<DbWsStatPath> for WsStatPath {
+impl TryFrom<DbReqStatPath> for ReqStatPath {
     type Error = DbWsStatTempCountItemError;
-    fn try_from(value: DbWsStatPath) -> Result<Self, Self::Error> {
+    fn try_from(value: DbReqStatPath) -> Result<Self, Self::Error> {
         Ok(
             Self {
                 // total_count: u64::try_from(value.total_count)?,
@@ -190,15 +190,15 @@ impl TryFrom<DbWsStatPath> for WsStatPath {
     }
 }
 
-impl WsStat {
-    pub fn new(con_id: TempConIdType , ip: IpAddr, addr: SocketAddr, started_at: DateTime<Utc>) -> Self {
+impl ReqStat {
+    pub fn new() -> Self {
         Self {
-            con_id,
-            ip,
-            addr,
+            // con_id,
+            // ip,
+            // addr,
             count: HashMap::new(),
-            connected_at: started_at,
-            banned_until: None,
+            // connected_at: started_at,
+            // banned_until: None,
             //throttle: ThrottleDoubleLayer::new(started_at),
         }
     }
@@ -206,36 +206,33 @@ impl WsStat {
     pub async fn inc_path(
         &mut self,
         path: ClientPathType,
-        block_threshold: Threshold,
+        block_threshold: &Threshold,
         ban_threshold: &Threshold,
         ban_duration: &TimeDelta,
-       // banned_until: &mut Option<(DateTime<Utc>, IpBanReason)>,
+        banned_until: &mut Option<(DateTime<Utc>, IpBanReason)>,
         time: &DateTime<Utc>,
     ) -> AllowCon {
         let path = self
             .count
             .entry(path)
-            .or_insert_with(|| WsStatPath::new(*time));
+            .or_insert_with(|| ReqStatPath::new(*time));
 
         let result = path.throttle.allow(
-            &block_threshold,
+            block_threshold,
             ban_threshold,
             IpBanReason::WsRouteBruteForceDetected,
             ban_duration,
             time,
-            &mut self.banned_until,
+            banned_until,
         );
 
         //path.total_count += 1;
 
         match &result {
-            AllowCon::Allow => {
+            AllowCon::Allow | AllowCon::UnbannedAndAllow => {
                 path.total_allowed_count += 1;
             }
-            AllowCon::Unbanned => {
-                path.total_allowed_count += 1;
-            }
-            AllowCon::Blocked => {
+            AllowCon::Blocked | AllowCon::UnbannedAndBlocked => {
                 path.total_blocked_count += 1;
             }
             AllowCon::Banned(_) => {
@@ -250,11 +247,11 @@ impl WsStat {
     }
 }
 
-impl TryFrom<DbWsStat> for WsStat {
+impl TryFrom<DbReqStat> for ReqStat {
     type Error = WsStatDbToTempTryFromError;
 
-    fn try_from(value: DbWsStat) -> Result<WsStat, Self::Error> {
-        let mut count = HashMap::<ClientPathType, WsStatPath>::with_capacity(value.req_count.len());
+    fn try_from(value: DbReqStat) -> Result<ReqStat, Self::Error> {
+        let mut count = HashMap::<ClientPathType, ReqStatPath>::with_capacity(value.req_count.len());
         for req_count in value.req_count {
             let client_msg_enum_index = ClientMsg::VARIANTS.iter().position(|name| *name == req_count.path).ok_or(WsStatDbToTempTryFromError::InvalidClientMsgEnumName(req_count.path.clone()))?;
             //let total_count = u64::try_from(req_count.count)?;
@@ -266,17 +263,17 @@ impl TryFrom<DbWsStat> for WsStat {
             );
         }
 
-        let con_id = uuid::Uuid::from_str(&value.con_id)?;
+        //let con_id = uuid::Uuid::from_str(&value.con_id)?;
 
         Ok(
             Self {
-                con_id: con_id.as_u128(),
-                ip: IpAddr::from_str(&value.ip)?,
-                addr: SocketAddr::from_str(&value.addr)?,
+                // con_id: con_id.as_u128(),
+                // ip: IpAddr::from_str(&value.ip)?,
+                // addr: SocketAddr::from_str(&value.addr)?,
                 count,
                 //throttle: value.throttle.try_into()?,
-                connected_at: DateTime::<Utc>::from_timestamp_millis(value.connected_at).ok_or(WsStatDbToTempTryFromError::InvalidDate(value.connected_at))?,
-                banned_until: None,
+                // connected_at: DateTime::<Utc>::from_timestamp_millis(value.connected_at).ok_or(WsStatDbToTempTryFromError::InvalidDate(value.connected_at))?,
+                // banned_until: None,
             }
         )
     }

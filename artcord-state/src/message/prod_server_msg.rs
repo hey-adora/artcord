@@ -3,7 +3,7 @@ use std::{collections::HashMap, net::{IpAddr, SocketAddr}, str::FromStr};
 use crate::{
     aggregation::server_msg_img::AggImg,
     misc::{registration_invalid::RegistrationInvalidMsg, throttle_connection::{IpBanReason, TempThrottleConnection}},
-    model::{user::User, ws_statistics::{DbWsStat, TempConIdType, WsStat}}, ws::WsIpStat,
+    model::{user::User, ws_statistics::{DbReqStat, TempConIdType, ReqStat}}, ws::WsIpStat,
 };
 
 use artcord_leptos_web_sockets::WsPackage;
@@ -31,25 +31,31 @@ pub enum ServerMsg {
     // WsLiveThrottleCachedFlickerBanned { ip: IpAddr, date: DateTime<Utc>, reason: IpBanReason },
     // WsLiveThrottleCachedFlickerUnban { ip: IpAddr },
 
-    WsLiveStatsIpConnections(Vec<WsIpStat>),
+    WsLiveStatsIpCons(Vec<WsIpStat>),
 
-    WsLiveStatsConnected(WsStat),
+    WsLiveStatsConnected {
+        ip: IpAddr,
+        socket_addr: SocketAddr,
+        con_id: TempConIdType,
+        banned_until: Option<(DateTime<Utc>, IpBanReason)>,
+        req_stat: ReqStat,
+    },
     WsLiveStatsDisconnected{ con_id: TempConIdType },
 
-    WsLiveStatsConReqAllowed { con_id: TempConIdType, path: ClientPathType, total_amount: u64 },
-    WsLiveStatsConReqBlocked { con_id: TempConIdType, path: ClientPathType, total_amount: u64 },
-    WsLiveStatsConReqBanned { con_id: TempConIdType, path: ClientPathType, total_amount: u64 },
+    WsLiveStatsReqAllowed { con_id: TempConIdType, path: ClientPathType, total_amount: u64 },
+    WsLiveStatsReqBlocked { con_id: TempConIdType, path: ClientPathType, total_amount: u64 },
+    WsLiveStatsReqBanned { con_id: TempConIdType, path: ClientPathType, total_amount: u64 },
 
     WsLiveStatsIpBanned { ip: IpAddr, date: DateTime<Utc>, reason: IpBanReason },
     WsLiveStatsIpUnbanned{ ip: IpAddr },
     
-    WsLiveStatsIpConnectionAllowed{ ip: IpAddr, total_amount: u64 },
-    WsLiveStatsIpConnectionBlocked{ ip: IpAddr, total_amount: u64 },
-    WsLiveStatsIpConnectionBanned{ ip: IpAddr, total_amount: u64 },
+    WsLiveStatsConAllowed{ ip: IpAddr, total_amount: u64 },
+    WsLiveStatsConBlocked{ ip: IpAddr, total_amount: u64 },
+    WsLiveStatsConBanned{ ip: IpAddr, total_amount: u64 },
     //WsLiveStatsIpConnectionUnbanned{ ip: IpAddr },
 
-    WsSavedStatsWithPagination { total_count: u64, latest: Option<i64>, stats: Vec<DbWsStat> },
-    WsSavedStatsPage(Vec<DbWsStat>),
+    WsSavedStatsWithPagination { total_count: u64, latest: Option<i64>, stats: Vec<DbReqStat> },
+    WsSavedStatsPage(Vec<DbReqStat>),
 
     WsSavedStatsGraph(Vec<f64>),
 

@@ -44,6 +44,7 @@ impl ThrottleStatsListenerTracker {
             let msg = Message::binary(msg);
             trace!("sending {:#?} to listener: {}", &msg_org, &con_key);
             let send_result = tx.send(ConMsg::Send(msg)).await;
+            trace!("finished sending to listener");
             if let Err(err) = send_result {
                 debug!(
                     "ws throttle: failed to send on_con update to {} {}",

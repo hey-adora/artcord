@@ -5,8 +5,8 @@ use artcord_leptos_web_sockets::channel::WsRecvResult;
 use artcord_state::message::prod_client_msg::ClientMsg;
 use artcord_state::message::prod_server_msg::ServerMsg;
 use artcord_state::model::ws_statistics;
-use artcord_state::model::ws_statistics::DbWsStat;
-use artcord_state::model::ws_statistics::WsStat;
+use artcord_state::model::ws_statistics::DbReqStat;
+use artcord_state::model::ws_statistics::ReqStat;
 use leptos::html::U;
 use leptos::*;
 use leptos_router::use_params_map;
@@ -71,14 +71,14 @@ pub enum AdminWsOldPageState {
 pub struct AdminPageState {
     pub live_connections: LiveWsStats,
     pub live_throttle_cache: LiveThrottleCache,
-    pub old_connections: RwSignal<Vec<DbWsStat>>,
+    pub old_connections: RwSignal<Vec<DbReqStat>>,
     pub old_connections_pagination: RwSignal<Option<u64>>,
     pub old_connections_active_page: RwSignal<u64>,
     pub old_connections_loading: RwSignal<bool>,
     pub old_connections_loaded: RwSignal<Option<u64>>,
     pub old_connections_from: RwSignal<Option<i64>>,
     pub overview_state: RwSignal<LoadingNotFound>,
-    pub overview_old_connections: RwSignal<Vec<DbWsStat>>,
+    pub overview_old_connections: RwSignal<Vec<DbReqStat>>,
     pub overview_selected_days: RwSignal<u64>,
     pub overview_selected_unique: RwSignal<bool>,
 }
@@ -101,7 +101,7 @@ impl AdminPageState {
         }
     }
 
-    pub fn set_overview_old_stats(&self, stats: Vec<DbWsStat>) {
+    pub fn set_overview_old_stats(&self, stats: Vec<DbReqStat>) {
         self.overview_old_connections.set(stats);
     }
 
@@ -109,13 +109,13 @@ impl AdminPageState {
         self.old_connections_pagination.set(Some(pagination.div_ceil(PAGE_AMOUNT)));
     }
 
-    pub fn set_old_stats_paged(&self, stats: Vec<DbWsStat>) {
+    pub fn set_old_stats_paged(&self, stats: Vec<DbReqStat>) {
         self.old_connections.set(stats);
         self.old_connections_loading.set(false);
         self.old_connections_loaded.set(Some(self.old_connections_active_page.get_untracked()));
     }
 
-    pub fn set_old_stats_with_pagination(&self, total_count: u64, from: Option<i64>, stats: Vec<DbWsStat>) {
+    pub fn set_old_stats_with_pagination(&self, total_count: u64, from: Option<i64>, stats: Vec<DbReqStat>) {
         // let mut web_stats: HashMap<String, WsStat> = HashMap::with_capacity(stats.len());
         // for (path, stat) in stats {
         //     web_stats.insert(path, stat.into());
