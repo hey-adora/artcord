@@ -72,7 +72,7 @@ use super::con::throttle_stats_listener_tracker::ThrottleStatsListenerTracker;
 use super::con::ConMsg;
 use super::con::GlobalConMsg;
 use super::con::IpConMsg;
-use super::con::IpDataSyncMsg;
+use super::con::IpManagerMsg;
 use super::WsAppMsg;
 
 #[derive(Debug)]
@@ -88,8 +88,8 @@ pub struct WsThrottleCon {
     pub con_flicker_throttle: ThrottleSimple,
     pub ip_con_tx: broadcast::Sender<IpConMsg>,
     pub ip_con_rx: broadcast::Receiver<IpConMsg>,
-    pub ip_data_sync_tx: mpsc::Sender<IpDataSyncMsg>,
-    pub ip_data_sync_task: JoinHandle<()>,
+    pub ip_manager_tx: mpsc::Sender<IpManagerMsg>,
+    pub ip_manager_task: JoinHandle<()>,
     //pub ip_req
     //pub stats_listeners: broadcast::Receiver<GlobalConMsg>,
 }
@@ -102,7 +102,7 @@ pub struct WsIpTask<TimeMiddlewareType: TimeMiddleware + Clone + Sync + Send + '
     time_middleware: TimeMiddlewareType,
     ban_threshold: Threshold,
     ban_duration: TimeDelta,
-    data_sync_rx: mpsc::Receiver<IpDataSyncMsg>,
+    data_sync_rx: mpsc::Receiver<IpManagerMsg>,
     //pub ip_req
     //pub stats_listeners: broadcast::Receiver<GlobalConMsg>,
 }
@@ -112,7 +112,7 @@ impl<TimeMiddlewareType: TimeMiddleware + Clone + Sync + Send + 'static>
 {
     pub async fn manage_ip(
         cancelation_token: CancellationToken,
-        data_sync_rx: mpsc::Receiver<IpDataSyncMsg>,
+        data_sync_rx: mpsc::Receiver<IpManagerMsg>,
         time_middleware: TimeMiddlewareType,
         ban_threshold: Threshold,
         ban_duration: TimeDelta,
@@ -151,10 +151,10 @@ impl<TimeMiddlewareType: TimeMiddleware + Clone + Sync + Send + 'static>
         trace!("task exited");
     }
 
-    async fn on_msg(&mut self, msg: IpDataSyncMsg) -> bool {
+    async fn on_msg(&mut self, msg: IpManagerMsg) -> bool {
         trace!("recv: {:#?}", &msg);
         match msg {
-            IpDataSyncMsg::CheckThrottle {
+            IpManagerMsg::CheckThrottle {
                 path,
                 block_threshold,
                 allow_tx,
@@ -174,6 +174,9 @@ impl<TimeMiddlewareType: TimeMiddleware + Clone + Sync + Send + 'static>
                 if send_result.is_err() {
                     error!("failed to send AllowCon");
                 }
+            }
+            IpManagerMsg::Unban => {
+                self.banned_until = None;
             }
         }
         trace!("recv finished");
@@ -202,7 +205,7 @@ impl WsThrottle {
         Ok(())
     }
 
-    pub fn unban(&mut self, ip: &IpAddr) {
+    pub fn unban_on_throttle(&mut self, ip: &IpAddr) {
         let ip_stats = self.ips.get_mut(ip);
         let Some(ip_stats) = ip_stats else {
             error!("throttle: cant be banned because it doesnt exist in the list");
@@ -210,7 +213,19 @@ impl WsThrottle {
         };
         ip_stats
             .con_throttle
-            .unban(&mut ip_stats.stats.banned_until);
+            .unban_on_throttle(&mut ip_stats.stats.banned_until);
+    }
+
+    pub async fn unban_on_ip_manager(&mut self, ip: &IpAddr) -> Result<(), tokio::sync::mpsc::error::SendError<IpManagerMsg>> {
+        let ip_stats = self.ips.get_mut(ip);
+        let Some(ip_stats) = ip_stats else {
+            error!("throttle: cant be banned because it doesnt exist in the list");
+            return Ok(());
+        };
+        ip_stats
+        .ip_manager_tx.send(IpManagerMsg::Unban).await?;
+
+        Ok(())
     }
 
     pub fn dec_con(&mut self, ip: &IpAddr, time: &DateTime<Utc>) {
@@ -270,7 +285,7 @@ impl WsThrottle {
     ) -> Option<(
         broadcast::Sender<IpConMsg>,
         broadcast::Receiver<IpConMsg>,
-        mpsc::Sender<IpDataSyncMsg>,
+        mpsc::Sender<IpManagerMsg>,
     )> {
         let Some(con) = self.ips.get_mut(ip) else {
             return None;
@@ -279,7 +294,7 @@ impl WsThrottle {
         Some((
             con.ip_con_tx.clone(),
             con.ip_con_rx.resubscribe(),
-            con.ip_data_sync_tx.clone(),
+            con.ip_manager_tx.clone(),
         ))
     }
 
@@ -377,8 +392,8 @@ impl WsThrottleCon {
 
             ip_con_tx: con_broadcast_tx,
             ip_con_rx: con_broadcast_rx,
-            ip_data_sync_tx,
-            ip_data_sync_task,
+            ip_manager_tx: ip_data_sync_tx,
+            ip_manager_task: ip_data_sync_task,
             // ip_stats_tx: ip_stats_tx.clone(),
             // ip_stats_rx: ip_stats_rx.clone(),
         };

@@ -259,12 +259,13 @@ impl ThrottleRanged {
         *banned_until = Some((ban_until, ban_reason));
     }
 
-    pub fn unban(
+    pub fn unban_on_throttle(
         &mut self,
         banned_until: &mut Option<(DateTime<Utc>, IpBanReason)>,
     ) {
         *banned_until = None;
     }
+    
 
 
     pub fn is_banned(

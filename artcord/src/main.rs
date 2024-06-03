@@ -500,18 +500,22 @@ mod artcord_tests {
             callback(time);
         }
 
-        async fn send(&self, client_id: usize, msg: ClientMsg) {
+        async fn send(&self, client_id: usize, msg: ClientMsg) -> std::result::Result<(), tokio::sync::mpsc::error::SendError<DebugClientMsg>> {
             let Some(con) = self.connections.get(&client_id) else {
                 panic!("missing con: {}", client_id);
             };
             con.client_tx
                 .send(DebugClientMsg::Send((0, msg)))
                 .await
-                .unwrap();
         }
 
         async fn send_test_msg_once(&mut self, send_client_id: usize) {
-            self.send(send_client_id, ClientMsg::Logout).await;
+            self.send(send_client_id, ClientMsg::Logout).await.unwrap()
+        }
+
+        async fn fail_to_send_test_msg_once(&mut self, send_client_id: usize) {
+            let r: Result<(), mpsc::error::SendError<DebugClientMsg>> = self.send(send_client_id, ClientMsg::Logout).await;
+            assert!(r.is_err())
         }
 
         // async fn send_and_recv_allow_nth(&mut self, send_client_id: usize, check_client_id: usize, times: usize) {
@@ -598,6 +602,16 @@ mod artcord_tests {
             let msg = con.recv_command().await;
 
             assert_eq!(msg, Ok(ConnectionMsg::Disconnected));
+        }
+
+        async fn recv_command_boom(&mut self, client_id: usize) {
+            let Some(con) = self.connections.get_mut(&client_id) else {
+                panic!("missing con: {}", client_id);
+            };
+
+            let msg = con.recv_command().await;
+
+            assert_eq!(msg, Err(ClientErr::Boom));
         }
 
         async fn recv_command(&mut self, client_id: usize) -> Result<ConnectionMsg, ClientErr> {
@@ -841,7 +855,10 @@ mod artcord_tests {
         }
 
         pub async fn recv_command(&mut self) -> Result<ConnectionMsg, ClientErr> {
-            self.connection_rx.recv().await.unwrap()
+            self.connection_rx
+                .recv()
+                .await
+                .unwrap_or(Err(ClientErr::Boom))
         }
 
         pub async fn send(&mut self, msg: ClientMsg) {
@@ -954,8 +971,14 @@ mod artcord_tests {
         let client1 = ws_test_app
             .create_client(1, Ipv4Addr::new(0, 0, 0, 1), CLIENT_CONNECTED_SUCCESS)
             .await;
+        let client11 = ws_test_app
+            .create_client(11, Ipv4Addr::new(0, 0, 0, 1), CLIENT_CONNECTED_SUCCESS)
+            .await;
         let client2 = ws_test_app
             .create_client(2, Ipv4Addr::new(0, 0, 0, 2), CLIENT_CONNECTED_SUCCESS)
+            .await;
+        let client3 = ws_test_app
+            .create_client(2, Ipv4Addr::new(0, 0, 0, 3), CLIENT_CONNECTED_SUCCESS)
             .await;
 
         ws_test_app.send_live_stats_on(client2).await;
@@ -974,6 +997,10 @@ mod artcord_tests {
         ws_test_app.recv_req_ban(client2).await;
         ws_test_app.recv_ip_banned(client2, client1).await;
 
+        ws_test_app.fail_to_send_test_msg_once(client11).await;
+        //ws_test_app.recv_req_allow(client2).await;
+
+        ws_test_app.recv_disconnected_one(client2).await;
         ws_test_app.recv_disconnected_one(client2).await;
 
         info!("point -10");
@@ -983,9 +1010,10 @@ mod artcord_tests {
             .await;
         info!("point -11");
         ws_test_app.recv_command_disconnected(client1).await;
+        ws_test_app.recv_command_disconnected(client11).await;
         info!("point -12");
-        ws_test_app.recv_command_disconnected(client3).await;
-        
+        ws_test_app.recv_command_boom(client3).await;
+
         // ws_test_app.close().await;
 
         // info!("point -11");
@@ -1003,7 +1031,7 @@ mod artcord_tests {
         //ws_test_app.recv_req_allow(client2).await;
 
         info!("point -1");
-        sleep(Duration::from_secs(2)).await;
+        //sleep(Duration::from_secs(2)).await;
 
         ws_test_app.add_time(REQ_BAN_DURATION).await;
 
@@ -1012,12 +1040,13 @@ mod artcord_tests {
             .await;
 
         info!("point 0");
-        ws_test_app.recv_con_allow(client2, client3).await;
-        ws_test_app.recv_connected_one(client2, client3).await;
+        ws_test_app.recv_con_allow(client2, client1).await;
+        ws_test_app.recv_ip_unban(client2, client1).await;
+        ws_test_app.recv_connected_one(client2, client1).await;
 
         ws_test_app.send_test_msg_once(client1).await;
         ws_test_app.recv_req_allow(client2).await;
-        ws_test_app.recv_ip_unban(client2, client1).await;
+        //ws_test_app.recv_ip_unban(client2, client1).await;
         // ws_test_app.recv_req_allow(client2).await;
         // ws_test_app.recv_ip_unban(client2, client1).await;
 
@@ -1778,6 +1807,9 @@ mod artcord_tests {
     pub enum ClientErr {
         #[error("failed to connect")]
         FailedToConnect,
+
+        #[error("exploded")]
+        Boom,
     }
 
     #[derive(Error, Debug)]

@@ -83,6 +83,7 @@ use self::con::throttle_stats_listener_tracker::ThrottleStatsListenerTracker;
 use self::con::Con;
 use self::con::ConMsg;
 use self::con::IpConMsg;
+use self::con::IpManagerMsg;
 
 pub mod con;
 pub mod throttle;
@@ -321,6 +322,7 @@ impl<
                     let msg = ServerMsg::WsLiveStatsIpUnbanned { ip };
                     self.listener_tracker.send(msg).await?;
                 }
+                self.throttle.unban_on_ip_manager(&ip).await?;
                 false
             }
             AllowCon::UnbannedAndAllow => {
@@ -342,6 +344,7 @@ impl<
                     let msg = ServerMsg::WsLiveStatsIpUnbanned { ip };
                     self.listener_tracker.send(msg).await?;
                 }
+                self.throttle.unban_on_ip_manager(&ip).await?;
                 true
             }
             AllowCon::Banned((date, reason)) => {
@@ -442,6 +445,7 @@ impl<
             WsAppMsg::Ban { ip, date: until, reason } => {
                 self.throttle.ban(&ip, reason, until)?;
                 debug!("ip {} is banned: {:#?}", ip, &self.throttle.ips); 
+                
             }
             // WsAppMsg::UnBan { ip } => {
             //     self.throttle.unban(&ip);
@@ -461,6 +465,9 @@ impl GetUserAddrMiddleware for ProdUserAddrMiddleware {
 pub enum WsOnConErr {
     #[error("Con tracker err: {0}")]
     ConTracker(#[from] ConTrackerErr),
+
+    #[error("Send error: {0}")]
+    IpMangerSend(#[from] tokio::sync::mpsc::error::SendError<IpManagerMsg>),
 }
 
 #[derive(Error, Debug)]

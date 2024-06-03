@@ -36,12 +36,13 @@ pub mod req;
 pub mod throttle_stats_listener_tracker;
 
 #[derive(Debug)]
-pub enum IpDataSyncMsg {
+pub enum IpManagerMsg {
     CheckThrottle {
         path: usize,
         block_threshold: Threshold,
         allow_tx: oneshot::Sender<AllowCon>,
     },
+    Unban,
     // IncThrottle {
     //     author_id: TempConIdType,
     //     path: usize,
@@ -132,7 +133,7 @@ pub struct Con<
     global_con_rx: broadcast::Receiver<GlobalConMsg>,
     con_tx: mpsc::Sender<ConMsg>,
     con_rx: mpsc::Receiver<ConMsg>,
-    ip_data_sync_tx: mpsc::Sender<IpDataSyncMsg>,
+    ip_data_sync_tx: mpsc::Sender<IpManagerMsg>,
     ws_app_tx: mpsc::Sender<WsAppMsg>,
     cancellation_token: CancellationToken,
     db: Arc<DB>,
@@ -166,7 +167,7 @@ impl<
         (global_con_tx, mut global_con_rx): GlobalConChannel,
         ip_con_tx: broadcast::Sender<IpConMsg>,
         ip_con_rx: broadcast::Receiver<IpConMsg>,
-        ip_data_sync_tx: mpsc::Sender<IpDataSyncMsg>,
+        ip_data_sync_tx: mpsc::Sender<IpManagerMsg>,
         ban_threshold: Threshold,
         ban_duration: TimeDelta,
         time_middleware: TimeMiddlewareType,
@@ -407,7 +408,7 @@ impl<
                     let (result_tx, result_rx) = oneshot::channel::<AllowCon>();
 
                     self.ip_data_sync_tx
-                        .send(IpDataSyncMsg::CheckThrottle {
+                        .send(IpManagerMsg::CheckThrottle {
                             path,
                             block_threshold: block_threshold.clone(),
                             allow_tx: result_tx,
@@ -832,7 +833,7 @@ pub enum ConErr {
     DoneTxErr(#[from] oneshot::error::RecvError),
 
     #[error("failed to send ip data sync msg: {0}")]
-    SendIpDataSyncErr(#[from] mpsc::error::SendError<IpDataSyncMsg>),
+    SendIpDataSyncErr(#[from] mpsc::error::SendError<IpManagerMsg>),
 
     #[error("failed to send con msg: {0}")]
     SendConMsgErr(#[from] mpsc::error::SendError<ConMsg>),
