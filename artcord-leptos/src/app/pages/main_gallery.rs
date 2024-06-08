@@ -3,7 +3,6 @@ use crate::app::global_state::GlobalState;
 use crate::app::utils::img_resize::{calc_fit_count, resize_imgs, NEW_IMG_HEIGHT};
 use crate::app::utils::img_resized::ServerMsgImgResized;
 use crate::app::utils::{LoadingNotFound, SelectedImg};
-use artcord_state::message::prod_client_msg::ClientMsg;
 use chrono::Utc;
 use leptos::ev::resize;
 use leptos::html::Section;
@@ -11,6 +10,7 @@ use leptos::*;
 use leptos_router::use_location;
 use leptos_use::{use_event_listener, use_window};
 use web_sys::Event;
+use artcord_state::global;
 
 #[derive(Copy, Clone, Debug)]
 pub struct GalleryPageState {
@@ -51,10 +51,11 @@ pub fn MainGalleryPage() -> impl IntoView {
         let client_height = section.client_height();
         let client_width = section.client_width();
 
-        let msg = ClientMsg::GalleryInit {
+        let msg = global::ClientMsg::GalleryInit {
             amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
             from: last,
         };
+
 
         // match ws_gallery.send_and_recv(msg, move |server_msg| {
         //     match server_msg {

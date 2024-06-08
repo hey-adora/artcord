@@ -1,9 +1,7 @@
 use crate::app::pages::register::GlobalAuthState;
 
 use artcord_leptos_web_sockets::runtime::WsRuntime;
-use artcord_state::message::prod_client_msg::ClientMsg;
-use artcord_state::message::prod_perm_key::ProdMsgPermKey;
-use artcord_state::message::prod_server_msg::ServerMsg;
+use artcord_state::global;
 use leptos::{create_rw_signal, RwSignal, SignalWith, StoredValue};
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -31,7 +29,7 @@ pub struct GlobalState {
     // pub socket_connected: RwSignal<bool>,
     // pub socket_closures: StoredValue<HashMap<u128, Rc<dyn Fn(ServerMsg)>>>,
     // pub socket_pending_client_msgs: StoredValue<Vec<u8>>,
-    pub ws: WsRuntime<ServerMsg, ClientMsg>,
+    pub ws: WsRuntime<global::ServerMsg, global::ClientMsg>,
 }
 
 #[derive(Clone, Debug)]
@@ -73,7 +71,7 @@ impl GlobalState {
             // socket_timestamps: create_rw_signal(HashMap::new()),
             // socket_closures: StoredValue::new(HashMap::new()),
             // socket_pending_client_msgs: StoredValue::new(Vec::new()),
-            ws: WsRuntime::<ServerMsg, ClientMsg>::new(),
+            ws: WsRuntime::<global::ServerMsg, global::ClientMsg>::new(),
         }
     }
 

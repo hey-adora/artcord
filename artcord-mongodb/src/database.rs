@@ -1,12 +1,4 @@
-use artcord_state::model::acc_session::AccSession;
-use artcord_state::model::allowed_channel::AllowedChannel;
-use artcord_state::model::allowed_guild::AllowedGuild;
-use artcord_state::model::allowed_role::AllowedRole;
-use artcord_state::model::auto_reaction::AutoReaction;
-use artcord_state::model::img::Img;
-use artcord_state::model::migration::Migration;
-use artcord_state::model::user::User;
-use artcord_state::model::{acc::Acc, ws_statistics::DbReqStat};
+use artcord_state::global::{DbAcc, DbAccSession, DbAllowedChannel, DbAllowedGuild, DbAllowedRole, DbAutoReaction, DbImg, DbMigration, DbWsCon, DbUser};
 use cfg_if::cfg_if;
 
 use mongodb::options::ClientOptions;
@@ -16,22 +8,33 @@ use mongodb::Client;
 use thiserror::Error;
 use tracing::{info, trace};
 
-pub mod query;
+pub mod model;
+
+const COLLECTION_ACC_SESSION_NAME: &'static str = "acc_session";
+const COLLECTION_ACC_NAME: &'static str = "acc";
+const COLLECTION_ALLOWED_CHANNEL_NAME: &'static str = "allowed_channel";
+const COLLECTION_ALLOWED_GUILD_NAME: &'static str = "allowed_guild";
+const COLLECTION_ALLOWED_ROLE_NAME: &'static str = "allowed_role";
+const COLLECTION_AUTO_REACTION_NAME: &'static str = "auto_reaction";
+const COLLECTION_IMG_NAME: &'static str = "img";
+const COLLECTION_MIGRATION_NAME: &'static str = "migration";
+const COLLECTION_USER_NAME: &'static str = "user";
+const COLLECTION_WS_STATISTIC_NAME: &'static str = "ws_statistic";
 
 #[derive(Clone, Debug)]
 pub struct DB {
     pub client: mongodb::Client,
     pub database: mongodb::Database,
-    collection_img: mongodb::Collection<Img>,
-    collection_user: mongodb::Collection<User>,
-    collection_allowed_role: mongodb::Collection<AllowedRole>,
-    collection_allowed_channel: mongodb::Collection<AllowedChannel>,
-    collection_allowed_guild: mongodb::Collection<AllowedGuild>,
-    collection_auto_reaction: mongodb::Collection<AutoReaction>,
-    collection_acc: mongodb::Collection<Acc>,
-    collection_acc_session: mongodb::Collection<AccSession>,
-    collection_migration: mongodb::Collection<Migration>,
-    collection_ws_statistic: mongodb::Collection<DbReqStat>,
+    collection_img: mongodb::Collection<DbImg>,
+    collection_user: mongodb::Collection<DbUser>,
+    collection_allowed_role: mongodb::Collection<DbAllowedRole>,
+    collection_allowed_channel: mongodb::Collection<DbAllowedChannel>,
+    collection_allowed_guild: mongodb::Collection<DbAllowedGuild>,
+    collection_auto_reaction: mongodb::Collection<DbAutoReaction>,
+    collection_acc: mongodb::Collection<DbAcc>,
+    collection_acc_session: mongodb::Collection<DbAccSession>,
+    collection_migration: mongodb::Collection<DbMigration>,
+    collection_ws_statistic: mongodb::Collection<DbWsCon>,
 }
 
 // const DATABASE_NAME: &'static str = "artcord";

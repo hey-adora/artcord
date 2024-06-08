@@ -10,7 +10,7 @@
 //!
 //! You can use this example together with the `server` example.
 
-use artcord_state::message::prod_client_msg::ClientMsg;
+use artcord_state::global;
 use bson::DateTime;
 use crossterm::event::{Event, KeyCode, KeyModifiers};
 use dotenv::dotenv;
@@ -375,7 +375,7 @@ async fn node(master_tx: mpsc::Sender<MasterMsg>, mut node_rx: broadcast::Receiv
     let (ws_stream, res) = con;
 
     let (write, mut read) = ws_stream.split();
-    let (send_tx, mut recv_tx) = mpsc::channel::<ClientMsg>(1);
+    let (send_tx, mut recv_tx) = mpsc::channel::<global::ClientMsg>(1);
 
     master_tx.send(MasterMsg::Con).await.unwrap();
 
@@ -434,8 +434,8 @@ async fn on_node_msg(msg: NodeMsg) -> Result<bool, OnNodeMsgError> {
     Ok(false)
 }
 
-async fn on_client_msg(msg: ClientMsg) -> Result<(), OnClientMsgError> {
-    let bytes = ClientMsg::as_vec(&(0, msg))?;
+async fn on_client_msg(msg: global::ClientMsg) -> Result<(), OnClientMsgError> {
+    let bytes = global::ClientMsg::as_vec(&(0, msg))?;
 
     Ok(())
 }

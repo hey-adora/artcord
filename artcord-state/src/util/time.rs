@@ -23,31 +23,22 @@ use thiserror::Error;
 //     }
 // }
 
-#[derive(Clone, Debug)]
-pub struct Clock;
-
-impl Default for Clock {
-    fn default() -> Self {
-        Self
-    }
-}
-
-impl Clock {
-    pub fn new() -> Self {
-        Self
-    }
-}
-
-pub trait TimeMiddleware {
-    fn get_time(&self) -> impl std::future::Future<Output = DateTime<Utc>> + Send;
-}
 
 
-impl TimeMiddleware for Clock {
-    async fn get_time(&self) -> DateTime<Utc> {
-        Utc::now()
-    }
-}
+// impl Default for Clock {
+//     fn default() -> Self {
+//         Self
+//     }
+// }
+
+// impl Clock {
+//     pub fn new() -> Self {
+//         Self
+//     }
+// }
+
+
+
 
 
 

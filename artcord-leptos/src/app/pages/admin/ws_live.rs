@@ -1,7 +1,6 @@
 use artcord_leptos_web_sockets::channel::WsRecvResult;
-use artcord_state::message::prod_client_msg::ClientMsg;
-use artcord_state::message::prod_server_msg::ServerMsg;
 use leptos::*;
+use artcord_state::global;
 
 use crate::app::{global_state::GlobalState, hooks::use_ws_live_stats::WebStatPathType};
 use crate::app::hooks::use_ws_live_stats::use_ws_live_stats;
@@ -22,7 +21,7 @@ pub fn WsLive() -> impl IntoView {
     
 
     let live_connection_count_view = move |count: WebStatPathType| {
-        (0..ClientMsg::COUNT)
+        (0..global::ClientMsg::COUNT)
             .map(|path| {
                 let count = count.get(&path).cloned();
                 view! {

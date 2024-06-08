@@ -3,8 +3,6 @@ use crate::app::global_state::GlobalState;
 use crate::app::pages::register::{auth_input_show_error, AuthLoadingState};
 //use crate::app::utils::signal_switch::signal_switch;
 use artcord_leptos_web_sockets::channel::WsResourcSendResult;
-use artcord_state::message::prod_client_msg::ClientMsg;
-use artcord_state::misc::registration_invalid::{RegistrationInvalidMsg, MINIMUM_PASSWORD_LENGTH};
 use leptos::html::Input;
 use leptos::leptos_dom::log;
 use leptos::*;
@@ -13,6 +11,7 @@ use tracing::debug;
 use tracing::error;
 use tracing::warn;
 use web_sys::SubmitEvent;
+use artcord_state::global;
 
 pub fn validate_login(email: &str, password: &str) -> (bool, Option<String>, Option<String>) {
     let email_error = if email.len() < 1 {
@@ -23,10 +22,10 @@ pub fn validate_login(email: &str, password: &str) -> (bool, Option<String>, Opt
 
     let password_error = if password.len() < 1 {
         Some("Password field can't be empty.".to_string())
-    } else if password.len() < MINIMUM_PASSWORD_LENGTH {
+    } else if password.len() < global::MINIMUM_PASSWORD_LENGTH {
         Some(format!(
             "Minimum password length is {}.",
-            MINIMUM_PASSWORD_LENGTH
+            global::MINIMUM_PASSWORD_LENGTH
         ))
     } else {
         None
@@ -99,7 +98,7 @@ pub fn Login() -> impl IntoView {
 
         log!("Submit: '{}' '{}'", email, password);
 
-        let msg = ClientMsg::Login { password, email };
+        let msg = global::ClientMsg::Login { password, email };
 
         // match ws_login.send_and_recv(msg, move |msg| {
         //     debug!("login: RECEIVED: {:?}", msg);

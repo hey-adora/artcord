@@ -1,21 +1,21 @@
-use artcord_state::model::allowed_channel::{AllowedChannel, AllowedChannelFieldName};
+use artcord_state::global::{DbAllowedChannel, DbAllowedChannelFieldName};
 use bson::doc;
 use futures::TryStreamExt;
 use mongodb::{options::IndexOptions, Collection, Database, IndexModel};
+use field_types::FieldName;
+use serde::{Deserialize, Serialize};
 
-use crate::database::DB;
-
-const COLLECTION_ALLOWED_CHANNEL_NAME: &'static str = "allowed_channel";
+use crate::database::{COLLECTION_ALLOWED_CHANNEL_NAME, DB};
 
 impl DB {
-    pub async fn init_allowed_channel(database: &Database) -> Collection<AllowedChannel> {
+    pub async fn init_allowed_channel(database: &Database) -> Collection<DbAllowedChannel> {
         let opts = IndexOptions::builder().unique(true).build();
         let index = IndexModel::builder()
-            .keys(doc! { AllowedChannelFieldName::GuildId.name(): -1, AllowedChannelFieldName::ChannelId.name(): -1, AllowedChannelFieldName::Feature.name(): -1 })
+            .keys(doc! { DbAllowedChannelFieldName::GuildId.name(): -1, DbAllowedChannelFieldName::ChannelId.name(): -1, DbAllowedChannelFieldName::Feature.name(): -1 })
             .options(opts)
             .build();
 
-        let collection = database.collection::<AllowedChannel>(COLLECTION_ALLOWED_CHANNEL_NAME);
+        let collection = database.collection::<DbAllowedChannel>(&COLLECTION_ALLOWED_CHANNEL_NAME);
 
         collection
             .create_index(index, None)
@@ -36,7 +36,7 @@ impl DB {
         let channel = self
             .collection_allowed_channel
             .find_one(
-                doc! { AllowedChannelFieldName::GuildId.name(): guild_id.to_string(), AllowedChannelFieldName::ChannelId.name(): channel_id.to_string(), AllowedChannelFieldName::Feature.name(): feature.to_string() },
+                doc! { DbAllowedChannelFieldName::GuildId.name(): guild_id.to_string(), DbAllowedChannelFieldName::ChannelId.name(): channel_id.to_string(), DbAllowedChannelFieldName::Feature.name(): feature.to_string() },
                 None,
             )
             .await?;
@@ -45,7 +45,7 @@ impl DB {
 
     pub async fn allowed_channel_insert_one(
         &self,
-        allowed_channel: AllowedChannel,
+        allowed_channel: DbAllowedChannel,
     ) -> Result<String, mongodb::error::Error> {
         let result = self
             .collection_allowed_channel
@@ -58,11 +58,11 @@ impl DB {
     pub async fn allowed_channel_find_all(
         &self,
         guild_id: &str,
-    ) -> Result<Vec<AllowedChannel>, mongodb::error::Error> {
+    ) -> Result<Vec<DbAllowedChannel>, mongodb::error::Error> {
         let result = self
             .collection_allowed_channel
             .find(
-                doc! { AllowedChannelFieldName::GuildId.name(): guild_id },
+                doc! { DbAllowedChannelFieldName::GuildId.name(): guild_id },
                 None,
             )
             .await?;
@@ -78,7 +78,7 @@ impl DB {
     ) -> Result<u64, mongodb::error::Error> {
         let result = self
             .collection_allowed_channel
-            .delete_one(doc! { AllowedChannelFieldName::ChannelId.name(): channel_id, AllowedChannelFieldName::Feature.name(): feature }, None)
+            .delete_one(doc! { DbAllowedChannelFieldName::ChannelId.name(): channel_id, DbAllowedChannelFieldName::Feature.name(): feature }, None)
             .await?;
 
         Ok(result.deleted_count)

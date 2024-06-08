@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use artcord_leptos_web_sockets::{WsPackage, WsRouteKey};
-use artcord_state::{message::prod_server_msg::ServerMsg, model::ws_statistics::TempConIdType};
+use artcord_state::global;
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message;
@@ -12,7 +12,7 @@ use super::ConMsg;
 
 #[derive(Debug, Clone)]
 pub struct ThrottleStatsListenerTracker {
-    pub cons: HashMap<TempConIdType, (WsRouteKey, mpsc::Sender<ConMsg>)>,
+    pub cons: HashMap<global::TempConIdType, (WsRouteKey, mpsc::Sender<ConMsg>)>,
 }
 
 // #[derive(Debug, Clone)]
@@ -30,17 +30,17 @@ impl ThrottleStatsListenerTracker {
 
     pub async fn send(
         &mut self,
-        msg_org: ServerMsg,
+        msg_org: global::ServerMsg,
     ) -> Result<(), ConTrackerErr> {
         // if self.cons.is_empty() {
         //     return Ok(());
         // }
 
-        let mut to_remove: Vec<TempConIdType> = Vec::new();
+        let mut to_remove: Vec<global::TempConIdType> = Vec::new();
         trace!("sending {:#?} to listeners: {:#?}", &msg_org, &self.cons);
         for (con_key, (ws_key, tx)) in self.cons.iter() {
-            let msg: WsPackage<ServerMsg> = (ws_key.clone(), msg_org.clone());
-            let msg = ServerMsg::as_bytes(msg)?;
+            let msg: WsPackage<global::ServerMsg> = (ws_key.clone(), msg_org.clone());
+            let msg = global::ServerMsg::as_bytes(msg)?;
             let msg = Message::binary(msg);
             trace!("sending {:#?} to listener: {}", &msg_org, &con_key);
             let send_result = tx.send(ConMsg::Send(msg)).await;

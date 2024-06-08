@@ -1,6 +1,6 @@
 use std::num::ParseIntError;
 
-use artcord_state::model::auto_reaction::AutoReaction;
+use artcord_state::global;
 use chrono::Utc;
 use serenity::model::{
     channel::ReactionType,
@@ -164,7 +164,7 @@ get_option!(
     String::from("Role option was not provided.")
 );
 
-pub fn to_reaction_type(auto_reaction: AutoReaction) -> Result<ReactionType, ToReactionTypeError> {
+pub fn to_reaction_type(auto_reaction: global::DbAutoReaction) -> Result<ReactionType, ToReactionTypeError> {
     let reaction: ReactionType = if let Some(unicode) = auto_reaction.unicode {
         ReactionType::Unicode(unicode)
     } else {
@@ -189,15 +189,15 @@ pub fn to_reaction_type(auto_reaction: AutoReaction) -> Result<ReactionType, ToR
 pub fn from_reaction_type(
     guild_id: u64,
     reaction_type: ReactionType,
-) -> Result<AutoReaction, FromReactionTypeError> {
+) -> Result<global::DbAutoReaction, FromReactionTypeError> {
     let auto_reaction = match reaction_type {
         serenity::model::prelude::ReactionType::Unicode(s) => {
-            let auto_reaction = AutoReaction::new(guild_id.to_string(), Some(s), None, None, false);
+            let auto_reaction = global::DbAutoReaction::new(guild_id.to_string(), Some(s), None, None, false);
 
             Ok(auto_reaction)
         }
         serenity::model::prelude::ReactionType::Custom { animated, id, name } => {
-            let auto_reaction = AutoReaction::new(
+            let auto_reaction = global::DbAutoReaction::new(
                 guild_id.to_string(),
                 None,
                 Some(id.0.to_string()),
@@ -215,18 +215,18 @@ pub fn from_reaction_type(
 pub fn from_reaction_type_vec(
     guild_id: u64,
     reaction_types: Vec<ReactionType>,
-) -> Result<Vec<AutoReaction>, FromReactionTypeError> {
-    let mut auto_reactions: Vec<AutoReaction> = Vec::new();
+) -> Result<Vec<global::DbAutoReaction>, FromReactionTypeError> {
+    let mut auto_reactions: Vec<global::DbAutoReaction> = Vec::new();
     for reaction in reaction_types {
         let auto_reaction = match reaction {
             serenity::model::prelude::ReactionType::Unicode(s) => {
                 let auto_reaction =
-                    AutoReaction::new(guild_id.to_string(), Some(s), None, None, false);
+                global::DbAutoReaction::new(guild_id.to_string(), Some(s), None, None, false);
 
                 Ok(auto_reaction)
             }
             serenity::model::prelude::ReactionType::Custom { animated, id, name } => {
-                let auto_reaction = AutoReaction::new(
+                let auto_reaction = global::DbAutoReaction::new(
                     guild_id.to_string(),
                     None,
                     Some(id.0.to_string()),
@@ -245,7 +245,7 @@ pub fn from_reaction_type_vec(
 }
 
 pub fn to_reaction_type_vec(
-    auto_reactions: Vec<AutoReaction>,
+    auto_reactions: Vec<global::DbAutoReaction>,
 ) -> Result<Vec<ReactionType>, ToReactionTypeError> {
     let mut output: Vec<ReactionType> = Vec::with_capacity(auto_reactions.len());
     for reaction in auto_reactions {

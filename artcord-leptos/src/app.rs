@@ -7,19 +7,12 @@ use crate::app::pages::login::Login;
 use crate::app::pages::register::Register;
 use crate::app::utils::PageUrl;
 use artcord_leptos_web_sockets::runtime::WsRuntime;
-use artcord_state::message::debug_client_msg::DebugClientMsg;
-use artcord_state::message::debug_msg_key::DebugMsgPermKey;
-use artcord_state::message::debug_server_msg::DebugServerMsg;
-use artcord_state::message::prod_client_msg::ClientMsg;
-use artcord_state::message::prod_server_msg::ServerMsg;
 use global_state::GlobalState;
 
 use leptos::*;
 use leptos_meta::*;
 use leptos_router::*;
 
-//use crate::app::utils::ws_runtime::WsRuntime;
-//use artcord_leptos_web_sockets::Runtime;
 use cfg_if::cfg_if;
 use pages::account::Account;
 use pages::home::HomePage;
@@ -28,7 +21,6 @@ use pages::not_found::NotFound;
 use pages::user_gallery::UserGalleryPage;
 use tracing::debug;
 use tracing::{error, trace};
-//use crate::app::utils::signal_switch::signal_switch_init;
 
 pub mod components;
 pub mod global_state;
@@ -40,8 +32,7 @@ pub mod utils;
 pub fn App() -> impl IntoView {
     provide_meta_context();
     provide_context(GlobalState::new());
-    //signal_switch_init();
-    //let location = use_location();
+
     #[cfg(feature = "development")]
     {
         let debug_ws = WsRuntime::<DebugServerMsg, DebugClientMsg>::new();
@@ -54,15 +45,6 @@ pub fn App() -> impl IntoView {
 
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
     global_state.ws.connect(3420).unwrap();
-
-    // ws.on_ws_state(move |is_connected| {
-
-    //      if is_connected {
-    //      } else {
-    //      }
-    //  });
-
-    
 
     view! {
         <meta name="viewport" content="width=device-width, initial-scale=1.0"/>

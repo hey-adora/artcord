@@ -1,10 +1,7 @@
 use artcord_actix::server::create_server;
 use artcord_mongodb::database::DB;
 use artcord_serenity::create_bot::create_bot;
-use artcord_state::message::prod_client_msg::ProdThreshold;
-use artcord_state::misc::throttle_connection::IpBanReason;
-use artcord_state::misc::throttle_threshold::Threshold;
-use artcord_state::util::time::Clock;
+use artcord_state::global;
 use artcord_tungstenite::ws::ProdUserAddrMiddleware;
 use artcord_tungstenite::ws::Ws;
 use artcord_tungstenite::WsThreshold;
@@ -62,7 +59,7 @@ async fn main() {
     //let gallery_root_dir = Arc::new(gallery_root_dir);
     let db = DB::new("artcord", mongodb_url).await;
     let db = Arc::new(db);
-    let time_machine = Clock::new();
+    let time_machine = global::Clock;
 
     let task_tracker = TaskTracker::new();
     let cancelation_token = CancellationToken::new();
@@ -101,20 +98,20 @@ async fn main() {
             };
         } else {
             let threshold = WsThreshold {
-                ws_max_con_threshold: Threshold::new_const(10000, TimeDelta::try_minutes(1)),
+                ws_max_con_threshold: global::Threshold::new_const(10000, TimeDelta::try_minutes(1)),
                 ws_max_con_ban_duration: match TimeDelta::try_days(1) {
                     Some(delta) => delta,
                     None => panic!("invalid delta"),
                 },
                 ws_max_con_threshold_range: 100,
-                ws_max_con_ban_reason: IpBanReason::WsTooManyReconnections,
-                ws_con_flicker_threshold: Threshold::new_const(10000, TimeDelta::try_minutes(1)),
+                ws_max_con_ban_reason: global::IpBanReason::WsTooManyReconnections,
+                ws_con_flicker_threshold: global::Threshold::new_const(10000, TimeDelta::try_minutes(1)),
                 ws_con_flicker_ban_duration: match TimeDelta::try_days(1) {
                     Some(delta) => delta,
                     None => panic!("invalid delta"),
                 },
-                ws_con_flicker_ban_reason: IpBanReason::WsConFlickerDetected,
-                ws_req_ban_threshold: Threshold::new_const(10000, TimeDelta::try_minutes(1)),
+                ws_con_flicker_ban_reason: global::IpBanReason::WsConFlickerDetected,
+                ws_req_ban_threshold: global::Threshold::new_const(10000, TimeDelta::try_minutes(1)),
                 ws_req_ban_duration: match TimeDelta::try_days(1) {
                     Some(delta) => delta,
                     None => panic!("invalid delta"),
@@ -132,7 +129,7 @@ async fn main() {
             threshold,
             db.clone(),
             time_machine,
-            ProdThreshold,
+            global::ProdThreshold,
             ProdUserAddrMiddleware,
         )
         .instrument(tracing::trace_span!("ws", "{}", ws_ip,)),
@@ -202,14 +199,7 @@ mod artcord_tests {
     };
 
     use artcord_mongodb::database::DB;
-    use artcord_state::{
-        message::{
-            prod_client_msg::{ClientMsg, ClientThresholdMiddleware},
-            prod_server_msg::ServerMsg,
-        },
-        misc::{throttle_connection::IpBanReason, throttle_threshold::Threshold},
-        util::time::TimeMiddleware,
-    };
+    use artcord_state::global;
     use artcord_tungstenite::ws::{GetUserAddrMiddleware, Ws};
     use artcord_tungstenite::WsThreshold;
     use chrono::{DateTime, TimeDelta, Utc};
@@ -274,13 +264,13 @@ mod artcord_tests {
         key: u128,
         ip: IpAddr,
         client_tx: mpsc::Sender<DebugClientMsg>,
-        server_rx: mpsc::Receiver<(u128, ServerMsg)>,
+        server_rx: mpsc::Receiver<(u128, global::ServerMsg)>,
         connection_rx: mpsc::Receiver<Result<ConnectionMsg, ClientErr>>,
     }
 
     #[derive(Debug, PartialEq, Clone)]
     enum DebugClientMsg {
-        Send((u128, ClientMsg)),
+        Send((u128, global::ClientMsg)),
         Disconnect,
     }
 
@@ -326,7 +316,7 @@ mod artcord_tests {
         }
     }
 
-    impl TimeMiddleware for TestClock {
+    impl global::TimeMiddleware for TestClock {
         async fn get_time(&self) -> DateTime<Utc> {
             let (time_tx, time_rx) = oneshot::channel::<DateTime<Utc>>();
             self.time_tx.send(time_tx).await.unwrap();
@@ -334,10 +324,10 @@ mod artcord_tests {
         }
     }
 
-    impl ClientThresholdMiddleware for DebugThreshold {
-        fn get_threshold(&self, msg: &ClientMsg) -> Threshold {
+    impl global::ClientThresholdMiddleware for DebugThreshold {
+        fn get_threshold(&self, msg: &global::ClientMsg) -> global::Threshold {
             match msg {
-                _ => Threshold::new(REQ_MAX_ALLOW, REQ_ALLOW_DURATION),
+                _ => global::Threshold::new(REQ_MAX_ALLOW, REQ_ALLOW_DURATION),
             }
         }
     }
@@ -376,17 +366,17 @@ mod artcord_tests {
             let tracker = TaskTracker::new();
             let cancelation_token = CancellationToken::new();
             let threshold = WsThreshold {
-                ws_max_con_threshold: Threshold::new(CON_MAX_BLOCK_AMOUNT, CON_BLOCK_DURATION),
+                ws_max_con_threshold: global::Threshold::new(CON_MAX_BLOCK_AMOUNT, CON_BLOCK_DURATION),
                 ws_max_con_ban_duration: CON_BAN_DURATION,
                 ws_max_con_threshold_range: CON_MAX_AMOUNT,
-                ws_max_con_ban_reason: IpBanReason::WsTooManyReconnections,
-                ws_con_flicker_threshold: Threshold::new(
+                ws_max_con_ban_reason: global::IpBanReason::WsTooManyReconnections,
+                ws_con_flicker_threshold: global::Threshold::new(
                     CON_FLICKER_MAX,
                     CON_FLICKER_BLOCK_DURATION,
                 ),
                 ws_con_flicker_ban_duration: CON_FLICKER_BAN_DURATION,
-                ws_con_flicker_ban_reason: IpBanReason::WsConFlickerDetected,
-                ws_req_ban_threshold: Threshold::new(REQ_MAX_BLOCK, REQ_BLOCK_DURATION),
+                ws_con_flicker_ban_reason: global::IpBanReason::WsConFlickerDetected,
+                ws_req_ban_threshold: global::Threshold::new(REQ_MAX_BLOCK, REQ_BLOCK_DURATION),
                 ws_req_ban_duration: REQ_BAN_DURATION,
             };
 
@@ -500,21 +490,24 @@ mod artcord_tests {
             callback(time);
         }
 
-        async fn send(&self, client_id: usize, msg: ClientMsg) -> std::result::Result<(), tokio::sync::mpsc::error::SendError<DebugClientMsg>> {
+        async fn send(
+            &self,
+            client_id: usize,
+            msg: global::ClientMsg,
+        ) -> std::result::Result<(), tokio::sync::mpsc::error::SendError<DebugClientMsg>> {
             let Some(con) = self.connections.get(&client_id) else {
                 panic!("missing con: {}", client_id);
             };
-            con.client_tx
-                .send(DebugClientMsg::Send((0, msg)))
-                .await
+            con.client_tx.send(DebugClientMsg::Send((0, msg))).await
         }
 
         async fn send_test_msg_once(&mut self, send_client_id: usize) {
-            self.send(send_client_id, ClientMsg::Logout).await.unwrap()
+            self.send(send_client_id, global::ClientMsg::Logout).await.unwrap()
         }
 
         async fn fail_to_send_test_msg_once(&mut self, send_client_id: usize) {
-            let r: Result<(), mpsc::error::SendError<DebugClientMsg>> = self.send(send_client_id, ClientMsg::Logout).await;
+            let r: Result<(), mpsc::error::SendError<DebugClientMsg>> =
+                self.send(send_client_id, global::ClientMsg::Logout).await;
             assert!(r.is_err())
         }
 
@@ -584,7 +577,7 @@ mod artcord_tests {
             *time += add_this_time;
         }
 
-        async fn recv(&mut self, client_id: usize) -> ServerMsg {
+        async fn recv(&mut self, client_id: usize) -> global::ServerMsg {
             let Some(con) = self.connections.get_mut(&client_id) else {
                 panic!("missing con: {}", client_id);
             };
@@ -625,29 +618,29 @@ mod artcord_tests {
         }
 
         async fn send_live_stats_on(&self, client_id: usize) {
-            self.send(client_id, ClientMsg::LiveWsStats(true)).await;
+            self.send(client_id, global::ClientMsg::LiveWsStats(true)).await;
         }
 
         async fn send_live_stats_off(&self, client_id: usize) {
-            self.send(client_id, ClientMsg::LiveWsStats(false)).await;
+            self.send(client_id, global::ClientMsg::LiveWsStats(false)).await;
         }
 
         async fn recv_connections(&mut self, client_id: usize) {
             let msg = self.recv(client_id).await;
-            assert!(matches!(msg, ServerMsg::WsLiveStatsIpCons(_)));
+            assert!(matches!(msg, global::ServerMsg::WsLiveStatsIpCons(_)));
         }
 
         async fn recv_connected(&mut self, client_id: usize) {
             //let mut received: Vec<IpAddr> = Vec::new();
             let ips: Vec<IpAddr> = self.connections.values().map(|con| con.ip).collect();
             trace!("current ips set: {:#?}", ips);
-            let good = |msg: ServerMsg| match msg {
-                ServerMsg::WsLiveStatsConnected {
+            let good = |msg: global::ServerMsg| match msg {
+                global::ServerMsg::WsLiveStatsConnected {
                     ip,
                     socket_addr,
                     con_id,
                     banned_until,
-                    req_stat,
+                    req_stats
                 } => {
                     if ips.iter().any(|known_ip| ip == *known_ip)
                     // && !received.iter().any(|ip| stat.ip == *ip)
@@ -671,12 +664,12 @@ mod artcord_tests {
             let targer_ip = self.connections.get(&target).map(|con| con.ip).unwrap();
             let msg = self.recv(client_id).await;
             assert!(match msg {
-                ServerMsg::WsLiveStatsConnected {
+                global::ServerMsg::WsLiveStatsConnected {
                     ip,
                     socket_addr,
                     con_id,
                     banned_until,
-                    req_stat,
+                    req_stats,
                 } => ip == targer_ip,
                 _ => false,
             })
@@ -685,7 +678,7 @@ mod artcord_tests {
         async fn recv_disconnected_one(&mut self, client_id: usize) {
             let msg = self.recv(client_id).await;
             assert!(match msg {
-                ServerMsg::WsLiveStatsDisconnected { con_id } => true,
+                global::ServerMsg::WsLiveStatsDisconnected { con_id } => true,
                 _ => false,
             })
         }
@@ -693,7 +686,7 @@ mod artcord_tests {
         async fn recv_req_allow(&mut self, client_id: usize) {
             let msg = self.recv(client_id).await;
             assert!(match msg {
-                ServerMsg::WsLiveStatsReqAllowed {
+                global::ServerMsg::WsLiveStatsReqAllowed {
                     con_id,
                     path,
                     total_amount,
@@ -705,7 +698,7 @@ mod artcord_tests {
         async fn recv_req_block(&mut self, client_id: usize) {
             let msg = self.recv(client_id).await;
             assert!(match msg {
-                ServerMsg::WsLiveStatsReqBlocked {
+                global::ServerMsg::WsLiveStatsReqBlocked {
                     con_id,
                     path,
                     total_amount,
@@ -717,7 +710,7 @@ mod artcord_tests {
         async fn recv_req_ban(&mut self, client_id: usize) {
             let msg = self.recv(client_id).await;
             assert!(match msg {
-                ServerMsg::WsLiveStatsReqBanned {
+                global::ServerMsg::WsLiveStatsReqBanned {
                     con_id,
                     path,
                     total_amount,
@@ -730,7 +723,7 @@ mod artcord_tests {
             let c_ip = self.connections.get(&target).map(|con| con.ip).unwrap();
             let msg = self.recv(client_id).await;
             assert!(match msg {
-                ServerMsg::WsLiveStatsConAllowed { ip, total_amount } => ip == c_ip,
+                global::ServerMsg::WsLiveStatsConAllowed { ip, total_amount } => ip == c_ip,
                 _ => false,
             })
         }
@@ -739,7 +732,7 @@ mod artcord_tests {
             let c_ip = self.connections.get(&target).map(|con| con.ip).unwrap();
             let msg = self.recv(client_id).await;
             assert!(match msg {
-                ServerMsg::WsLiveStatsConBlocked { ip, total_amount } => ip == c_ip,
+                global::ServerMsg::WsLiveStatsConBlocked { ip, total_amount } => ip == c_ip,
                 _ => false,
             })
         }
@@ -748,7 +741,7 @@ mod artcord_tests {
             let c_ip = self.connections.get(&target).map(|con| con.ip).unwrap();
             let msg = self.recv(client_id).await;
             assert!(match msg {
-                ServerMsg::WsLiveStatsConBanned { ip, total_amount } => ip == c_ip,
+                global::ServerMsg::WsLiveStatsConBanned { ip, total_amount } => ip == c_ip,
                 _ => false,
             })
         }
@@ -757,7 +750,7 @@ mod artcord_tests {
             let c_ip = self.connections.get(&target).map(|con| con.ip).unwrap();
             let msg = self.recv(client_id).await;
             assert!(match msg {
-                ServerMsg::WsLiveStatsIpBanned { ip, date, reason } => ip == c_ip,
+                global::ServerMsg::WsLiveStatsIpBanned { ip, date, reason } => ip == c_ip,
                 _ => false,
             })
         }
@@ -766,7 +759,7 @@ mod artcord_tests {
             let c_ip = self.connections.get(&target).map(|con| con.ip).unwrap();
             let msg = self.recv(client_id).await;
             assert!(match msg {
-                ServerMsg::WsLiveStatsIpUnbanned { ip } => ip == c_ip,
+                global::ServerMsg::WsLiveStatsIpUnbanned { ip } => ip == c_ip,
                 _ => false,
             })
         }
@@ -789,7 +782,7 @@ mod artcord_tests {
             let (connection_tx, connection_rx) =
                 mpsc::channel::<Result<ConnectionMsg, ClientErr>>(100);
             let (client_tx, mut client_rx) = mpsc::channel::<DebugClientMsg>(100);
-            let (server_tx, server_rx) = mpsc::channel::<(u128, ServerMsg)>(100);
+            let (server_tx, server_rx) = mpsc::channel::<(u128, global::ServerMsg)>(100);
 
             // (
             //     Self {
@@ -861,14 +854,14 @@ mod artcord_tests {
                 .unwrap_or(Err(ClientErr::Boom))
         }
 
-        pub async fn send(&mut self, msg: ClientMsg) {
+        pub async fn send(&mut self, msg: global::ClientMsg) {
             self.client_tx
                 .send(DebugClientMsg::Send((self.key, msg)))
                 .await
                 .unwrap();
         }
 
-        pub async fn recv(&mut self) -> ServerMsg {
+        pub async fn recv(&mut self) -> global::ServerMsg {
             let (_, msg) = self.server_rx.recv().await.unwrap();
             msg
         }
@@ -925,6 +918,7 @@ mod artcord_tests {
             ws_test_app.send_test_msg_once(client1).await;
             ws_test_app.recv_req_allow(client2).await;
         }
+
         for _ in 0..REQ_MAX_BLOCK {
             ws_test_app.send_test_msg_once(client1).await;
             ws_test_app.recv_req_block(client2).await;
@@ -978,12 +972,19 @@ mod artcord_tests {
             .create_client(2, Ipv4Addr::new(0, 0, 0, 2), CLIENT_CONNECTED_SUCCESS)
             .await;
         let client3 = ws_test_app
-            .create_client(2, Ipv4Addr::new(0, 0, 0, 3), CLIENT_CONNECTED_SUCCESS)
+            .create_client(3, Ipv4Addr::new(0, 0, 0, 3), CLIENT_CONNECTED_SUCCESS)
             .await;
 
         ws_test_app.send_live_stats_on(client2).await;
         ws_test_app.recv_connections(client2).await;
         ws_test_app.recv_connected(client2).await;
+
+        info!("point 1");
+
+        ws_test_app.send_test_msg_once(client3).await;
+        ws_test_app.recv_req_allow(client2).await;
+
+        info!("point 2");
 
         for _ in 0..REQ_MAX_ALLOW {
             ws_test_app.send_test_msg_once(client1).await;
@@ -993,26 +994,52 @@ mod artcord_tests {
             ws_test_app.send_test_msg_once(client1).await;
             ws_test_app.recv_req_block(client2).await;
         }
+
+        info!("point 3");
+
         ws_test_app.send_test_msg_once(client1).await;
         ws_test_app.recv_req_ban(client2).await;
         ws_test_app.recv_ip_banned(client2, client1).await;
 
+        info!("point 4");
+
+        ws_test_app.recv_disconnected_one(client2).await;
+        ws_test_app.recv_disconnected_one(client2).await;
+
+        info!("point 5");
+
         ws_test_app.fail_to_send_test_msg_once(client11).await;
+
+        info!("point 6");
         //ws_test_app.recv_req_allow(client2).await;
 
-        ws_test_app.recv_disconnected_one(client2).await;
-        ws_test_app.recv_disconnected_one(client2).await;
+        ws_test_app.send_test_msg_once(client3).await;
+        ws_test_app.recv_req_allow(client2).await;
 
-        info!("point -10");
+        info!("point 7");
 
-        let client3 = ws_test_app
-            .create_client(3, Ipv4Addr::new(0, 0, 0, 1), CLIENT_CONNECTED_ERR)
+        ws_test_app.send_test_msg_once(client3).await;
+        ws_test_app.recv_req_allow(client2).await;
+
+        info!("point 8");
+
+        let client111 = ws_test_app
+            .create_client(111, Ipv4Addr::new(0, 0, 0, 1), CLIENT_CONNECTED_ERR)
             .await;
-        info!("point -11");
+
+        info!("point 9");
+
         ws_test_app.recv_command_disconnected(client1).await;
         ws_test_app.recv_command_disconnected(client11).await;
-        info!("point -12");
-        ws_test_app.recv_command_boom(client3).await;
+
+        info!("point 10");
+
+        ws_test_app.recv_command_boom(client111).await;
+
+        info!("point 11");
+
+        ws_test_app.send_test_msg_once(client3).await;
+        ws_test_app.recv_req_allow(client2).await;
 
         // ws_test_app.close().await;
 
@@ -1030,7 +1057,7 @@ mod artcord_tests {
 
         //ws_test_app.recv_req_allow(client2).await;
 
-        info!("point -1");
+        info!("point 12");
         //sleep(Duration::from_secs(2)).await;
 
         ws_test_app.add_time(REQ_BAN_DURATION).await;
@@ -1039,10 +1066,34 @@ mod artcord_tests {
             .create_client(1, Ipv4Addr::new(0, 0, 0, 1), CLIENT_CONNECTED_SUCCESS)
             .await;
 
-        info!("point 0");
+        info!("point 13");
+
         ws_test_app.recv_con_allow(client2, client1).await;
         ws_test_app.recv_ip_unban(client2, client1).await;
         ws_test_app.recv_connected_one(client2, client1).await;
+
+        info!("point 14");
+
+        for _ in 0..REQ_MAX_ALLOW {
+            ws_test_app.send_test_msg_once(client3).await;
+            ws_test_app.recv_req_allow(client2).await;
+        }
+
+        ws_test_app.close_client(client3).await;
+
+        ws_test_app.recv_disconnected_one(client2).await;
+
+        let client3 = ws_test_app
+            .create_client(3, Ipv4Addr::new(0, 0, 0, 3), CLIENT_CONNECTED_SUCCESS)
+            .await;
+
+        ws_test_app.recv_con_allow(client2, client3).await;
+        ws_test_app.recv_connected_one(client2, client3).await;
+
+        ws_test_app.send_test_msg_once(client3).await;
+        ws_test_app.recv_req_block(client2).await;
+
+        info!("point 15");
 
         ws_test_app.send_test_msg_once(client1).await;
         ws_test_app.recv_req_allow(client2).await;
@@ -1050,16 +1101,22 @@ mod artcord_tests {
         // ws_test_app.recv_req_allow(client2).await;
         // ws_test_app.recv_ip_unban(client2, client1).await;
 
-        info!("point 1");
+        info!("point 16");
 
         ws_test_app.send_test_msg_once(client1).await;
         ws_test_app.recv_req_allow(client2).await;
 
-        ws_test_app.send_test_msg_once(client1).await;
-        ws_test_app.recv_req_allow(client2).await;
+        info!("point 17");
 
         ws_test_app.send_test_msg_once(client1).await;
         ws_test_app.recv_req_allow(client2).await;
+
+        info!("point 18");
+
+        ws_test_app.send_test_msg_once(client1).await;
+        ws_test_app.recv_req_allow(client2).await;
+
+        info!("point 19");
 
         // ws_test_app.send_test_msg_once(client3).await;
         // ws_test_app.recv_req_allow(client2).await;
@@ -1756,7 +1813,7 @@ mod artcord_tests {
     ) -> bool {
         match msg {
             DebugClientMsg::Send((key, msg)) => {
-                let bytes = ClientMsg::as_vec(&(key, msg)).unwrap();
+                let bytes = global::ClientMsg::as_vec(&(key, msg)).unwrap();
                 write.send(Message::Binary(bytes)).await.unwrap();
             }
             DebugClientMsg::Disconnect => {
@@ -1768,7 +1825,7 @@ mod artcord_tests {
 
     async fn on_read(
         msg: Option<Result<Message, tokio_tungstenite::tungstenite::Error>>,
-        server_tx: &mpsc::Sender<(u128, ServerMsg)>,
+        server_tx: &mpsc::Sender<(u128, global::ServerMsg)>,
     ) -> bool {
         let Some(msg) = msg else {
             return true;
@@ -1777,7 +1834,7 @@ mod artcord_tests {
 
         match msg {
             Message::Binary(msg) => {
-                let msg = ServerMsg::from_bytes(&msg).unwrap();
+                let msg = global::ServerMsg::from_bytes(&msg).unwrap();
                 server_tx.send(msg).await.unwrap();
             }
             _ => {}

@@ -1,6 +1,7 @@
 use artcord_mongodb::database::DBError;
 use thiserror::Error;
 use tokio_tungstenite::tungstenite::Message;
+use artcord_state::global;
 
 use crate::ws::{con::ConMsg, WsAppMsg};
 
@@ -12,6 +13,10 @@ pub mod gallery;
 
 #[derive(Error, Debug)]
 pub enum ResErr {
+    // global::WsStatDbToSavedErr
+    #[error("failed to convert ws_con: {0}")]
+    WsConFromDbErr(#[from] global::WsConFromDbErr),
+
     #[error("Invalid client msg type (not binary) error: {0}")]
     InvalidClientMsg(Message),
 

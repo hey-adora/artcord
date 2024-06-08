@@ -1,7 +1,7 @@
 use std::{collections::HashMap, net::IpAddr};
 
 use artcord_leptos_web_sockets::{channel::WsRecvResult, runtime::WsRuntime};
-use artcord_state::{message::{prod_client_msg::{ClientMsg, ClientPathType}, prod_server_msg::ServerMsg}, misc::throttle_connection::{IpBanReason, TempThrottleConnection, WebThrottleConnection, WebThrottleConnectionCount}, model::ws_statistics::{TempConIdType, ReqStat}};
+use artcord_state::global;
 use chrono::{DateTime, Utc};
 use leptos::{RwSignal, SignalGet, SignalGetUntracked, SignalSet, SignalUpdate, SignalWithUntracked};
 use tracing::warn;
@@ -11,6 +11,41 @@ use tracing::debug;
 #[derive(Copy, Clone, Debug)]
 pub struct LiveThrottleCache {
     pub ips: RwSignal<HashMap<IpAddr, WebThrottleConnection>>
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct WebThrottleConnection {
+    pub ws_connection_count: RwSignal<u64>,
+    pub ws_path_count: RwSignal<HashMap<global::ClientPathType, WebThrottleConnectionCount>>,
+    pub ws_total_blocked_connection_attempts: RwSignal<u64>,
+    pub ws_blocked_connection_attempts: RwSignal<u64>,
+    pub ws_blocked_connection_attempts_last_reset_at: RwSignal<DateTime<Utc>>,
+    pub ws_con_banned_until: RwSignal<Option<(DateTime<Utc>, global::IpBanReason)>>,
+    pub ws_con_flicker_count: RwSignal<u64>,
+    pub ws_con_flicker_banned_until: RwSignal<Option<(DateTime<Utc>, global::IpBanReason)>>,
+}
+
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct WebThrottleConnectionCount {
+    pub total_count: RwSignal<u64>,
+    pub count: RwSignal<u64>,
+    pub last_reset_at: RwSignal<DateTime<Utc>>,
+}
+
+impl Default for WebThrottleConnection {
+    fn default() -> Self {
+        Self {
+            ws_connection_count: RwSignal::new(1),
+            ws_path_count: RwSignal::new(HashMap::new()),
+            ws_total_blocked_connection_attempts: RwSignal::new(0),
+            ws_blocked_connection_attempts: RwSignal::new(0),
+            ws_blocked_connection_attempts_last_reset_at: RwSignal::new(Utc::now()),
+            ws_con_banned_until: RwSignal::new(None),
+            ws_con_flicker_count: RwSignal::new(0),
+            ws_con_flicker_banned_until: RwSignal::new(None),
+        }
+    }
 }
 
 impl Default for LiveThrottleCache {
@@ -37,11 +72,11 @@ impl LiveThrottleCache {
             true
         });
 
-        if !updated {
-            self.ips.update(|ips| {
-                ips.insert(*ip, WebThrottleConnection::new());
-            });
-        }
+        // if !updated {
+        //     self.ips.update(|ips| {
+        //         ips.insert(*ip, WebThrottleConnection::new());
+        //     });
+        // }
     }
 
     pub fn on_disc(&self, ip: &IpAddr) {
@@ -66,12 +101,12 @@ impl LiveThrottleCache {
         }
     }
 
-    pub fn on_start(&self, throttle_cache: HashMap<IpAddr, TempThrottleConnection>) {
+    pub fn on_start(&self, throttle_cache: HashMap<IpAddr, global::WsIpStat>) {
         self.ips.update(|ips| {
             for (ip, new_con) in throttle_cache {
                 if let Some(con) = ips.get(&ip) {
-                    if con.ws_connection_count.get_untracked() != new_con.con_throttle.amount {
-                        con.ws_connection_count.set(new_con.con_throttle.amount);
+                    if con.ws_connection_count.get_untracked() != new_con.total_allow_amount {
+                        con.ws_connection_count.set(new_con.total_allow_amount);
                     }
                     // for (new_path_index, new_path_count) in new_con.ws_path_count {
                     //         let updated = con.ws_path_count.with_untracked(|con_path_count| {
@@ -96,15 +131,15 @@ impl LiveThrottleCache {
                     //             });
                     //         }
                     // }
-                    if con.ws_total_blocked_connection_attempts.get_untracked() != new_con.con_throttle.tracker.total_amount {
-                        con.ws_total_blocked_connection_attempts.set(new_con.con_throttle.tracker.total_amount);
+                    if con.ws_total_blocked_connection_attempts.get_untracked() != new_con.total_block_amount {
+                        con.ws_total_blocked_connection_attempts.set(new_con.total_block_amount);
                     }
-                    if con.ws_blocked_connection_attempts.get_untracked() != new_con.con_throttle.tracker.amount {
-                        con.ws_blocked_connection_attempts.set(new_con.con_throttle.tracker.amount);
-                    }
-                    if con.ws_blocked_connection_attempts_last_reset_at.get_untracked() != new_con.con_throttle.tracker.started_at {
-                        con.ws_blocked_connection_attempts_last_reset_at.set(new_con.con_throttle.tracker.started_at);
-                    }
+                    // if con.ws_blocked_connection_attempts.get_untracked() != new_con.con_throttle.tracker.amount {
+                    //     con.ws_blocked_connection_attempts.set(new_con.con_throttle.tracker.amount);
+                    // }
+                    // if con.ws_blocked_connection_attempts_last_reset_at.get_untracked() != new_con.con_throttle.tracker.started_at {
+                    //     con.ws_blocked_connection_attempts_last_reset_at.set(new_con.con_throttle.tracker.started_at);
+                    // }
                     if con.ws_con_banned_until.get_untracked() != new_con.banned_until {
                         con.ws_con_banned_until.set(new_con.banned_until);
                     }
@@ -136,7 +171,7 @@ impl LiveThrottleCache {
         });
     }
 
-    pub fn on_ban(&self, ip: &IpAddr, date: DateTime<Utc>, reason: IpBanReason) {
+    pub fn on_ban(&self, ip: &IpAddr, date: DateTime<Utc>, reason: global::IpBanReason) {
         self.ips.with_untracked(|ips| {
             let con = ips.get(ip); 
             let Some(con) = con else {
@@ -158,7 +193,7 @@ impl LiveThrottleCache {
         });
     }
 
-    pub fn on_inc(&self, ip: &IpAddr, path_index: &ClientPathType) {
+    pub fn on_inc(&self, ip: &IpAddr, path_index: &global::ClientPathType) {
         self.ips.with_untracked(|ips| {
             let con = ips.get(ip);
             let Some(con_paths) = con else {
@@ -176,17 +211,17 @@ impl LiveThrottleCache {
                 });
                 true
             });
-            if !updated {
-                con_paths.ws_path_count.update(|path_count| {
-                    trace!("live throttle: path '{}' inserted for {}", path_index, ip);
-                    path_count.insert(*path_index, WebThrottleConnectionCount::new());
-                });
-            }
+            // if !updated {
+            //     con_paths.ws_path_count.update(|path_count| {
+            //         trace!("live throttle: path '{}' inserted for {}", path_index, ip);
+            //         path_count.insert(*path_index, WebThrottleConnectionCount::new());
+            //     });
+            // }
         });
     }
 }
 
-pub fn use_ws_live_throttle_cache(ws: WsRuntime<ServerMsg, ClientMsg>, live_throttle_cache: LiveThrottleCache) {
+pub fn use_ws_live_throttle_cache(ws: WsRuntime<global::ServerMsg, global::ClientMsg>, live_throttle_cache: LiveThrottleCache) {
     let ws_live_ws_stats = ws.channel().timeout(30).single_fire().start();
 
     ws_live_ws_stats
@@ -225,6 +260,6 @@ pub fn use_ws_live_throttle_cache(ws: WsRuntime<ServerMsg, ClientMsg>, live_thro
     ws_live_ws_stats
         .sender()
         .resend_on_reconnect()
-        .on_cleanup(ClientMsg::LiveWsThrottleCache(false))
-        .send(ClientMsg::LiveWsThrottleCache(true));
+        .on_cleanup(global::ClientMsg::LiveWsThrottleCache(false))
+        .send(global::ClientMsg::LiveWsThrottleCache(true));
 }

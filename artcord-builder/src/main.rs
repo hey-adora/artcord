@@ -1,10 +1,7 @@
 use std::{ffi::OsStr, net::SocketAddr, ops::Deref, path::Path, pin::Pin, process::ExitStatus};
 
 use artcord_leptos_web_sockets::WsPackage;
-use artcord_state::message::{
-    debug_client_msg::DebugClientMsg, debug_msg_key::DebugMsgPermKey,
-    debug_server_msg::DebugServerMsg,
-};
+use artcord_state::global;
 use cfg_if::cfg_if;
 use dotenv::dotenv;
 use futures::{future::join_all, Future, FutureExt, SinkExt, StreamExt, TryStreamExt};
@@ -379,8 +376,8 @@ async fn sockets_handle_connection(
 
                     // }
                     tokio_tungstenite::tungstenite::Message::Binary(client_msg_bytes) => {
-                        let client_msg: Result<WsPackage<DebugClientMsg>, _> =
-                            DebugClientMsg::from_bytes(&client_msg_bytes);
+                        let client_msg: Result<WsPackage<global::DebugClientMsg>, _> =
+                        global::DebugClientMsg::from_bytes(&client_msg_bytes);
 
                         let Ok(client_msg) = client_msg.inspect_err(|err| {
                             error!(
@@ -394,12 +391,12 @@ async fn sockets_handle_connection(
                         let key = client_msg.0;
                         let client_msg = client_msg.1;
                         let send_result = match client_msg {
-                            DebugClientMsg::BrowserReady => {
+                            global::DebugClientMsg::BrowserReady => {
                                 send_manager_event
                                     .send(ManagerEventKind::BrowserReady)
                                     .await
                             }
-                            DebugClientMsg::RuntimeReady => {
+                            global::DebugClientMsg::RuntimeReady => {
                                 send_manager_event
                                     .send(ManagerEventKind::RuntimeReady)
                                     .await
@@ -503,13 +500,13 @@ async fn sockets_handle_connection(
                         match result {
                             BrowserEvent::Restart => {
                                 //trace!("socekt: msg recv: ({},{:?})", key, &client_msg);
-                                let restart_package: WsPackage<DebugServerMsg> = (
+                                let restart_package: WsPackage<global::DebugServerMsg> = (
                                     0,
                                     // WsRouteKey::Perm(DebugMsgPermKey::Debug),
-                                    DebugServerMsg::Restart,
+                                    global::DebugServerMsg::Restart,
                                 );
                                 trace!("socekt_connection: send: {:?}", &restart_package);
-                                let server_msg = DebugServerMsg::as_bytes(&restart_package);
+                                let server_msg = global::DebugServerMsg::as_bytes(&restart_package);
 
                                 match server_msg {
                                     Ok(server_msg) => {

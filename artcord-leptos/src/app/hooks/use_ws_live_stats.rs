@@ -4,15 +4,6 @@ use std::{
 };
 
 use artcord_leptos_web_sockets::{channel::WsRecvResult, runtime::WsRuntime, WsRouteKey};
-use artcord_state::{
-    message::{
-        prod_client_msg::{ClientMsg, ClientPathType},
-        prod_server_msg::ServerMsg,
-    },
-    misc::throttle_connection::IpBanReason,
-    model::ws_statistics::{ReqStat, TempConIdType},
-    ws::WsIpStat,
-};
 use chrono::{DateTime, Utc};
 use leptos::{
     create_effect, on_cleanup, RwSignal, SignalGet, SignalGetUntracked, SignalSet, SignalUpdate,
@@ -20,25 +11,26 @@ use leptos::{
 };
 use tracing::trace;
 use tracing::{debug, warn};
+use artcord_state::global;
 
-pub type WebStatPathType = HashMap<ClientPathType, WebWsStatPath>;
+pub type WebStatPathType = HashMap<global::ClientPathType, WebWsConReqStat>;
 
 #[derive(Copy, Clone, Debug)]
 pub struct LiveWsStats {
-    pub stats: RwSignal<HashMap<TempConIdType, WebWsStat>>,
+    pub stats: RwSignal<HashMap<global::TempConIdType, WebWsCon>>,
     pub ip_stats: RwSignal<HashMap<IpAddr, WebWsIpStat>>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct WebWsStat {
+pub struct WebWsCon {
     pub ip: IpAddr,
     pub addr: SocketAddr,
     pub paths: RwSignal<WebStatPathType>,
-    pub banned_until: RwSignal<Option<(DateTime<Utc>, IpBanReason)>>,
+    pub banned_until: RwSignal<Option<(DateTime<Utc>, global::IpBanReason)>>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct WebWsStatPath {
+pub struct WebWsConReqStat {
     pub total_allowed: RwSignal<u64>,
     pub total_blocked: RwSignal<u64>,
     pub total_banned: RwSignal<u64>,
@@ -48,13 +40,13 @@ pub struct WebWsStatPath {
 #[derive(Debug, PartialEq, Clone)]
 pub struct WebWsIpStat {
     pub con_count: RwSignal<u64>,
-    pub banned_until: RwSignal<Option<(DateTime<Utc>, IpBanReason)>>,
+    pub banned_until: RwSignal<Option<(DateTime<Utc>, global::IpBanReason)>>,
     //pub totals: RwSignal< HashMap< TempConIdType, u64 > >,
     pub total_allowed: RwSignal<u64>,
     pub total_blocked: RwSignal<u64>,
     pub total_banned: RwSignal<u64>,
     pub total_already_banned: RwSignal<u64>,
-    pub paths: RwSignal<HashMap<ClientPathType, WebWsStatPath>>,
+    pub paths: RwSignal<HashMap<global::ClientPathType, WebWsConReqStat>>,
 }
 
 // #[derive(Debug, PartialEq, Clone)]
@@ -72,7 +64,7 @@ impl WebWsIpStat {
         total_blocked: u64,
         total_banned: u64,
         total_already_banned: u64,
-        banned_until: Option<(DateTime<Utc>, IpBanReason)>,
+        banned_until: Option<(DateTime<Utc>, global::IpBanReason)>,
     ) -> Self {
         Self {
             con_count: RwSignal::new(con_count),
@@ -107,7 +99,7 @@ impl WebWsIpStat {
 //     }
 // }
 
-impl WebWsStatPath {
+impl WebWsConReqStat {
     pub fn new(allowed: u64, blocked: u64, banned: u64, already_banned: u64) -> Self {
         Self {
             total_allowed: RwSignal::new(allowed),
@@ -118,16 +110,15 @@ impl WebWsStatPath {
     }
 }
 
-impl WebWsStat {
-    pub fn from_req_stat(ip: IpAddr, addr: SocketAddr, banned_until: Option<(DateTime<Utc>, IpBanReason)>, value: ReqStat) -> WebWsStat {
+impl WebWsCon {
+    pub fn from_msg(ip: IpAddr, addr: SocketAddr, banned_until: Option<(DateTime<Utc>, global::IpBanReason)>, req_stats: HashMap<global::ClientPathType, global::WsConReqStat>) -> WebWsCon {
         let count_map =
-            value
-                .count
+        req_stats
                 .iter()
                 .fold(WebStatPathType::new(), |mut prev, (key, value)| {
                     prev.insert(
                         *key,
-                        WebWsStatPath::new(
+                        WebWsConReqStat::new(
                             value.total_allowed_count,
                             value.total_blocked_count,
                             value.total_banned_count,
@@ -136,7 +127,7 @@ impl WebWsStat {
                     );
                     prev
                 });
-        WebWsStat {
+        WebWsCon {
             ip,
             addr,
             paths: RwSignal::new(count_map),
@@ -165,11 +156,10 @@ impl LiveWsStats {
         Self::default()
     }
 
-    pub fn update_con_stat(&self,  ip: IpAddr, addr: SocketAddr, con_id: TempConIdType, banned_until: Option<(DateTime<Utc>, IpBanReason)>, req_stat: ReqStat) {
-        let new_stat = &req_stat;
-        let new_paths = &req_stat.count;
+    pub fn update_con_stat(&self,  ip: IpAddr, addr: SocketAddr, con_id: global::TempConIdType, banned_until: Option<(DateTime<Utc>, global::IpBanReason)>, new_paths: HashMap<global::ClientPathType, global::WsConReqStat>) {
         let new_con_id = &con_id;
         let new_ip = &ip;
+        let new_paths = &new_paths;
         self.stats.update(|stats| {
             if let Some(stats) = stats.get(new_con_id) {
                 for (new_path_index, new_path_count) in new_paths {
@@ -209,7 +199,7 @@ impl LiveWsStats {
                         stats.paths.update(|stat_count| {
                             stat_count.insert(
                                 *new_path_index,
-                                WebWsStatPath::new(
+                                WebWsConReqStat::new(
                                     new_path_count.total_allowed_count,
                                     new_path_count.total_blocked_count,
                                     new_path_count.total_banned_count,
@@ -220,7 +210,7 @@ impl LiveWsStats {
                     }
                 }
             } else {
-                stats.insert(*new_con_id, WebWsStat::from_req_stat(ip, addr, banned_until, new_stat.clone()) );
+                stats.insert(*new_con_id, WebWsCon::from_msg(ip, addr, banned_until, new_paths.clone()) );
             }
         });
         self.ip_stats.with_untracked(|stats| {
@@ -229,14 +219,14 @@ impl LiveWsStats {
                 stat.paths.with_untracked(|current_paths| {
                     for (new_path, new_path_stat) in new_paths {
                         let Some(current_path) = current_paths.get(&new_path) else {
-                            let stat = WebWsStatPath::new(
+                            let stat = WebWsConReqStat::new(
                                 new_path_stat.total_allowed_count,
                                 new_path_stat.total_blocked_count,
                                 new_path_stat.total_banned_count,
                                 new_path_stat.total_already_banned_count,
                             );
 
-                            add_these.push((*new_path, stat));
+                            add_these.push((new_path, stat));
 
                             continue;
                         };
@@ -257,7 +247,7 @@ impl LiveWsStats {
                 if !add_these.is_empty() {
                     stat.paths.update(|current_paths| {
                         for (path, stat) in add_these {
-                            current_paths.insert(path, stat);
+                            current_paths.insert(*path, stat);
                         }
                     });
                 }
@@ -267,7 +257,7 @@ impl LiveWsStats {
         });
     }
 
-    pub fn ban_ip(&self, ip: IpAddr, date: DateTime<Utc>, reason: IpBanReason) {
+    pub fn ban_ip(&self, ip: IpAddr, date: DateTime<Utc>, reason: global::IpBanReason) {
         self.stats.with_untracked(|stats| {
             for (_, stat) in stats {
                 if stat.ip == ip {
@@ -305,8 +295,8 @@ impl LiveWsStats {
 
     pub fn update_con_allowed_path(
         &self,
-        con_id: TempConIdType,
-        path: ClientPathType,
+        con_id: global::TempConIdType,
+        path: global::ClientPathType,
         amount: u64,
     ) {
         self.stats.with_untracked(|stats| {
@@ -327,7 +317,7 @@ impl LiveWsStats {
             if let Some(updated) = updated {
                 if !updated {
                     con.paths.update(|paths| {
-                        paths.insert(path, WebWsStatPath::new(amount, 0, 0, 0));
+                        paths.insert(path, WebWsConReqStat::new(amount, 0, 0, 0));
                     });
                 }
             } else {
@@ -338,8 +328,8 @@ impl LiveWsStats {
 
     pub fn update_con_blocked_path(
         &self,
-        con_id: TempConIdType,
-        path: ClientPathType,
+        con_id: global::TempConIdType,
+        path: global::ClientPathType,
         amount: u64,
     ) {
         self.stats.update_untracked(|stats| {
@@ -360,7 +350,7 @@ impl LiveWsStats {
             if let Some(updated) = updated {
                 if !updated {
                     con.paths.update(|paths| {
-                        paths.insert(path, WebWsStatPath::new(0, amount, 0, 0));
+                        paths.insert(path, WebWsConReqStat::new(0, amount, 0, 0));
                     });
                 }
             } else {
@@ -369,7 +359,7 @@ impl LiveWsStats {
         });
     }
 
-    pub fn update_con_banned_path(&self, con_id: TempConIdType, path: ClientPathType, amount: u64) {
+    pub fn update_con_banned_path(&self, con_id: global::TempConIdType, path: global::ClientPathType, amount: u64) {
         self.stats.update_untracked(|stats| {
             let Some(con) = stats.get(&con_id) else {
                 debug!("ws live stats con not found: {}", con_id);
@@ -388,7 +378,7 @@ impl LiveWsStats {
             if let Some(updated) = updated {
                 if !updated {
                     con.paths.update(|paths| {
-                        paths.insert(path, WebWsStatPath::new(0, 0, amount, 0));
+                        paths.insert(path, WebWsConReqStat::new(0, 0, amount, 0));
                     });
                 }
             } else {
@@ -397,7 +387,7 @@ impl LiveWsStats {
         });
     }
 
-    pub fn update_ip_allowed_path(&self, ip: IpAddr, path: ClientPathType) {
+    pub fn update_ip_allowed_path(&self, ip: IpAddr, path: global::ClientPathType) {
         self.ip_stats.with_untracked(|stats| {
             let Some(con) = stats.get(&ip) else {
                 debug!("ws live stats ip not found: {}", ip);
@@ -416,7 +406,7 @@ impl LiveWsStats {
             if let Some(updated) = updated {
                 if !updated {
                     con.paths.update(|paths| {
-                        paths.insert(path, WebWsStatPath::new(1, 0, 0, 0));
+                        paths.insert(path, WebWsConReqStat::new(1, 0, 0, 0));
                     });
                 }
             } else {
@@ -425,7 +415,7 @@ impl LiveWsStats {
         });
     }
 
-    pub fn update_ip_blocked_path(&self, ip: IpAddr, path: ClientPathType) {
+    pub fn update_ip_blocked_path(&self, ip: IpAddr, path: global::ClientPathType) {
         self.ip_stats.with_untracked(|stats| {
             let Some(con) = stats.get(&ip) else {
                 debug!("ws live stats ip not found: {}", ip);
@@ -444,7 +434,7 @@ impl LiveWsStats {
             if let Some(updated) = updated {
                 if !updated {
                     con.paths.update(|paths| {
-                        paths.insert(path, WebWsStatPath::new(0, 1, 0, 0));
+                        paths.insert(path, WebWsConReqStat::new(0, 1, 0, 0));
                     });
                 }
             } else {
@@ -453,7 +443,7 @@ impl LiveWsStats {
         });
     }
 
-    pub fn update_ip_banned_path(&self, ip: IpAddr, path: ClientPathType) {
+    pub fn update_ip_banned_path(&self, ip: IpAddr, path: global::ClientPathType) {
         self.ip_stats.with_untracked(|stats| {
             let Some(con) = stats.get(&ip) else {
                 debug!("ws live stats ip not found: {}", ip);
@@ -472,7 +462,7 @@ impl LiveWsStats {
             if let Some(updated) = updated {
                 if !updated {
                     con.paths.update(|paths| {
-                        paths.insert(path, WebWsStatPath::new(0, 0, 1, 0));
+                        paths.insert(path, WebWsConReqStat::new(0, 0, 1, 0));
                     });
                 }
             } else {
@@ -481,7 +471,7 @@ impl LiveWsStats {
         });
     }
 
-    pub fn update_connections(&self, ip_stats: Vec<WsIpStat>) {
+    pub fn update_connections(&self, ip_stats: Vec<global::WsIpStat>) {
         self.ip_stats.update(|stats| {
             for ip_stat in ip_stats {
                 let Some(stat) = stats.get(&ip_stat.ip) else {
@@ -569,7 +559,7 @@ impl LiveWsStats {
         }
     }
 
-    pub fn inc_ip_path_count(&self, ip: IpAddr, path: ClientPathType) {
+    pub fn inc_ip_path_count(&self, ip: IpAddr, path: global::ClientPathType) {
         let updated = self.ip_stats.try_with_untracked(|stats| {
             let Some(stat) = stats.get(&ip) else {
                 return false;
@@ -669,7 +659,7 @@ impl LiveWsStats {
     //     });
     // }
 
-    pub fn remove_live_stat(&self, con_key: &TempConIdType) {
+    pub fn remove_live_stat(&self, con_key: &global::TempConIdType) {
         self.stats.update(|stats| {
             let stat = stats.remove(con_key);
             if stat.is_some() {
@@ -681,21 +671,21 @@ impl LiveWsStats {
     }
 }
 
-pub fn use_ws_live_stats(ws: WsRuntime<ServerMsg, ClientMsg>, live_stats: LiveWsStats) {
+pub fn use_ws_live_stats(ws: WsRuntime<global::ServerMsg, global::ClientMsg>, live_stats: LiveWsStats) {
     let ws_live_ws_stats = ws.channel().timeout(30).single_fire().start();
 
     ws_live_ws_stats
         .recv()
         .start(move |server_msg, _| match server_msg {
             WsRecvResult::Ok(server_msg) => match server_msg {
-                ServerMsg::WsLiveStatsIpCons(ip_stats) => {
+                global::ServerMsg::WsLiveStatsIpCons(ip_stats) => {
                     live_stats.update_connections(ip_stats.clone());
                 }
-                ServerMsg::WsLiveStatsConnected { ip, socket_addr, con_id, banned_until, req_stat } => {
+                global::ServerMsg::WsLiveStatsConnected { ip, socket_addr, con_id, banned_until, req_stats: req_stat } => {
                     live_stats.update_con_stat(*ip, *socket_addr, *con_id, *banned_until, req_stat.clone());
                     live_stats.inc_ip_con_count(*ip);
                 }
-                ServerMsg::WsLiveStatsReqAllowed {
+                global::ServerMsg::WsLiveStatsReqAllowed {
                     con_id,
                     path,
                     total_amount,
@@ -710,7 +700,7 @@ pub fn use_ws_live_stats(ws: WsRuntime<ServerMsg, ClientMsg>, live_stats: LiveWs
                     live_stats.update_con_allowed_path(*con_id, *path, *total_amount);
                     live_stats.update_ip_allowed_path(ip, *path);
                 }
-                ServerMsg::WsLiveStatsReqBlocked {
+                global::ServerMsg::WsLiveStatsReqBlocked {
                     con_id,
                     path,
                     total_amount,
@@ -725,7 +715,7 @@ pub fn use_ws_live_stats(ws: WsRuntime<ServerMsg, ClientMsg>, live_stats: LiveWs
                     live_stats.update_con_blocked_path(*con_id, *path, *total_amount);
                     live_stats.update_ip_blocked_path(ip, *path);
                 }
-                ServerMsg::WsLiveStatsReqBanned {
+                global::ServerMsg::WsLiveStatsReqBanned {
                     con_id,
                     path,
                     total_amount,
@@ -740,7 +730,7 @@ pub fn use_ws_live_stats(ws: WsRuntime<ServerMsg, ClientMsg>, live_stats: LiveWs
                     live_stats.update_con_banned_path(*con_id, *path, *total_amount);
                     live_stats.update_ip_banned_path(ip, *path);
                 }
-                ServerMsg::WsLiveStatsDisconnected { con_id } => {
+                global::ServerMsg::WsLiveStatsDisconnected { con_id } => {
                     let Some(ip) = live_stats
                         .stats
                         .with_untracked(|stats| stats.get(con_id).map(|stat| stat.ip))
@@ -751,19 +741,19 @@ pub fn use_ws_live_stats(ws: WsRuntime<ServerMsg, ClientMsg>, live_stats: LiveWs
                     live_stats.remove_live_stat(con_id);
                     live_stats.dec_ip_con_count(ip);
                 }
-                ServerMsg::WsLiveStatsIpBanned { ip, date, reason } => {
+                global::ServerMsg::WsLiveStatsIpBanned { ip, date, reason } => {
                     live_stats.ban_ip(*ip, *date, *reason);
                 }
-                ServerMsg::WsLiveStatsIpUnbanned { ip } => {
+                global::ServerMsg::WsLiveStatsIpUnbanned { ip } => {
                     live_stats.unban_ip(*ip);
                 }
-                ServerMsg::WsLiveStatsConAllowed { ip, total_amount } => {
+                global::ServerMsg::WsLiveStatsConAllowed { ip, total_amount } => {
                     live_stats.update_ip_allowed_count(*ip, *total_amount);
                 }
-                ServerMsg::WsLiveStatsConBlocked { ip, total_amount } => {
+                global::ServerMsg::WsLiveStatsConBlocked { ip, total_amount } => {
                     live_stats.update_ip_blocked_count(*ip, *total_amount);
                 }
-                ServerMsg::WsLiveStatsConBanned { ip, total_amount } => {
+                global::ServerMsg::WsLiveStatsConBanned { ip, total_amount } => {
                     live_stats.update_ip_banned_count(*ip, *total_amount);
                 }
                 // ServerMsg::WsLiveStatsStarted(stats) => {
@@ -778,7 +768,7 @@ pub fn use_ws_live_stats(ws: WsRuntime<ServerMsg, ClientMsg>, live_stats: LiveWs
                 // ServerMsg::WsLiveStatsUpdateRemoveStat { con_key } => {
                 //     live_stats.remove_live_stat(con_key);
                 // }
-                ServerMsg::WsSavedStatsPage(stats) => {}
+                global::ServerMsg::WsSavedStatsPage(stats) => {}
                 _ => {}
             },
             WsRecvResult::TimeOut => {}
@@ -789,7 +779,7 @@ pub fn use_ws_live_stats(ws: WsRuntime<ServerMsg, ClientMsg>, live_stats: LiveWs
         move || {
             ws_live_ws_stats
                 .sender()
-                .send(ClientMsg::LiveWsStats(false));
+                .send(global::ClientMsg::LiveWsStats(false));
         }
     });
 
@@ -797,7 +787,7 @@ pub fn use_ws_live_stats(ws: WsRuntime<ServerMsg, ClientMsg>, live_stats: LiveWs
         let _ = ws.connected.get();
         live_stats.ip_stats.update(|stats| stats.clear());
         live_stats.stats.update(|stats| stats.clear());
-        ws_live_ws_stats.sender().send(ClientMsg::LiveWsStats(true));
+        ws_live_ws_stats.sender().send(global::ClientMsg::LiveWsStats(true));
 
         // ws_live_ws_stats
         //     .sender()

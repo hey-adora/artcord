@@ -15,9 +15,7 @@ use serenity::{
 use super::save_attachments::SaveAttachmentsError;
 use crate::{commands::{from_reaction_type, FromReactionTypeError, ToReactionTypeError}, create_bot::ReactionQueue};
 use artcord_mongodb::database::DB;
-use artcord_state::model::auto_reaction::{
-    AutoReaction,
-};
+use artcord_state::global;
 use serenity::model::channel::Reaction;
 use std::sync::Arc;
 

@@ -1,6 +1,6 @@
 use crate::events;
 use artcord_mongodb::database::DB;
-use artcord_state::model::auto_reaction::AutoReaction;
+use artcord_state::global;
 use serenity::client::Context;
 use serenity::framework::StandardFramework;
 use serenity::model::channel::Reaction;
@@ -79,7 +79,7 @@ impl serenity::client::EventHandler for BotHandler {
 pub struct ReactionQueue {
     pub msg_id: u64,
     pub channel_id: u64,
-    pub reactions: Vec<AutoReaction>,
+    pub reactions: Vec<global::DbAutoReaction>,
     pub add: bool,
 }
 

@@ -1,20 +1,21 @@
-use crate::database::DB;
-use artcord_state::model::allowed_role::{AllowedRole, AllowedRoleFieldName};
+use crate::database::{COLLECTION_ALLOWED_ROLE_NAME, DB};
+use artcord_state::global::{DbAllowedRole, DbAllowedRoleFieldName};
 use bson::doc;
 use futures::TryStreamExt;
 use mongodb::{options::IndexOptions, Collection, Database, IndexModel};
-
-const COLLECTION_ALLOWED_ROLE_NAME: &'static str = "allowed_role";
+use field_types::FieldName;
+use serde::{Deserialize, Serialize};
+use chrono::Utc;
 
 impl DB {
-    pub async fn init_allowed_role(database: &Database) -> Collection<AllowedRole> {
+    pub async fn init_allowed_role(database: &Database) -> Collection<DbAllowedRole> {
         let opts = IndexOptions::builder().unique(true).build();
         let index = IndexModel::builder()
-            .keys(doc! { AllowedRoleFieldName::GuildId.name(): -1, AllowedRoleFieldName::RoleId.name(): -1, AllowedRoleFieldName::Feature.name(): -1 })
+            .keys(doc! { DbAllowedRoleFieldName::GuildId.name(): -1, DbAllowedRoleFieldName::RoleId.name(): -1, DbAllowedRoleFieldName::Feature.name(): -1 })
             .options(opts)
             .build();
 
-        let collection = database.collection::<AllowedRole>(COLLECTION_ALLOWED_ROLE_NAME);
+        let collection = database.collection::<DbAllowedRole>(&COLLECTION_ALLOWED_ROLE_NAME);
 
         collection
         .create_index(index, None)
@@ -31,11 +32,11 @@ impl DB {
         guild_id: &str,
         role_id: &str,
         feature_option: &str,
-    ) -> Result<Option<AllowedRole>, mongodb::error::Error> {
+    ) -> Result<Option<DbAllowedRole>, mongodb::error::Error> {
         let role = self
             .collection_allowed_role
             .find_one(
-                doc! { AllowedRoleFieldName::GuildId.name(): guild_id, AllowedRoleFieldName::RoleId.name(): role_id, AllowedRoleFieldName::Feature.name(): feature_option },
+                doc! { DbAllowedRoleFieldName::GuildId.name(): guild_id, DbAllowedRoleFieldName::RoleId.name(): role_id, DbAllowedRoleFieldName::Feature.name(): feature_option },
                 None,
             )
             .await?;
@@ -52,7 +53,7 @@ impl DB {
         let result = self
             .collection_allowed_role
             .delete_one(
-                doc! { AllowedRoleFieldName::GuildId.name(): guild_id, AllowedRoleFieldName::RoleId.name(): role_id, AllowedRoleFieldName::Feature.name(): feature_option },
+                doc! { DbAllowedRoleFieldName::GuildId.name(): guild_id, DbAllowedRoleFieldName::RoleId.name(): role_id, DbAllowedRoleFieldName::Feature.name(): feature_option },
                 None,
             )
             .await?;
@@ -62,7 +63,7 @@ impl DB {
 
     pub async fn allowed_role_insert_one(
         &self,
-        allowed_channel: AllowedRole,
+        allowed_channel: DbAllowedRole,
     ) -> Result<String, mongodb::error::Error> {
         let result = self
             .collection_allowed_role
@@ -75,11 +76,11 @@ impl DB {
     pub async fn allowed_role_find_all(
         &self,
         guild_id: &str,
-    ) -> Result<Vec<AllowedRole>, mongodb::error::Error> {
+    ) -> Result<Vec<DbAllowedRole>, mongodb::error::Error> {
         let result = self
             .collection_allowed_role
             .find(
-                doc! { AllowedRoleFieldName::GuildId.name(): guild_id },
+                doc! { DbAllowedRoleFieldName::GuildId.name(): guild_id },
                 None,
             )
             .await?;

@@ -1,5 +1,5 @@
 use artcord_mongodb::database::DB;
-use artcord_state::model::allowed_channel::AllowedChannel;
+use artcord_state::global;
 use chrono::Utc;
 use serenity::{
     builder::CreateApplicationCommand,
@@ -22,7 +22,7 @@ pub async fn run(
 
     is_valid_channel_feature(feature_option)?;
 
-    let allowed_channel = AllowedChannel {
+    let allowed_channel = global::DbAllowedChannel {
         id: uuid::Uuid::new_v4().to_string(),
         channel_id: channel_option.id.to_string(),
         guild_id: guild_id.to_string(),

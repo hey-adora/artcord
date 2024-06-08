@@ -1,14 +1,10 @@
 use std::collections::HashMap;
 
 use artcord_leptos_web_sockets::channel::WsRecvResult;
-use artcord_state::message::prod_client_msg::{ClientMsg, ClientPathType};
-use artcord_state::message::prod_server_msg::ServerMsg;
-use artcord_state::misc::throttle_connection::{
-    LiveThrottleConnectionCount, WebThrottleConnectionCount,
-};
+use artcord_state::global;
 use leptos::*;
 
-use crate::app::hooks::use_ws_live_stats::{use_ws_live_stats, WebWsStatPath};
+use crate::app::hooks::use_ws_live_stats::{use_ws_live_stats, WebWsConReqStat};
 use crate::app::{
     global_state::GlobalState, hooks::use_ws_live_throttle_cache::use_ws_live_throttle_cache,
 };
@@ -30,8 +26,8 @@ pub fn ThrottleCached() -> impl IntoView {
 
     //use_ws_live_stats(ws, live_stats);
 
-    let live_connection_count_view = move |count: HashMap<ClientPathType, WebWsStatPath>| {
-        (0..ClientMsg::COUNT)
+    let live_connection_count_view = move |count: HashMap<global::ClientPathType, WebWsConReqStat>| {
+        (0..global::ClientMsg::COUNT)
             .map(|path| {
                 // let count_view = move |item: Option<WebWsStatPath>| {
                 //     item

@@ -1,15 +1,13 @@
 use std::time::Duration;
 
 use artcord_leptos_web_sockets::channel::WsRecvResult;
-use artcord_state::message::prod_client_msg::ClientMsg;
-use artcord_state::message::prod_server_msg::ServerMsg;
-use artcord_state::model::ws_statistics::DbReqStatPath;
 use leptos::*;
 use leptos_router::use_navigate;
 use leptos_router::use_params_map;
 use leptos_router::use_query_map;
 use strum::VariantNames;
 use tracing::error;
+use artcord_state::global;
 
 use crate::app::global_state::GlobalState;
 use crate::app::utils::PageUrl;
@@ -45,15 +43,15 @@ pub fn WsOld() -> impl IntoView {
                 // ServerMsg::WsStatsTotalCount(stats) => {
                 //     page.set_old_stats_pagination(*stats);
                 // }
-                ServerMsg::WsSavedStatsPage(stats) => {
-                    page.set_old_stats_paged(stats.clone());
+                global::ServerMsg::WsSavedStatsPage(stats) => {
+                    //page.set_old_stats_paged(stats.clone());
                 }
-                ServerMsg::WsSavedStatsWithPagination {
+                global::ServerMsg::WsSavedStatsWithPagination {
                     total_count,
                     latest,
                     stats,
                 } => {
-                    page.set_old_stats_with_pagination(*total_count, latest.clone(), stats.clone());
+                    //page.set_old_stats_with_pagination(*total_count, latest.clone(), stats.clone());
                 }
                 // ServerMsg::WsStatsFirstPage {
                 //     total_count,
@@ -128,7 +126,7 @@ pub fn WsOld() -> impl IntoView {
             loading.set(true);
             let _ = ws_old_ws_stats
                 .sender()
-                .send(ClientMsg::WsStatsWithPagination {
+                .send(global::ClientMsg::WsStatsWithPagination {
                     page,
                     amount: PAGE_AMOUNT,
                 });
@@ -139,7 +137,7 @@ pub fn WsOld() -> impl IntoView {
             trace!("dash: wsold: fetching pages seperatly");
             let _ = ws_old_ws_stats
                 .sender()
-                .send(ClientMsg::WsStatsTotalCount { from: Some(from) });
+                .send(global::ClientMsg::WsStatsTotalCount { from: Some(from) });
         }
 
         if loaded.with_untracked(move |loaded_page| {
@@ -155,7 +153,7 @@ pub fn WsOld() -> impl IntoView {
         
         loading.set(true);
 
-        let _ = ws_old_ws_stats.sender().send(ClientMsg::WsStatsPaged {
+        let _ = ws_old_ws_stats.sender().send(global::ClientMsg::WsStatsPaged {
             page,
             amount: PAGE_AMOUNT,
             from,
@@ -257,16 +255,16 @@ pub fn WsOld() -> impl IntoView {
     //     }
     // });
 
-    let old_connections_count_view = move |count: Vec<DbReqStatPath>| {
+    let old_connections_count_view = move |count: Vec<global::DbWsConReqStat>| {
         // let count_iter = count.into_iter();
-        <ClientMsg as VariantNames>::VARIANTS
+        <global::ClientMsg as VariantNames>::VARIANTS
             .into_iter()
             .map(|path| {
                 // let path_str = path.
                 let count = count
                     .iter()
                     .find(|v| v.path == *path)
-                    .map(|v| v.throttle.block_tracker.total_amount)
+                    .map(|v| v.total_blocked_count)
                     .unwrap_or(0_i64);
                 view! {
                     <th class="border border-mid-purple ">{count}</th>
@@ -285,7 +283,7 @@ pub fn WsOld() -> impl IntoView {
                             <td class="border border-mid-purple">{v.ip}</td>
                             <td class="border border-mid-purple">{v.addr}</td>
                             <td class="border border-mid-purple">{ format!("{:?}", Duration::from_millis((v.disconnected_at - v.connected_at) as u64)) }</td>
-                            { old_connections_count_view(v.req_count) }
+                            { old_connections_count_view(v.req_stats) }
                         </tr>
                 }
             })

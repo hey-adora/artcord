@@ -5,8 +5,7 @@ use crate::app::global_state::GlobalState;
 //use crate::app::utils::signal_switch::signal_switch;
 
 use artcord_leptos_web_sockets::channel::WsResourcSendResult;
-use artcord_state::message::prod_client_msg::ClientMsg;
-use artcord_state::misc::registration_invalid::{RegistrationInvalidMsg, MINIMUM_PASSWORD_LENGTH};
+use artcord_state::global;
 use leptos::html::Input;
 use leptos::logging::log;
 use leptos::*;
@@ -32,7 +31,7 @@ pub enum AuthLoadingState {
     Ready,
     Processing,
     Completed,
-    Failed(RegistrationInvalidMsg),
+    Failed(global::RegistrationInvalidMsg),
 }
 
 pub fn validate_registration(
@@ -48,10 +47,10 @@ pub fn validate_registration(
 
     let password_error = if password.len() < 1 {
         Some("Password field can't be empty.".to_string())
-    } else if password.len() < MINIMUM_PASSWORD_LENGTH {
+    } else if password.len() < global::MINIMUM_PASSWORD_LENGTH {
         Some(format!(
             "Minimum password length is {}.",
-            MINIMUM_PASSWORD_LENGTH
+            global::MINIMUM_PASSWORD_LENGTH
         ))
     } else if password_confirmation.len() < 1 {
         Some("Password confirm field can't be empty.".to_string())
@@ -148,7 +147,7 @@ pub fn Register() -> impl IntoView {
 
         log!("Submit: '{}' '{}' '{}'", email, password, password_confirm);
 
-        let msg = ClientMsg::Register { password, email };
+        let msg = global::ClientMsg::Register { password, email };
 
         //global_state.socket_send(&msg);
         // let on_recv = move |msg| {

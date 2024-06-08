@@ -2,16 +2,15 @@ use std::collections::HashMap;
 
 use crate::app::components::navbar::shrink_nav;
 use crate::app::components::navbar::Navbar;
+use crate::app::global_state::GlobalState;
 
-use artcord_state::message::prod_client_msg::ClientMsg;
-use artcord_state::message::prod_perm_key::ProdMsgPermKey;
 use leptos::html::Main;
 use leptos_use::use_event_listener;
 use leptos_use::use_window;
 use tracing::debug;
 use tracing::trace;
 
-use crate::app::global_state::GlobalState;
+
 use leptos::*;
 use web_sys::Event;
 

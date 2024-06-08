@@ -11,10 +11,13 @@ chrono = "0.4.34"
 futures = "0.3.30"
 mongodb = "2.8.1"
 thiserror = "1.0.57"
-tracing = { version = "0.1.40"  }
+tracing = { version = "0.1.40" }
 artcord-state = { path = "../artcord-state" }
 cfg-if = "1"
 uuid = { version = "1.8.0", features = ["v4"] }
+serde = { version = "1.0.197" }
+field_types = "1.1.0"
+strum = { version = "0.26.2" }
 
 [features]
 development = []

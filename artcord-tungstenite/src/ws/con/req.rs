@@ -4,12 +4,7 @@ use std::sync::Arc;
 
 use artcord_leptos_web_sockets::{WsPackage, WsRouteKey};
 use artcord_mongodb::database::DB;
-use artcord_state::message::prod_client_msg::{
-    ClientMsg, ClientThresholdMiddleware, ProdThreshold,
-};
-use artcord_state::message::prod_perm_key::ProdMsgPermKey;
-use artcord_state::message::prod_server_msg::ServerMsg;
-use artcord_state::model::ws_statistics::TempConIdType;
+use artcord_state::global;
 use enum_index::EnumIndex;
 use tokio::sync::{mpsc, oneshot};
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
@@ -31,10 +26,10 @@ pub async fn req_task(
     db: Arc<DB>,
     connection_task_tx: mpsc::Sender<ConMsg>,
     ws_app_tx: mpsc::Sender<WsAppMsg>,
-    connection_key: TempConIdType,
+    connection_key: global::TempConIdType,
     addr: SocketAddr,
     ip: IpAddr,
-    get_threshold: impl ClientThresholdMiddleware,
+    get_threshold: impl global::ClientThresholdMiddleware,
 ) {
     trace!("started");
     let user_task_result = async {
@@ -45,9 +40,9 @@ pub async fn req_task(
             client_msg => Err(ResErr::InvalidClientMsg(client_msg)),
         };
 
-        let client_msg = ClientMsg::from_bytes(&client_msg?)?;
+        let client_msg = global::ClientMsg::from_bytes(&client_msg?)?;
         let res_key: WsRouteKey = client_msg.0;
-        let data: ClientMsg = client_msg.1;
+        let data: global::ClientMsg = client_msg.1;
         let path_index = data.enum_index();
         let path_throttle = get_threshold.get_threshold(&data);
 
@@ -67,24 +62,24 @@ pub async fn req_task(
 
         let get_response_data = async {
             if !allow {
-                return Ok(Some(ServerMsg::TooManyRequests));
+                return Ok(Some(global::ServerMsg::TooManyRequests));
             }
 
-            let response_data: Result<Option<ServerMsg>, ResErr> = match data {
-                ClientMsg::WsStatsTotalCount { from } => res::ws_stats::total_count(db, from).await,
-                ClientMsg::WsStatsGraph {
+            let response_data: Result<Option<global::ServerMsg>, ResErr> = match data {
+                global::ClientMsg::WsStatsTotalCount { from } => res::ws_stats::total_count(db, from).await,
+                global::ClientMsg::WsStatsGraph {
                     from,
                     to,
                     unique_ip,
                 } => res::ws_stats::graph(db, from, to, unique_ip).await,
                 //ClientMsg::WsStatsFirstPage {  amount } => ws_stats_first_page(db, amount).await,
-                ClientMsg::WsStatsPaged { page, amount, from } => {
+                global::ClientMsg::WsStatsPaged { page, amount, from } => {
                     res::ws_stats::paged(db, page, amount, from).await
                 }
-                ClientMsg::WsStatsWithPagination { page, amount } => {
+                global::ClientMsg::WsStatsWithPagination { page, amount } => {
                     res::ws_stats::pagination(db, page, amount).await
                 }
-                ClientMsg::LiveWsThrottleCache(listener_state) => {
+                global::ClientMsg::LiveWsThrottleCache(listener_state) => {
                     res::ws_throttle::ws_throttle_cached(
                         db,
                         listener_state,
@@ -95,7 +90,7 @@ pub async fn req_task(
                     )
                     .await
                 }
-                ClientMsg::LiveWsStats(listener_state) => {
+                global::ClientMsg::LiveWsStats(listener_state) => {
                     res::ws_stats::live(
                         listener_state,
                         &connection_task_tx,
@@ -103,16 +98,16 @@ pub async fn req_task(
                     )
                     .await
                 }
-                ClientMsg::User { user_id } => res::user::user(db, user_id).await,
-                ClientMsg::UserGalleryInit {
+                global::ClientMsg::User { user_id } => res::user::user(db, user_id).await,
+                global::ClientMsg::UserGalleryInit {
                     amount,
                     from,
                     user_id,
                 } => res::user::user_gallery(db, amount, from, user_id).await,
-                ClientMsg::GalleryInit { amount, from } => {
+                global::ClientMsg::GalleryInit { amount, from } => {
                     res::gallery::gallery(db, amount, from).await
                 }
-                _ => Ok(Some(ServerMsg::NotImplemented)),
+                _ => Ok(Some(global::ServerMsg::NotImplemented)),
             };
             response_data
         };
@@ -123,19 +118,19 @@ pub async fn req_task(
 
         let response_data = response_data
             .inspect_err(|err| error!("reponse error: {:#?}", err))
-            .unwrap_or(Some(ServerMsg::Error));
+            .unwrap_or(Some(global::ServerMsg::Error));
         let Some(response_data) = response_data else {
             trace!("not sending anything back from request handle task");
             return Ok(());
         };
-        let response: WsPackage<ServerMsg> = (res_key, response_data);
+        let response: WsPackage<global::ServerMsg> = (res_key, response_data);
         #[cfg(feature = "development")]
         {
             // let mut output = format!("{:?}", &response);
             // output.truncate(100);
             trace!("sent res: {:#?}", response);
         }
-        let response = ServerMsg::as_bytes(response)?;
+        let response = global::ServerMsg::as_bytes(response)?;
         let response = Message::Binary(response);
         connection_task_tx.send(ConMsg::Send(response)).await?;
 

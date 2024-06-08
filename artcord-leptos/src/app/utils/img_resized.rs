@@ -1,6 +1,4 @@
-use artcord_state::aggregation::server_msg_img::AggImg;
-use artcord_state::misc::img_quality::ImgQuality;
-use artcord_state::model::user::User;
+use artcord_state::global;
 use chrono::Utc;
 use leptos::*;
 use leptos::{window, RwSignal, SignalGetUntracked};
@@ -15,11 +13,9 @@ use super::img_resize::GalleryImg;
 #[derive(Clone, PartialEq, Debug)]
 pub struct ServerMsgImgResized {
     pub id: String,
-    // pub id: u128,
-    pub quality: ImgQuality,
     pub display_high: String,
     pub display_preview: String,
-    pub user: User,
+    pub user: global::DbUser,
     pub user_id: String,
     pub org_hash: String,
     pub format: String,
@@ -36,18 +32,15 @@ pub struct ServerMsgImgResized {
     pub created_at: i64,
 }
 
-// Hi
-
 impl Default for ServerMsgImgResized {
     fn default() -> Self {
         Self {
             id: String::from("1177244237021073450"),
-            quality: ImgQuality::Org,
             display_preview: String::from(
                 "/assets/gallery/org_2552bd2db66978a9b3675721e95d1cbd.png",
             ),
             display_high: String::from("/assets/gallery/org_2552bd2db66978a9b3675721e95d1cbd.png"),
-            user: User {
+            user: global::DbUser {
                 id: Uuid::new_v4().to_string(),
                 author_id: String::from("id"),
                 guild_id: String::from("1159766826620817419"),
@@ -90,16 +83,13 @@ impl GalleryImg for ServerMsgImgResized {
     }
 }
 
-impl From<AggImg> for ServerMsgImgResized {
-    fn from(value: AggImg) -> Self {
-        let quality = value.pick_quality();
-        let display_preview = quality.gen_link_preview(&value.org_hash, &value.format);
+impl From<global::AggImg> for ServerMsgImgResized {
+    fn from(value: global::AggImg) -> Self {
+        let display_preview = pick_quality(&value.org_hash, &value.format, value.has_high, value.has_medium, value.has_low);
         Self {
             id: value.id,
-            quality,
             display_preview,
-            // id: rand::thread_rng().gen::<u128>(),
-            display_high: ImgQuality::gen_link_org(&value.org_hash, &value.format),
+            display_high: gen_link_org(&value.org_hash, &value.format),
             user: value.user,
             new_width: RwSignal::new(value.width as f32),
             new_height: RwSignal::new(value.height as f32),
@@ -125,4 +115,20 @@ pub fn create_client_test_imgs() -> Vec<ServerMsgImgResized> {
         new_imgs.push(ServerMsgImgResized::default());
     }
     new_imgs
+}
+
+pub fn pick_quality(hex: &str, format: &str, has_high: bool, has_medium: bool, has_low: bool) -> String {
+    if has_high {
+        format!("/assets/gallery/high_{}.webp", hex)
+    } else if has_medium {
+        format!("/assets/gallery/medium_{}.webp", hex)
+    } else if has_low {
+        format!("/assets/gallery/low_{}.webp", hex)
+    } else {
+        gen_link_org(hex, format)
+    }
+}
+
+pub fn gen_link_org(hex: &str, format: &str) -> String {
+    format!("/assets/gallery/org_{}.{}", hex, format)
 }

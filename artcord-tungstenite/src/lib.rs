@@ -6,13 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use artcord_mongodb::database::DB;
-use artcord_state::message::prod_client_msg::ClientMsg;
-use artcord_state::message::prod_perm_key::ProdMsgPermKey;
-use artcord_state::message::prod_server_msg::ServerMsg;
-use artcord_state::misc::throttle_connection::IpBanReason;
-use artcord_state::misc::throttle_threshold::Threshold;
-use artcord_state::util::time::time_is_past;
-use artcord_state::util::time::time_passed_days;
+use artcord_state::global;
 use chrono::DateTime;
 use chrono::Month;
 use chrono::Months;
@@ -49,19 +43,21 @@ use tracing::instrument;
 use tracing::Instrument;
 use tracing::{error, trace};
 
+pub const BCRYPT_COST: u32 = 12;
+
 pub mod ws;
 
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct WsThreshold {
-    pub ws_max_con_threshold: Threshold,
+    pub ws_max_con_threshold: global::Threshold,
     pub ws_max_con_threshold_range: u64,
     pub ws_max_con_ban_duration: TimeDelta,
-    pub ws_max_con_ban_reason: IpBanReason,
-    pub ws_con_flicker_threshold: Threshold,
+    pub ws_max_con_ban_reason: global::IpBanReason,
+    pub ws_con_flicker_threshold: global::Threshold,
     pub ws_con_flicker_ban_duration: TimeDelta,
-    pub ws_con_flicker_ban_reason: IpBanReason,
-    pub ws_req_ban_threshold: Threshold,
+    pub ws_con_flicker_ban_reason: global::IpBanReason,
+    pub ws_req_ban_threshold: global::Threshold,
     pub ws_req_ban_duration: TimeDelta,
 }
 
@@ -91,9 +87,9 @@ pub struct WsThreshold {
 
 //const WS_MAX_FAILED_CON_ATTEMPTS_DELTA: TimeDelta = match TimeDelta::try_minutes(10) { Some(delta) => delta, None => panic!("invalid delta") };
 //const WS_MAX_FAILED_CON_ATTEMPTS_RATE: u64 =  WS_MAX_FAILED_CON_ATTEMPTS / WS_MAX_FAILED_CON_ATTEMPTS_DELTA.num_minutes() as u64;
-const WS_LIMIT_MAX_RED_FLAGS: u64 = 2;
-const WS_EXPIRE_RED_FLAGS_DAYS: u64 = 30;
-const WS_BAN_UNTIL_DAYS: u64 = 30;
-const WS_TOKEN_SIZE: u64 = 256;
+// const WS_LIMIT_MAX_RED_FLAGS: u64 = 2;
+// const WS_EXPIRE_RED_FLAGS_DAYS: u64 = 30;
+// const WS_BAN_UNTIL_DAYS: u64 = 30;
+// const WS_TOKEN_SIZE: u64 = 256;
 //const WS_LIMIT_THROTTLE: u64 = 10;
 // pub async fn create_websockets(db: Arc<DB>) {}

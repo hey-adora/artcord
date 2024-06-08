@@ -1,26 +1,26 @@
-use artcord_state::model::{
-    migration::{Migration, MigrationFieldName},
-    user::User,
-};
+use artcord_state::global::{DbMigration, DbMigrationFieldName};
 use bson::{doc, Document};
 use futures::TryStreamExt;
 use mongodb::{options::IndexOptions, Collection, Database, IndexModel};
 use thiserror::Error;
 use tracing::{info, warn};
+use field_types::FieldName;
+use serde::{Deserialize, Serialize};
 
-use crate::database::DB;
+use crate::database::{COLLECTION_MIGRATION_NAME, DB};
 
-const COLLECTION_MIGRATION_NAME: &'static str = "migration";
+
+
 
 impl DB {
-    pub async fn init_migration(database: &Database) -> Collection<Migration> {
+    pub async fn init_migration(database: &Database) -> Collection<DbMigration> {
         let opts = IndexOptions::builder().unique(true).build();
         let index = IndexModel::builder()
-            .keys(doc! { MigrationFieldName::Name.name(): -1 })
+            .keys(doc! { DbMigrationFieldName::Name.name(): -1 })
             .options(opts)
             .build();
 
-        let collection = database.collection::<Migration>(COLLECTION_MIGRATION_NAME);
+        let collection = database.collection::<DbMigration>(&COLLECTION_MIGRATION_NAME);
 
         collection
             .create_index(index, None)

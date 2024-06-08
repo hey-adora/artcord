@@ -7,9 +7,7 @@ use crate::app::utils::img_resize::NEW_IMG_HEIGHT;
 use crate::app::utils::img_resized::ServerMsgImgResized;
 use crate::app::utils::{LoadingNotFound, SelectedImg};
 use artcord_leptos_web_sockets::channel::WsRecvResult;
-use artcord_state::message::prod_client_msg::ClientMsg;
-use artcord_state::message::prod_server_msg::{ServerMsg};
-use artcord_state::model::user::User;
+use artcord_state::global;
 use chrono::Utc;
 use leptos::ev::resize;
 use leptos::html::Section;
@@ -23,7 +21,7 @@ use web_sys::Event;
 #[derive(Copy, Clone, Debug)]
 pub struct PageUserGalleryState {
     // pub not_found: RwSignal<bool>,
-    pub user: RwSignal<Option<User>>,
+    pub user: RwSignal<Option<global::DbUser>>,
     pub gallery_imgs: RwSignal<Vec<ServerMsgImgResized>>,
     pub gallery_loaded: RwSignal<LoadingNotFound>,
 }
@@ -110,7 +108,7 @@ pub fn UserGalleryPage() -> impl IntoView {
                 let client_height = section.client_height();
                 let client_width = section.client_width();
 
-                let msg = ClientMsg::UserGalleryInit {
+                let msg = global::ClientMsg::UserGalleryInit {
                     amount: calc_fit_count(client_width as u32, client_height as u32) * 2,
                     from: last,
                     user_id,
@@ -180,7 +178,7 @@ pub fn UserGalleryPage() -> impl IntoView {
             loaded_sig.set(LoadingNotFound::Loading);
             global_gallery_imgs.set(Vec::new());
 
-            let msg = ClientMsg::User { user_id: new_user };
+            let msg = global::ClientMsg::User { user_id: new_user };
             // match ws_user.send_and_recv(msg, move |server_msg| match server_msg {
             //     WsRecvResult::Ok(server_msg) => match server_msg {
             //         ServerMsg::User(response) => match response {

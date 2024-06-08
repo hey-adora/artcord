@@ -6,6 +6,8 @@ pub enum ImgQuality {
     Org,
 }
 
+// TODO: load path from env, not hardcoded stuff.
+
 impl ImgQuality {
     pub fn gen_link_preview(&self, hex: &str, format: &str) -> String {
         match self {
@@ -16,28 +18,28 @@ impl ImgQuality {
         }
     }
 
-    pub fn gen_link_org(hex: &str, format: &str) -> String {
-        format!("/assets/gallery/org_{}.{}", hex, format)
-    }
+    // pub fn gen_link_org(hex: &str, format: &str) -> String {
+    //     format!("/assets/gallery/org_{}.{}", hex, format)
+    // }
 
-    pub fn gen_img_path_org(_root: &str, hex: &str, format: &str) -> String {
-        // format!("target/site/gallery/org_{}.{}", hex, format)
-        format!("target/site/gallery/org_{}.{}", hex, format)
-    }
+    // pub fn gen_img_path_org(_root: &str, hex: &str, format: &str) -> String {
+    //     // format!("target/site/gallery/org_{}.{}", hex, format)
+    //     format!("target/site/gallery/org_{}.{}", hex, format)
+    // }
 
-    pub fn gen_img_path_high(_root: &str, hex: &str) -> String {
-        format!("target/site/gallery/high_{}.webp", hex)
-    }
+    // pub fn gen_img_path_high(_root: &str, hex: &str) -> String {
+    //     format!("target/site/gallery/high_{}.webp", hex)
+    // }
 
-    pub fn gen_img_path_medium(_root: &str, hex: &str) -> String {
-        format!("target/site/gallery/medium_{}.webp", hex)
-    }
+    // pub fn gen_img_path_medium(_root: &str, hex: &str) -> String {
+    //     format!("target/site/gallery/medium_{}.webp", hex)
+    // }
 
-    pub fn gen_img_path_low(_root: &str, hex: &str) -> String {
-        format!("target/site/gallery/low_{}.webp", hex)
-    }
+    // pub fn gen_img_path_low(_root: &str, hex: &str) -> String {
+    //     format!("target/site/gallery/low_{}.webp", hex)
+    // }
 
-    pub fn sizes() -> [u32; 3] {
-        [360, 720, 1080]
-    }
+    // pub fn sizes() -> [u32; 3] {
+    //     [360, 720, 1080]
+    // }
 }

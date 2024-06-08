@@ -1,35 +1,39 @@
+use std::collections::HashMap;
+use std::net::IpAddr;
+use std::num::TryFromIntError;
 use std::str::FromStr;
 
-use crate::database::{DBError, DB};
-use artcord_state::{
-    model::ws_statistics::{DbReqStat, DbReqStatFieldName}, util::DAY_IN_MS,
-};
+use crate::database::{DBError, COLLECTION_WS_STATISTIC_NAME, DB};
+use artcord_state::global;
 use bson::{doc, Document};
 use chrono::naive::NaiveDate;
 use chrono::{DateTime, Utc};
+use field_types::FieldName;
 use futures::TryStreamExt;
 use mongodb::{
     options::{FindOptions, IndexOptions},
     Collection, Database, IndexModel,
 };
+use serde::{Deserialize, Serialize};
 use tracing::{debug, error};
-
-pub const COLLECTION_WS_STATISTIC_NAME: &'static str = "ws_statistic";
+use std::net::SocketAddr;
+use thiserror::Error;
+use strum::VariantNames;
 
 impl DB {
-    pub async fn init_ws_statistic(database: &Database) -> Collection<DbReqStat> {
+    pub async fn init_ws_statistic(database: &Database) -> Collection<global::DbWsCon> {
         let (index1) = (
             {
                 let opts = IndexOptions::builder().unique(true).build();
                 IndexModel::builder()
-                    .keys(doc! { DbReqStatFieldName::Id.name(): -1 })
+                    .keys(doc! { global::DbWsConFieldName::Id.name(): -1 })
                     .options(opts)
                     .build()
             },
             {
                 let opts = IndexOptions::builder().unique(true).build();
                 IndexModel::builder()
-                    .keys(doc! { DbReqStatFieldName::ConId.name(): -1 })
+                    .keys(doc! { global::DbWsConFieldName::ConId.name(): -1 })
                     .options(opts)
                     .build()
             },
@@ -42,7 +46,7 @@ impl DB {
             // },
         );
 
-        let collection = database.collection::<DbReqStat>(COLLECTION_WS_STATISTIC_NAME);
+        let collection = database.collection::<global::DbWsCon>(&COLLECTION_WS_STATISTIC_NAME);
 
         collection
             .create_indexes([index1.0, index1.1], None)
@@ -56,7 +60,7 @@ impl DB {
 impl DB {
     pub async fn ws_statistic_insert_one(
         &self,
-        statistic: DbReqStat,
+        statistic: global::DbWsCon,
     ) -> Result<String, mongodb::error::Error> {
         let result = self
             .collection_ws_statistic
@@ -68,40 +72,19 @@ impl DB {
 
     pub async fn ws_statistic_insert_many(
         &self,
-        statistics: Vec<DbReqStat>,
+        statistics: Vec<global::DbWsCon>,
     ) -> Result<(), mongodb::error::Error> {
         let _ = self
             .collection_ws_statistic
             .insert_many(statistics, None)
             .await?;
 
-        // Ok(result.inserted_ids)
         Ok(())
     }
 
-    // pub async fn ws_statistic_update_disconnect(
-    //     &self,
-    //     id: String,
-    // ) -> Result<(), mongodb::error::Error> {
-    //     let _ = self
-    //         .collection_ws_statistic
-    //         .update_one(
-    //             doc! { WsStatFieldName::Id.name(): id},
-    //             doc! {
-    //                 "$set": {
-    //                     WsStatFieldName::IsConnected.name(): false
-    //                 }
-    //             },
-    //             None,
-    //         )
-    //         .await?;
-
-    //     Ok(())
-    // }
-
-    pub async fn ws_statistic_all_latest(&self) -> Result<Vec<DbReqStat>, mongodb::error::Error> {
+    pub async fn ws_statistic_all_latest(&self) -> Result<Vec<global::DbWsCon>, mongodb::error::Error> {
         let opts = FindOptions::builder()
-            .sort(doc! { DbReqStatFieldName::CreatedAt.name(): -1 })
+            .sort(doc! { global::DbWsConFieldName::CreatedAt.name(): -1 })
             .build();
         let result = self.collection_ws_statistic.find(doc! {}, opts).await?;
         let result = result.try_collect().await.unwrap_or_else(|_| vec![]);
@@ -115,8 +98,8 @@ impl DB {
     ) -> Result<u64, mongodb::error::Error> {
         let mut pipeline = if let Some(from) = from {
             vec![
-                doc! { "$sort": doc! { DbReqStatFieldName::CreatedAt.name(): -1 } },
-                doc! { "$match": doc! { DbReqStatFieldName::CreatedAt.name(): { "$lt": from } } },
+                doc! { "$sort": doc! { global::DbWsConFieldName::CreatedAt.name(): -1 } },
+                doc! { "$match": doc! { global::DbWsConFieldName::CreatedAt.name(): { "$lt": from } } },
                 doc! { "$count": "total" },
             ]
         } else {
@@ -139,10 +122,6 @@ impl DB {
                     .unwrap_or(0)
             })
             .unwrap_or(0);
-        // for stat in stats {
-        //     let count = stat
-        // }
-
         Ok(count)
     }
 
@@ -150,12 +129,11 @@ impl DB {
         &self,
         page: u64,
         amount: u64,
-        //   from: Option<i64>,
-    ) -> Result<(u64, Option<i64>, Vec<DbReqStat>), DBError> {
+    ) -> Result<(u64, Option<i64>, Vec<global::DbWsCon>), DBError> {
         let amount = amount.clamp(1, 10000);
 
         let mut stats_pipeline = vec![doc! {
-            "$sort": { DbReqStatFieldName::CreatedAt.name(): -1 }
+            "$sort": { global::DbWsConFieldName::CreatedAt.name(): -1 }
         }];
 
         if page > 0 {
@@ -171,7 +149,7 @@ impl DB {
                 "total_count": [
                     {
                         "$sort": {
-                            DbReqStatFieldName::CreatedAt.name(): -1
+                            global::DbWsConFieldName::CreatedAt.name(): -1
                         }
                     },
                     {
@@ -181,7 +159,7 @@ impl DB {
                 "latest": [
                     {
                         "$sort": {
-                            DbReqStatFieldName::CreatedAt.name(): -1
+                            global::DbWsConFieldName::CreatedAt.name(): -1
                         }
                     },
                     {
@@ -189,7 +167,7 @@ impl DB {
                     },
                     {
                         "$project": {
-                            DbReqStatFieldName::CreatedAt.name(): 1
+                            global::DbWsConFieldName::CreatedAt.name(): 1
                         }
                     }
                 ],
@@ -197,17 +175,6 @@ impl DB {
             }
 
         }];
-
-        // if let Some(from) = from {
-        //     pipeline.push(doc! { "$match": doc! { WsStatFieldName::CreatedAt.name(): { "$lt": from } } });
-        // }
-
-        // println!("{:#?}", pipeline);
-
-        // let mut stats = self
-        //     .collection_ws_statistic
-        //     .aggregate(pipeline, None)
-        //     .await?;
 
         let stats_with_paginatoin = self
             .collection_ws_statistic
@@ -217,9 +184,8 @@ impl DB {
             .try_collect()
             .await
             .unwrap_or_else(|_| vec![]);
-        //debug!("STATS: {:#?}", &stats_with_paginatoin);
 
-        let mut output: Vec<DbReqStat> = Vec::new();
+        let mut output: Vec<global::DbWsCon> = Vec::new();
 
         let Some(stats_with_paginatoin) = stats_with_paginatoin.first() else {
             return Ok((0, None, output));
@@ -242,8 +208,10 @@ impl DB {
         let latest = stats_with_paginatoin.get_array("latest").map(|v| {
             v.first()
                 .map(|v| {
-                    v.as_document()
-                        .map(|v| v.get(DbReqStatFieldName::CreatedAt.name()).map(|v| v.as_i64()))
+                    v.as_document().map(|v| {
+                        v.get(global::DbWsConFieldName::CreatedAt.name())
+                            .map(|v| v.as_i64())
+                    })
                 })
                 .flatten()
                 .flatten()
@@ -256,30 +224,15 @@ impl DB {
                 v.iter()
                     .map(|v| {
                         v.as_document().map(|v| {
-                            mongodb::bson::from_document::<DbReqStat>(v.clone())
+                            mongodb::bson::from_document::<global::DbWsCon>(v.clone())
                                 .map_err(|err| DBError::from(err))
                         })
                     })
                     .flatten()
             })
-            .map(|v| v.collect::<Result<Vec<DbReqStat>, DBError>>())??;
-
-        // while let Some(result) = stats.try_next().await? {   bson::de::Error
-        //     let doc: WsStat = mongodb::bson::from_document(result)?;
-        //     //let a = doc.f
-        //     output.push(doc);
-        //     // println!("hh");
-        // }
-        //debug!("STATS: {:#?}", &stats);
+            .map(|v| v.collect::<Result<Vec<global::DbWsCon>, DBError>>())??;
 
         Ok((total_count, latest, stats))
-        // let opts = FindOptions::builder()
-        //     .sort(doc! { WsStatFieldName::CreatedAt.name(): -1 })
-        //     .build();
-        // let result = self.collection_ws_statistic.find(doc! {}, opts).await?;
-        // let result = result.try_collect().await.unwrap_or_else(|_| vec![]);
-        //
-        // Ok(result)
     }
 
     pub async fn ws_statistic_paged_latest(
@@ -287,12 +240,14 @@ impl DB {
         page: u64,
         amount: u64,
         from: i64,
-    ) -> Result<Vec<DbReqStat>, mongodb::error::Error> {
+    ) -> Result<Vec<global::DbWsCon>, mongodb::error::Error> {
         let amount = amount.clamp(1, 10000);
-        let mut pipeline = vec![doc! { "$sort": doc! { DbReqStatFieldName::CreatedAt.name(): -1 } }];
+        let mut pipeline =
+            vec![doc! { "$sort": doc! { global::DbWsConFieldName::CreatedAt.name(): -1 } }];
 
-        pipeline
-            .push(doc! { "$match": doc! { DbReqStatFieldName::CreatedAt.name(): { "$lt": from } } });
+        pipeline.push(
+            doc! { "$match": doc! { global::DbWsConFieldName::CreatedAt.name(): { "$lt": from } } },
+        );
 
         if page > 0 {
             let skip = (page * amount) as i64;
@@ -308,23 +263,14 @@ impl DB {
             .aggregate(pipeline, None)
             .await?;
 
-        let mut output: Vec<DbReqStat> = Vec::new();
+        let mut output: Vec<global::DbWsCon> = Vec::new();
 
         while let Some(result) = stats.try_next().await? {
-            let doc: DbReqStat = mongodb::bson::from_document(result)?;
-            //let a = doc.f
+            let doc: global::DbWsCon = mongodb::bson::from_document(result)?;
             output.push(doc);
-            // println!("hh");
         }
 
         Ok(output)
-        // let opts = FindOptions::builder()
-        //     .sort(doc! { WsStatFieldName::CreatedAt.name(): -1 })
-        //     .build();
-        // let result = self.collection_ws_statistic.find(doc! {}, opts).await?;
-        // let result = result.try_collect().await.unwrap_or_else(|_| vec![]);
-        //
-        // Ok(result)
     }
 
     pub async fn ws_stats_graph(
@@ -334,87 +280,60 @@ impl DB {
         unique_id: bool,
     ) -> Result<Vec<f64>, DBError> {
         let mut pipeline = vec![
-            doc! { "$sort": { DbReqStatFieldName::CreatedAt.name(): 1 } },
-            doc! { "$match": { DbReqStatFieldName::CreatedAt.name(): { "$lt": from, "$gt": to } } },
+            doc! { "$sort": { global::DbWsConFieldName::CreatedAt.name(): 1 } },
+            doc! { "$match": { global::DbWsConFieldName::CreatedAt.name(): { "$lt": from, "$gt": to } } },
         ];
 
         if unique_id {
-            pipeline.push(
-                doc! { "$group": {
-                    "_id": {
-                        "date": {
-                            "$dateToString": {
-                                "date": {
-                                    "$toDate": format!("${}", DbReqStatFieldName::CreatedAt.name()),
-                                },
-                                "format": "%Y-%m-%d"
-                            }
-                        },
-                        "ip": "$ip",
+            pipeline.push(doc! { "$group": {
+                "_id": {
+                    "date": {
+                        "$dateToString": {
+                            "date": {
+                                "$toDate": format!("${}", global::DbWsConFieldName::CreatedAt.name()),
+                            },
+                            "format": "%Y-%m-%d"
+                        }
                     },
-                } },
-            );
-            pipeline.push(
-                doc! { "$group": {
-                    "_id": {
-                        "date": "$_id.date",
-                    },
-                    "count": { "$count": { } }
-                } },
-            );
+                    "ip": "$ip",
+                },
+            } });
+            pipeline.push(doc! { "$group": {
+                "_id": {
+                    "date": "$_id.date",
+                },
+                "count": { "$count": { } }
+            } });
         } else {
-            pipeline.push(
-                doc! { "$group": {
-                    "_id": {
-                        "date": {
-                            "$dateToString": {
-                                "date": {
-                                    "$toDate": format!("${}", DbReqStatFieldName::CreatedAt.name()),
-                                },
-                                "format": "%Y-%m-%d"
-                            }
-                        },
+            pipeline.push(doc! { "$group": {
+                "_id": {
+                    "date": {
+                        "$dateToString": {
+                            "date": {
+                                "$toDate": format!("${}", global::DbWsConFieldName::CreatedAt.name()),
+                            },
+                            "format": "%Y-%m-%d"
+                        }
                     },
-                    "count": { "$count": { } }
-                } },
-            );
+                },
+                "count": { "$count": { } }
+            } });
         }
 
         pipeline.push(doc! { "$sort": { "_id.date": 1 } });
-
-        //debug!("db: pipes: {:#?}", &pipeline);
 
         let mut stats: mongodb::Cursor<Document> = self
             .collection_ws_statistic
             .aggregate(pipeline, None)
             .await?;
-
         let stats = stats.try_collect().await.unwrap_or_else(|_| vec![]);
-
         let mut output: Vec<f64> = Vec::new();
-
-        //let first = stats.first();
-        // let Some(first) = first else {
-        //     return Ok(output);
-        // };
-
-        // let created_at = first
-        //         .get_document("_id")
-        //         .and_then(|_id|_id.get_str("date"))
-        //         .map(|date| {
-        //             NaiveDate::parse_from_str(date, "%Y-%m-%d")
-        //                 .map(|date| DateTime::<Utc>::from_naive_utc_and_offset(date.into(), Utc))
-        //         })??
-        //         .timestamp_millis();
-
-     
-
         let mut prev_created_at: Option<i64> = None;
+
         for stat in stats {
-            
             let created_at = stat
                 .get_document("_id")
-                .and_then(|_id|_id.get_str("date"))
+                .and_then(|_id| _id.get_str("date"))
                 .map(|date| {
                     NaiveDate::parse_from_str(date, "%Y-%m-%d")
                         .map(|date| DateTime::<Utc>::from_naive_utc_and_offset(date.into(), Utc))
@@ -422,14 +341,11 @@ impl DB {
                 .timestamp_millis();
             let count = stat.get_i32("count")? as f64;
 
-            //debug!("db: graph: {}", stat);
-
-            
-
             if let Some(prev_created_at) = prev_created_at {
-                //debug!("({} - {}) / {} > 1 = {} | {} {}", created_at, prev_created_at, DAY_IN_MS, (created_at - prev_created_at) / DAY_IN_MS > 1, created_at - prev_created_at, (created_at - prev_created_at) / DAY_IN_MS);
-                if (created_at - prev_created_at) / DAY_IN_MS > 1 {
-                    for day_i in (prev_created_at + DAY_IN_MS..created_at).step_by(DAY_IN_MS as usize) {
+                if (created_at - prev_created_at) / global::DAY_IN_MS > 1 {
+                    for day_i in
+                        (prev_created_at + global::DAY_IN_MS..created_at).step_by(global::DAY_IN_MS as usize)
+                    {
                         output.push(day_i as f64);
                         output.push(0.0);
                     }
@@ -439,27 +355,24 @@ impl DB {
             output.push(created_at as f64);
             output.push(count);
             prev_created_at = Some(created_at);
-            //output.push(doc);
         }
 
-        //let created_at = 1715990400000;
-        
         if let Some(created_at) = prev_created_at {
             let diff = from - created_at;
             if diff > 0 {
-                for day_i in (created_at + DAY_IN_MS..from).step_by(DAY_IN_MS as usize) {
+                for day_i in (created_at + global::DAY_IN_MS..from).step_by(global::DAY_IN_MS as usize) {
                     output.push(day_i as f64);
                     output.push(0.0);
                 }
             }
         } else {
-            for day_i in (to..from).step_by(DAY_IN_MS as usize) {
+            for day_i in (to..from).step_by(global::DAY_IN_MS as usize) {
                 output.push(day_i as f64);
                 output.push(0.0);
             }
         }
 
-        //debug!("db: graph: {}", stat);
         Ok(output)
     }
 }
+

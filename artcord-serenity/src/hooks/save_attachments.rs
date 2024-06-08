@@ -1,7 +1,6 @@
 use crate::commands::FEATURE_GALLERY;
 use artcord_mongodb::database::DB;
-use artcord_state::model::img::{Img, ImgFieldName};
-use artcord_state::model::user::{User, UserFieldName};
+use artcord_state::global;
 use chrono::Utc;
 use image::EncodableLayout;
 use mongodb::bson::doc;
@@ -196,7 +195,7 @@ pub async fn save_user_pfp(
     gallery_root_dir: &str,
     user_id: u64,
     pfp_hash: Option<String>,
-    mongo_user: &Option<User>,
+    mongo_user: &Option<global::DbUser>,
 ) -> Result<SaveUserPfpResult, SaveUserPfpError> {
     let user_pfp_hash = pfp_hash.ok_or(SaveUserPfpError::NotFound(user_id))?;
 
@@ -259,28 +258,28 @@ pub async fn save_user(
             Some(bin) => match user.pfp_hash {
                 Some(org_bin) => {
                     if bin != org_bin {
-                        update.insert(UserFieldName::PfpHash.name(), bin);
+                        update.insert(global::DbUserFieldName::PfpHash.name(), bin);
                     }
                 }
                 None => {
-                    update.insert(UserFieldName::PfpHash.name(), bin);
+                    update.insert(global::DbUserFieldName::PfpHash.name(), bin);
                 }
             },
             None => match user.pfp_hash {
                 Some(_) => {
-                    update.insert(UserFieldName::PfpHash.name(), None::<String>);
+                    update.insert(global::DbUserFieldName::PfpHash.name(), None::<String>);
                 }
                 None => {}
             },
         }
 
         if name != user.name {
-            update.insert(UserFieldName::Name.name(), name);
+            update.insert(global::DbUserFieldName::Name.name(), name);
         }
 
         if update.len() > 0 {
             update.insert(
-                UserFieldName::ModifiedAt.name(),
+                global::DbUserFieldName::ModifiedAt.name(),
                 Utc::now().timestamp_millis(),
             );
             db.user_update_one_raw(&user_id.to_string(), update.clone())
@@ -290,7 +289,7 @@ pub async fn save_user(
             Ok(SaveUserResult::None)
         }
     } else {
-        let user = User {
+        let user = global::DbUser {
             id: uuid::Uuid::new_v4().to_string(),
             author_id: format!("{}", user_id),
             guild_id: guild_id.to_string(),
@@ -384,12 +383,12 @@ pub async fn save_attachment(
         let mut update = doc! {};
 
         if found_img.created_at != timestamp {
-            update.insert(ImgFieldName::CreatedAt.name(), timestamp);
+            update.insert(global::DbImgFieldName::CreatedAt.name(), timestamp);
         }
 
         let msg_id = msg_id.to_string();
         if found_img.msg_id != msg_id {
-            update.insert(ImgFieldName::MsgId.name(), msg_id);
+            update.insert(global::DbImgFieldName::MsgId.name(), msg_id);
         }
 
         // if !found_img.show {
@@ -397,7 +396,7 @@ pub async fn save_attachment(
         // }
 
         if found_img.org_url != attachment.url {
-            update.insert(ImgFieldName::OrgUrl.name(), attachment.url.clone());
+            update.insert(global::DbImgFieldName::OrgUrl.name(), attachment.url.clone());
         }
 
         for (i, path_state) in paths_state.into_iter().enumerate() {
@@ -408,7 +407,7 @@ pub async fn save_attachment(
 
         if update.len() > 0 {
             update.insert(
-                ImgFieldName::ModifiedAt.name(),
+                global::DbImgFieldName::ModifiedAt.name(),
                 Utc::now().timestamp_millis(),
             );
             let update_msg = format!("{}: {:#?}", file_hash_hex, &update);
@@ -423,7 +422,7 @@ pub async fn save_attachment(
             .with_guessed_format()?
             .decode()?;
 
-        let img = Img {
+        let img = global::DbImg {
             id: uuid::Uuid::new_v4().to_string(),
             msg_id: format!("{}", msg_id),
             show: true,

@@ -1,5 +1,5 @@
 use artcord_mongodb::database::DB;
-use artcord_state::model::allowed_guild::AllowedGuild;
+use artcord_state::global;
 use bson::doc;
 use chrono::Utc;
 use serenity::{
@@ -20,7 +20,7 @@ pub async fn run(
     let guild_option = get_option_string(command.data.options.get(0))?;
     let guild = ctx.http.get_guild(guild_option.parse::<u64>()?).await?;
 
-    let allowed_guild = AllowedGuild::new(guild_option.to_owned(), guild.name);
+    let allowed_guild = global::DbAllowedGuild::new(guild_option.to_owned(), guild.name);
 
     let result = db.allowed_guild_insert(allowed_guild).await?;
     if result.is_some() {

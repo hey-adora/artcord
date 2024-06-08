@@ -1,5 +1,5 @@
 use artcord_mongodb::database::DB;
-use artcord_state::model::allowed_role::AllowedRole;
+use artcord_state::global;
 use bson::doc;
 use chrono::Utc;
 use serenity::{
@@ -38,7 +38,7 @@ pub async fn run(
 
     is_valid_role_feature(feature_option)?;
 
-    let allowed_role = AllowedRole::new(
+    let allowed_role = global::DbAllowedRole::new(
         role_option.id.to_string(),
         guild_id.to_string(),
         role_option.name.clone(),

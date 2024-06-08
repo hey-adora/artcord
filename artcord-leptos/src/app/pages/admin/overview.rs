@@ -3,8 +3,7 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use artcord_leptos_web_sockets::channel::WsRecvResult;
-use artcord_state::message::prod_client_msg::ClientMsg;
-use artcord_state::message::prod_server_msg::ServerMsg;
+use artcord_state::global;
 use chrono::DateTime;
 use chrono::Datelike;
 use chrono::Days;
@@ -56,7 +55,7 @@ pub fn Overview() -> impl IntoView {
                 //     page.set_old_stats_pagination(*stats);
                 //     selected_state.set(LoadingNotFound::Loaded);
                 // }
-                ServerMsg::WsSavedStatsGraph(stats) => {
+                global::ServerMsg::WsSavedStatsGraph(stats) => {
                     canvas_data.set(stats.clone());
                     selected_state.set(LoadingNotFound::Loaded);
                 }
@@ -70,7 +69,7 @@ pub fn Overview() -> impl IntoView {
         });
 
     let fetch = move |selected_days: u64, selected_unique: bool| {
-        let _ = ws_old_ws_stats.sender().send(ClientMsg::WsStatsGraph {
+        let _ = ws_old_ws_stats.sender().send(global::ClientMsg::WsStatsGraph {
             from: Utc::now().timestamp_millis(),
             to: Utc::now().checked_sub_days(Days::new(selected_days)).map(|to| to.timestamp_millis()).unwrap_or_default(),
             unique_ip: selected_unique,

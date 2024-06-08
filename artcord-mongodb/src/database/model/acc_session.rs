@@ -1,14 +1,12 @@
-use artcord_state::model::acc_session::{AccSession, AccSessionFieldName};
+use artcord_state::global::{DbAccSession, DbAccSessionFieldName};
 use bson::doc;
 use mongodb::{Collection, Database};
 
-use crate::database::DB;
-
-const COLLECTION_ACC_SESSION_NAME: &'static str = "acc_session";
+use crate::database::{COLLECTION_ACC_SESSION_NAME, DB};
 
 impl DB {
-    pub async fn init_acc_session(database: &Database) -> Collection<AccSession> {
-        database.collection::<AccSession>(COLLECTION_ACC_SESSION_NAME)
+    pub async fn init_acc_session(database: &Database) -> Collection<DbAccSession> {
+        database.collection::<DbAccSession>(&COLLECTION_ACC_SESSION_NAME)
     }
 }
 
@@ -16,17 +14,17 @@ impl DB {
     pub async fn acc_session_find_one(
         &self,
         token: &str,
-    ) -> Result<Option<AccSession>, mongodb::error::Error> {
+    ) -> Result<Option<DbAccSession>, mongodb::error::Error> {
         let acc = self
             .collection_acc_session
-            .find_one(doc! { AccSessionFieldName::Token.name(): token }, None)
+            .find_one(doc! { DbAccSessionFieldName::Token.name(): token }, None)
             .await?;
 
         Ok(acc)
     }
     pub async fn acc_session_insert_one(
         &self,
-        acc_session: AccSession,
+        acc_session: DbAccSession,
     ) -> Result<String, mongodb::error::Error> {
         let acc = self
             .collection_acc_session
@@ -36,4 +34,3 @@ impl DB {
         Ok(acc.inserted_id.to_string())
     }
 }
-
