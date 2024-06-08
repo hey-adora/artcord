@@ -725,11 +725,13 @@ pub fn threshold_allow(
 ) -> bool {
     let max_reatched = tracker.amount >= threshold.amount;
     let time_passed = (*time - tracker.started_at) >= threshold.delta;
+    trace!("threshold_allow: max_reatched: {}, time_passed: {}", max_reatched, time_passed);
+
     if time_passed {
         tracker.started_at = *time;
         tracker.amount = 0;
     }
-    max_reatched && !time_passed
+    !max_reatched || time_passed
 }
 
 pub fn compare_pick_worst(a: AllowCon, b: AllowCon) -> AllowCon {
@@ -792,7 +794,7 @@ mod throttle_tests {
     use crate::ws::throttle::{double_throttle, ranged_throttle, ws_ip_throttle};
     use crate::WsThreshold;
 
-    use super::AllowCon;
+    use super::{threshold_allow, AllowCon};
 
     #[tokio::test]
     async fn ws_throttle_test() {
@@ -1371,6 +1373,41 @@ mod throttle_tests {
             ),
             (AllowCon::Allow, 2, 0)
         );
+    }
+
+    #[test]
+    fn threshold_tracker() {
+        init_logger();
+
+        let mut time = Utc::now();
+        let max = 5;
+        let delta = TimeDelta::try_seconds(5).unwrap();
+        let mut tracker = global::ThresholdTracker::new(time);
+        let threshold = global::Threshold::new(max, delta);
+        
+        let allow = threshold_allow(&mut tracker, &threshold, &time);
+        assert!(allow);
+
+        tracker.amount = max - 1;
+
+        let allow = threshold_allow(&mut tracker, &threshold, &time);
+        assert!(allow);
+
+        tracker.amount = max;
+
+        let allow = threshold_allow(&mut tracker, &threshold, &time);
+        assert!(!allow);
+
+        tracker.amount = max - 1;
+
+        let allow = threshold_allow(&mut tracker, &threshold, &time);
+        assert!(allow);
+
+        tracker.amount = max;
+        time += delta;
+
+        let allow = threshold_allow(&mut tracker, &threshold, &time);
+        assert!(allow);
     }
 
     fn init_logger() {
