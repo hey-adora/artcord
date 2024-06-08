@@ -661,11 +661,11 @@ pub fn ranged_throttle(
         *current >= *max
     );
     if *current >= *max {
-        let range_status = threshold_allow(tracker, threshold, time);
+        let allow = threshold_allow(tracker, threshold, time);
         //let range_status = !self.tracker.allow(threshold, time);
-        trace!("throttle: range allow: {}", range_status);
+        trace!("throttle: range allow: {}", allow);
 
-        if range_status {
+        if !allow {
             let ban_until = *time + *ban_duration;
             *banned_until = Some((ban_until, *ban_reason));
             return AllowCon::Banned((ban_until, *ban_reason));
@@ -725,7 +725,7 @@ pub fn threshold_allow(
 ) -> bool {
     let max_reatched = tracker.amount >= threshold.amount;
     let time_passed = (*time - tracker.started_at) >= threshold.delta;
-    trace!("threshold_allow: max_reatched: {}, time_passed: {}", max_reatched, time_passed);
+    trace!("threshold_allow: max_reatched: {}({}/{}), time_passed: {}", max_reatched,tracker.amount, threshold.amount, time_passed);
 
     if time_passed {
         tracker.started_at = *time;
@@ -1005,10 +1005,9 @@ mod throttle_tests {
         init_logger();
 
         let time = Utc::now();
-        let now = Utc::now();
         let ban_reason = global::IpBanReason::WsTooManyReconnections;
         let ban_duration = TimeDelta::try_seconds(10).unwrap();
-        let mut banned_until: Option<(DateTime<Utc>, global::IpBanReason)> = None;
+        //let mut banned_until: Option<(DateTime<Utc>, global::IpBanReason)> = None;
 
         let max = 10;
         let mut current = 0;
@@ -1100,7 +1099,7 @@ mod throttle_tests {
             (result, current, tracker.amount,),
             (
                 AllowCon::Banned((
-                    now.checked_add_signed(ban_duration).unwrap(),
+                    time.checked_add_signed(ban_duration).unwrap(),
                     global::IpBanReason::WsTooManyReconnections
                 )),
                 10,
@@ -1108,7 +1107,7 @@ mod throttle_tests {
             )
         );
 
-        let now = now.checked_add_signed(ban_duration).unwrap();
+        let time = time.checked_add_signed(ban_duration).unwrap();
         let result = ranged_throttle(
             &max,
             &mut current,
@@ -1141,7 +1140,7 @@ mod throttle_tests {
             (AllowCon::Blocked, 10, 2)
         );
 
-        tracker.amount -= 1;
+        current -= 1;
 
         let result = ranged_throttle(
             &max,
@@ -1184,7 +1183,7 @@ mod throttle_tests {
             (result, current, tracker.amount,),
             (
                 AllowCon::Banned((
-                    now.checked_add_signed(ban_duration).unwrap(),
+                    time.checked_add_signed(ban_duration).unwrap(),
                     global::IpBanReason::WsTooManyReconnections
                 )),
                 10,
@@ -1192,8 +1191,8 @@ mod throttle_tests {
             )
         );
 
-        let now = now.checked_add_signed(ban_duration).unwrap();
-        tracker.amount -= 1;
+        let time = time.checked_add_signed(ban_duration).unwrap();
+        current -= 1;
 
         let result = ranged_throttle(
             &max,
@@ -1333,7 +1332,7 @@ mod throttle_tests {
             (AllowCon::AlreadyBanned,  10, 10)
         );
 
-        let now = time.checked_add_signed(ban_duration).unwrap();
+        let time = time.checked_add_signed(ban_duration).unwrap();
         let result = double_throttle(
             &mut block_tracker,
             &mut ban_tracker,
