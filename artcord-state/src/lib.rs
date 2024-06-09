@@ -47,7 +47,7 @@ pub mod global {
 
     #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
     pub enum ServerMsg {
-        WsLiveStatsIpCons(Vec<WsIpStat>),
+        WsLiveStatsIpCons(Vec<WsIp>),
 
         WsLiveStatsConnected {
             ip: IpAddr,
@@ -365,6 +365,16 @@ pub mod global {
         pub created_at: i64,
     }
 
+    #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, FieldName)]
+    pub struct DbWsIpManager {
+        pub id: String,
+        pub ip: String,
+        pub req_stats: Vec<DbWsConReqStat>,
+        pub modified_at: i64,
+        pub created_at: i64,
+        //pub banned_until: Option<(DateTime<Utc>, IpBanReason)>,
+    }
+
     #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, FieldName)]
     pub struct DbWsCon {
         pub id: String,
@@ -378,7 +388,7 @@ pub mod global {
         pub created_at: i64,
     }
 
-    #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
+    #[derive(Deserialize, Serialize, Debug, PartialEq, Clone, FieldName)]
     pub struct DbWsConReqStat {
         pub path: String,
         pub total_allowed_count: i64,
@@ -396,7 +406,7 @@ pub mod global {
     //     pub ban_tracker: DbThresholdTracker,
     // }
 
-    #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+    #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, FieldName)]
     pub struct DbThresholdTracker {
         //pub total_amount: i64,
         pub amount: i64,
@@ -413,8 +423,8 @@ pub mod global {
     //     //pub cons_brodcast: broadcast::Sender<ConMsg>
     // }
 
-    #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-    pub struct WsIpStat {
+    #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, FieldName)]
+    pub struct WsIp {
         pub ip: IpAddr,
         pub total_allow_amount: u64,
         pub total_block_amount: u64,
@@ -423,12 +433,22 @@ pub mod global {
         pub banned_until: Option<(DateTime<Utc>, IpBanReason)>,
     }
 
+    #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, FieldName)]
+    pub struct SavedWsIpManager {
+        pub id: uuid::Uuid,
+        pub ip: IpAddr,
+        pub req_stats: HashMap<ClientPathType, WsConReqStat>,
+        pub modified_at: DateTime<Utc>,
+        pub created_at: DateTime<Utc>,
+        //pub banned_until: Option<(DateTime<Utc>, IpBanReason)>,
+    }
+
     #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, FieldName)]
     pub struct ConnectedWsCon {
         pub con_id: u128,
         pub ip: IpAddr,
         pub addr: SocketAddr,
-        pub banned_until: Option<(DateTime<Utc>, IpBanReason)>,
+        //pub banned_until: Option<(DateTime<Utc>, IpBanReason)>,
         pub req_stats: HashMap<ClientPathType, WsConReqStat>,
         pub connected_at: DateTime<Utc>,
     }
@@ -477,7 +497,7 @@ pub mod global {
 
     #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
     pub struct ThresholdTracker {
-       // pub total_amount: u64,
+        // pub total_amount: u64,
         pub amount: u64,
         pub started_at: DateTime<Utc>,
     }
@@ -650,33 +670,19 @@ pub mod global {
         type Error = WsConFromDbErr;
 
         fn try_from(value: DbWsCon) -> Result<ConnectedWsCon, Self::Error> {
-            let mut req_stat =
-                HashMap::<ClientPathType, WsConReqStat>::with_capacity(value.req_stats.len());
-            for req_count in value.req_stats {
-                let client_msg_enum_index = ClientMsg::VARIANTS
-                    .iter()
-                    .position(|name| *name == req_count.path)
-                    .ok_or(WsConFromDbErr::InvalidClientMsgEnumName(
-                        req_count.path.clone(),
-                    ))?;
-                //let total_count = u64::try_from(req_count.count)?;
-                //let count_item = WsStatPath::from_db(total_count);
-
-                req_stat.insert(client_msg_enum_index, req_count.try_into()?);
-            }
-
+            let req_stats = req_stats_from_db(value.req_stats)?;
             let con_id = uuid::Uuid::from_str(&value.con_id)?;
 
             Ok(Self {
                 con_id: con_id.as_u128(),
                 ip: IpAddr::from_str(&value.ip)?,
                 addr: SocketAddr::from_str(&value.addr)?,
-                req_stats: req_stat,
+                req_stats,
                 //connected_at: Utc::try
                 //throttle: value.throttle.try_into()?,
                 connected_at: DateTime::<Utc>::from_timestamp_millis(value.connected_at)
                     .ok_or(WsConFromDbErr::InvalidDate(value.connected_at))?,
-                banned_until: None,
+                //banned_until: None,
             })
         }
     }
@@ -685,21 +691,7 @@ pub mod global {
         type Error = WsConFromDbErr;
 
         fn try_from(value: DbWsCon) -> Result<SavedWsCon, Self::Error> {
-            let mut req_stats =
-                HashMap::<ClientPathType, WsConReqStat>::with_capacity(value.req_stats.len());
-            for req_count in value.req_stats {
-                let client_msg_enum_index = ClientMsg::VARIANTS
-                    .iter()
-                    .position(|name| *name == req_count.path)
-                    .ok_or(WsConFromDbErr::InvalidClientMsgEnumName(
-                        req_count.path.clone(),
-                    ))?;
-                //let total_count = u64::try_from(req_count.count)?;
-                //let count_item = WsStatPath::from_db(total_count);
-
-                req_stats.insert(client_msg_enum_index, req_count.try_into()?);
-            }
-
+            let req_stats = req_stats_from_db(value.req_stats)?;
             let con_id = uuid::Uuid::from_str(&value.con_id)?;
 
             Ok(Self {
@@ -709,13 +701,13 @@ pub mod global {
                 addr: SocketAddr::from_str(&value.addr)?,
                 req_stats,
                 connected_at: DateTime::<Utc>::from_timestamp_millis(value.connected_at)
-                .ok_or(WsConFromDbErr::InvalidDate(value.connected_at))?,
+                    .ok_or(WsConFromDbErr::InvalidDate(value.connected_at))?,
                 disconnected_at: DateTime::<Utc>::from_timestamp_millis(value.disconnected_at)
-                .ok_or(WsConFromDbErr::InvalidDate(value.disconnected_at))?,
+                    .ok_or(WsConFromDbErr::InvalidDate(value.disconnected_at))?,
                 created_at: DateTime::<Utc>::from_timestamp_millis(value.created_at)
-                .ok_or(WsConFromDbErr::InvalidDate(value.created_at))?,
+                    .ok_or(WsConFromDbErr::InvalidDate(value.created_at))?,
                 modified_at: DateTime::<Utc>::from_timestamp_millis(value.modified_at)
-                .ok_or(WsConFromDbErr::InvalidDate(value.modified_at))?,
+                    .ok_or(WsConFromDbErr::InvalidDate(value.modified_at))?,
             })
         }
     }
@@ -739,6 +731,24 @@ pub mod global {
                 last_reset_at: value.last_reset_at.timestamp_millis(),
                 block_tracker: value.block_tracker.try_into()?,
                 ban_tracker: value.ban_tracker.try_into()?,
+            })
+        }
+    }
+
+    //WsIpManagerFromDb
+    impl TryFrom<DbWsIpManager> for SavedWsIpManager {
+        type Error = WsIpManagerFromDb;
+        fn try_from(value: DbWsIpManager) -> Result<Self, Self::Error> {
+            let req_stats = req_stats_from_db(value.req_stats)?;
+
+            Ok(Self {
+                id: uuid::Uuid::from_str(&value.id)?,
+                ip: IpAddr::from_str(&value.ip)?,
+                req_stats,
+                created_at: DateTime::<Utc>::from_timestamp_millis(value.created_at)
+                    .ok_or(WsIpManagerFromDb::InvalidDate(value.created_at))?,
+                modified_at: DateTime::<Utc>::from_timestamp_millis(value.modified_at)
+                    .ok_or(WsIpManagerFromDb::InvalidDate(value.modified_at))?,
             })
         }
     }
@@ -823,6 +833,24 @@ pub mod global {
         }
     }
 
+    impl DbWsIpManager {
+        pub fn try_new(
+            ip: IpAddr,
+            req_stats: HashMap<ClientPathType, WsConReqStat>,
+            time: DateTime<Utc>,
+        ) -> Result<Self, WsIpManagerToDb> {
+            let req_stats: Vec<DbWsConReqStat> = req_stats_to_db(req_stats)?;
+
+            Ok(Self {
+                id: uuid::Uuid::new_v4().to_string(),
+                ip: ip.to_string(),
+                req_stats,
+                created_at: time.timestamp_millis(),
+                modified_at: time.timestamp_millis(),
+            })
+        }
+    }
+
     impl DebugServerMsg {
         pub fn from_bytes(bytes: &[u8]) -> Result<WsPackage<Self>, bincode::Error> {
             let result = bincode::deserialize::<WsPackage<Self>>(bytes);
@@ -870,7 +898,12 @@ pub mod global {
     }
 
     impl DbAcc {
-        pub fn new(email: &str, password: &str, email_verification_code: &str, time: &DateTime<Utc>) -> DbAcc {
+        pub fn new(
+            email: &str,
+            password: &str,
+            email_verification_code: &str,
+            time: &DateTime<Utc>,
+        ) -> DbAcc {
             DbAcc {
                 id: uuid::Uuid::new_v4().to_string(),
                 email: email.to_string(),
@@ -930,12 +963,7 @@ pub mod global {
             disconnected_at: DateTime<Utc>,
             time: DateTime<Utc>,
         ) -> Result<Self, WsConReqStatToDbErr> {
-            let req_count: Vec<DbWsConReqStat> = value
-                .req_stats
-                .into_iter()
-                .map(|v| v.try_into())
-                .collect::<Result<Vec<DbWsConReqStat>, WsConReqStatToDbErr>>(
-            )?;
+            let req_count: Vec<DbWsConReqStat> = req_stats_to_db(value.req_stats)?;
 
             Ok(Self {
                 id: uuid::Uuid::new_v4().to_string(),
@@ -953,7 +981,13 @@ pub mod global {
     }
 
     impl DbAccSession {
-        pub fn new(acc_id: String, ip: String, agent: String, token: String, time: &DateTime<Utc>) -> Self {
+        pub fn new(
+            acc_id: String,
+            ip: String,
+            agent: String,
+            token: String,
+            time: &DateTime<Utc>,
+        ) -> Self {
             Self {
                 id: uuid::Uuid::new_v4().to_string(),
                 acc_id,
@@ -980,8 +1014,6 @@ pub mod global {
             }
         }
     }
-
-  
 
     // impl ThrottleSimple {
     //     pub fn new(started_at: DateTime<Utc>) -> Self {
@@ -1013,7 +1045,7 @@ pub mod global {
     impl ThresholdTracker {
         pub fn new(started_at: DateTime<Utc>) -> ThresholdTracker {
             Self {
-          //      total_amount: 0,
+                //      total_amount: 0,
                 amount: 0,
                 started_at,
             }
@@ -1043,7 +1075,7 @@ pub mod global {
         }
     }
 
-    impl WsIpStat {
+    impl WsIp {
         pub fn new(ip: IpAddr) -> Self {
             Self {
                 ip,
@@ -1054,6 +1086,54 @@ pub mod global {
                 banned_until: None,
             }
         }
+    }
+
+    pub fn req_stats_to_db(
+        current_req_stats: HashMap<ClientPathType, WsConReqStat>,
+    ) -> Result<Vec<DbWsConReqStat>, WsConReqStatToDbErr> {
+        current_req_stats
+            .into_iter()
+            .map(|v| v.try_into())
+            .collect::<Result<Vec<DbWsConReqStat>, WsConReqStatToDbErr>>()
+    }
+
+    pub fn req_stats_from_db(
+        current_req_stats: Vec<DbWsConReqStat>,
+    ) -> Result<HashMap<ClientPathType, WsConReqStat>, WsConReqStatFromDbErr> {
+        let mut req_stats =
+            HashMap::<ClientPathType, WsConReqStat>::with_capacity(current_req_stats.len());
+        for req_count in current_req_stats {
+            let client_msg_enum_index = ClientMsg::VARIANTS
+                .iter()
+                .position(|name| *name == req_count.path)
+                .ok_or(WsConReqStatFromDbErr::InvalidClientMsgEnumName(
+                    req_count.path.clone(),
+                ))?;
+            req_stats.insert(client_msg_enum_index, req_count.try_into()?);
+        }
+
+        Ok(req_stats)
+    }
+
+    #[derive(Error, Debug)]
+    pub enum WsIpManagerFromDb {
+        #[error("failed to convert path from database: {0}")]
+        WsConReqStatFromDbErr(#[from] WsConReqStatFromDbErr),
+
+        #[error("failed to parse string to socket_addr: {0}")]
+        InvalidSocketAddr(#[from] std::net::AddrParseError),
+
+        #[error("Invalid date: {0}")]
+        InvalidDate(i64),
+
+        #[error("Invalid uuid: {0}")]
+        InvalidUuid(#[from] uuid::Error),
+    }
+
+    #[derive(Error, Debug)]
+    pub enum WsIpManagerToDb {
+        #[error("Failed to convert req stats: {0}")]
+        ReqStatErr(#[from] WsConReqStatToDbErr),
     }
 
     #[derive(Error, Debug)]
@@ -1073,6 +1153,9 @@ pub mod global {
 
     #[derive(Error, Debug)]
     pub enum WsConReqStatFromDbErr {
+        #[error("Invalid client msg enum name - name not found: {0}")]
+        InvalidClientMsgEnumName(String),
+
         #[error("Failed to convert i64 to u64: {0}")]
         TryFromIntError(#[from] TryFromIntError),
 
@@ -1092,16 +1175,13 @@ pub mod global {
         InvalidSocketAddr(#[from] std::net::AddrParseError),
 
         #[error("failed to convert path from database: {0}")]
-        DbWsStatTempCountItem(#[from] WsConReqStatFromDbErr),
+        WsConReqStatFromDbErr(#[from] WsConReqStatFromDbErr),
 
         #[error("failed to convert from database: {0}")]
         DbThrottleDoubleLayer(#[from] DbThrottleDoubleLayerFromError),
 
         #[error("Failed to convert i64 to u64: {0}")]
         TryFromIntError(#[from] TryFromIntError),
-
-        #[error("Invalid client msg enum name - name not found: {0}")]
-        InvalidClientMsgEnumName(String),
 
         #[error("Invalid date: {0}")]
         InvalidDate(i64),

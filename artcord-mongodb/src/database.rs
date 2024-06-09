@@ -1,4 +1,4 @@
-use artcord_state::global::{DbAcc, DbAccSession, DbAllowedChannel, DbAllowedGuild, DbAllowedRole, DbAutoReaction, DbImg, DbMigration, DbWsCon, DbUser};
+use artcord_state::global;
 use cfg_if::cfg_if;
 
 use mongodb::options::ClientOptions;
@@ -10,31 +10,33 @@ use tracing::{info, trace};
 
 pub mod model;
 
-const COLLECTION_ACC_SESSION_NAME: &'static str = "acc_session";
-const COLLECTION_ACC_NAME: &'static str = "acc";
-const COLLECTION_ALLOWED_CHANNEL_NAME: &'static str = "allowed_channel";
-const COLLECTION_ALLOWED_GUILD_NAME: &'static str = "allowed_guild";
-const COLLECTION_ALLOWED_ROLE_NAME: &'static str = "allowed_role";
-const COLLECTION_AUTO_REACTION_NAME: &'static str = "auto_reaction";
-const COLLECTION_IMG_NAME: &'static str = "img";
-const COLLECTION_MIGRATION_NAME: &'static str = "migration";
-const COLLECTION_USER_NAME: &'static str = "user";
-const COLLECTION_WS_STATISTIC_NAME: &'static str = "ws_statistic";
+const COLLECTION_ACC_SESSION_NAME: &str = "acc_session";
+const COLLECTION_ACC_NAME: &str = "acc";
+const COLLECTION_ALLOWED_CHANNEL_NAME: &str = "allowed_channel";
+const COLLECTION_ALLOWED_GUILD_NAME: &str = "allowed_guild";
+const COLLECTION_ALLOWED_ROLE_NAME: &str = "allowed_role";
+const COLLECTION_AUTO_REACTION_NAME: &str = "auto_reaction";
+const COLLECTION_IMG_NAME: &str = "img";
+const COLLECTION_MIGRATION_NAME: &str = "migration";
+const COLLECTION_USER_NAME: &str = "user";
+const COLLECTION_WS_STATISTIC_NAME: &str = "ws_statistic";
+const COLLECTION_WS_IP_MANAGER_NAME: &str = "ws_ip_manager";
 
 #[derive(Clone, Debug)]
 pub struct DB {
     pub client: mongodb::Client,
     pub database: mongodb::Database,
-    collection_img: mongodb::Collection<DbImg>,
-    collection_user: mongodb::Collection<DbUser>,
-    collection_allowed_role: mongodb::Collection<DbAllowedRole>,
-    collection_allowed_channel: mongodb::Collection<DbAllowedChannel>,
-    collection_allowed_guild: mongodb::Collection<DbAllowedGuild>,
-    collection_auto_reaction: mongodb::Collection<DbAutoReaction>,
-    collection_acc: mongodb::Collection<DbAcc>,
-    collection_acc_session: mongodb::Collection<DbAccSession>,
-    collection_migration: mongodb::Collection<DbMigration>,
-    collection_ws_statistic: mongodb::Collection<DbWsCon>,
+    collection_img: mongodb::Collection<global::DbImg>,
+    collection_user: mongodb::Collection<global::DbUser>,
+    collection_allowed_role: mongodb::Collection<global::DbAllowedRole>,
+    collection_allowed_channel: mongodb::Collection<global::DbAllowedChannel>,
+    collection_allowed_guild: mongodb::Collection<global::DbAllowedGuild>,
+    collection_auto_reaction: mongodb::Collection<global::DbAutoReaction>,
+    collection_acc: mongodb::Collection<global::DbAcc>,
+    collection_acc_session: mongodb::Collection<global::DbAccSession>,
+    collection_migration: mongodb::Collection<global::DbMigration>,
+    collection_ws_statistic: mongodb::Collection<global::DbWsCon>,
+    collection_ws_ip_manager: mongodb::Collection<global::DbWsIpManager>,
 }
 
 // const DATABASE_NAME: &'static str = "artcord";
@@ -68,6 +70,7 @@ impl DB {
         let collection_acc = DB::init_acc(&database).await;
         let collection_acc_session = DB::init_acc_session(&database).await;
         let collection_ws_statistic = DB::init_ws_statistic(&database).await;
+        let collection_ws_ip_manager = DB::init_ws_ip_manager(&database).await;
 
         Self {
             database,
@@ -82,6 +85,7 @@ impl DB {
             collection_acc_session,
             collection_migration,
             collection_ws_statistic,
+            collection_ws_ip_manager,
         }
     }
 }
@@ -99,8 +103,20 @@ pub enum DBError {
     #[error("Bson DE: {0}.")]
     BsonDE(#[from] bson::de::Error),
 
+    #[error("Bson DE: {0}.")]
+    BsonSE(#[from] bson::ser::Error),
+
     #[error("Chrono parse: {0}.")]
     Chrono(#[from] chrono::ParseError),
+
+    #[error("ws_ip_manager_from_db conversion err: {0}.")]
+    WsIpManagerFromDb(#[from] global::WsIpManagerFromDb),
+
+    #[error("ws_ip_manager_to_db conversion err: {0}.")]
+    WsIpManagerToDb(#[from] global::WsIpManagerToDb),
+
+    #[error("req_stats conversion err: {0}.")]
+    WsConReqStatToDbErr(#[from] global::WsConReqStatToDbErr),
 
     // #[error("Not found: {0}.")]
     // NotFound(String),

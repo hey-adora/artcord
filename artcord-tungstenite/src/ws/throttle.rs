@@ -54,7 +54,6 @@ use super::con::throttle_stats_listener_tracker::ThrottleStatsListenerTracker;
 use super::con::ConMsg;
 use super::con::GlobalConMsg;
 use super::con::IpConMsg;
-use super::con::IpManagerMsg;
 use super::WsAppMsg;
 use super::WsIp;
 

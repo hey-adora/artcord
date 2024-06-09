@@ -471,7 +471,7 @@ impl LiveWsStats {
         });
     }
 
-    pub fn update_connections(&self, ip_stats: Vec<global::WsIpStat>) {
+    pub fn update_connections(&self, ip_stats: Vec<global::WsIp>) {
         self.ip_stats.update(|stats| {
             for ip_stat in ip_stats {
                 let Some(stat) = stats.get(&ip_stat.ip) else {

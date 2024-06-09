@@ -18,6 +18,7 @@ pub mod migration;
 pub mod user;
 pub mod ws_ip_stat;
 pub mod ws_req_stat;
+pub mod ws_ip_manager;
 
 
 

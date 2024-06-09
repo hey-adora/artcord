@@ -27,30 +27,12 @@ use self::req::req_task;
 use self::throttle_stats_listener_tracker::{ConTrackerErr, ThrottleStatsListenerTracker};
 
 use super::throttle::AllowCon;
+use super::IpManagerMsg;
 
 pub mod req;
 pub mod throttle_stats_listener_tracker;
 
-#[derive(Debug)]
-pub enum IpManagerMsg {
-    CheckThrottle {
-        path: usize,
-        block_threshold: global::Threshold,
-        allow_tx: oneshot::Sender<AllowCon>,
-    },
-    Unban,
-    // IncThrottle {
-    //     author_id: TempConIdType,
-    //     path: usize,
-    //     block_threshold: Threshold,
-    // },
-    // AddIpStatListener {
-    //     msg_author: TempConIdType,
-    //     con_id: TempConIdType,
-    //     con_tx: mpsc::Sender<ConMsg>,
-    //     current_state_tx: mpsc::Sender<HashMap<ClientPathType, WsReqStat>>,
-    // },
-}
+
 
 #[derive(Debug, Clone)]
 pub enum IpConMsg {
@@ -401,7 +383,10 @@ impl<
             } => {
                 let time = self.time_middleware.get_time().await;
 
-                let req_stat = self.req_stats.entry(path).or_insert_with(|| global::WsConReqStat::new(time));
+                let req_stat = self
+                    .req_stats
+                    .entry(path)
+                    .or_insert_with(|| global::WsConReqStat::new(time));
 
                 let result = {
                     let (result_tx, result_rx) = oneshot::channel::<AllowCon>();
@@ -432,13 +417,11 @@ impl<
                         &self.ban_duration,
                         &time,
                         &mut self.banned_until,
-                    )
-                   ;
+                    );
 
                     // if allow {
 
                     // }
-
 
                     // if let AllowCon::Allow = a {
                     //     let b = self
@@ -482,18 +465,36 @@ impl<
                     AllowCon::Allow => {
                         if !self.listener_tracker.cons.is_empty() {
                             self.listener_tracker
-                                    .send(global::ServerMsg::WsLiveStatsReqAllowed {
-                                        con_id: self.con_id,
-                                        path,
-                                        total_amount: req_stat.total_allowed_count,
-                                    })
-                                    .await?;
+                                .send(global::ServerMsg::WsLiveStatsReqAllowed {
+                                    con_id: self.con_id,
+                                    path,
+                                    total_amount: req_stat.total_allowed_count,
+                                })
+                                .await?;
                         }
 
                         true
                     }
                     AllowCon::AlreadyBanned => false,
                     AllowCon::Banned((date, reason)) => {
+                        if !self.listener_tracker.cons.is_empty() {
+                            self.listener_tracker
+                                .send(global::ServerMsg::WsLiveStatsReqBanned {
+                                    con_id: self.con_id,
+                                    path,
+                                    total_amount: req_stat.total_banned_count,
+                                })
+                                .await?;
+
+                            self.listener_tracker
+                                .send(global::ServerMsg::WsLiveStatsIpBanned {
+                                    ip: self.ip,
+                                    date,
+                                    reason,
+                                })
+                                .await?;
+                        }
+
                         self.ws_app_tx
                             .send(WsAppMsg::Ban {
                                 ip: self.ip,
@@ -502,66 +503,48 @@ impl<
                             })
                             .await?;
 
-                        if !self.listener_tracker.cons.is_empty() {
-                            self.listener_tracker
-                                    .send(global::ServerMsg::WsLiveStatsReqBanned {
-                                        con_id: self.con_id,
-                                        path,
-                                        total_amount: req_stat.total_banned_count,
-                                    })
-                                    .await?;
-
-                                self.listener_tracker
-                                    .send(global::ServerMsg::WsLiveStatsIpBanned {
-                                        ip: self.ip,
-                                        date,
-                                        reason,
-                                    })
-                                    .await?;
-                        }
-
                         false
                     }
                     AllowCon::Blocked => {
                         if !self.listener_tracker.cons.is_empty() {
                             self.listener_tracker
-                                    .send(global::ServerMsg::WsLiveStatsReqBlocked {
-                                        con_id: self.con_id,
-                                        path,
-                                        total_amount: req_stat.total_blocked_count,
-                                    })
-                                    .await?;
+                                .send(global::ServerMsg::WsLiveStatsReqBlocked {
+                                    con_id: self.con_id,
+                                    path,
+                                    total_amount: req_stat.total_blocked_count,
+                                })
+                                .await?;
                         }
                         false
                     }
                     AllowCon::UnbannedAndBlocked => {
                         if !self.listener_tracker.cons.is_empty() {
                             self.listener_tracker
-                                    .send(global::ServerMsg::WsLiveStatsReqBlocked {
-                                        con_id: self.con_id,
-                                        path,
-                                        total_amount: req_stat.total_blocked_count,
-                                    })
-                                    .await?;
-                                self.listener_tracker
-                                    .send(global::ServerMsg::WsLiveStatsIpUnbanned { ip: self.ip })
-                                    .await?;
+                                .send(global::ServerMsg::WsLiveStatsReqBlocked {
+                                    con_id: self.con_id,
+                                    path,
+                                    total_amount: req_stat.total_blocked_count,
+                                })
+                                .await?;
+                            self.listener_tracker
+                                .send(global::ServerMsg::WsLiveStatsIpUnbanned { ip: self.ip })
+                                .await?;
                         }
                         false
                     }
                     AllowCon::UnbannedAndAllow => {
                         if !self.listener_tracker.cons.is_empty() {
                             self.listener_tracker
-                                    .send(global::ServerMsg::WsLiveStatsReqAllowed {
-                                        con_id: self.con_id,
-                                        path,
-                                        total_amount: req_stat.total_allowed_count,
-                                    })
-                                    .await?;
+                                .send(global::ServerMsg::WsLiveStatsReqAllowed {
+                                    con_id: self.con_id,
+                                    path,
+                                    total_amount: req_stat.total_allowed_count,
+                                })
+                                .await?;
 
-                                self.listener_tracker
-                                    .send(global::ServerMsg::WsLiveStatsIpUnbanned { ip: self.ip })
-                                    .await?;
+                            self.listener_tracker
+                                .send(global::ServerMsg::WsLiveStatsIpUnbanned { ip: self.ip })
+                                .await?;
                         }
 
                         true
