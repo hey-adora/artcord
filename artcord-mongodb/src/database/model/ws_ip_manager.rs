@@ -50,7 +50,7 @@ impl DB {
         collection
     }
 
-    pub async fn ws_ip_manager_update_req_stats(
+    pub async fn ws_ip_manager_upsert(
         &self,
         ip: IpAddr,
         req_stats: HashMap<global::ClientPathType, global::WsConReqStat>,
@@ -87,21 +87,6 @@ impl DB {
                 None,
             )
             .await?;
-
-        // let options = UpdateOptions::builder().upsert(true).build();
-        // let data = bson::to_bson(&ws_ip_manager)?;
-        // let result = self
-        //     .collection_ws_ip_manager
-        //     .update_one(
-        //         doc! {
-        //             global::DbWsIpManagerFieldName::Ip.name(): ws_ip_manager.ip,
-        //         },
-        //         doc! {
-        //             "$set": data
-        //         },
-        //         options,
-        //     )
-        //     .await?;
 
         Ok(())
     }

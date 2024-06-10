@@ -101,7 +101,7 @@ impl LiveThrottleCache {
         }
     }
 
-    pub fn on_start(&self, throttle_cache: HashMap<IpAddr, global::WsIp>) {
+    pub fn on_start(&self, throttle_cache: HashMap<IpAddr, global::ConnectedWsIp>) {
         self.ips.update(|ips| {
             for (ip, new_con) in throttle_cache {
                 if let Some(con) = ips.get(&ip) {

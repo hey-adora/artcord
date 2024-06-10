@@ -451,9 +451,9 @@ pub fn ws_ip_throttle(
     //let flicker_throttle_allow = threshold_allow(tracker, flicker_threshold, time);
     let flicker_throttle_allow = simple_throttle(
         con_flicker_tracker,
-        &ws_threshold.ws_max_con_threshold,
-        &ws_threshold.ws_max_con_ban_duration,
-        &ws_threshold.ws_max_con_ban_reason,
+        &ws_threshold.ws_con_flicker_threshold,
+        &ws_threshold.ws_con_flicker_ban_duration,
+        &ws_threshold.ws_con_flicker_ban_reason,
         time,
         banned_until,
     );
@@ -467,7 +467,7 @@ pub fn ws_ip_throttle(
     // );
 
     trace!(
-        "throttle: flicker throttle result: {:?}",
+        "ws_ip_throttle: flicker throttle result: {:?}",
         flicker_throttle_allow
     );
 
@@ -482,7 +482,7 @@ pub fn ws_ip_throttle(
         &ws_threshold.ws_max_con_threshold_range,
         current_con_count,
         con_count_tracker,
-        &ws_threshold.ws_con_flicker_threshold,
+        &ws_threshold.ws_max_con_threshold,
         &ws_threshold.ws_max_con_ban_reason,
         &ws_threshold.ws_max_con_ban_duration,
         time,
@@ -496,11 +496,12 @@ pub fn ws_ip_throttle(
     //     banned_until,
     // );
 
-    trace!("throttle: result: {:?}", ranged_throttle_allow);
+    trace!("ws_ip_throttle: ranged throttle result: {:?}", ranged_throttle_allow);
 
     match ranged_throttle_allow {
         AllowCon::Allow => {
             con_flicker_tracker.amount += 1;
+            debug!("flicker incremented to: {}", con_flicker_tracker.amount);
             if flicker_throttle_allow == AllowCon::UnbannedAndAllow {
                 flicker_throttle_allow
             } else {
@@ -640,7 +641,7 @@ pub fn ranged_throttle(
     banned_until: &mut Option<(DateTime<Utc>, global::IpBanReason)>,
 ) -> AllowCon {
     let ban_status = is_banned(banned_until, time);
-    trace!("throttle: ban status: {:?}", ban_status);
+    trace!("ranged throttle: ban status: {:?}", ban_status);
 
     match ban_status {
         IsBanned::Banned => {
@@ -654,7 +655,7 @@ pub fn ranged_throttle(
     }
 
     trace!(
-        "throttle: range {} >= {} = {}",
+        "ranged throttle: {} >= {} = {}",
         current,
         max,
         *current >= *max
@@ -662,7 +663,7 @@ pub fn ranged_throttle(
     if *current >= *max {
         let allow = threshold_allow(tracker, threshold, time);
         //let range_status = !self.tracker.allow(threshold, time);
-        trace!("throttle: range allow: {}", allow);
+        trace!("ranged throttle: allow: {}", allow);
 
         if !allow {
             let ban_until = *time + *ban_duration;
@@ -756,14 +757,14 @@ pub fn is_banned(
     time: &DateTime<Utc>,
 ) -> IsBanned {
     let Some((date, _)) = banned_until else {
-        trace!("throttle: ban check: entry doesnt exist");
+        trace!("is_banned: entry doesnt exist");
         return IsBanned::NotBanned;
     };
 
     let un_banned = time >= date;
 
     trace!(
-        "throttle: is banned: {}, state: {:#?}",
+        "is_banned: {}, state: {:#?}",
         !un_banned,
         banned_until
     );
@@ -856,7 +857,7 @@ mod throttle_tests {
         );
         assert_eq!(con_1, AllowCon::Blocked);
 
-        //time += TimeDelta::try_minutes(2).unwrap();
+       
 
         current_con_count -= 1;
         //throttle.dec_con(&ip, &time);
@@ -870,6 +871,8 @@ mod throttle_tests {
             &time,
         );
         assert_eq!(con_1, AllowCon::Allow);
+
+       // time += TimeDelta::try_minutes(1).unwrap();
 
         for _ in 0..19 {
             current_con_count -= 1;

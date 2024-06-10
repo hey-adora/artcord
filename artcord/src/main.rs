@@ -162,6 +162,7 @@ async fn main() {
 mod artcord_tests {
     use std::{
         collections::{HashMap, HashSet},
+        env,
         net::{IpAddr, Ipv4Addr},
         str::FromStr,
         sync::Arc,
@@ -181,7 +182,7 @@ mod artcord_tests {
     use tokio::sync::oneshot;
     use tokio::{net::TcpStream, sync::Mutex};
     use tokio::{select, time::sleep};
-    use tokio_tungstenite::{connect_async, tungstenite::Message, WebSocketStream};
+    use tokio_tungstenite::{connect_async, tungstenite::{protocol::CloseFrame, Message}, WebSocketStream};
     use tokio_util::{sync::CancellationToken, task::TaskTracker};
     use tracing::{debug, error, info, trace, Instrument, Level};
 
@@ -675,7 +676,7 @@ mod artcord_tests {
                 };
                 let _ = connection_tx.send(Ok(ConnectionMsg::Connected)).await;
                 let (mut write, mut read) = ws_stream.split();
-
+              
                 loop {
                     select! {
                         msg = client_rx.recv() => {
@@ -698,6 +699,11 @@ mod artcord_tests {
                         }
                     }
                 }
+                let close_frame = CloseFrame {
+                    code: tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Normal,
+                    reason: std::borrow::Cow::Borrowed("boom"),
+                };
+                write.send(Message::Close(Some(close_frame))).await.unwrap();
                 let _ = connection_tx.send(Ok(ConnectionMsg::Disconnected)).await;
                 debug!("client exited.");
             });
@@ -946,12 +952,12 @@ mod artcord_tests {
             ws_test_app.recv_con_block(client2, client).await;
         }
 
-        
         info!("GET UNBLOCKED");
 
         ws_test_app.add_time(CON_BLOCK_DURATION).await;
         for i in 0..CON_MAX_AMOUNT as usize {
             ws_test_app.close_client(i).await;
+            ws_test_app.recv_disconnected_one(client2).await;
         }
 
         info!("GET BLOCKED AGAIN");
@@ -992,13 +998,57 @@ mod artcord_tests {
         info!("GET UNBANNED");
         ws_test_app.add_time(CON_BLOCK_DURATION).await;
 
-        for i in 0..CON_MAX_AMOUNT as usize {
+        let client = ws_test_app
+            .create_client(0, Ipv4Addr::new(0, 0, 0, 1), CLIENT_CONNECTED_SUCCESS)
+            .await;
+        ws_test_app.recv_con_allow(client2, client).await;
+        ws_test_app.recv_ip_unban(client2, client).await;
+        ws_test_app.recv_connected_one(client2, client).await;
+
+        for i in 1..CON_MAX_AMOUNT as usize {
             let client = ws_test_app
                 .create_client(i, Ipv4Addr::new(0, 0, 0, 1), CLIENT_CONNECTED_SUCCESS)
                 .await;
             ws_test_app.recv_con_allow(client2, client).await;
             ws_test_app.recv_connected_one(client2, client).await;
         }
+
+        ws_test_app.close().await;
+    }
+
+    #[tokio::test]
+    async fn throttle_con_flicker_ban() {
+        init_tracer();
+
+        let mut ws_test_app = WsTestApp::new(4).await;
+
+        let client2 = ws_test_app
+            .create_client(200, Ipv4Addr::new(0, 0, 0, 2), CLIENT_CONNECTED_SUCCESS)
+            .await;
+
+        ws_test_app.send_live_stats_on(client2).await;
+        ws_test_app.recv_connections(client2).await;
+        ws_test_app.recv_connected_one(client2, client2).await;
+
+        info!("GET BLOCKED");
+
+        for i in 0..CON_FLICKER_MAX as usize {
+            let client = ws_test_app
+                .create_client(0, Ipv4Addr::new(0, 0, 0, 1), CLIENT_CONNECTED_SUCCESS)
+                .await;
+            ws_test_app.recv_con_allow(client2, client).await;
+            ws_test_app.recv_connected_one(client2, client).await;
+            ws_test_app.close_client(client).await;
+            ws_test_app.recv_disconnected_one(client2).await;
+        }
+
+        let client = ws_test_app
+            .create_client(0, Ipv4Addr::new(0, 0, 0, 1), CLIENT_CONNECTED_ERR)
+            .await;
+        ws_test_app.recv_con_banned(client2, client).await;
+        ws_test_app
+            .recv_ip_banned(client2, client, global::IpBanReason::WsConFlickerDetected)
+            .await;
 
         ws_test_app.close().await;
     }
@@ -1010,7 +1060,11 @@ mod artcord_tests {
                     .with_file(true)
                     .with_line_number(true),
             )
-            .with_env_filter(tracing_subscriber::EnvFilter::from_str("artcord=trace").unwrap())
+            .with_env_filter(
+                env::var("RUST_LOG")
+                    .map(|data| tracing_subscriber::EnvFilter::from_str(&data).unwrap())
+                    .unwrap_or(tracing_subscriber::EnvFilter::from_str("artcord=trace").unwrap()),
+            )
             .try_init();
     }
 

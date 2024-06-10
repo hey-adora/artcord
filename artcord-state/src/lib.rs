@@ -19,12 +19,14 @@ pub mod global {
         num::TryFromIntError,
         str::FromStr,
     };
-    use strum::{EnumCount, EnumString, IntoStaticStr, VariantNames};
+    use strum::{AsRefStr, EnumCount, EnumString, IntoStaticStr, VariantNames};
     use thiserror::Error;
     use tracing::{error, info, trace, warn};
 
     pub type ClientPathType = usize;
     pub type TempConIdType = u128;
+    pub type BanType = Option<(DateTime<Utc>, IpBanReason)>;
+    pub type DbBanType = Option<(i64, String)>;
 
     pub const SEC_IN_MS: i64 = 1000;
     pub const MIN_IN_MS: i64 = 60 * SEC_IN_MS;
@@ -47,13 +49,13 @@ pub mod global {
 
     #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
     pub enum ServerMsg {
-        WsLiveStatsIpCons(Vec<WsIp>),
+        WsLiveStatsIpCons(Vec<ConnectedWsIp>),
 
         WsLiveStatsConnected {
             ip: IpAddr,
             socket_addr: SocketAddr,
             con_id: TempConIdType,
-            banned_until: Option<(DateTime<Utc>, IpBanReason)>,
+            banned_until: BanType,
             req_stats: HashMap<ClientPathType, WsConReqStat>,
         },
         WsLiveStatsDisconnected {
@@ -200,6 +202,8 @@ pub mod global {
         IntoStaticStr,
         VariantNames,
         EnumString,
+        // AsRefStr,
+        strum::Display
     )]
     #[strum(serialize_all = "snake_case")]
     pub enum IpBanReason {
@@ -366,13 +370,27 @@ pub mod global {
     }
 
     #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, FieldName)]
+    pub struct DbWsIp {
+        pub id: String,
+        pub ip: String,
+        pub total_allow_amount: i64,
+        pub total_block_amount: i64,
+        pub total_banned_amount: i64,
+        pub total_already_banned_amount: i64,
+        pub con_count_tracker: DbThresholdTracker,
+        pub con_flicker_tracker: DbThresholdTracker,
+        pub banned_until: DbBanType,
+        pub modified_at: i64,
+        pub created_at: i64,
+    }
+
+    #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, FieldName)]
     pub struct DbWsIpManager {
         pub id: String,
         pub ip: String,
         pub req_stats: Vec<DbWsConReqStat>,
         pub modified_at: i64,
         pub created_at: i64,
-        //pub banned_until: Option<(DateTime<Utc>, IpBanReason)>,
     }
 
     #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, FieldName)]
@@ -424,7 +442,22 @@ pub mod global {
     // }
 
     #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, FieldName)]
-    pub struct WsIp {
+    pub struct SavedWsIp {
+        pub id: uuid::Uuid,
+        pub ip: IpAddr,
+        pub total_allow_amount: u64,
+        pub total_block_amount: u64,
+        pub total_banned_amount: u64,
+        pub total_already_banned_amount: u64,
+        pub con_count_tracker: ThresholdTracker,
+        pub con_flicker_tracker: ThresholdTracker,
+        pub banned_until: Option<(DateTime<Utc>, IpBanReason)>,
+        pub modified_at: DateTime<Utc>,
+        pub created_at: DateTime<Utc>,
+    }
+
+    #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, FieldName)]
+    pub struct ConnectedWsIp {
         pub ip: IpAddr,
         pub total_allow_amount: u64,
         pub total_block_amount: u64,
@@ -624,7 +657,7 @@ pub mod global {
     }
 
     impl TryFrom<ThresholdTracker> for DbThresholdTracker {
-        type Error = ThresholdTrackerFromError;
+        type Error = ThresholdTrackerToDbErr;
         fn try_from(value: ThresholdTracker) -> Result<Self, Self::Error> {
             Ok(Self {
                 //total_amount: i64::try_from(value.total_amount)?,
@@ -635,13 +668,12 @@ pub mod global {
     }
 
     impl TryFrom<DbThresholdTracker> for ThresholdTracker {
-        type Error = DbThresholdTrackerFromError;
+        type Error = ThresholdTrackerFromDbErr;
         fn try_from(value: DbThresholdTracker) -> Result<Self, Self::Error> {
             Ok(Self {
                 //total_amount: u64::try_from(value.total_amount)?,
                 amount: u64::try_from(value.amount)?,
-                started_at: DateTime::<Utc>::from_timestamp_millis(value.started_at)
-                    .ok_or(DbThresholdTrackerFromError::InvalidDate(value.started_at))?,
+                started_at: date_from_db(value.started_at)?,
             })
         }
     }
@@ -666,6 +698,28 @@ pub mod global {
     //     }
     // }
 
+    impl TryFrom<DbWsIp> for SavedWsIp {
+        type Error = WsIpFromDbErr;
+
+        fn try_from(value: DbWsIp) -> Result<SavedWsIp, Self::Error> {
+            //let id = uuid::Uuid::from_str(&value.id)?;
+
+            Ok(Self {
+                id: uuid::Uuid::from_str(&value.id)?,
+                ip: IpAddr::from_str(&value.ip)?,
+                total_allow_amount: value.total_allow_amount as u64,
+                total_block_amount: value.total_block_amount as u64,
+                total_banned_amount: value.total_banned_amount as u64,
+                total_already_banned_amount: value.total_already_banned_amount as u64,
+                banned_until: ban_from_db(value.banned_until)?,
+                con_count_tracker: value.con_count_tracker.try_into()?,
+                con_flicker_tracker: value.con_flicker_tracker.try_into()?,
+                modified_at: date_from_db(value.modified_at)?,
+                created_at: date_from_db(value.created_at)?,
+            })
+        }
+    }
+
     impl TryFrom<DbWsCon> for ConnectedWsCon {
         type Error = WsConFromDbErr;
 
@@ -678,11 +732,7 @@ pub mod global {
                 ip: IpAddr::from_str(&value.ip)?,
                 addr: SocketAddr::from_str(&value.addr)?,
                 req_stats,
-                //connected_at: Utc::try
-                //throttle: value.throttle.try_into()?,
-                connected_at: DateTime::<Utc>::from_timestamp_millis(value.connected_at)
-                    .ok_or(WsConFromDbErr::InvalidDate(value.connected_at))?,
-                //banned_until: None,
+                connected_at: date_from_db(value.connected_at)?,
             })
         }
     }
@@ -700,14 +750,10 @@ pub mod global {
                 ip: IpAddr::from_str(&value.ip)?,
                 addr: SocketAddr::from_str(&value.addr)?,
                 req_stats,
-                connected_at: DateTime::<Utc>::from_timestamp_millis(value.connected_at)
-                    .ok_or(WsConFromDbErr::InvalidDate(value.connected_at))?,
-                disconnected_at: DateTime::<Utc>::from_timestamp_millis(value.disconnected_at)
-                    .ok_or(WsConFromDbErr::InvalidDate(value.disconnected_at))?,
-                created_at: DateTime::<Utc>::from_timestamp_millis(value.created_at)
-                    .ok_or(WsConFromDbErr::InvalidDate(value.created_at))?,
-                modified_at: DateTime::<Utc>::from_timestamp_millis(value.modified_at)
-                    .ok_or(WsConFromDbErr::InvalidDate(value.modified_at))?,
+                connected_at: date_from_db(value.connected_at)?,
+                disconnected_at: date_from_db(value.disconnected_at)?,
+                created_at: date_from_db(value.created_at)?,
+                modified_at: date_from_db(value.modified_at)?,
             })
         }
     }
@@ -745,10 +791,8 @@ pub mod global {
                 id: uuid::Uuid::from_str(&value.id)?,
                 ip: IpAddr::from_str(&value.ip)?,
                 req_stats,
-                created_at: DateTime::<Utc>::from_timestamp_millis(value.created_at)
-                    .ok_or(WsIpManagerFromDb::InvalidDate(value.created_at))?,
-                modified_at: DateTime::<Utc>::from_timestamp_millis(value.modified_at)
-                    .ok_or(WsIpManagerFromDb::InvalidDate(value.modified_at))?,
+                created_at: date_from_db(value.created_at)?,
+                modified_at: date_from_db(value.modified_at)?,
             })
         }
     }
@@ -766,8 +810,7 @@ pub mod global {
                 //total_unbanned_count: u64::try_from(value.total_unbanned_count)?,
                 block_tracker: value.block_tracker.try_into()?,
                 ban_tracker: value.ban_tracker.try_into()?,
-                last_reset_at: DateTime::<Utc>::from_timestamp_millis(value.last_reset_at)
-                    .ok_or(WsConReqStatFromDbErr::InvalidDate(value.last_reset_at))?,
+                last_reset_at: date_from_db(value.last_reset_at)?,
             })
         }
     }
@@ -833,23 +876,6 @@ pub mod global {
         }
     }
 
-    impl DbWsIpManager {
-        pub fn try_new(
-            ip: IpAddr,
-            req_stats: HashMap<ClientPathType, WsConReqStat>,
-            time: DateTime<Utc>,
-        ) -> Result<Self, WsIpManagerToDb> {
-            let req_stats: Vec<DbWsConReqStat> = req_stats_to_db(req_stats)?;
-
-            Ok(Self {
-                id: uuid::Uuid::new_v4().to_string(),
-                ip: ip.to_string(),
-                req_stats,
-                created_at: time.timestamp_millis(),
-                modified_at: time.timestamp_millis(),
-            })
-        }
-    }
 
     impl DebugServerMsg {
         pub fn from_bytes(bytes: &[u8]) -> Result<WsPackage<Self>, bincode::Error> {
@@ -897,27 +923,6 @@ pub mod global {
         }
     }
 
-    impl DbAcc {
-        pub fn new(
-            email: &str,
-            password: &str,
-            email_verification_code: &str,
-            time: &DateTime<Utc>,
-        ) -> DbAcc {
-            DbAcc {
-                id: uuid::Uuid::new_v4().to_string(),
-                email: email.to_string(),
-                verified_email: false,
-                email_verification_code: email_verification_code.to_string(),
-                password: password.to_string(),
-                role: DbAccRole::Member.to_string(),
-                discord: None,
-                modified_at: time.timestamp_millis(),
-                created_at: time.timestamp_millis(),
-            }
-        }
-    }
-
     impl DbAutoReaction {
         pub fn new(
             guild_id: String,
@@ -953,8 +958,99 @@ pub mod global {
         }
     }
 
+    impl DbAcc {
+        pub fn new(
+            email: &str,
+            password: &str,
+            email_verification_code: &str,
+            time: &DateTime<Utc>,
+        ) -> DbAcc {
+            DbAcc {
+                id: uuid::Uuid::new_v4().to_string(),
+                email: email.to_string(),
+                verified_email: false,
+                email_verification_code: email_verification_code.to_string(),
+                password: password.to_string(),
+                role: DbAccRole::Member.to_string(),
+                discord: None,
+                modified_at: time.timestamp_millis(),
+                created_at: time.timestamp_millis(),
+            }
+        }
+    }
+
+    impl DbAccSession {
+        pub fn new(
+            acc_id: String,
+            ip: String,
+            agent: String,
+            token: String,
+            time: &DateTime<Utc>,
+        ) -> Self {
+            Self {
+                id: uuid::Uuid::new_v4().to_string(),
+                acc_id,
+                ip,
+                agent,
+                token,
+                last_used: time.timestamp_millis(),
+                modified_at: time.timestamp_millis(),
+                created_at: time.timestamp_millis(),
+            }
+        }
+    }
+
+    impl DbWsIp {
+        pub fn try_new(
+            ip: IpAddr,
+            total_allow_amount: u64,
+            total_block_amount: u64,
+            total_banned_amount: u64,
+            total_already_banned_amount: u64,
+            con_count_tracker: ThresholdTracker,
+            con_flicker_tracker: ThresholdTracker,
+            banned_until: BanType,
+            time: DateTime<Utc>,
+        ) -> Result<Self, WsIpToDbErr> {
+            Ok(
+                Self {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    ip: ip.to_string(),
+                    total_allow_amount: total_allow_amount as i64,
+                    total_block_amount: total_block_amount as i64,
+                    total_banned_amount: total_banned_amount as i64,
+                    total_already_banned_amount: total_already_banned_amount as i64,
+                    con_count_tracker: con_count_tracker.try_into()?,
+                    con_flicker_tracker: con_flicker_tracker.try_into()?,
+                    banned_until: ban_to_db(banned_until),
+                    modified_at: time.timestamp_millis(),
+                    created_at: time.timestamp_millis()
+                }
+            )
+        }
+    }
+
+    impl DbWsIpManager {
+        pub fn try_new(
+            ip: IpAddr,
+            req_stats: HashMap<ClientPathType, WsConReqStat>,
+            time: DateTime<Utc>,
+        ) -> Result<Self, WsIpManagerToDb> {
+            let req_stats: Vec<DbWsConReqStat> = req_stats_to_db(req_stats)?;
+
+            Ok(Self {
+                id: uuid::Uuid::new_v4().to_string(),
+                ip: ip.to_string(),
+                req_stats,
+                created_at: time.timestamp_millis(),
+                modified_at: time.timestamp_millis(),
+            })
+        }
+    }
+
+
     impl DbWsCon {
-        pub fn from_ws_stat(
+        pub fn try_new(
             value: ConnectedWsCon,
             ip: IpAddr,
             addr: SocketAddr,
@@ -977,27 +1073,6 @@ pub mod global {
                 modified_at: time.timestamp_millis(),
                 created_at: time.timestamp_millis(),
             })
-        }
-    }
-
-    impl DbAccSession {
-        pub fn new(
-            acc_id: String,
-            ip: String,
-            agent: String,
-            token: String,
-            time: &DateTime<Utc>,
-        ) -> Self {
-            Self {
-                id: uuid::Uuid::new_v4().to_string(),
-                acc_id,
-                ip,
-                agent,
-                token,
-                last_used: time.timestamp_millis(),
-                modified_at: time.timestamp_millis(),
-                created_at: time.timestamp_millis(),
-            }
         }
     }
 
@@ -1075,7 +1150,7 @@ pub mod global {
         }
     }
 
-    impl WsIp {
+    impl ConnectedWsIp {
         pub fn new(ip: IpAddr) -> Self {
             Self {
                 ip,
@@ -1086,6 +1161,21 @@ pub mod global {
                 banned_until: None,
             }
         }
+    }
+
+    pub fn ban_from_db(banned_until: DbBanType) -> Result<BanType, BanFromDbErr> {
+        match banned_until {
+            Some((date, reason)) => {
+                let date = date_from_db(date)?;
+                let reason = IpBanReason::from_str(&reason).map_err(|err| BanFromDbErr::InvalidReason { reason, err })?;
+                Ok(Some((date, reason)))
+            }
+            None => Ok(None),
+        }
+    }
+
+    pub fn ban_to_db(banned_until: BanType) -> Option<(i64, String)> {
+        banned_until.map(|(date, reason)| (date.timestamp_millis(), reason.to_string() ))
     }
 
     pub fn req_stats_to_db(
@@ -1115,6 +1205,54 @@ pub mod global {
         Ok(req_stats)
     }
 
+    pub fn date_from_db(date: i64) -> Result<DateTime<Utc>, InvalidDateErr> {
+        Ok(
+            DateTime::<Utc>::from_timestamp_millis(date)
+                .ok_or(InvalidDateErr { date })?
+        )
+    }
+
+    #[derive(Error, Debug)]
+    pub enum BanFromDbErr {
+        
+        #[error("invalid ban reason: {reason:?}, err: {err:?}")]
+        InvalidReason {
+            reason: String,
+            err: strum::ParseError
+        },
+
+        #[error("invalid ban date: {0}")]
+        InvalidDate(#[from] InvalidDateErr),
+    }
+
+    #[derive(Error, Debug)]
+    pub enum WsIpFromDbErr {
+        #[error("banned_until conversion error: {0}")]
+        BanError(#[from] BanFromDbErr),
+
+        #[error("tracker error: {0}")]
+        TrackerError(#[from] ThresholdTrackerFromDbErr),
+
+        #[error("failed to parse string to socket_addr: {0}")]
+        InvalidSocketAddr(#[from] std::net::AddrParseError),
+
+        #[error("Invalid uuid: {0}")]
+        InvalidUuid(#[from] uuid::Error),
+
+        #[error("invalid ban date: {0}")]
+        InvalidDate(#[from] InvalidDateErr),
+        
+    }
+
+   
+
+    #[derive(Error, Debug)]
+    pub enum WsIpToDbErr {
+        #[error("tracker error: {0}")]
+        TrackerError(#[from] ThresholdTrackerToDbErr),
+    }
+
+
     #[derive(Error, Debug)]
     pub enum WsIpManagerFromDb {
         #[error("failed to convert path from database: {0}")]
@@ -1124,7 +1262,7 @@ pub mod global {
         InvalidSocketAddr(#[from] std::net::AddrParseError),
 
         #[error("Invalid date: {0}")]
-        InvalidDate(i64),
+        InvalidDate(#[from] InvalidDateErr),
 
         #[error("Invalid uuid: {0}")]
         InvalidUuid(#[from] uuid::Error),
@@ -1148,7 +1286,7 @@ pub mod global {
         DoubleLayer(#[from] ThrottleDoubleLayerFromError),
 
         #[error("tracker error: {0}")]
-        TrackerError(#[from] ThresholdTrackerFromError),
+        TrackerError(#[from] ThresholdTrackerToDbErr),
     }
 
     #[derive(Error, Debug)]
@@ -1163,10 +1301,10 @@ pub mod global {
         DoubleLayer(#[from] DbThrottleDoubleLayerFromError),
 
         #[error("invalid date: {0}")]
-        InvalidDate(i64),
+        InvalidDate(#[from] InvalidDateErr),
 
         #[error("tracker error: {0}")]
-        TrackerError(#[from] DbThresholdTrackerFromError),
+        TrackerError(#[from] ThresholdTrackerFromDbErr),
     }
 
     #[derive(Error, Debug)]
@@ -1184,7 +1322,7 @@ pub mod global {
         TryFromIntError(#[from] TryFromIntError),
 
         #[error("Invalid date: {0}")]
-        InvalidDate(i64),
+        InvalidDate(#[from] InvalidDateErr),
 
         #[error("Invalid uuid: {0}")]
         InvalidUuid(#[from] uuid::Error),
@@ -1199,33 +1337,44 @@ pub mod global {
         MissingBannedReason,
 
         #[error("invalid date: {0}")]
-        InvalidDate(i64),
+        InvalidDate(#[from] InvalidDateErr),
 
         #[error("invalid date: {0}")]
         InvalidReason(#[from] strum::ParseError),
 
         #[error("tracker error: {0}")]
-        TrackerError(#[from] DbThresholdTrackerFromError),
+        TrackerError(#[from] ThresholdTrackerFromDbErr),
     }
 
     #[derive(Error, Debug)]
     pub enum ThrottleDoubleLayerFromError {
         #[error("tracker error: {0}")]
-        TrackerError(#[from] ThresholdTrackerFromError),
+        TrackerError(#[from] ThresholdTrackerToDbErr),
     }
 
     #[derive(Error, Debug)]
-    pub enum ThresholdTrackerFromError {
+    pub enum ThresholdTrackerToDbErr {
         #[error("Failed to convert int: {0}")]
         TryFromIntError(#[from] TryFromIntError),
     }
 
     #[derive(Error, Debug)]
-    pub enum DbThresholdTrackerFromError {
+    pub enum ThresholdTrackerFromDbErr {
         #[error("Failed to convert int: {0}")]
         TryFromIntError(#[from] TryFromIntError),
 
         #[error("invalid date: {0}")]
-        InvalidDate(i64),
+        InvalidDate(#[from] InvalidDateErr),
+    }
+
+    #[derive(Error, Debug)]
+    pub struct InvalidDateErr {
+        date: i64
+    }
+
+    impl Display for InvalidDateErr {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}", self.date)
+        }
     }
 }

@@ -16,8 +16,8 @@ pub mod auto_reaction;
 pub mod img;
 pub mod migration;
 pub mod user;
-pub mod ws_ip_stat;
-pub mod ws_req_stat;
+pub mod ws_ip;
+pub mod ws_con;
 pub mod ws_ip_manager;
 
 

@@ -713,6 +713,8 @@ dependencies = [
  "serde",
  "strum",
  "thiserror",
+ "tokio",
+ "tokio-util",
  "tracing",
  "uuid",
 ]
