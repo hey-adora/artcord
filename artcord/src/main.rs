@@ -182,7 +182,11 @@ mod artcord_tests {
     use tokio::sync::oneshot;
     use tokio::{net::TcpStream, sync::Mutex};
     use tokio::{select, time::sleep};
-    use tokio_tungstenite::{connect_async, tungstenite::{protocol::CloseFrame, Message}, WebSocketStream};
+    use tokio_tungstenite::{
+        connect_async,
+        tungstenite::{protocol::CloseFrame, Message},
+        WebSocketStream,
+    };
     use tokio_util::{sync::CancellationToken, task::TaskTracker};
     use tracing::{debug, error, info, trace, Instrument, Level};
 
@@ -436,6 +440,10 @@ mod artcord_tests {
                 .unwrap()
         }
 
+        async fn send_custom_msg_once(&mut self, send_client_id: usize, msg: global::ClientMsg) {
+            self.send(send_client_id, msg).await.unwrap()
+        }
+
         async fn fail_to_send_test_msg_once(&mut self, send_client_id: usize) {
             let r: Result<(), mpsc::error::SendError<DebugClientMsg>> =
                 self.send(send_client_id, global::ClientMsg::Logout).await;
@@ -676,7 +684,7 @@ mod artcord_tests {
                 };
                 let _ = connection_tx.send(Ok(ConnectionMsg::Connected)).await;
                 let (mut write, mut read) = ws_stream.split();
-              
+
                 loop {
                     select! {
                         msg = client_rx.recv() => {
@@ -700,7 +708,8 @@ mod artcord_tests {
                     }
                 }
                 let close_frame = CloseFrame {
-                    code: tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Normal,
+                    code:
+                        tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Normal,
                     reason: std::borrow::Cow::Borrowed("boom"),
                 };
                 write.send(Message::Close(Some(close_frame))).await.unwrap();
@@ -1049,6 +1058,71 @@ mod artcord_tests {
         ws_test_app
             .recv_ip_banned(client2, client, global::IpBanReason::WsConFlickerDetected)
             .await;
+
+        ws_test_app.close().await;
+    }
+
+    #[tokio::test]
+    async fn throttle_con_manual_ban() {
+        init_tracer();
+
+        let mut ws_test_app = WsTestApp::new(5).await;
+
+        let time = Utc::now();
+
+        let client1_ip = Ipv4Addr::new(0, 0, 0, 1);
+        let ban_duration = TimeDelta::try_seconds(10).unwrap();
+        let ban_date = time + ban_duration;
+        let ban_reason = global::IpBanReason::Other(String::from("too stinky"));
+
+        let client1 = ws_test_app
+            .create_client(1, client1_ip, CLIENT_CONNECTED_SUCCESS)
+            .await;
+
+        let client2 = ws_test_app
+            .create_client(200, Ipv4Addr::new(0, 0, 0, 2), CLIENT_CONNECTED_SUCCESS)
+            .await;
+
+        ws_test_app.send_live_stats_on(client2).await;
+        ws_test_app.recv_connections(client2).await;
+        ws_test_app.recv_connected(client2).await;
+
+        ws_test_app
+            .send_custom_msg_once(
+                client2,
+                global::ClientMsg::BanIp {
+                    ip: IpAddr::V4(client1_ip),
+                    date: ban_date,
+                    reason: ban_reason.clone(),
+                },
+            )
+            .await;
+
+        ws_test_app.recv_req_allow(client2).await;
+        ws_test_app
+            .recv_ip_banned(client2, client1, ban_reason)
+            .await;
+
+        ws_test_app.recv_disconnected_one(client2).await;
+        ws_test_app.recv_command_boom(client1).await;
+
+        let client1 = ws_test_app
+            .create_client(1, client1_ip, CLIENT_CONNECTED_ERR)
+            .await;
+
+        ws_test_app.add_time(TimeDelta::try_seconds(11).unwrap()).await;
+
+        let client1 = ws_test_app
+            .create_client(1, client1_ip, CLIENT_CONNECTED_SUCCESS)
+            .await;
+        ws_test_app.recv_con_allow(client2, client1).await;
+        ws_test_app.recv_ip_unban(client2, client1).await;
+        ws_test_app.recv_connected_one(client2, client1).await;
+
+        ws_test_app.send_test_msg_once(client1).await;
+        ws_test_app.recv_req_allow(client2).await;
+
+        //ws_test_app.recv_command_disconnected(client1).await;
 
         ws_test_app.close().await;
     }

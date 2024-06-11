@@ -173,7 +173,7 @@ mod db_tests {
                 total_already_banned_amount,
                 con_count_tracker.clone(),
                 con_flicker_tracker.clone(),
-                banned_until,
+                banned_until.clone(),
                 &time,
             ).await.unwrap();
             assert_eq!(modified_count, 1);

@@ -537,7 +537,7 @@ impl<
                             ws_ip.total_already_banned_amount,
                             ws_ip.con_count_tracker.clone(),
                             ws_ip.con_flicker_tracker.clone(),
-                            ws_ip.banned_until,
+                            ws_ip.banned_until.clone(),
                             &time,
                         ).await?;
 
@@ -587,11 +587,15 @@ impl<
             }
             WsAppMsg::Ban {
                 ip,
-                date: until,
+                date,
                 reason,
             } => {
                 if let Some(ws_ip) = self.ips.get_mut(&ip) {
-                    ws_ip.banned_until = Some((until, reason));
+
+                    let msg = global::ServerMsg::WsLiveStatsIpBanned { ip, date, reason: reason.clone() };
+                    self.listener_tracker.send(msg).await?;
+
+                    ws_ip.banned_until = Some((date, reason));
                     ws_ip.ip_con_tx.send(IpConMsg::Disconnect)?;
                     debug!("ip {} is banned: {:#?}", ip, &self.ips);
                 } else {
@@ -697,7 +701,7 @@ impl<TimeMiddlewareType: global::TimeMiddleware + Clone + Sync + Send + 'static>
                     &mut ip_req_stat.ban_tracker,
                     &block_threshold,
                     &self.ban_threshold,
-                    global::IpBanReason::WsRouteBruteForceDetected,
+                    &global::IpBanReason::WsRouteBruteForceDetected,
                     &self.ban_duration,
                     &time,
                     &mut self.banned_until,
@@ -821,6 +825,9 @@ pub enum WsIpManagerErr {
 
 #[derive(Error, Debug)]
 pub enum WsMsgErr {
+    #[error("Con tracker err: {0}")]
+    ConTracker(#[from] ConTrackerErr),
+
     #[error("failed to send done_tx msg back")]
     ListenerDoneTx,
 

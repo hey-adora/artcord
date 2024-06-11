@@ -74,371 +74,7 @@ pub enum IsBanned {
     UnBanned,
 }
 
-// impl<TimeMiddlewareType: global::TimeMiddleware + Clone + Sync + Send + 'static>
-//     WsIpTask<TimeMiddlewareType>
-// {
-//     pub async fn manage_ip(
-//         cancelation_token: CancellationToken,
-//         data_sync_rx: mpsc::Receiver<IpManagerMsg>,
-//         time_middleware: TimeMiddlewareType,
-//         ban_threshold: global::Threshold,
-//         ban_duration: TimeDelta,
-//     ) {
-//         let mut task = Self {
-//             stats: WsConReqStats::new(),
-//             banned_until: None,
-//             cancelation_token,
-//             time_middleware,
-//             ban_duration,
-//             ban_threshold,
-//             data_sync_rx,
-//         };
 
-//         task.run().await;
-//     }
-
-//     pub async fn run(&mut self) {
-//         trace!("task is running");
-//         loop {
-//             select! {
-//                 msg = self.data_sync_rx.recv() => {
-//                     let Some(msg) = msg else {
-//                         break;
-//                     };
-//                     let exit = self.on_msg(msg).await;
-//                     if exit {
-//                         break;
-//                     }
-//                 }
-//                 _ = self.cancelation_token.cancelled() => {
-//                     break;
-//                 }
-//             }
-//         }
-//         trace!("task exited");
-//     }
-
-//     async fn on_msg(&mut self, msg: IpManagerMsg) -> bool {
-//         trace!("recv: {:#?}", &msg);
-//         match msg {
-//             IpManagerMsg::CheckThrottle {
-//                 path,
-//                 block_threshold,
-//                 allow_tx,
-//             } => {
-//                 let time = self.time_middleware.get_time().await;
-//                 let allow = path_throttle_check(
-//                     &mut self.stats,
-//                     path,
-//                     &block_threshold,
-//                     &self.ban_threshold,
-//                     &self.ban_duration,
-//                     &mut self.banned_until,
-//                     &time,
-//                 )
-//                 .await;
-//                 let send_result = allow_tx.send(allow);
-//                 if send_result.is_err() {
-//                     error!("failed to send AllowCon");
-//                 }
-//             }
-//             IpManagerMsg::Unban => {
-//                 self.banned_until = None;
-//             }
-//         }
-//         trace!("recv finished");
-//         false
-//     }
-// }
-
-// impl WsIpTracker {
-//     pub fn new() -> Self {
-//         Self {
-//             ips: HashMap::new(),
-//             //stats_listeners: ThrottleStatsListenerTracker::new(),
-//         }
-//     }
-//     pub fn ban(
-//         &mut self,
-//         ip: &IpAddr,
-//         ban_reason: global::IpBanReason,
-//         until: DateTime<Utc>,
-//     ) -> Result<(), tokio::sync::broadcast::error::SendError<IpConMsg>> {
-//         let ip_stats = self.ips.get_mut(ip);
-//         let Some(ip_stats) = ip_stats else {
-//             error!("throttle: cant be banned because it doesnt exist in the list");
-//             return Ok(());
-//         };
-//         ip_stats
-//             .con_throttle
-//             .ban(&mut ip_stats.stats.banned_until, ban_reason, until);
-//         ip_stats.ip_con_tx.send(IpConMsg::Disconnect)?;
-
-//         Ok(())
-//     }
-
-//     pub fn unban_on_throttle(&mut self, ip: &IpAddr) {
-//         let ip_stats = self.ips.get_mut(ip);
-//         let Some(ip_stats) = ip_stats else {
-//             error!("throttle: cant be banned because it doesnt exist in the list");
-//             return;
-//         };
-//         ip_stats
-//             .con_throttle
-//             .unban_on_throttle(&mut ip_stats.stats.banned_until);
-//     }
-
-//     pub async fn unban_on_ip_manager(
-//         &mut self,
-//         ip: &IpAddr,
-//     ) -> Result<(), tokio::sync::mpsc::error::SendError<IpManagerMsg>> {
-//         let ip_stats = self.ips.get_mut(ip);
-//         let Some(ip_stats) = ip_stats else {
-//             error!("throttle: cant be banned because it doesnt exist in the list");
-//             return Ok(());
-//         };
-//         ip_stats.ip_manager_tx.send(IpManagerMsg::Unban).await?;
-
-//         Ok(())
-//     }
-
-//     pub fn dec_con(&mut self, ip: &IpAddr, time: &DateTime<Utc>) {
-//         let ip_stats = self.ips.get_mut(ip);
-//         let Some(ip_stats) = ip_stats else {
-//             error!("throttle: cant disconnect ip that doesnt exist");
-//             return;
-//         };
-//         ip_stats.dec();
-//         if ip_stats.con_throttle.amount == 0 && ip_stats.is_banned(time) != IsBanned::Banned {
-//             self.ips.remove(&ip);
-//         }
-//         trace!("throttle on DEC: {:#?}", self);
-//     }
-
-//     pub fn get_total_allowed(&mut self, ip: &IpAddr) -> Option<u64> {
-//         let Some(con) = self.ips.get_mut(ip) else {
-//             return None;
-//         };
-//         Some(con.stats.total_allow_amount)
-//     }
-
-//     pub fn get_total_blocked(&mut self, ip: &IpAddr) -> Option<u64> {
-//         let Some(con) = self.ips.get_mut(ip) else {
-//             return None;
-//         };
-//         Some(con.stats.total_block_amount)
-//     }
-
-//     pub fn get_total_banned(&mut self, ip: &IpAddr) -> Option<u64> {
-//         let Some(con) = self.ips.get_mut(ip) else {
-//             return None;
-//         };
-//         Some(con.stats.total_banned_amount)
-//     }
-
-//     // pub fn get_total_unbanned(&mut self, ip: &IpAddr) -> Option<u64> {
-//     //     let Some(con) = self.ips.get_mut(ip) else {
-//     //         return None;
-//     //     };
-//     //     Some(con.stats.total_unbanned_amount)
-//     // }
-
-//     pub fn get_amounts(&mut self, ip: &IpAddr) -> Option<(u64, u64)> {
-//         let Some(con) = self.ips.get_mut(ip) else {
-//             return None;
-//         };
-//         Some((
-//             con.con_throttle.tracker.total_amount,
-//             con.con_throttle.tracker.amount,
-//         ))
-//     }
-
-//     pub fn get_ip_channel(
-//         &mut self,
-//         ip: &IpAddr,
-//     ) -> Option<(
-//         broadcast::Sender<IpConMsg>,
-//         broadcast::Receiver<IpConMsg>,
-//         mpsc::Sender<IpManagerMsg>,
-//     )> {
-//         let Some(con) = self.ips.get_mut(ip) else {
-//             return None;
-//         };
-
-//         Some((
-//             con.ip_con_tx.clone(),
-//             con.ip_con_rx.resubscribe(),
-//             con.ip_manager_tx.clone(),
-//         ))
-//     }
-
-// }
-
-// pub fn con_connect_throttle_check<TimeMiddlewareType: global::TimeMiddleware + Clone + Sync + Send + 'static>(
-//     ips: &mut HashMap<IpAddr, WsIp>,
-//     ip: IpAddr,
-//     ws_threshold: &WsThreshold,
-//     task_tracker: &TaskTracker,
-//     cancellation_token: &CancellationToken,
-//     time: &DateTime<Utc>,
-//     time_middleware: &TimeMiddlewareType,
-//     // ban_threshold: &Threshold,
-//     // ban_duration: &TimeDelta,
-// ) -> AllowCon {
-
-//     let result = con.inc(ws_threshold, time);
-//     match result {
-//         AllowCon::Allow => {
-//             con.stats.total_allow_amount += 1;
-//         }
-//         AllowCon::Blocked | AllowCon::UnbannedAndBlocked => {
-//             con.stats.total_block_amount += 1;
-//         }
-//         // AllowCon::Blocked => {
-//         //     con.stats.total_block_amount += 1;
-//         // }
-//         AllowCon::Banned(_) => {
-//             con.stats.total_banned_amount += 1;
-//         }
-//         AllowCon::AlreadyBanned => {
-//             con.stats.total_already_banned_amount += 1;
-//         }
-
-//         AllowCon::UnbannedAndAllow => {
-//             //con.stats.total_unbanned_amount += 1;
-//         }
-//     }
-//     trace!("throttle result {:?} and INC: {:#?}", result, ips);
-//     result
-// }
-
-// pub fn con_disconnect_throttle_check(
-//     ips: &mut HashMap<IpAddr, WsIp>,
-//     ip: &IpAddr,
-//     time: &DateTime<Utc>,
-// ) {
-//     let ip_stats = ips.get_mut(ip);
-//     let Some(ip_stats) = ip_stats else {
-//         error!("throttle: cant disconnect ip that doesnt exist");
-//         return;
-//     };
-//     ip_stats.dec();
-//     if ip_stats.con_throttle.amount == 0 && ip_stats.is_banned(time) != IsBanned::Banned {
-//         ips.remove(&ip);
-//     }
-//     trace!("throttle on DEC: {:#?}", ips);
-// }
-
-// impl WsThrottleCon {
-//     // pub fn to_temp(
-//     //     value: &HashMap<IpAddr, WsThrottleCon>,
-//     // ) -> HashMap<IpAddr, TempThrottleConnection> {
-//     //     value
-//     //         .into_iter()
-//     //         .fold(HashMap::new(), |mut a, (key, value)| {
-//     //             a.insert(*key, value.into());
-//     //             a
-//     //         })
-//     // }
-
-//     pub fn new<TimeMiddlewareType: global::TimeMiddleware + Clone + Sync + Send + 'static>(
-//         ip: IpAddr,
-//         range: u64,
-//         task_tracker: &TaskTracker,
-//         cancelation_token: CancellationToken,
-//         started_at: DateTime<Utc>,
-//         time_middleware: TimeMiddlewareType,
-//         ban_threshold: global::Threshold,
-//         ban_duration: TimeDelta,
-//     ) -> Self {
-//         let (con_broadcast_tx, con_broadcast_rx) = broadcast::channel(1);
-//         let (ip_data_sync_tx, ip_data_sync_rx) = mpsc::channel(1);
-//         let ip_data_sync_task = task_tracker.spawn(
-//             WsIpTask::manage_ip(
-//                 cancelation_token,
-//                 ip_data_sync_rx,
-//                 time_middleware,
-//                 ban_threshold,
-//                 ban_duration,
-//             )
-//             .instrument(tracing::trace_span!("ip_sync", "{}", ip)),
-//         );
-//         let con = Self {
-//             //path_stats: HashMap::new(),
-//             stats: global::WsIpStat::new(ip),
-//             con_throttle: global::ThrottleRanged::new(range, started_at),
-//             con_flicker_throttle: global::ThrottleSimple::new(started_at),
-
-//             ip_con_tx: con_broadcast_tx,
-//             ip_con_rx: con_broadcast_rx,
-//             ip_manager_tx: ip_data_sync_tx,
-//             ip_manager_task: ip_data_sync_task,
-//             // ip_stats_tx: ip_stats_tx.clone(),
-//             // ip_stats_rx: ip_stats_rx.clone(),
-//         };
-//         // ((ip_stats_tx, ip_stats_rx), con)
-//         con
-//     }
-
-//     pub fn dec(&mut self) {
-//         self.con_throttle.dec();
-//     }
-
-//     pub fn inc(&mut self, ws_threshold: &WsThreshold, time: &DateTime<Utc>) -> AllowCon {
-//         let allow = self.con_flicker_throttle.allow(
-//             &ws_threshold.ws_con_flicker_threshold,
-//             &ws_threshold.ws_con_flicker_ban_duration,
-//             &ws_threshold.ws_con_flicker_ban_reason,
-//             time,
-//             &mut self.stats.banned_until,
-//         );
-
-//         trace!("throttle: flicker throttle result: {:?}", allow);
-
-//         if matches!(
-//             allow,
-//             AllowCon::Banned(_) | AllowCon::AlreadyBanned | AllowCon::Blocked
-//         ) {
-//             return allow;
-//         }
-
-//         let result = self.con_throttle.inc(
-//             &ws_threshold.ws_max_con_threshold,
-//             ws_threshold.ws_max_con_ban_reason,
-//             ws_threshold.ws_max_con_ban_duration,
-//             time,
-//             &mut self.stats.banned_until,
-//         );
-
-//         trace!("throttle: result: {:?}", result);
-
-//         match result {
-//             AllowCon::Allow => {
-//                 self.con_flicker_throttle.inc();
-//                 if allow == AllowCon::UnbannedAndAllow {
-//                     allow
-//                 } else {
-//                     result
-//                 }
-//             }
-//             AllowCon::Blocked => {
-//                 if allow == AllowCon::UnbannedAndAllow {
-//                     AllowCon::UnbannedAndBlocked
-//                 } else {
-//                     result
-//                 }
-//             }
-//             // AllowCon::Blocked => {
-//             //     if allow == AllowCon::Unbanned {
-//             //         AllowCon::UnbannedAndBlocked
-//             //     } else {
-//             //         result
-//             //     }
-//             // }
-//             _ => result,
-//         }
-//     }
-// }
 
 pub fn ws_ip_throttle(
     con_flicker_tracker: &mut global::ThresholdTracker,
@@ -448,7 +84,7 @@ pub fn ws_ip_throttle(
     ws_threshold: &WsThreshold,
     time: &DateTime<Utc>,
 ) -> AllowCon {
-    //let flicker_throttle_allow = threshold_allow(tracker, flicker_threshold, time);
+ 
     let flicker_throttle_allow = simple_throttle(
         con_flicker_tracker,
         &ws_threshold.ws_con_flicker_threshold,
@@ -457,14 +93,6 @@ pub fn ws_ip_throttle(
         time,
         banned_until,
     );
-
-    // let allow = con_flicker_throttle.allow(
-    //     &ws_threshold.ws_con_flicker_threshold,
-    //     &ws_threshold.ws_con_flicker_ban_duration,
-    //     &ws_threshold.ws_con_flicker_ban_reason,
-    //     time,
-    //     banned_until,
-    // );
 
     trace!(
         "ws_ip_throttle: flicker throttle result: {:?}",
@@ -488,14 +116,6 @@ pub fn ws_ip_throttle(
         time,
         banned_until,
     );
-    // let result = con_throttle.inc(
-    //     &ws_threshold.ws_max_con_threshold,
-    //     ws_threshold.ws_max_con_ban_reason,
-    //     ws_threshold.ws_max_con_ban_duration,
-    //     time,
-    //     banned_until,
-    // );
-
     trace!("ws_ip_throttle: ranged throttle result: {:?}", ranged_throttle_allow);
 
     match ranged_throttle_allow {
@@ -515,78 +135,16 @@ pub fn ws_ip_throttle(
                 ranged_throttle_allow
             }
         }
-        // AllowCon::Blocked => {
-        //     if allow == AllowCon::Unbanned {
-        //         AllowCon::UnbannedAndBlocked
-        //     } else {
-        //         result
-        //     }
-        // }
         _ => ranged_throttle_allow,
     }
 }
-
-// impl From<&WsThrottleCon> for TempThrottleConnection {
-//     fn from(value: &WsThrottleCon) -> Self {
-//         Self {
-//             banned_until: value.stats.banned_until,
-//             con_flicker_throttle: value.con_flicker_throttle.clone(),
-//             con_throttle: value.con_throttle.clone(),
-//         }
-//     }
-// }
-
-// pub async fn req_throttle(
-//     req_stat: &mut global::WsConReqStat,
-//     path: global::ClientPathType,
-//     block_threshold: &global::Threshold,
-//     ban_threshold: &global::Threshold,
-//     ban_duration: &TimeDelta,
-//     banned_until: &mut Option<(DateTime<Utc>, global::IpBanReason)>,
-//     time: &DateTime<Utc>,
-// ) -> AllowCon {
-//     let path = req_stat
-//         .req_stats
-//         .entry(path)
-//         .or_insert_with(|| global::WsConReqStat::new(*time));
-
-//     let result = double_tracker_check(
-//         &path.throttle.block_tracker,
-//         &path.throttle.ban_tracker,
-//         block_threshold,
-//         ban_threshold,
-//         global::IpBanReason::WsRouteBruteForceDetected,
-//         ban_duration,
-//         time,
-//         banned_until,
-//     );
-
-//     //path.total_count += 1;
-
-//     match &result {
-//         AllowCon::Allow | AllowCon::UnbannedAndAllow => {
-//             path.total_allowed_count += 1;
-//         }
-//         AllowCon::Blocked | AllowCon::UnbannedAndBlocked => {
-//             path.total_blocked_count += 1;
-//         }
-//         AllowCon::Banned(_) => {
-//             path.total_banned_count += 1;
-//         }
-//         AllowCon::AlreadyBanned => {
-//             path.total_already_banned_count += 1;
-//         }
-//     }
-
-//     result
-// }
 
 pub fn double_throttle(
     block_tracker: &mut global::ThresholdTracker,
     ban_tracker: &mut global::ThresholdTracker,
     block_threshold: &global::Threshold,
     ban_threshold: &global::Threshold,
-    ban_reason: global::IpBanReason,
+    ban_reason: &global::IpBanReason,
     ban_duration: &TimeDelta,
     time: &DateTime<Utc>,
     banned_until: &mut Option<(DateTime<Utc>, global::IpBanReason)>,
@@ -608,8 +166,8 @@ pub fn double_throttle(
 
     if !threshold_allow(ban_tracker, ban_threshold, time) {
         let ban_until = *time + *ban_duration;
-        *banned_until = Some((ban_until, ban_reason));
-        return AllowCon::Banned((ban_until, ban_reason));
+        *banned_until = Some((ban_until, ban_reason.clone()));
+        return AllowCon::Banned((ban_until, ban_reason.clone()));
     }
 
     if !threshold_allow(block_tracker, block_threshold, time) {
@@ -667,8 +225,8 @@ pub fn ranged_throttle(
 
         if !allow {
             let ban_until = *time + *ban_duration;
-            *banned_until = Some((ban_until, *ban_reason));
-            return AllowCon::Banned((ban_until, *ban_reason));
+            *banned_until = Some((ban_until, ban_reason.clone()));
+            return AllowCon::Banned((ban_until, ban_reason.clone()));
         }
 
         tracker.amount += 1;
@@ -710,8 +268,8 @@ pub fn simple_throttle(
     }
     let allow = threshold_allow(tracker, threshold, time);
     if !allow {
-        let ban = (*time + *ban_duration, *ban_reason);
-        *banned_until = Some(ban);
+        let ban = (*time + *ban_duration, ban_reason.clone());
+        *banned_until = Some(ban.clone());
         return AllowCon::Banned(ban);
     }
 
@@ -756,7 +314,7 @@ pub fn is_banned(
     banned_until: &mut Option<(DateTime<Utc>, global::IpBanReason)>,
     time: &DateTime<Utc>,
 ) -> IsBanned {
-    let Some((date, _)) = banned_until else {
+    let Some((date, reason)) = banned_until else {
         trace!("is_banned: entry doesnt exist");
         return IsBanned::NotBanned;
     };
@@ -764,9 +322,11 @@ pub fn is_banned(
     let un_banned = time >= date;
 
     trace!(
-        "is_banned: {}, state: {:#?}",
+        "is_banned: {} >= {} = {}, reason: {:#?}",
+        time,
+        date,
         !un_banned,
-        banned_until
+        reason,
     );
 
     if un_banned {
@@ -1234,7 +794,7 @@ mod throttle_tests {
             &mut ban_tracker,
             &block_threshold,
             &ban_threshold,
-            ban_reason,
+            &ban_reason,
             &ban_duration,
             &time,
             &mut banned_until,
@@ -1248,7 +808,7 @@ mod throttle_tests {
                 &mut ban_tracker,
                 &block_threshold,
                 &ban_threshold,
-                ban_reason,
+                &ban_reason,
                 &ban_duration,
                 &time,
                 &mut banned_until,
@@ -1260,7 +820,7 @@ mod throttle_tests {
             &mut ban_tracker,
             &block_threshold,
             &ban_threshold,
-            ban_reason,
+            &ban_reason,
             &ban_duration,
             &time,
             &mut banned_until,
@@ -1281,7 +841,7 @@ mod throttle_tests {
                 &mut ban_tracker,
                 &block_threshold,
                 &ban_threshold,
-                ban_reason,
+                &ban_reason,
                 &ban_duration,
                 &time,
                 &mut banned_until,
@@ -1293,7 +853,7 @@ mod throttle_tests {
             &mut ban_tracker,
             &block_threshold,
             &ban_threshold,
-            ban_reason,
+            &ban_reason,
             &ban_duration,
             &time,
             &mut banned_until,
@@ -1319,7 +879,7 @@ mod throttle_tests {
             &mut ban_tracker,
             &block_threshold,
             &ban_threshold,
-            ban_reason,
+            &ban_reason,
             &ban_duration,
             &time,
             &mut banned_until,
@@ -1340,7 +900,7 @@ mod throttle_tests {
             &mut ban_tracker,
             &block_threshold,
             &ban_threshold,
-            ban_reason,
+            &ban_reason,
             &ban_duration,
             &time,
             &mut banned_until,
@@ -1360,7 +920,7 @@ mod throttle_tests {
             &mut ban_tracker,
             &block_threshold,
             &ban_threshold,
-            ban_reason,
+            &ban_reason,
             &ban_duration,
             &time,
             &mut banned_until,

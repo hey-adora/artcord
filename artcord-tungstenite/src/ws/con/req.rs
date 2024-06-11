@@ -24,8 +24,8 @@ pub mod stats;
 pub async fn req_task(
     client_msg: Message,
     db: Arc<DB>,
-    connection_task_tx: mpsc::Sender<ConMsg>,
-    ws_app_tx: mpsc::Sender<WsAppMsg>,
+    con_tx: mpsc::Sender<ConMsg>,
+    ws_tx: mpsc::Sender<WsAppMsg>,
     connection_key: global::TempConIdType,
     addr: SocketAddr,
     ip: IpAddr,
@@ -49,7 +49,7 @@ pub async fn req_task(
         trace!("recv: {:#?}", data);
 
         let (allow_tx, allow_rx) = oneshot::channel();
-        connection_task_tx
+        con_tx
             .send(ConMsg::CheckThrottle {
                 path: path_index,
                 block_threshold: path_throttle,
@@ -66,6 +66,10 @@ pub async fn req_task(
             }
 
             let response_data: Result<Option<global::ServerMsg>, ResErr> = match data {
+                global::ClientMsg::BanIp { ip, date, reason } => {
+                    ws_tx.send(WsAppMsg::Ban { ip, date, reason }).await?;
+                    Ok(None)
+                }
                 global::ClientMsg::WsStatsTotalCount { from } => res::ws_stats::total_count(db, from).await,
                 global::ClientMsg::WsStatsGraph {
                     from,
@@ -85,15 +89,15 @@ pub async fn req_task(
                         listener_state,
                         connection_key,
                         res_key,
-                        &connection_task_tx,
-                        &ws_app_tx,
+                        &con_tx,
+                        &ws_tx,
                     )
                     .await
                 }
                 global::ClientMsg::LiveWsStats(listener_state) => {
                     res::ws_stats::live(
                         listener_state,
-                        &connection_task_tx,
+                        &con_tx,
                         res_key
                     )
                     .await
@@ -112,8 +116,6 @@ pub async fn req_task(
             response_data
         };
 
-        // a
-
         let response_data = get_response_data.await;
 
         let response_data = response_data
@@ -126,22 +128,19 @@ pub async fn req_task(
         let response: WsPackage<global::ServerMsg> = (res_key, response_data);
         #[cfg(feature = "development")]
         {
-            // let mut output = format!("{:?}", &response);
-            // output.truncate(100);
             trace!("sent res: {:#?}", response);
         }
         let response = global::ServerMsg::as_bytes(response)?;
         let response = Message::Binary(response);
-        connection_task_tx.send(ConMsg::Send(response)).await?;
+        con_tx.send(ConMsg::Send(response)).await?;
 
-        // Ok::<Message, WsUserTaskError>(Message::Binary(bytes))
         Ok::<(), ResErr>(())
     }
     .await;
     
     if let Err(err) = user_task_result {
         debug!("res error: {}", &err);
-        let send_result = connection_task_tx
+        let send_result = con_tx
             .send(ConMsg::Send(Message::Close(Some(CloseFrame {
                 code: CloseCode::Error,
                 reason: Cow::from("corrupted"),

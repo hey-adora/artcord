@@ -261,7 +261,7 @@ impl LiveWsStats {
         self.stats.with_untracked(|stats| {
             for (_, stat) in stats {
                 if stat.ip == ip {
-                    stat.banned_until.set(Some((date, reason)));
+                    stat.banned_until.set(Some((date, reason.clone())));
                 }
             }
         });
@@ -682,7 +682,7 @@ pub fn use_ws_live_stats(ws: WsRuntime<global::ServerMsg, global::ClientMsg>, li
                     live_stats.update_connections(ip_stats.clone());
                 }
                 global::ServerMsg::WsLiveStatsConnected { ip, socket_addr, con_id, banned_until, req_stats: req_stat } => {
-                    live_stats.update_con_stat(*ip, *socket_addr, *con_id, *banned_until, req_stat.clone());
+                    live_stats.update_con_stat(*ip, *socket_addr, *con_id, banned_until.clone(), req_stat.clone());
                     live_stats.inc_ip_con_count(*ip);
                 }
                 global::ServerMsg::WsLiveStatsReqAllowed {
@@ -742,7 +742,7 @@ pub fn use_ws_live_stats(ws: WsRuntime<global::ServerMsg, global::ClientMsg>, li
                     live_stats.dec_ip_con_count(ip);
                 }
                 global::ServerMsg::WsLiveStatsIpBanned { ip, date, reason } => {
-                    live_stats.ban_ip(*ip, *date, *reason);
+                    live_stats.ban_ip(*ip, *date, reason.clone());
                 }
                 global::ServerMsg::WsLiveStatsIpUnbanned { ip } => {
                     live_stats.unban_ip(*ip);

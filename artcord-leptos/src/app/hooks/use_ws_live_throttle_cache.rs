@@ -141,7 +141,7 @@ impl LiveThrottleCache {
                     //     con.ws_blocked_connection_attempts_last_reset_at.set(new_con.con_throttle.tracker.started_at);
                     // }
                     if con.ws_con_banned_until.get_untracked() != new_con.banned_until {
-                        con.ws_con_banned_until.set(new_con.banned_until);
+                        con.ws_con_banned_until.set(new_con.banned_until.clone());
                     }
                     if con.ws_con_flicker_banned_until.get_untracked() != new_con.banned_until {
                         con.ws_con_flicker_banned_until.set(new_con.banned_until);

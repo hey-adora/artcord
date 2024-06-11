@@ -329,11 +329,6 @@ impl<
                     })?;
             }
             ConMsg::AddWsThrottleListener { res_key: ws_key } => {
-                //let self.stats_listeners.cons.contains_key(&self.con_id);
-                //let result = self.stats_listeners.cons.insert(self.con_id, (ws_key, self.con_tx.clone()));
-                // if result
-                // let mut stats: Vec<WsStat> = Vec::new();
-                // let (current_global_state_tx, mut current_global_state_rx) = mpsc::channel::<WsStat>(100);
                 let (done_tx, done_rx) = oneshot::channel();
                 self.ws_app_tx
                     .send(WsAppMsg::AddListener {
@@ -413,33 +408,11 @@ impl<
                         &mut req_stat.ban_tracker,
                         &block_threshold,
                         &self.ban_threshold,
-                        global::IpBanReason::WsRouteBruteForceDetected,
+                        &global::IpBanReason::WsRouteBruteForceDetected,
                         &self.ban_duration,
                         &time,
                         &mut self.banned_until,
                     );
-
-                    // if allow {
-
-                    // }
-
-                    // if let AllowCon::Allow = a {
-                    //     let b = self
-                    //         .local_req_statse
-                    //         .inc_path(
-                    //             path,
-                    //             &block_threshold,
-                    //             &self.ban_threshold,
-                    //             &self.ban_duration,
-                    //             &mut self.banned_until,
-                    //             &time,
-                    //         )
-                    //         .await;
-
-                    //     b
-                    // } else {
-                    //     a
-                    // }
 
                     let result = compare_pick_worst(result_a, result_b);
 
@@ -447,19 +420,6 @@ impl<
                 };
 
                 trace!("check throttle result: {:?}", result);
-
-                // let result_b = self.ip_req_stats.inc_path(
-                //     path,
-                //     &block_threshold,
-                //     &self.ban_threshold,
-                //     &self.ban_duration,
-                //     &mut self.banned_until,
-                //     &time,
-                // ).await;
-
-                //let result = result_a.compare_pick_worst(result_b);
-                //let result = result_a;
-                //self.ip_con_tx.send(IpConMsg::IncThrottle { path, block_threshold, author_id: self.con_id })?;
 
                 let result = match result {
                     AllowCon::Allow => {
@@ -490,7 +450,7 @@ impl<
                                 .send(global::ServerMsg::WsLiveStatsIpBanned {
                                     ip: self.ip,
                                     date,
-                                    reason,
+                                    reason: reason.clone(),
                                 })
                                 .await?;
                         }
@@ -590,7 +550,7 @@ impl<
                     ip: self.ip,
                     socket_addr: self.addr,
                     con_id: self.con_id,
-                    banned_until: self.banned_until,
+                    banned_until: self.banned_until.clone(),
                     req_stats: self.req_stats.clone(),
                 };
                 let msg: WsPackage<global::ServerMsg> = (ws_key, msg);
@@ -675,7 +635,7 @@ impl<
                 ip: self.ip,
                 socket_addr: self.addr,
                 con_id: self.con_id,
-                banned_until: self.banned_until,
+                banned_until: self.banned_until.clone(),
                 req_stats: self.req_stats.clone(),
             };
             self.listener_tracker.send(msg).await?;

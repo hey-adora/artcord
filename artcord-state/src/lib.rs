@@ -49,6 +49,7 @@ pub mod global {
 
     #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
     pub enum ServerMsg {
+        
         WsLiveStatsIpCons(Vec<ConnectedWsIp>),
 
         WsLiveStatsConnected {
@@ -132,6 +133,12 @@ pub mod global {
         Deserialize, Serialize, Debug, PartialEq, Clone, VariantNames, EnumIndex, EnumCount,
     )]
     pub enum ClientMsg {
+        BanIp {
+            ip: IpAddr,
+            date: DateTime<Utc>,
+            reason: IpBanReason,
+        },
+
         GalleryInit {
             amount: u32,
 
@@ -197,7 +204,6 @@ pub mod global {
         Serialize,
         Debug,
         Clone,
-        Copy,
         PartialEq,
         IntoStaticStr,
         VariantNames,
@@ -210,6 +216,7 @@ pub mod global {
         WsTooManyReconnections,
         WsRouteBruteForceDetected,
         WsConFlickerDetected,
+        Other(String),
     }
 
     #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
