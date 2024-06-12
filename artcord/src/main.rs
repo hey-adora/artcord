@@ -318,13 +318,13 @@ mod artcord_tests {
     }
 
     impl WsTestApp {
-        pub async fn new(ws_id: usize) -> Self {
+        pub async fn new(ws_id: usize, time: DateTime<Utc>) -> Self {
             let mongo_name = format!("artcord_test_{}", ws_id);
             drop_db(mongo_name.clone(), MONGO_URL).await;
             let db = DB::new(mongo_name, MONGO_URL).await;
             let db = Arc::new(db);
             let (time_machine, mut time_rx) = TestClock::new();
-            let time: Arc<Mutex<DateTime<Utc>>> = Arc::new(Mutex::new(Utc::now()));
+            let time: Arc<Mutex<DateTime<Utc>>> = Arc::new(Mutex::new(time));
             let tracker = TaskTracker::new();
             let cancelation_token = CancellationToken::new();
             let threshold = WsThreshold {
@@ -352,6 +352,7 @@ mod artcord_tests {
                 async move {
                     while let Some(time_rx) = time_rx.recv().await {
                         let time = *time.lock().await;
+                        debug!("TIME SENT: {}", time);
                         time_rx.send(time).unwrap();
                     }
                 }
@@ -435,9 +436,7 @@ mod artcord_tests {
         }
 
         async fn send_test_msg_once(&mut self, send_client_id: usize) {
-            self.send(send_client_id, global::ClientMsg::Logout)
-                .await
-                .unwrap()
+            self.send_custom_msg_once(send_client_id, global::ClientMsg::Logout).await;
         }
 
         async fn send_custom_msg_once(&mut self, send_client_id: usize, msg: global::ClientMsg) {
@@ -754,7 +753,8 @@ mod artcord_tests {
     async fn throttle_connect_and_disconnect() {
         init_tracer();
 
-        let mut ws_test_app = WsTestApp::new(1).await;
+        let time = Utc::now();
+        let mut ws_test_app = WsTestApp::new(1, time).await;
 
         let client1 = ws_test_app
             .create_client(1, Ipv4Addr::new(0, 0, 0, 1), CLIENT_CONNECTED_SUCCESS)
@@ -783,7 +783,8 @@ mod artcord_tests {
     async fn throttle_req_ban() {
         init_tracer();
 
-        let mut ws_test_app = WsTestApp::new(2).await;
+        let time = Utc::now();
+        let mut ws_test_app = WsTestApp::new(2, time).await;
 
         let client1 = ws_test_app
             .create_client(1, Ipv4Addr::new(0, 0, 0, 1), CLIENT_CONNECTED_SUCCESS)
@@ -934,7 +935,8 @@ mod artcord_tests {
     async fn throttle_too_many_cons_ban() {
         init_tracer();
 
-        let mut ws_test_app = WsTestApp::new(3).await;
+        let time = Utc::now();
+        let mut ws_test_app = WsTestApp::new(3, time).await;
 
         let client2 = ws_test_app
             .create_client(200, Ipv4Addr::new(0, 0, 0, 2), CLIENT_CONNECTED_SUCCESS)
@@ -1029,7 +1031,8 @@ mod artcord_tests {
     async fn throttle_con_flicker_ban() {
         init_tracer();
 
-        let mut ws_test_app = WsTestApp::new(4).await;
+        let time = Utc::now();
+        let mut ws_test_app = WsTestApp::new(4, time).await;
 
         let client2 = ws_test_app
             .create_client(200, Ipv4Addr::new(0, 0, 0, 2), CLIENT_CONNECTED_SUCCESS)
@@ -1066,9 +1069,9 @@ mod artcord_tests {
     async fn throttle_con_manual_ban() {
         init_tracer();
 
-        let mut ws_test_app = WsTestApp::new(5).await;
-
         let time = Utc::now();
+        let mut ws_test_app = WsTestApp::new(5, time).await;
+
 
         let client1_ip = Ipv4Addr::new(0, 0, 0, 1);
         let ban_duration = TimeDelta::try_seconds(10).unwrap();
@@ -1110,7 +1113,7 @@ mod artcord_tests {
             .create_client(1, client1_ip, CLIENT_CONNECTED_ERR)
             .await;
 
-        ws_test_app.add_time(TimeDelta::try_seconds(11).unwrap()).await;
+        ws_test_app.add_time(ban_duration).await;
 
         let client1 = ws_test_app
             .create_client(1, client1_ip, CLIENT_CONNECTED_SUCCESS)
@@ -1153,6 +1156,7 @@ mod artcord_tests {
     ) -> bool {
         match msg {
             DebugClientMsg::Send((key, msg)) => {
+                info!("sending: {msg:#?}");
                 let bytes = global::ClientMsg::as_vec(&(key, msg)).unwrap();
                 write.send(Message::Binary(bytes)).await.unwrap();
             }
