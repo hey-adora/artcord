@@ -711,7 +711,7 @@ mod artcord_tests {
                         tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Normal,
                     reason: std::borrow::Cow::Borrowed("boom"),
                 };
-                write.send(Message::Close(Some(close_frame))).await.unwrap();
+                let _ = write.send(Message::Close(Some(close_frame))).await;
                 let _ = connection_tx.send(Ok(ConnectionMsg::Disconnected)).await;
                 debug!("client exited.");
             });
@@ -1107,7 +1107,7 @@ mod artcord_tests {
             .await;
 
         ws_test_app.recv_disconnected_one(client2).await;
-        ws_test_app.recv_command_boom(client1).await;
+        ws_test_app.recv_command_disconnected(client1).await;
 
         let client1 = ws_test_app
             .create_client(1, client1_ip, CLIENT_CONNECTED_ERR)

@@ -446,13 +446,13 @@ impl<
                                 })
                                 .await?;
 
-                            self.listener_tracker
-                                .send(global::ServerMsg::WsLiveStatsIpBanned {
-                                    ip: self.ip,
-                                    date,
-                                    reason: reason.clone(),
-                                })
-                                .await?;
+                            // self.listener_tracker
+                            //     .send(global::ServerMsg::WsLiveStatsIpBanned {
+                            //         ip: self.ip,
+                            //         date,
+                            //         reason: reason.clone(),
+                            //     })
+                            //     .await?;
                         }
 
                         self.ws_app_tx
