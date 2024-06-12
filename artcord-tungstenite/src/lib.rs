@@ -48,18 +48,6 @@ pub const BCRYPT_COST: u32 = 12;
 pub mod ws;
 
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct WsThreshold {
-    pub ws_max_con_threshold: global::Threshold,
-    pub ws_max_con_threshold_range: u64,
-    pub ws_max_con_ban_duration: TimeDelta,
-    pub ws_max_con_ban_reason: global::IpBanReason,
-    pub ws_con_flicker_threshold: global::Threshold,
-    pub ws_con_flicker_ban_duration: TimeDelta,
-    pub ws_con_flicker_ban_reason: global::IpBanReason,
-    pub ws_req_ban_threshold: global::Threshold,
-    pub ws_req_ban_duration: TimeDelta,
-}
 
 
 // cfg_if! {

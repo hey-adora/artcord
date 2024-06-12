@@ -25,6 +25,7 @@ tracing-subscriber = {version ="0.3.18", features = ["env-filter"] }
 url = "2.5.0"
 tokio-tungstenite = "0.21.0"
 artcord-leptos-web-sockets = { path = "../artcord-leptos-web-sockets" }
+actix-http = "3.7.0"
 
 [features]
 development = []

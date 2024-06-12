@@ -6,6 +6,8 @@
 // mod util;
 // mod ws;
 
+
+
 pub mod global {
     use artcord_leptos_web_sockets::WsPackage;
     use chrono::{DateTime, TimeDelta, Utc};
@@ -22,6 +24,16 @@ pub mod global {
     use strum::{AsRefStr, EnumCount, EnumString, IntoStaticStr, VariantNames};
     use thiserror::Error;
     use tracing::{error, info, trace, warn};
+
+    mod throttle;
+
+    pub use throttle::ws_ip_throttle;
+    pub use throttle::double_throttle;
+    pub use throttle::ranged_throttle;
+    pub use throttle::simple_throttle;
+    pub use throttle::threshold_allow;
+    pub use throttle::compare_pick_worst;
+    pub use throttle::is_banned;
 
     pub type ClientPathType = usize;
     pub type TempConIdType = u128;
@@ -218,12 +230,30 @@ pub mod global {
         WsConFlickerDetected,
         Other(String),
     }
+    
 
     #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
     pub enum ConStatus {
         Allow,
         Blocked(u64, u64),
         Banned((DateTime<Utc>, IpBanReason)),
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub enum AllowCon {
+        Allow,
+        Blocked,
+        AlreadyBanned,
+        Banned((DateTime<Utc>, IpBanReason)),
+        UnbannedAndAllow,
+        UnbannedAndBlocked,
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub enum IsBanned {
+        Banned,
+        NotBanned,
+        UnBanned,
     }
 
     #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -238,6 +268,19 @@ pub mod global {
 
     #[derive(Clone, Debug)]
     pub struct Clock;
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct DefaultThreshold {
+        pub ws_max_con_threshold: Threshold,
+        pub ws_max_con_threshold_range: u64,
+        pub ws_max_con_ban_duration: TimeDelta,
+        pub ws_max_con_ban_reason: IpBanReason,
+        pub ws_con_flicker_threshold: Threshold,
+        pub ws_con_flicker_ban_duration: TimeDelta,
+        pub ws_con_flicker_ban_reason: IpBanReason,
+        pub ws_req_ban_threshold: Threshold,
+        pub ws_req_ban_duration: TimeDelta,
+    }
 
     #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
     pub struct RegistrationInvalidMsg {

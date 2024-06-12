@@ -8,80 +8,29 @@ use std::time::Duration;
 
 use artcord_leptos_web_sockets::WsPackage;
 use artcord_leptos_web_sockets::WsRouteKey;
-use artcord_mongodb::database::DB;
-use artcord_state::global;
-use artcord_state::global::Threshold;
 use chrono::DateTime;
 use chrono::Days;
 use chrono::Month;
 use chrono::Months;
 use chrono::TimeDelta;
 use chrono::Utc;
-use futures::pin_mut;
-use futures::FutureExt;
-use futures::TryStreamExt;
 use thiserror::Error;
-use tokio::io::AsyncWriteExt;
-use tokio::net::TcpListener;
-use tokio::net::TcpStream;
-use tokio::select;
-use tokio::sync::broadcast;
-use tokio::sync::oneshot;
-use tokio::sync::watch;
-use tokio::sync::Mutex;
-use tokio::sync::RwLock;
-use tokio::task;
 
-use crate::WsThreshold;
-use cfg_if::cfg_if;
-use futures::future;
-use futures::SinkExt;
-use futures::StreamExt;
-use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
-use tokio::time;
-use tokio::time::sleep;
-use tokio::time::Instant;
-use tokio_tungstenite::tungstenite::Message;
-use tokio_util::sync::CancellationToken;
-use tokio_util::task::TaskTracker;
 use tracing::debug;
 use tracing::instrument;
 use tracing::Instrument;
 use tracing::{error, trace};
 
-use super::con::throttle_stats_listener_tracker::ThrottleStatsListenerTracker;
-use super::con::ConMsg;
-use super::con::GlobalConMsg;
-use super::con::IpConMsg;
-use super::WsAppMsg;
-use super::WsIp;
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum AllowCon {
-    Allow,
-    Blocked,
-    AlreadyBanned,
-    Banned((DateTime<Utc>, global::IpBanReason)),
-    UnbannedAndAllow,
-    UnbannedAndBlocked,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum IsBanned {
-    Banned,
-    NotBanned,
-    UnBanned,
-}
-
-
+use crate::global;
+use crate::global::AllowCon;
+use crate::global::IsBanned;
 
 pub fn ws_ip_throttle(
     con_flicker_tracker: &mut global::ThresholdTracker,
     con_count_tracker: &mut global::ThresholdTracker,
     current_con_count: &mut u64,
     banned_until: &mut Option<(DateTime<Utc>, global::IpBanReason)>,
-    ws_threshold: &WsThreshold,
+    ws_threshold: &global::DefaultThreshold,
     time: &DateTime<Utc>,
 ) -> AllowCon {
  
@@ -336,33 +285,29 @@ pub fn is_banned(
     IsBanned::Banned
 }
 
-#[derive(Error, Debug)]
-pub enum WsThrottleErr {
-    #[error("MainGallery error: {0}")]
-    Serialization(#[from] bincode::Error),
-}
+// #[derive(Error, Debug)]
+// pub enum WsThrottleErr {
+//     #[error("MainGallery error: {0}")]
+//     Serialization(#[from] bincode::Error),
+// }
 
 #[cfg(test)]
 mod throttle_tests {
-    use artcord_state::global;
+    use crate::global;
+    use crate::global::throttle::{double_throttle, ranged_throttle, ws_ip_throttle};
     use chrono::{DateTime, TimeDelta, Utc};
     use std::net::{IpAddr, Ipv4Addr};
     use std::str::FromStr;
-    use tokio_util::{sync::CancellationToken, task::TaskTracker};
     use tracing::{debug, trace};
-
-    use crate::ws::throttle::{double_throttle, ranged_throttle, ws_ip_throttle};
-    use crate::WsThreshold;
-
     use super::{threshold_allow, AllowCon};
 
-    #[tokio::test]
-    async fn ws_throttle_test() {
+    #[test]
+    fn ws_throttle_test() {
         init_logger();
 
         //let mut throttle = WsIpTracker::new();
         let mut time = Utc::now();
-        let ws_threshold = WsThreshold {
+        let ws_threshold = global::DefaultThreshold {
             ws_max_con_threshold: global::Threshold::new_const(10, TimeDelta::try_minutes(1)),
             ws_max_con_ban_duration: match TimeDelta::try_minutes(1) {
                 Some(delta) => delta,
@@ -985,27 +930,3 @@ mod throttle_tests {
             .try_init();
     }
 }
-
-// #[derive(Error, Debug)]
-// pub enum WsStatsOnMsgErr {
-//     #[error("MainGallery error: {0}")]
-//     Serialization(#[from] bincode::Error),
-
-//     #[error("checl_throttle send error")]
-//     SendCheckThrottle,
-
-//     #[error("dsync sync send error")]
-//     SendDiscSync,
-
-//     #[error("Send error: {0}")]
-//     SendToWsApp(#[from] tokio::sync::mpsc::error::SendError<WsAppMsg>),
-
-//     #[error("Send error: {0}")]
-//     Send(#[from] tokio::sync::mpsc::error::SendError<tokio_tungstenite::tungstenite::Message>),
-
-//     #[error("Send error: {0}")]
-//     ConnectionSend(#[from] tokio::sync::mpsc::error::SendError<ConMsg>),
-
-//     #[error("Mongodb error: {0}")]
-//     MongoDB(#[from] mongodb::error::Error),
-// }

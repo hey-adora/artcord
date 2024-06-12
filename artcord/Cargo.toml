@@ -210,3 +210,9 @@ development = [
   "artcord-mongodb/development",
 ]
 
+[dev-dependencies]
+reqwest = "0.12.4"
+
+# [dev-dependencies]
+# tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+# tokio = { version = "1.37.0", features = ["full"] }

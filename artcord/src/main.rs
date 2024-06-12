@@ -4,7 +4,6 @@ use artcord_serenity::create_bot::create_bot;
 use artcord_state::global;
 use artcord_tungstenite::ws::ProdUserAddrMiddleware;
 use artcord_tungstenite::ws::Ws;
-use artcord_tungstenite::WsThreshold;
 use cfg_if::cfg_if;
 use chrono::TimeDelta;
 use dotenv::dotenv;
@@ -89,7 +88,7 @@ async fn main() {
                 },
             };
         } else {
-            let threshold = WsThreshold {
+            let threshold = global::DefaultThreshold {
                 ws_max_con_threshold: global::Threshold::new_const(10000, TimeDelta::try_minutes(1)),
                 ws_max_con_ban_duration: match TimeDelta::try_days(1) {
                     Some(delta) => delta,
@@ -169,10 +168,10 @@ mod artcord_tests {
         time::Duration,
     };
 
+    use crate::create_server;
     use artcord_mongodb::database::DB;
     use artcord_state::global;
     use artcord_tungstenite::ws::{GetUserAddrMiddleware, Ws};
-    use artcord_tungstenite::WsThreshold;
     use chrono::{DateTime, TimeDelta, Utc};
     use futures::{stream::SplitSink, SinkExt, StreamExt};
     use mongodb::{bson::doc, options::ClientOptions};
@@ -327,7 +326,7 @@ mod artcord_tests {
             let time: Arc<Mutex<DateTime<Utc>>> = Arc::new(Mutex::new(time));
             let tracker = TaskTracker::new();
             let cancelation_token = CancellationToken::new();
-            let threshold = WsThreshold {
+            let threshold = global::DefaultThreshold {
                 ws_max_con_threshold: global::Threshold::new(
                     CON_MAX_BLOCK_AMOUNT,
                     CON_BLOCK_DURATION,
@@ -436,7 +435,8 @@ mod artcord_tests {
         }
 
         async fn send_test_msg_once(&mut self, send_client_id: usize) {
-            self.send_custom_msg_once(send_client_id, global::ClientMsg::Logout).await;
+            self.send_custom_msg_once(send_client_id, global::ClientMsg::Logout)
+                .await;
         }
 
         async fn send_custom_msg_once(&mut self, send_client_id: usize, msg: global::ClientMsg) {
@@ -1072,7 +1072,6 @@ mod artcord_tests {
         let time = Utc::now();
         let mut ws_test_app = WsTestApp::new(5, time).await;
 
-
         let client1_ip = Ipv4Addr::new(0, 0, 0, 1);
         let ban_duration = TimeDelta::try_seconds(10).unwrap();
         let ban_date = time + ban_duration;
@@ -1128,6 +1127,28 @@ mod artcord_tests {
         //ws_test_app.recv_command_disconnected(client1).await;
 
         ws_test_app.close().await;
+    }
+
+    #[tokio::test]
+    async fn http_ban() {
+        init_tracer();
+        let server = create_server("./artcord-actix/gallery/", "./artcord-actix/assets").await;
+
+        tokio::spawn(server);
+
+        let body = reqwest::get("http://localhost:3000")
+            .await
+            .unwrap();
+
+        trace!("{:#?}", body);
+
+        let body = reqwest::get("http://localhost:3000")
+            .await
+            .unwrap();
+
+        trace!("{:#?}", body);
+
+        
     }
 
     fn init_tracer() {

@@ -1,16 +1,26 @@
+use actix::fut::ready;
 use actix_files::Files;
 
-use actix_web::dev::Server;
+use actix_web::body::EitherBody;
+use actix_web::dev::{forward_ready, Server, Service, ServiceRequest, ServiceResponse, Transform};
 
-use actix_web::{web, App, HttpResponse, HttpServer, Responder};
+use actix_web::http::StatusCode;
+use actix_web::middleware::{self, Logger};
+use actix_web::{http, web, App, HttpResponse, HttpServer, Responder};
 
 use artcord_leptos_web_sockets::WsPackage;
+use futures::future::LocalBoxFuture;
 use futures::StreamExt;
+use leptos::leptos_config::{ConfFile, Env};
 use leptos::logging::warn;
 use leptos_actix::{generate_route_list, LeptosRoutes};
 
+use std::cell::RefCell;
 use std::fs::read_to_string;
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use tracing::{error, info, trace};
+use leptos::{get_configuration, LeptosOptions};
+use futures::future::{ok, Either, MapOk, Ready};
 
 use cfg_if::cfg_if;
 
@@ -400,25 +410,98 @@ pub async fn hello() -> impl Responder {
     // ")
 }
 
-use leptos::get_configuration;
+struct Throttle {
+    hello: u64,
+}
+struct ThrottleService<S> {
+    service: S,
+    goodbye: RefCell<u64>,
+}
+
+impl <S, B> Transform<S, ServiceRequest> for Throttle 
+    where 
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = actix_web::Error>,
+    S::Future: 'static,
+    B: 'static,
+{
+    type Response = ServiceResponse<EitherBody<B>>;
+    type Error = actix_web::Error;
+    type InitError = ();
+    type Transform = ThrottleService<S>;
+    type Future = Ready<Result<Self::Transform, Self::InitError>>;
+
+    fn new_transform(&self, service: S) -> Self::Future {
+        trace!("throttle service going brrrrr:");
+        ready(Ok(ThrottleService { service, goodbye: RefCell::new(0) }))
+    }
+}
+
+// type ServiceFuture<S, B> = MapOk<
+//     <S as Service<ServiceRequest>>::Future,
+//     fn(ServiceResponse<B>) -> ServiceResponse<EitherBody<B>>,
+// >;
+
+impl <S, B> Service<ServiceRequest> for ThrottleService<S> where 
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = actix_web::Error>,
+    S::Future: 'static,
+    B:  'static,
+{
+    type Response = ServiceResponse<EitherBody<B>>;
+    type Error = actix_web::Error;
+    type Future = LocalBoxFuture<'static, Result<Self::Response, Self::Error>>;
+    //type Future = Either<ServiceFuture<S, B>, Ready<Result<ServiceResponse<EitherBody<B>>, Self::Error>>>;
+
+    forward_ready!(service);
+
+    fn call(&self, req: ServiceRequest) -> Self::Future {
+        {
+            let goodbye = &mut * self.goodbye.borrow_mut();
+            trace!("throttle middelware going brrrrr: {}", goodbye);  
+            *goodbye += 1;
+        }
+        //let res: HttpResponse<&str> = HttpResponse::with_body(StatusCode::TOO_MANY_REQUESTS, "sdfsdf");
+
+        //let res = req.into_response::<B, HttpResponse<B>>(res.map_into_right_body());
+        
+        let fut = self.service.call(req);
+
+        Box::pin(async move {
+            let res = fut.await?;
+            //let addr = res.request().peer_addr().unwrap();
+            // let addr = req.peer_addr().unwrap();
+            // trace!("i am the destroyer!: {}", addr);
+            // //let res = Self::Response::;
+            // let req = req.request().clone();
+           
+            // let o = Self::Response::new(req, res);
+
+            //Ok(req.into_response(HttpResponse::TooManyRequests().finish().map_into_right_body()))
+            let b = res.map_into_left_body();
+            Ok(b)
+        })
+    }
+}
 
 pub async fn create_server(galley_root_dir: &str, assets_root_dir: &str) -> Server {
-    let conf = get_configuration(Some("Cargo.toml")).await.unwrap();
-    // let conf: ConfFile = ConfFile {
-    //     leptos_options: LeptosOptions {
-    //         output_name: "leptos_start5".to_string(),
-    //         site_root: "target/site".to_string(),
-    //         site_pkg_dir: "pkg".to_string(),
-    //         env: DEV,
-    //         site_addr: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 3000)),
-    //         reload_port: 3001,
-    //         reload_external_port: None,
-    //         reload_ws_protocol: WS,
-    //         not_found_path: "/404".to_string(),
-    //         hash_file: String::from("hash.txt"),
-    //         hash_files: true,
-    //     },
-    // };
+    let conf = get_configuration(Some("Cargo.toml")).await.unwrap_or_else(|_| {
+        warn!("leptops config in Cargo.toml was not found");
+        ConfFile {
+            leptos_options: LeptosOptions {
+                output_name: "leptos_start5".to_string(),
+                site_root: "target/site".to_string(),
+                site_pkg_dir: "pkg".to_string(),
+                env: Env::DEV,
+                site_addr: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 3000)),
+                reload_port: 3001,
+                reload_external_port: None,
+                reload_ws_protocol: leptos::leptos_config::ReloadWSProtocol::WS,
+                not_found_path: "/404".to_string(),
+                hash_file: String::from("hash.txt"),
+                hash_files: true,
+            },
+        }
+    });
+
     //info!("current leptos config is {:#?}", &conf);
     let addr = conf.leptos_options.site_addr;
     let routes = generate_route_list(artcord_leptos::app::App);
@@ -427,7 +510,13 @@ pub async fn create_server(galley_root_dir: &str, assets_root_dir: &str) -> Serv
 
     let galley_root_dir = galley_root_dir.to_string();
     let assets_root_dir = assets_root_dir.to_string();
+
+    
+    //Logger
+
     let server = HttpServer::new(move || {
+        let s = Throttle { hello: 0 };
+        //middleware::Condition
         let leptos_options = &conf.leptos_options;
         // let site_root = &leptos_options.site_root;
         //println!("site root: {}", &*assets_root_dir);
@@ -435,6 +524,7 @@ pub async fn create_server(galley_root_dir: &str, assets_root_dir: &str) -> Serv
         //println!("pkg dir: {}", pkg_url);
 
         let mut app = App::new()
+            .wrap(s)
             .route("/favicon.ico", web::get().to(favicon))
             .service(Files::new("/assets/gallery", &galley_root_dir))
             .service(Files::new("/assets", &assets_root_dir))
@@ -553,3 +643,17 @@ pub async fn create_server(galley_root_dir: &str, assets_root_dir: &str) -> Serv
 
     server
 }
+
+
+
+// #[cfg(test)]
+// mod tests {
+//     use crate::server::create_server;
+
+//     #[tokio::test]
+//     async fn throttle_req_ban() {
+//         let a = create_server("./artcord-actix/gallery/", "./artcord-actix/assets").await;
+
+
+//     }
+// }
