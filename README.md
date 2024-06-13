@@ -1,8 +1,9 @@
 # ArtCord
 
-#### This project is a art sharing website with many features to come.
+## Description
+A fully working website for posting/sharing art. 
 
-> Currently under heavy refactoring/cleanup. Contributions are welcome, my discord handle `hey__adora`
+> Currently under heavy development. Contributions are welcome, my discord handle `hey__adora`
 
 Roadmap:
 
@@ -25,14 +26,18 @@ Roadmap:
 
 - `docker compose up`
 
-### Build manually.
+### Build manually on Arch linux.
 
-1. `rustup toolchain install stable` - make sure you have Rust stable
-2. `rustup target add wasm32-unknown-unknown` - add the ability to compile Rust to WebAssembly
-3. `cargo leptos serve` - install `cargo-generate` binary (should be installed automatically in future)
-4. `npm install -g sass` - install `dart-sass` (should be optional in future)
+before you can run it manually, you need to setup the mongodb database first. Easiest way would be `cd mongo && docker compose up` which will only start the database instance.
 
-## Updating css
+And then you can run the website with:
 
-1. `npm -g i tailwindcss`
-1. `tailwindcss -i input.css -o style/output.css -c tailwind.config.js -w`
+1. `sudo pacman -S rustup sudo git base-devel go binaryen nodejs npm`
+2. `npm -g i tailwindcss`
+3. `rustup toolchain install stable`
+4. `rustup target add wasm32-unknown-unknown`
+5. `rustup default stable`
+6. `cargo install wasm-bindgen-cli`
+7. `cargo run --package artcord-builder`
+
+it should also work with `cargo-leptos serve` but i dont use it personally.
