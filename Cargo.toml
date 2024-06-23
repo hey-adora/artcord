@@ -2,7 +2,7 @@
 resolver = "2"
 members = [
   "artcord",
-  "artcord-actix",
+  "artcord-http",
   "artcord-builder",
   "artcord-leptos",
   "artcord-leptos-web-sockets",

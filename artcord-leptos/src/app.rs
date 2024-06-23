@@ -8,6 +8,7 @@ use crate::app::pages::register::Register;
 use crate::app::utils::PageUrl;
 use artcord_leptos_web_sockets::runtime::WsRuntime;
 use global_state::GlobalState;
+use artcord_state::global;
 
 use leptos::*;
 use leptos_meta::*;
@@ -30,23 +31,24 @@ pub mod utils;
 
 #[component]
 pub fn App() -> impl IntoView {
-    provide_meta_context();
-    provide_context(GlobalState::new());
+     provide_meta_context();
+     provide_context(GlobalState::new());
 
-    #[cfg(feature = "development")]
-    {
-        let debug_ws = WsRuntime::<DebugServerMsg, DebugClientMsg>::new();
-        debug_ws.connect(3001).unwrap();
-        let debug_ch = debug_ws.channel().key(0).start();
-        debug_ch.recv().start(|msg, _| {
-            window().location().reload().unwrap();
-        });
-    }
+    // #[cfg(feature = "development")]
+    // {
+    //     let debug_ws = WsRuntime::<global::DebugServerMsg, global::DebugClientMsg>::new();
+    //     debug_ws.connect(3001).unwrap();
+    //     let debug_ch = debug_ws.channel().key(0).start();
+    //     debug_ch.recv().start(|msg, _| {
+    //         window().location().reload().unwrap();
+    //     });
+    // }
 
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
     global_state.ws.connect(3420).unwrap();
 
     view! {
+        <h1>"wowowowowwowowwowo"</h1>
         <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
         <meta name="description" content="Art Community!"/>
         <meta name="keywords" content="artcord,art,gallery,server,discord,community"/>
@@ -82,5 +84,6 @@ pub fn App() -> impl IntoView {
                     <ProtectedRoute condition=move || !global_state.auth_is_logged_out() redirect_path="/"  path="/register" view=Register/>
                 </Routes>
         </Router>
+        <h1>"wowowowowwowowwowo"</h1>
     }
 }

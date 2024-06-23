@@ -1,4 +1,4 @@
-use artcord_actix::server::create_server;
+use artcord_http::server::create_server;
 use artcord_mongodb::database::DB;
 use artcord_serenity::create_bot::create_bot;
 use artcord_state::global;
@@ -18,7 +18,7 @@ use tracing::info;
 use tracing::trace;
 use tracing::Instrument;
 
-#[actix_web::main]
+#[tokio::main]
 async fn main() {
     dotenv().ok();
     tracing_subscriber::fmt()
@@ -55,7 +55,11 @@ async fn main() {
     let task_tracker = TaskTracker::new();
     let cancelation_token = CancellationToken::new();
 
-    let web_server = create_server(&gallery_root_dir, &assets_root_dir).await;
+    let web_server = create_server(
+        cancelation_token.clone(),
+        &gallery_root_dir,
+        &assets_root_dir,
+    );
 
     // cfg_if! {
     //     if #[cfg(feature = "development")] {
@@ -67,21 +71,21 @@ async fn main() {
 
     cfg_if! {
         if #[cfg(feature = "development")] {
-            let threshold = WsThreshold {
-                ws_max_con_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
+            let threshold = global::DefaultThreshold {
+                ws_max_con_threshold: global::Threshold::new_const(10, TimeDelta::try_minutes(1)),
                 ws_max_con_ban_duration: match TimeDelta::try_minutes(1) {
                     Some(delta) => delta,
                     None => panic!("invalid delta"),
                 },
                 ws_max_con_threshold_range: 5,
-                ws_max_con_ban_reason: IpBanReason::WsTooManyReconnections,
-                ws_con_flicker_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
+                ws_max_con_ban_reason:global:: IpBanReason::WsTooManyReconnections,
+                ws_con_flicker_threshold: global::Threshold::new_const(10, TimeDelta::try_minutes(1)),
                 ws_con_flicker_ban_duration: match TimeDelta::try_minutes(1) {
                     Some(delta) => delta,
                     None => panic!("invalid delta"),
                 },
-                ws_con_flicker_ban_reason: IpBanReason::WsConFlickerDetected,
-                ws_req_ban_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
+                ws_con_flicker_ban_reason: global::IpBanReason::WsConFlickerDetected,
+                ws_req_ban_threshold: global::Threshold::new_const(10, TimeDelta::try_minutes(1)),
                 ws_req_ban_duration: match TimeDelta::try_minutes(1) {
                     Some(delta) => delta,
                     None => panic!("invalid delta"),
@@ -1132,23 +1136,22 @@ mod artcord_tests {
     #[tokio::test]
     async fn http_ban() {
         init_tracer();
-        let server = create_server("./artcord-actix/gallery/", "./artcord-actix/assets").await;
 
-        tokio::spawn(server);
+        let server = create_server(
+            CancellationToken::new(),
+            "./artcord-actix/gallery/",
+            "./artcord-actix/assets",
+        );
 
-        let body = reqwest::get("http://localhost:3000")
-            .await
-            .unwrap();
+        //   / tokio::spawn(server);
 
-        trace!("{:#?}", body);
-
-        let body = reqwest::get("http://localhost:3000")
-            .await
-            .unwrap();
+        let body = reqwest::get("http://localhost:3000").await.unwrap();
 
         trace!("{:#?}", body);
 
-        
+        let body = reqwest::get("http://localhost:3000").await.unwrap();
+
+        trace!("{:#?}", body);
     }
 
     fn init_tracer() {

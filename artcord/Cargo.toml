@@ -8,16 +8,16 @@ edition = "2021"
 
 
 [dependencies]
-artcord-actix = { path = "../artcord-actix" }
+artcord-http = { path = "../artcord-http" }
 artcord-tungstenite = { path = "../artcord-tungstenite" }
 artcord-mongodb = { path = "../artcord-mongodb" }
 artcord-serenity = { path = "../artcord-serenity" }
 tokio = { version = "1.37.0", features = ["full"] }
 dotenv = { version = "0.15.0" }
-actix-web = { version = "4.5.1", features = ["macros"] }
+# actix-web = { version = "4.5.1", features = ["macros"] }
 futures = "0.3.30"
 cfg-if = "1"
-tracing = { version = "0.1.40", features = ["release_max_level_warn"] }
+tracing = { version = "0.1.40" } 
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 tokio-util = { version = "0.7.10", features = ["full"] }
 mongodb = "2.8.1"
@@ -26,7 +26,7 @@ tokio-tungstenite = "0.21.0"
 artcord-state = { path = "../artcord-state" }
 chrono = "0.4.34"
 thiserror = "1.0.57"
-#artcord-leptos = { path = "../artcord-actix" }
+#artcord-leptos = { path = "../artcord-actix" } , features = ["release_max_level_trace"]
 # actix-files = { version = "0.6.5", optional = true }
 # actix-web = { version = "4.5.1", optional = true, features = ["macros"] }
 # console_error_panic_hook = "0.1.7"
@@ -204,8 +204,12 @@ thiserror = "1.0.57"
 # # Defines a size-optimized profile for the WASM bundle in release mode
 
 [features]
+default = []
+serve_csr = ["artcord-http/serve_csr"]
+ssr = ["artcord-http/ssr"]
+csr = ["artcord-http/csr"]
 development = [
-  "artcord-actix/development",
+  "artcord-http/development",
   "artcord-tungstenite/development",
   "artcord-mongodb/development",
 ]

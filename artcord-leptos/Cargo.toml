@@ -30,15 +30,14 @@ console_error_panic_hook = "0.1.7"
 console_log = { version = "1.0.0" }
 log = "0.4.21"
 tracing-wasm = "0.2.1"
-tracing = { version = "0.1.40", features = ["release_max_level_warn"] }
+tracing = { version = "0.1.40" }
 async-std = "1.12.0"
 strum = { version = "0.26.2", features = ["derive"] }
 regex = "1.10.4"
 rand = "0.8.5"
 
 [features]
-default = []
 hydrate = ["leptos/hydrate", "leptos_meta/hydrate", "leptos_router/hydrate"]
 ssr = ["leptos/ssr", "leptos_meta/ssr", "leptos_router/ssr"]
 csr = ["leptos/csr", "leptos_meta/csr", "leptos_router/csr"]
-development = ["csr"]
+development = []

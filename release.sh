@@ -1,4 +1,4 @@
-!/usr/bin/env sh
+#!/usr/bin/env sh
 
 # #cargo build --package=artcord --no-default-features --features=ssr
 # cargo build --package=artcord --lib --target=wasm32-unknown-unknown --no-default-features --features=hydrate
