@@ -1,4 +1,6 @@
 use artcord_leptos_web_sockets::WsPackage;
+use artcord_state::global;
+use chrono::{DateTime, Utc};
 use futures::future::LocalBoxFuture;
 use futures::StreamExt;
 use leptos::leptos_config::{ConfFile, Env};
@@ -6,14 +8,16 @@ use leptos::logging::warn;
 use tokio::io::AsyncWriteExt;
 use tokio::select;
 use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
 
+use futures::future::{ok, Either, MapOk, Ready};
+use leptos::{get_configuration, IntoView, LeptosOptions};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::read_to_string;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, TcpStream};
+use std::ops::Deref;
 use tracing::{debug, error, info, trace};
-use leptos::{get_configuration, IntoView, LeptosOptions};
-use futures::future::{ok, Either, MapOk, Ready};
 
 use cfg_if::cfg_if;
 
@@ -21,38 +25,67 @@ use std::sync::Arc;
 
 pub const TOKEN_SIZE: usize = 257;
 
-pub async fn create_server(cancelation_token: CancellationToken, galley_root_dir: &str, assets_root_dir: &str)  {
-    let conf = get_configuration(Some("Cargo.toml")).await.unwrap_or_else(|_| {
-        warn!("leptops config in Cargo.toml was not found");
-        ConfFile {
-            leptos_options: LeptosOptions {
-                output_name: "leptos_start5".to_string(),
-                site_root: "target/site".to_string(),
-                site_pkg_dir: "pkg".to_string(),
-                env: Env::DEV,
-                site_addr: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 3000)),
-                reload_port: 3001,
-                reload_external_port: None,
-                reload_ws_protocol: leptos::leptos_config::ReloadWSProtocol::WS,
-                not_found_path: "/404".to_string(),
-                hash_file: String::from("hash.txt"),
-                hash_files: true,
-            },
-        }
-    });
+// pub struct HttpServer<T: AsRef<str>, V: IntoView> {
+//     pub tracker: TaskTracker,
 
+// }
+
+// pub struct ResData<T: AsRef<str> + std::marker::Send, V: IntoView, F: Fn() -> V + Clone + std::marker::Send + 'static >
+
+pub struct HttpIp {
+    pub block_tracker: global::ThresholdTracker,
+    pub ban_tracker: global::ThresholdTracker,
+}
+
+pub struct ResData<T: AsRef<str> + std::marker::Send + 'static> {
+    pub leptos_options: leptos::leptos_config::LeptosOptions,
+    pub assets_res: HashMap<String, Vec<u8>>,
+    pub not_found_res: Vec<u8>,
+    pub index_res: Vec<u8>,
+    pub schemas: Vec<T>,
+}
+
+pub async fn create_server(
+    cancelation_token: CancellationToken,
+    galley_root_dir: &str,
+    assets_root_dir: &str,
+    default_threshold: global::DefaultThreshold,
+    time: DateTime<Utc>,
+) {
+    let conf = get_configuration(Some("Cargo.toml"))
+        .await
+        .unwrap_or_else(|_| {
+            warn!("leptops config in Cargo.toml was not found");
+            ConfFile {
+                leptos_options: LeptosOptions {
+                    output_name: "leptos_start5".to_string(),
+                    site_root: "target/site".to_string(),
+                    site_pkg_dir: "pkg".to_string(),
+                    env: Env::DEV,
+                    site_addr: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 3000)),
+                    reload_port: 3001,
+                    reload_external_port: None,
+                    reload_ws_protocol: leptos::leptos_config::ReloadWSProtocol::WS,
+                    not_found_path: "/404".to_string(),
+                    hash_file: String::from("hash.txt"),
+                    hash_files: true,
+                },
+            }
+        });
 
     let leptos_options = conf.leptos_options;
     let app_fn = move || leptos::view! { <artcord_leptos::app::App/> };
 
-    let (routes, static_data_map) = leptos_router::generate_route_list_inner_with_context({
-        move || leptos::IntoView::into_view(app_fn())
-    }, || {});
+    let (routes, static_data_map) = leptos_router::generate_route_list_inner_with_context(
+        { move || leptos::IntoView::into_view(app_fn()) },
+        || {},
+    );
 
     let schemas: Vec<String> = static_data_map.into_iter().map(|(key, v)| key).collect();
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await.unwrap();
-
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
+        .await
+        .unwrap();
 
     let not_found_res = "HTTP/1.1 404 Not Found\r\n\r\n";
     let not_found_res = not_found_res.as_bytes();
@@ -66,15 +99,39 @@ pub async fn create_server(cancelation_token: CancellationToken, galley_root_dir
     let index_res: Vec<u8> = [index_header, &index_bytes].concat();
 
     let assets_res = get_assets_res(assets_root_dir).await;
-    let k = assets_res.iter().map(|(k, _)| k.clone()).collect::<Vec<String>>();
+    let k = assets_res
+        .iter()
+        .map(|(k, _)| k.clone())
+        .collect::<Vec<String>>();
     debug!("AAAAAAAA: {:#?}", k);
 
-    
+    let tacker = TaskTracker::new();
 
+    let res_data = ResData {
+        leptos_options: leptos_options,
+        assets_res: assets_res,
+        index_res: index_res,
+        not_found_res: not_found_res.to_vec(),
+        schemas: schemas,
+    };
+    let res_data = Arc::new(res_data);
+
+    let mut block_tracker = global::ThresholdTracker::new(time);
+    let mut ban_tracker = global::ThresholdTracker::new(time);
+    let mut banned_until: global::BanType = None;
+
+    // let d = global::double_throttle(
+    //     &mut block_tracker,
+    //     &mut ban_tracker,
+    //     block_threshold,
+    //     ban_threshold,
+    //     ban_reason,
+    //     ban_duration,
+    //     &time,
+    //     &mut banned_until,
+    // );
 
     loop {
-
-        
         select! {
             result = listener.accept() => {
                 let (stream, addr) = match result {
@@ -85,15 +142,18 @@ pub async fn create_server(cancelation_token: CancellationToken, galley_root_dir
                     }
                 };
 
-                handle_res(stream, &leptos_options, false, app_fn, &assets_res, not_found_res, &index_res, &schemas).await;
+                tacker.spawn(handle_res(stream, res_data.clone()));
+                // let res_data = res_data.clone();
+                // tacker.spawn(async move {
+                //     stream;
+                //     res_data;
+                // });
             }
             _ = cancelation_token.cancelled() => {
                 break;
             }
         }
-
     }
-
 
     #[cfg(feature = "development")]
     {
@@ -109,7 +169,8 @@ pub async fn create_server(cancelation_token: CancellationToken, galley_root_dir
 
         let (send, mut recv) = mpsc::channel::<Message>(1);
 
-        let ready_package: WsPackage<global::DebugClientMsg> = (0, global::DebugClientMsg::RuntimeReady);
+        let ready_package: WsPackage<global::DebugClientMsg> =
+            (0, global::DebugClientMsg::RuntimeReady);
 
         let ready_package = global::DebugClientMsg::as_vec(&ready_package);
 
@@ -168,17 +229,19 @@ pub async fn create_server(cancelation_token: CancellationToken, galley_root_dir
         });
     }
 
-    
+    tacker.close();
+    tacker.wait().await;
 }
 
- fn get_assets_res(assets_dir: &str) -> std::pin::Pin<std::boxed::Box<dyn futures::Future<Output = HashMap<String, Vec<u8>>>>> {
+fn get_assets_res(
+    assets_dir: &str,
+) -> std::pin::Pin<std::boxed::Box<dyn futures::Future<Output = HashMap<String, Vec<u8>>>>> {
     let assets_dir = assets_dir.to_string();
     std::boxed::Box::pin(async move {
-        
         let mut responses: HashMap<String, Vec<u8>> = HashMap::new();
         debug!("reading {}", assets_dir);
         let mut dir = tokio::fs::read_dir(&assets_dir).await.unwrap();
-        
+
         while let Some(entry) = dir.next_entry().await.unwrap() {
             let kind = entry.file_type().await.unwrap();
             if kind.is_dir() {
@@ -192,8 +255,12 @@ pub async fn create_server(cancelation_token: CancellationToken, galley_root_dir
             } else if kind.is_file() {
                 let name = entry.file_name();
                 let name = name.to_str().unwrap();
-                let Some(extension) = std::path::Path::new(name).extension().map(|v| v.to_str()).flatten() else {
-                    continue
+                let Some(extension) = std::path::Path::new(name)
+                    .extension()
+                    .map(|v| v.to_str())
+                    .flatten()
+                else {
+                    continue;
                 };
                 let new_path = std::path::Path::new(&assets_dir).join(name);
                 let new_path = new_path.to_str().unwrap();
@@ -253,23 +320,19 @@ pub async fn create_server(cancelation_token: CancellationToken, galley_root_dir
                         responses.insert(route, js_res);
                     }
                     "wasm" => {
-                        let wasm = tokio::fs::read(new_path)
-                        .await
-                        .unwrap();
+                        let wasm = tokio::fs::read(new_path).await.unwrap();
                         let wasm_content_length = wasm.len();
                         let wasm_header = format!("HTTP/1.1 200 OK\r\ncontent-type: application/wasm\r\ncontent-length: {wasm_content_length}\r\n\r\n");
                         let wasm_header = wasm_header.as_bytes();
                         let wasm_res = [wasm_header, &wasm].concat();
-                    
+
                         // let not_found_res = "HTTP/1.1 404 Not Found\r\n\r\n";
                         // let not_found_res = not_found_res.as_bytes().to_vec();
 
                         let route = format!("/{}", name);
                         responses.insert(route, wasm_res);
                     }
-                    _ => {
-                       
-                    }
+                    _ => {}
                 }
             }
         }
@@ -277,7 +340,10 @@ pub async fn create_server(cancelation_token: CancellationToken, galley_root_dir
     })
 }
 
-async fn handle_res<T: AsRef<str>, V: IntoView>(mut stream:  tokio::net::TcpStream, leptos_options: &leptos::leptos_config::LeptosOptions, ssr: bool, app_fn: impl Fn() -> V + 'static, assets_res: &HashMap<String, Vec<u8>>, not_found_res: &[u8], index_res: &[u8], schemas: &[T]) {
+async fn handle_res<T: AsRef<str> + std::marker::Send + 'static>(
+    mut stream: tokio::net::TcpStream,
+    res_data: Arc<ResData<T>>,
+) {
     let mut buff: [u8; 8192] = [0; 8192];
     let size = tokio::io::AsyncReadExt::read(&mut stream, &mut buff).await;
 
@@ -285,8 +351,8 @@ async fn handle_res<T: AsRef<str>, V: IntoView>(mut stream:  tokio::net::TcpStre
         Ok(size) => size,
         Err(err) => {
             debug!("tcp read err: {err}");
-            return ;
-        },
+            return;
+        }
     };
 
     let mut headers = [httparse::EMPTY_HEADER; 64];
@@ -307,10 +373,11 @@ async fn handle_res<T: AsRef<str>, V: IntoView>(mut stream:  tokio::net::TcpStre
     trace!("connected: {} ", path);
     let full_path = ["http://leptos.dev", path].concat();
 
-    let result = if let Some(res) = assets_res.get(path) {
+    //let app_fn = (*res_data.app_fn)();
+    let result = if let Some(res) = res_data.assets_res.get(path) {
         stream.write_all(res).await
     } else {
-        let found = compare_path(path, schemas);
+        let found = compare_path(path, &res_data.schemas);
         if found {
             cfg_if! {
                 if #[cfg(feature = "serve_csr")] {
@@ -318,12 +385,15 @@ async fn handle_res<T: AsRef<str>, V: IntoView>(mut stream:  tokio::net::TcpStre
                     stream.write_all(index_res).await
                 } else {
                     trace!("rendering app....");
-                    let app = render_my_app(leptos_options.clone(), &full_path, app_fn).await;
+
+                    let app = render_my_app(&res_data.leptos_options, &full_path).await;
                     stream.write_all(app.as_bytes()).await
+
+                    // stream.write_all(&res_data.not_found_res).await
                 }
             }
         } else {
-            stream.write_all(not_found_res).await
+            stream.write_all(&res_data.not_found_res).await
         }
     };
 
@@ -332,36 +402,72 @@ async fn handle_res<T: AsRef<str>, V: IntoView>(mut stream:  tokio::net::TcpStre
     }
 }
 
-async fn render_my_app<T: leptos_dom::IntoView >(leptos_options: leptos::leptos_config::LeptosOptions, path: &str, app_fn: impl Fn() -> T + 'static) -> String {
-    let (bundle, runtime) = {
-        let leptos_options = leptos_options.clone();
-        let integration = leptos_router::ServerIntegration {
-            path: path.to_string(),
-        };
-  
-        leptos::leptos_dom::ssr::render_to_stream_with_prefix_undisposed_with_context_and_block_replacement(
-            move || {
-                leptos::provide_context(leptos_router::RouterIntegrationContext::new(integration));
-                leptos::provide_context(leptos_meta::MetaContext::new());
-    
-                app_fn().into_view()
-            },
-            || leptos_meta::generate_head_metadata_separated().1.into(),
-            || {
-                leptos::provide_context(leptos_options);
-                leptos::provide_context(leptos_router::Method::Get);
-            },
-            false,
-        )
+async fn render_my_app(
+    leptos_options: &leptos::leptos_config::LeptosOptions,
+    path: &str,
+) -> String {
+    leptos_dom::HydrationCtx::reset_id();
+
+    let runtime = leptos_reactive::create_runtime();
+
+    let prefix: String = leptos_meta::generate_head_metadata_separated().1.into();
+
+    let integration = leptos_router::ServerIntegration {
+        path: path.to_string(),
     };
+    leptos::provide_context(leptos_router::RouterIntegrationContext::new(integration));
+    leptos::provide_context(leptos_meta::MetaContext::new());
+    leptos::provide_context(leptos_options.clone());
+    leptos::provide_context(leptos_router::Method::Get);
 
-    let mut shell = Box::pin(bundle);
+    let body = (leptos::view! { <artcord_leptos::app::App/> }).render_to_string();
 
-    let mut body = String::new();
+    // let (bundle, runtime) = {
+    //     let leptos_options = leptos_options.clone();
+    //     let integration = leptos_router::ServerIntegration {
+    //         path: path.to_string(),
+    //     };
 
-    while let Some(chunk) = shell.next().await {
-        body.push_str(&chunk);
-    }
+    //     leptos::leptos_dom::ssr::render_to_stream_with_prefix_undisposed_with_context_and_block_replacement(
+    //         move || {
+    //             leptos::provide_context(leptos_router::RouterIntegrationContext::new(integration));
+    //             leptos::provide_context(leptos_meta::MetaContext::new());
+
+    //             app_fn().into_view()
+    //         },
+    //         || leptos_meta::generate_head_metadata_separated().1.into(),
+    //         || {
+    //             leptos::provide_context(leptos_options);
+    //             leptos::provide_context(leptos_router::Method::Get);
+    //         },
+    //         false,
+    //     )
+    // };
+
+    // let mut shell = Box::pin(bundle);
+
+    // let mut body = String::new();
+
+    // while let Some(chunk) = shell.next().await {
+    //     body.push_str(&chunk);
+    // }
+
+    let resources = leptos_reactive::SharedContext::pending_resources();
+    let pending_resources = serde_json::to_string(&resources).unwrap();
+    // let pending_fragments = leptos_reactive::SharedContext::pending_fragments();
+    // let serializers = leptos_reactive::SharedContext::serialization_resolvers();
+    let nonce_str = leptos_dom::nonce::use_nonce()
+        .map(|nonce| format!(" nonce=\"{nonce}\""))
+        .unwrap_or_default();
+    let local_only = leptos_reactive::SharedContext::fragments_with_local_resources();
+    let local_only = serde_json::to_string(&local_only).unwrap();
+
+    let resolvers = format!(
+        "<script{nonce_str}>__LEPTOS_PENDING_RESOURCES = \
+            {pending_resources};__LEPTOS_RESOLVED_RESOURCES = new \
+            Map();__LEPTOS_RESOURCE_RESOLVERS = new \
+            Map();__LEPTOS_LOCAL_ONLY = {local_only};</script>"
+    );
 
     let (head, tail) = leptos_integration_utils::html_parts_separated(
         &leptos_options,
@@ -370,30 +476,141 @@ async fn render_my_app<T: leptos_dom::IntoView >(leptos_options: leptos::leptos_
 
     runtime.dispose();
 
-    let app_content_length = head.len() + body.len() + tail.len();
-    format!("HTTP/1.1 200 OK\r\ncontent-type: text/html\r\ncontent-length: {app_content_length}\r\n\r\n{head}{body}{tail}")
-
+    let app_content_length = head.len() + body.len() + resolvers.len() + tail.len();
+    format!("HTTP/1.1 200 OK\r\ncontent-type: text/html\r\ncontent-length: {app_content_length}\r\n\r\n{head}{prefix}{body}{resolvers}{tail}")
 }
 
+async fn leptos_ssr(
+    view: impl FnOnce() -> leptos_dom::View + 'static,
+    prefix: impl FnOnce() -> leptos_reactive::Oco<'static, str> + 'static,
+    additional_context: impl FnOnce() + 'static,
+    replace_blocks: bool,
+) -> String {
+    leptos_dom::HydrationCtx::reset_id();
+
+    // create the runtime
+    let runtime = leptos_reactive::create_runtime();
+
+    // Add additional context items
+    additional_context();
+
+    // the actual app body/template code
+    // this does NOT contain any of the data being loaded asynchronously in resources
+    let shell = view().render_to_string();
+
+    //let resources = leptos_reactive::SharedContext::pending_resources();
+    // let pending_resources = serde_json::to_string(&resources).unwrap();
+    // let pending_fragments = leptos_reactive::SharedContext::pending_fragments();
+    // let serializers = leptos_reactive::SharedContext::serialization_resolvers();
+    // let nonce_str = leptos_dom::nonce::use_nonce()
+    //     .map(|nonce| format!(" nonce=\"{nonce}\""))
+    //     .unwrap_or_default();
+
+    // let local_only = leptos_reactive::SharedContext::fragments_with_local_resources();
+    // let local_only = serde_json::to_string(&local_only).unwrap();
+
+    // let mut blocks = Vec::new();
+    // let fragments = Vec::new();
+
+    // for (fragment_id, data) in pending_fragments {
+    //     if data.should_block {
+    //         blocks
+    //             .push((fragment_id, data.out_of_order.await));
+    //     } else {
+    //         fragments.push((fragment_id, data.out_of_order.await));
+    //     }
+    // }
+
+    // let mut output: String = String::new();
+
+    // {
+    //     let nonce_str = nonce_str.clone();
+
+    //     let resolvers = format!(
+    //         "<script{nonce_str}>__LEPTOS_PENDING_RESOURCES = \
+    //          {pending_resources};__LEPTOS_RESOLVED_RESOURCES = new \
+    //          Map();__LEPTOS_RESOURCE_RESOLVERS = new \
+    //          Map();__LEPTOS_LOCAL_ONLY = {local_only};</script>"
+    //     );
+
+    //     if replace_blocks {
+
+    //         let prefix = prefix();
+
+    //         let mut shell = shell;
+
+    //         for (blocked_id, blocked_fragment) in blocks {
+    //             let open = format!("<!--suspense-open-{blocked_id}-->");
+    //             let close =
+    //                 format!("<!--suspense-close-{blocked_id}-->");
+    //             let (first, rest) =
+    //                 shell.split_once(&open).unwrap_or_default();
+    //             let (_fallback, rest) =
+    //                 rest.split_once(&close).unwrap_or_default();
+
+    //             shell =
+    //                 format!("{first}{blocked_fragment}{rest}").into();
+    //         }
+
+    //         format!("{prefix}{shell}{resolvers}");
+    //     } else {
+    //         let mut blocking = blocks.into_iter().map(|b| fragments_to_chunks(nonce_str.clone(), b)).collect::<String>();
+    //         let prefix = prefix();
+    //         format!("{prefix}{shell}{resolvers}{blocking}");
+    //     }
+    // }
+
+    //let mut blocking = blocks.into_iter().map(|b| fragments_to_chunks(nonce_str.clone(), b)).collect::<String>();
+    let prefix = prefix();
+    // format!("{prefix}{shell}{resolvers}{blocking}")
+    format!("{prefix}{shell}")
+}
+
+fn fragments_to_chunks(nonce_str: String, (fragment_id, html): (String, String)) -> String {
+    format!(
+        r#"
+                <template id="{fragment_id}f">{html}</template>
+                <script{nonce_str}>
+                    (function() {{ let id = "{fragment_id}";
+                    let open = undefined;
+                    let close = undefined;
+                    let walker = document.createTreeWalker(document.body, NodeFilter.SHOW_COMMENT);
+                    while(walker.nextNode()) {{
+                         if(walker.currentNode.textContent == `suspense-open-${{id}}`) {{
+                           open = walker.currentNode;
+                         }} else if(walker.currentNode.textContent == `suspense-close-${{id}}`) {{
+                           close = walker.currentNode;
+                         }}
+                      }}
+                    let range = new Range();
+                    range.setStartAfter(open);
+                    range.setEndBefore(close);
+                    range.deleteContents();
+                    let tpl = document.getElementById("{fragment_id}f");
+                    close.parentNode.insertBefore(tpl.content.cloneNode(true), close);}})()
+                </script>
+                "#
+    )
+}
 
 fn compare_path<T: AsRef<str>>(path: &str, path_schemas: &[T]) -> bool {
-    
     'schema_loop: for schema_path in path_schemas {
-
         let mut schema_chars = schema_path.as_ref().chars().peekable();
         let mut path_chars = path.chars().peekable();
         let mut skip = false;
 
-        if path_chars.peek().map(|c| *c == '/').unwrap_or(false) && schema_chars.peek().map(|c| *c != '/').unwrap_or(false) {
+        if path_chars.peek().map(|c| *c == '/').unwrap_or(false)
+            && schema_chars.peek().map(|c| *c != '/').unwrap_or(false)
+        {
             path_chars.next();
-        } else if path_chars.peek().map(|c| *c != '/').unwrap_or(false) && schema_chars.peek().map(|c| *c == '/').unwrap_or(false) {
+        } else if path_chars.peek().map(|c| *c != '/').unwrap_or(false)
+            && schema_chars.peek().map(|c| *c == '/').unwrap_or(false)
+        {
             schema_chars.next();
         }
 
         'path_loop: loop {
-
             let Some(path_char) = path_chars.next() else {
-
                 let Some(schema_char) = schema_chars.next() else {
                     break;
                 };
@@ -402,30 +619,27 @@ fn compare_path<T: AsRef<str>>(path: &str, path_schemas: &[T]) -> bool {
                     if schema_char == '/' {
                         continue 'schema_loop;
                     }
-      
+
                     while let Some(schema_char) = schema_chars.next() {
                         if schema_char == '/' {
                             continue 'schema_loop;
                         }
-    
                     }
 
                     break;
                 } else if schema_char == '/' && schema_chars.peek().is_none() {
                     break;
-                } 
-                else {
+                } else {
                     continue 'schema_loop;
                 }
             };
-           
 
             let Some(schema_char) = schema_chars.next() else {
                 if skip {
                     if path_char == '/' {
                         continue 'schema_loop;
                     }
-      
+
                     while let Some(path_char) = path_chars.next() {
                         if path_char == '/' {
                             continue 'schema_loop;
@@ -435,35 +649,30 @@ fn compare_path<T: AsRef<str>>(path: &str, path_schemas: &[T]) -> bool {
                     break;
                 } else if path_char == '/' && path_chars.peek().is_none() {
                     break;
-                }
-                else {
+                } else {
                     continue 'schema_loop;
                 }
             };
-
-       
 
             match schema_char {
                 '/' => {
                     skip = false;
                     if path_char != '/' {
-                        
                         while let Some(path_char) = path_chars.next() {
                             if path_char == '/' {
                                 continue 'path_loop;
                             }
                         }
-                    
 
                         continue 'schema_loop;
                     }
-                    
+
                     continue;
                 }
                 ':' => {
                     skip = true;
                 }
-                schema_char  => {
+                schema_char => {
                     if path_char == '/' {
                         while let Some(schema_char) = schema_chars.next() {
                             if schema_char == '/' {
@@ -480,7 +689,7 @@ fn compare_path<T: AsRef<str>>(path: &str, path_schemas: &[T]) -> bool {
                     }
                     if !skip && schema_char != path_char {
                         continue 'schema_loop;
-                    } 
+                    }
                 }
             }
         }
@@ -500,7 +709,10 @@ mod tests {
         assert!(compare_path("/user/a/profile", &["/user/:id/profile/"]));
         assert!(compare_path("/user/a/profile/", &["/user/:id/profile/"]));
         assert!(compare_path("/user/a/profile/", &["/user/:id/profile"]));
-        assert!(compare_path("/user/profile/profile", &["/user/:id/profile"]));
+        assert!(compare_path(
+            "/user/profile/profile",
+            &["/user/:id/profile"]
+        ));
         assert!(!compare_path("/user2/profile", &["/user/:id/profile"]));
 
         assert!(!compare_path("/user/profile/", &["/user/profile/:id"]));
@@ -531,6 +743,5 @@ mod tests {
         assert!(compare_path("/user/123", &["/user/123/"]));
         assert!(!compare_path("/user/1234", &["/user/123/"]));
         assert!(!compare_path("/user/123/4", &["/user/123/"]));
-
     }
 }

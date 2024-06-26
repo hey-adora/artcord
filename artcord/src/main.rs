@@ -2,6 +2,7 @@ use artcord_http::server::create_server;
 use artcord_mongodb::database::DB;
 use artcord_serenity::create_bot::create_bot;
 use artcord_state::global;
+use artcord_state::global::TimeMiddleware;
 use artcord_tungstenite::ws::ProdUserAddrMiddleware;
 use artcord_tungstenite::ws::Ws;
 use cfg_if::cfg_if;
@@ -55,12 +56,9 @@ async fn main() {
     let task_tracker = TaskTracker::new();
     let cancelation_token = CancellationToken::new();
 
-    let web_server = create_server(
-        cancelation_token.clone(),
-        &gallery_root_dir,
-        &assets_root_dir,
-    );
+    let time = time_machine.get_time().await;
 
+ 
     // cfg_if! {
     //     if #[cfg(feature = "development")] {
 
@@ -69,51 +67,17 @@ async fn main() {
     //     }
     // }
 
-    cfg_if! {
-        if #[cfg(feature = "development")] {
-            let threshold = global::DefaultThreshold {
-                ws_max_con_threshold: global::Threshold::new_const(10, TimeDelta::try_minutes(1)),
-                ws_max_con_ban_duration: match TimeDelta::try_minutes(1) {
-                    Some(delta) => delta,
-                    None => panic!("invalid delta"),
-                },
-                ws_max_con_threshold_range: 5,
-                ws_max_con_ban_reason:global:: IpBanReason::WsTooManyReconnections,
-                ws_con_flicker_threshold: global::Threshold::new_const(10, TimeDelta::try_minutes(1)),
-                ws_con_flicker_ban_duration: match TimeDelta::try_minutes(1) {
-                    Some(delta) => delta,
-                    None => panic!("invalid delta"),
-                },
-                ws_con_flicker_ban_reason: global::IpBanReason::WsConFlickerDetected,
-                ws_req_ban_threshold: global::Threshold::new_const(10, TimeDelta::try_minutes(1)),
-                ws_req_ban_duration: match TimeDelta::try_minutes(1) {
-                    Some(delta) => delta,
-                    None => panic!("invalid delta"),
-                },
-            };
-        } else {
-            let threshold = global::DefaultThreshold {
-                ws_max_con_threshold: global::Threshold::new_const(10000, TimeDelta::try_minutes(1)),
-                ws_max_con_ban_duration: match TimeDelta::try_days(1) {
-                    Some(delta) => delta,
-                    None => panic!("invalid delta"),
-                },
-                ws_max_con_threshold_range: 100,
-                ws_max_con_ban_reason: global::IpBanReason::WsTooManyReconnections,
-                ws_con_flicker_threshold: global::Threshold::new_const(10000, TimeDelta::try_minutes(1)),
-                ws_con_flicker_ban_duration: match TimeDelta::try_days(1) {
-                    Some(delta) => delta,
-                    None => panic!("invalid delta"),
-                },
-                ws_con_flicker_ban_reason: global::IpBanReason::WsConFlickerDetected,
-                ws_req_ban_threshold: global::Threshold::new_const(10000, TimeDelta::try_minutes(1)),
-                ws_req_ban_duration: match TimeDelta::try_days(1) {
-                    Some(delta) => delta,
-                    None => panic!("invalid delta"),
-                },
-            };
-        }
-    }
+    let threshold = global::DefaultThreshold::default();
+   
+
+    let web_server = create_server(
+        cancelation_token.clone(),
+        &gallery_root_dir,
+        &assets_root_dir,
+        threshold.clone(),
+        time,
+    );
+
 
     let ws_ip = "0.0.0.0:3420".to_string();
     let web_sockets_handle = task_tracker.spawn(
@@ -124,7 +88,7 @@ async fn main() {
             threshold,
             db.clone(),
             time_machine,
-            global::ProdThreshold,
+            //global::ProdThreshold,
             ProdUserAddrMiddleware,
         )
         .instrument(tracing::trace_span!("ws", "{}", ws_ip,)),
@@ -197,43 +161,46 @@ mod artcord_tests {
     // const MONGO_NAME2: &'static str = "artcord_test2";
     // const MONGO_NAME3: &'static str = "artcord_test3";
     const MONGO_URL: &'static str = "mongodb://root:U2L63zXot4n5@localhost:27017";
+
     const CON_MAX_AMOUNT: u64 = 5;
     const CON_MAX_BLOCK_AMOUNT: u64 = 10;
-    const CON_BLOCK_DURATION: TimeDelta = match TimeDelta::try_minutes(1) {
-        Some(delta) => delta,
-        None => panic!("invalid delta"),
-    };
-    const CON_BAN_DURATION: TimeDelta = match TimeDelta::try_minutes(1) {
-        Some(delta) => delta,
-        None => panic!("invalid delta"),
-    };
-    const CON_FLICKER_MAX: u64 = 10;
-    const CON_FLICKER_BLOCK_DURATION: TimeDelta = match TimeDelta::try_minutes(1) {
-        Some(delta) => delta,
-        None => panic!("invalid delta"),
-    };
-    const CON_FLICKER_BAN_DURATION: TimeDelta = match TimeDelta::try_minutes(1) {
-        Some(delta) => delta,
-        None => panic!("invalid delta"),
-    };
-    const REQ_MAX_ALLOW: u64 = 5;
-    const REQ_ALLOW_DURATION: TimeDelta = match TimeDelta::try_seconds(10) {
-        Some(delta) => delta,
-        None => panic!("failed to create delta"),
-    };
-    const REQ_MAX_BLOCK: u64 = 10;
-    const REQ_BLOCK_DURATION: TimeDelta = match TimeDelta::try_seconds(10) {
-        Some(delta) => delta,
-        None => panic!("failed to create delta"),
-    };
+    const CON_BLOCK_DURATION: TimeDelta = global::delta_minutes(1);
+    const CON_BAN_DURATION: TimeDelta = global::delta_minutes(1);
 
-    const REQ_BAN_DURATION: TimeDelta = match TimeDelta::try_minutes(1) {
-        Some(delta) => delta,
-        None => panic!("invalid delta"),
-    };
+    const CON_FLICKER_MAX: u64 = 10;
+    const CON_FLICKER_BLOCK_DURATION: TimeDelta = global::delta_minutes(1);
+    const CON_FLICKER_BAN_DURATION: TimeDelta = global::delta_minutes(1);
+
+    const REQ_MAX_ALLOW: u64 = 5;
+    const REQ_ALLOW_DURATION: TimeDelta = global::delta_seconds(10);
+    const REQ_MAX_BLOCK: u64 = 10;
+    const REQ_BLOCK_DURATION: TimeDelta = global::delta_seconds(10);
+    const REQ_BAN_DURATION: TimeDelta = global::delta_minutes(1);
 
     const CLIENT_CONNECTED_SUCCESS: Result<ConnectionMsg, ClientErr> = Ok(ConnectionMsg::Connected);
     const CLIENT_CONNECTED_ERR: Result<ConnectionMsg, ClientErr> = Err(ClientErr::FailedToConnect);
+
+    // const DEFAULT_THRESHOLD: global::DefaultThreshold= global::DefaultThreshold {
+    //     ws_max_con_threshold: global::Threshold::new_const(10, TimeDelta::try_minutes(1)),
+    //     ws_max_con_ban_duration: global::delta_minutes(1),
+    //     ws_max_con_threshold_range: 5,
+    //     ws_max_con_ban_reason: global::IpBanReason::WsTooManyReconnections,
+    //     ws_con_flicker_threshold: global::Threshold::new_const(10, TimeDelta::try_minutes(1)),
+    //     ws_con_flicker_ban_duration: global::delta_minutes(1),
+    //     ws_con_flicker_ban_reason: global::IpBanReason::WsConFlickerDetected,
+    //     ws_req_block_threshold_fallback: global::Threshold::new_const(10, TimeDelta::try_minutes(1)),
+    //     ws_req_ban_threshold: global::Threshold::new_const(10, TimeDelta::try_seconds(10)),
+    //     ws_req_ban_duration: global::delta_minutes(1),
+    //     ws_req_ban_reason: global::IpBanReason::WsRouteBruteForceDetected,
+    //     ws_http_block_threshold: global::Threshold::new_const(10, TimeDelta::try_minutes(1)),
+    //     ws_http_ban_threshold: global::Threshold::new_const(10, TimeDelta::try_minutes(1)),
+    //     ws_http_ban_duration: global::delta_minutes(1),
+    //     ws_http_ban_reason: global::IpBanReason::HttpTooManyRequests,
+    // };
+
+
+
+
 
     #[derive(Debug, PartialEq, Clone, Copy)]
     pub struct DebugThreshold;
@@ -266,6 +233,36 @@ mod artcord_tests {
     #[derive(Debug, Clone)]
     pub struct TestUserAddrMiddleware {
         tx: mpsc::Sender<(SocketAddr, oneshot::Sender<SocketAddr>)>,
+    }
+
+    pub fn create_default_thresholds() -> global::DefaultThreshold {
+        global::DefaultThreshold {
+            ws_max_con_threshold: global::Threshold::new(
+                CON_MAX_BLOCK_AMOUNT,
+                CON_BLOCK_DURATION,
+            ),
+            ws_max_con_ban_duration: CON_BAN_DURATION,
+            ws_max_con_threshold_range: CON_MAX_AMOUNT,
+            ws_max_con_ban_reason: global::IpBanReason::WsTooManyReconnections,
+
+            ws_con_flicker_threshold: global::Threshold::new(
+                CON_FLICKER_MAX,
+                CON_FLICKER_BLOCK_DURATION,
+            ),
+            ws_con_flicker_ban_duration: CON_FLICKER_BAN_DURATION,
+            ws_con_flicker_ban_reason: global::IpBanReason::WsConFlickerDetected,
+
+            ws_req_block_threshold: HashMap::new(),
+            ws_req_block_threshold_fallback: global::Threshold::new(REQ_MAX_ALLOW, REQ_ALLOW_DURATION),
+            ws_req_ban_threshold: global::Threshold::new(REQ_MAX_BLOCK, REQ_BLOCK_DURATION),
+            ws_req_ban_duration: REQ_BAN_DURATION,
+            ws_req_ban_reason: global::IpBanReason::WsRouteBruteForceDetected,
+
+            ws_http_block_threshold: global::Threshold::new_const(10, TimeDelta::try_minutes(1)),
+            ws_http_ban_threshold: global::Threshold::new_const(10, TimeDelta::try_minutes(1)),
+            ws_http_ban_duration: global::delta_minutes(1),
+            ws_http_ban_reason: global::IpBanReason::HttpTooManyRequests,
+        }
     }
 
     impl GetUserAddrMiddleware for TestUserAddrMiddleware {
@@ -302,13 +299,13 @@ mod artcord_tests {
         }
     }
 
-    impl global::ClientThresholdMiddleware for DebugThreshold {
-        fn get_threshold(&self, msg: &global::ClientMsg) -> global::Threshold {
-            match msg {
-                _ => global::Threshold::new(REQ_MAX_ALLOW, REQ_ALLOW_DURATION),
-            }
-        }
-    }
+    // impl global::ClientThresholdMiddleware for DebugThreshold {
+    //     fn get_threshold(&self, msg: &global::ClientMsg) -> global::Threshold {
+    //         match msg {
+    //             _ => global::Threshold::new(REQ_MAX_ALLOW, REQ_ALLOW_DURATION),
+    //         }
+    //     }
+    // }
 
     struct WsTestApp {
         //ips: HashMap<usize, IpAddr>,
@@ -327,31 +324,15 @@ mod artcord_tests {
             let db = DB::new(mongo_name, MONGO_URL).await;
             let db = Arc::new(db);
             let (time_machine, mut time_rx) = TestClock::new();
-            let time: Arc<Mutex<DateTime<Utc>>> = Arc::new(Mutex::new(time));
+            let time_mutex: Arc<Mutex<DateTime<Utc>>> = Arc::new(Mutex::new(time));
             let tracker = TaskTracker::new();
             let cancelation_token = CancellationToken::new();
-            let threshold = global::DefaultThreshold {
-                ws_max_con_threshold: global::Threshold::new(
-                    CON_MAX_BLOCK_AMOUNT,
-                    CON_BLOCK_DURATION,
-                ),
-                ws_max_con_ban_duration: CON_BAN_DURATION,
-                ws_max_con_threshold_range: CON_MAX_AMOUNT,
-                ws_max_con_ban_reason: global::IpBanReason::WsTooManyReconnections,
-                ws_con_flicker_threshold: global::Threshold::new(
-                    CON_FLICKER_MAX,
-                    CON_FLICKER_BLOCK_DURATION,
-                ),
-                ws_con_flicker_ban_duration: CON_FLICKER_BAN_DURATION,
-                ws_con_flicker_ban_reason: global::IpBanReason::WsConFlickerDetected,
-                ws_req_ban_threshold: global::Threshold::new(REQ_MAX_BLOCK, REQ_BLOCK_DURATION),
-                ws_req_ban_duration: REQ_BAN_DURATION,
-            };
+            
 
             let (addr_middleware_rx, addr_middleware) = TestUserAddrMiddleware::new();
 
             tracker.spawn({
-                let time = time.clone();
+                let time = time_mutex.clone();
                 async move {
                     while let Some(time_rx) = time_rx.recv().await {
                         let time = *time.lock().await;
@@ -363,15 +344,17 @@ mod artcord_tests {
 
             let port = 3420 + ws_id;
             let ws_addr = format!("0.0.0.0:{}", port);
+            let default_threshold = create_default_thresholds();
+
             tracker.spawn(
                 Ws::create(
                     tracker.clone(),
                     cancelation_token.clone(),
                     ws_addr.clone(),
-                    threshold,
+                    default_threshold,
                     db.clone(),
                     time_machine,
-                    DebugThreshold,
+                  //  DebugThreshold,
                     addr_middleware,
                 )
                 .instrument(tracing::trace_span!("ws", "{}", ws_addr)),
@@ -382,7 +365,7 @@ mod artcord_tests {
                 connections: HashMap::new(),
                 cancelation_token,
                 tracker,
-                time,
+                time: time_mutex,
                 addr_middleware_rx,
                 server_port: port,
             }
@@ -1137,10 +1120,15 @@ mod artcord_tests {
     async fn http_ban() {
         init_tracer();
 
+        let time = Utc::now();
+        let default_threshold = create_default_thresholds();
+
         let server = create_server(
             CancellationToken::new(),
             "./artcord-actix/gallery/",
             "./artcord-actix/assets",
+            default_threshold,
+            time,
         );
 
         //   / tokio::spawn(server);

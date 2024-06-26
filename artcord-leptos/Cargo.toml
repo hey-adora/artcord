@@ -40,4 +40,4 @@ rand = "0.8.5"
 hydrate = ["leptos/hydrate", "leptos_meta/hydrate", "leptos_router/hydrate"]
 ssr = ["leptos/ssr", "leptos_meta/ssr", "leptos_router/ssr"]
 csr = ["leptos/csr", "leptos_meta/csr", "leptos_router/csr"]
-development = []
+development = ["artcord-state/development"]

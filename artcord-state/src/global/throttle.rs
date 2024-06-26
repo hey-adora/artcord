@@ -296,6 +296,7 @@ mod throttle_tests {
     use crate::global;
     use crate::global::throttle::{double_throttle, ranged_throttle, ws_ip_throttle};
     use chrono::{DateTime, TimeDelta, Utc};
+    use std::collections::HashMap;
     use std::net::{IpAddr, Ipv4Addr};
     use std::str::FromStr;
     use tracing::{debug, trace};
@@ -309,23 +310,21 @@ mod throttle_tests {
         let mut time = Utc::now();
         let ws_threshold = global::DefaultThreshold {
             ws_max_con_threshold: global::Threshold::new_const(10, TimeDelta::try_minutes(1)),
-            ws_max_con_ban_duration: match TimeDelta::try_minutes(1) {
-                Some(delta) => delta,
-                None => panic!("invalid delta"),
-            },
+            ws_max_con_ban_duration: global::delta_minutes(1),
             ws_max_con_threshold_range: 5,
             ws_max_con_ban_reason: global::IpBanReason::WsTooManyReconnections,
             ws_con_flicker_threshold: global::Threshold::new_const(20, TimeDelta::try_minutes(1)),
-            ws_con_flicker_ban_duration: match TimeDelta::try_minutes(1) {
-                Some(delta) => delta,
-                None => panic!("invalid delta"),
-            },
+            ws_con_flicker_ban_duration: global::delta_minutes(1),
             ws_con_flicker_ban_reason: global::IpBanReason::WsConFlickerDetected,
+            ws_req_block_threshold: HashMap::new(),
+            ws_req_block_threshold_fallback: global::Threshold::new_const(1, TimeDelta::try_minutes(1)),
             ws_req_ban_threshold: global::Threshold::new_const(1, TimeDelta::try_minutes(1)),
-            ws_req_ban_duration: match TimeDelta::try_minutes(1) {
-                Some(delta) => delta,
-                None => panic!("invalid delta"),
-            },
+            ws_req_ban_duration: global::delta_minutes(1),
+            ws_req_ban_reason: global::IpBanReason::WsRouteBruteForceDetected,
+            ws_http_block_threshold: global::Threshold::new_const(10, TimeDelta::try_minutes(1)),
+            ws_http_ban_threshold: global::Threshold::new_const(10, TimeDelta::try_minutes(1)),
+            ws_http_ban_duration: global::delta_minutes(1),
+            ws_http_ban_reason: global::IpBanReason::HttpTooManyRequests,
         };
 
         let ip = IpAddr::V4(Ipv4Addr::new(1, 1, 1, 69));

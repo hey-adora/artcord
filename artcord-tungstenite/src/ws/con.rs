@@ -67,7 +67,7 @@ pub enum ConMsg {
     Stop,
     CheckThrottle {
         path: usize,
-        block_threshold: global::Threshold,
+        //block_threshold: global::Threshold,
         allow_tx: oneshot::Sender<bool>,
     },
     AddWsThrottleListener {
@@ -97,7 +97,7 @@ pub enum ConMsg {
 #[derive(Debug)]
 pub struct Con<
     TimeMiddlewareType: global::TimeMiddleware + Clone + Sync + Send + 'static,
-    ThresholdMiddlewareType: global::ClientThresholdMiddleware + Send + Clone + Sync + 'static,
+    //ThresholdMiddlewareType: global::ClientThresholdMiddleware + Send + Clone + Sync + 'static,
 > {
     con_id: global::TempConIdType,
     con_stream_closed: bool,
@@ -109,7 +109,7 @@ pub struct Con<
     global_con_rx: broadcast::Receiver<GlobalConMsg>,
     con_tx: mpsc::Sender<ConMsg>,
     con_rx: mpsc::Receiver<ConMsg>,
-    ip_data_sync_tx: mpsc::Sender<IpManagerMsg>,
+    ip_manager_tx: mpsc::Sender<IpManagerMsg>,
     ws_app_tx: mpsc::Sender<WsAppMsg>,
     cancellation_token: CancellationToken,
     db: Arc<DB>,
@@ -119,18 +119,20 @@ pub struct Con<
     req_stats: HashMap<global::ClientPathType, global::WsConReqStat>,
     listener_tracker: ThrottleStatsListenerTracker,
     is_listening: bool,
+    ip_threshold_map: global::ThresholdMapType,
+    ip_threshold_fallback: global::Threshold,
     ban_threshold: global::Threshold,
     ban_duration: TimeDelta,
     banned_until: Option<(DateTime<Utc>, global::IpBanReason)>,
     con_task_tracker: TaskTracker,
     time_middleware: TimeMiddlewareType,
-    threshold_middleware: ThresholdMiddlewareType,
+    //threshold_middleware: ThresholdMiddlewareType,
 }
 
 impl<
         TimeMiddlewareType: global::TimeMiddleware + Clone + Sync + Send + 'static,
-        ThresholdMiddlewareType: global::ClientThresholdMiddleware + Send + Clone + Sync + 'static,
-    > Con<TimeMiddlewareType, ThresholdMiddlewareType>
+        //ThresholdMiddlewareType: global::ClientThresholdMiddleware + Send + Clone + Sync + 'static, ThresholdMiddlewareType
+    > Con<TimeMiddlewareType,  >
 {
     pub async fn connect(
         stream: TcpStream,
@@ -144,10 +146,12 @@ impl<
         ip_con_tx: broadcast::Sender<IpConMsg>,
         ip_con_rx: broadcast::Receiver<IpConMsg>,
         ip_data_sync_tx: mpsc::Sender<IpManagerMsg>,
+        ip_threshold_map: global::ThresholdMapType,
+        ip_threshold_fallback: global::Threshold,
         ban_threshold: global::Threshold,
         ban_duration: TimeDelta,
         time_middleware: TimeMiddlewareType,
-        threshold_middleware: ThresholdMiddlewareType,
+        //threshold_middleware: ThresholdMiddlewareType,
         listener_tracker: ThrottleStatsListenerTracker,
     ) {
         trace!("task spawned!");
@@ -177,7 +181,7 @@ impl<
             ip_con_rx,
             global_con_tx,
             global_con_rx,
-            ip_data_sync_tx,
+            ip_manager_tx: ip_data_sync_tx,
             con_tx,
             con_rx,
             ws_app_tx,
@@ -192,7 +196,9 @@ impl<
             banned_until: None,
             con_task_tracker: TaskTracker::new(),
             time_middleware,
-            threshold_middleware,
+            ip_threshold_map,
+            ip_threshold_fallback,
+            //threshold_middleware,
         };
 
         con.run().await;
@@ -371,7 +377,7 @@ impl<
             }
             ConMsg::CheckThrottle {
                 path,
-                block_threshold,
+                //block_threshold,
                 allow_tx,
             } => {
                 let time = self.time_middleware.get_time().await;
@@ -384,10 +390,10 @@ impl<
                 let result = {
                     let (result_tx, result_rx) = oneshot::channel::<global::AllowCon>();
 
-                    self.ip_data_sync_tx
+                    self.ip_manager_tx
                         .send(IpManagerMsg::CheckThrottle {
                             path,
-                            block_threshold: block_threshold.clone(),
+                            //block_threshold: block_threshold.clone(),
                             allow_tx: result_tx,
                         })
                         .await?;
@@ -400,6 +406,8 @@ impl<
                         }
                         _ => {}
                     }
+
+                    let block_threshold = self.ip_threshold_map.get(&path).unwrap_or(&self.ip_threshold_fallback);
 
                     let result_b = global::double_throttle(
                         &mut req_stat.block_tracker,
@@ -619,7 +627,7 @@ impl<
                 self.con_id,
                 self.addr,
                 self.ip,
-                self.threshold_middleware.clone(),
+             //   self.threshold_middleware.clone(),
             )
             .instrument(tracing::trace_span!("req", "{}", msg_name,)),
         );

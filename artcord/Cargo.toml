@@ -212,6 +212,7 @@ development = [
   "artcord-http/development",
   "artcord-tungstenite/development",
   "artcord-mongodb/development",
+  "artcord-state/development"
 ]
 
 [dev-dependencies]

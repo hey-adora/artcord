@@ -19,8 +19,12 @@ leptos = { version = "0.6.6", features = ["default"] }
 enum_index = "0.2.0"
 enum_index_derive = "0.2.0"
 thiserror = "1.0.57"
+cfg-if = "1"
 #tokio = { version = "1.36.0", features = ["signal"] }
 
 [dev-dependencies]
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 tokio = { version = "1.37.0", features = ["full"] }
+
+[features]
+development = []

@@ -6,8 +6,6 @@
 // mod util;
 // mod ws;
 
-
-
 pub mod global {
     use artcord_leptos_web_sockets::WsPackage;
     use chrono::{DateTime, TimeDelta, Utc};
@@ -15,11 +13,7 @@ pub mod global {
     use field_types::FieldName;
     use serde::{Deserialize, Serialize};
     use std::{
-        collections::HashMap,
-        fmt::{Display, Formatter},
-        net::{IpAddr, SocketAddr},
-        num::TryFromIntError,
-        str::FromStr,
+        collections::{HashMap, HashSet}, fmt::{Debug, Display, Formatter}, net::{IpAddr, SocketAddr}, num::TryFromIntError, rc::Rc, str::FromStr
     };
     use strum::{AsRefStr, EnumCount, EnumString, IntoStaticStr, VariantNames};
     use thiserror::Error;
@@ -27,18 +21,19 @@ pub mod global {
 
     mod throttle;
 
-    pub use throttle::ws_ip_throttle;
+    pub use throttle::compare_pick_worst;
     pub use throttle::double_throttle;
+    pub use throttle::is_banned;
     pub use throttle::ranged_throttle;
     pub use throttle::simple_throttle;
     pub use throttle::threshold_allow;
-    pub use throttle::compare_pick_worst;
-    pub use throttle::is_banned;
+    pub use throttle::ws_ip_throttle;
 
     pub type ClientPathType = usize;
     pub type TempConIdType = u128;
     pub type BanType = Option<(DateTime<Utc>, IpBanReason)>;
     pub type DbBanType = Option<(i64, String)>;
+    pub type ThresholdMapType = HashMap<usize, Threshold>;
 
     pub const SEC_IN_MS: i64 = 1000;
     pub const MIN_IN_MS: i64 = 60 * SEC_IN_MS;
@@ -51,17 +46,38 @@ pub mod global {
 
     pub const MINIMUM_PASSWORD_LENGTH: usize = 10;
 
+    //pub const DEFAULT_THRESHOLD: DefaultThreshold = DefaultThreshold::default();
+
+    // pub const CLIENT_MSG_FIELD_NAMES: &[&str] = <ClientMsg as strum::VariantNames>::VARIANTS;
+
+    // pub const fn find_msg_name(name: &'static str) -> &'static str {
+    //     let mut i: usize = 0;
+    //     let len = CLIENT_MSG_FIELD_NAMES.len();
+    //     while i < len {
+    //         let temp_name = CLIENT_MSG_FIELD_NAMES[i];
+    //         if temp_name == name {
+    //             return name;
+    //         }
+    //         i += 1;
+    //     }
+    //     panic!("field name not found");
+    // }
+    // pub const AAA: &[&'static str] = &["wow"];
+    // pub const CLIENT_MSG_FIELD_NAME2: HashSet<&str> = {
+
+    //     HashSet::new()
+    // };
+
     pub trait TimeMiddleware {
         fn get_time(&self) -> impl std::future::Future<Output = DateTime<Utc>> + Send;
     }
 
-    pub trait ClientThresholdMiddleware {
-        fn get_threshold(&self, msg: &ClientMsg) -> Threshold;
-    }
+    // pub trait ClientThresholdMiddleware {
+    //     fn get_threshold(&self, msg: &ClientMsg) -> Threshold;
+    // }
 
     #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
     pub enum ServerMsg {
-        
         WsLiveStatsIpCons(Vec<ConnectedWsIp>),
 
         WsLiveStatsConnected {
@@ -144,6 +160,7 @@ pub mod global {
     #[derive(
         Deserialize, Serialize, Debug, PartialEq, Clone, VariantNames, EnumIndex, EnumCount,
     )]
+    #[strum(serialize_all = "kebab-case")]
     pub enum ClientMsg {
         BanIp {
             ip: IpAddr,
@@ -221,16 +238,16 @@ pub mod global {
         VariantNames,
         EnumString,
         // AsRefStr,
-        strum::Display
+        strum::Display,
     )]
     #[strum(serialize_all = "snake_case")]
     pub enum IpBanReason {
         WsTooManyReconnections,
         WsRouteBruteForceDetected,
         WsConFlickerDetected,
+        HttpTooManyRequests,
         Other(String),
     }
-    
 
     #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
     pub enum ConStatus {
@@ -269,7 +286,7 @@ pub mod global {
     #[derive(Clone, Debug)]
     pub struct Clock;
 
-    #[derive(Debug, Clone, PartialEq)]
+    #[derive(Clone)]
     pub struct DefaultThreshold {
         pub ws_max_con_threshold: Threshold,
         pub ws_max_con_threshold_range: u64,
@@ -278,8 +295,18 @@ pub mod global {
         pub ws_con_flicker_threshold: Threshold,
         pub ws_con_flicker_ban_duration: TimeDelta,
         pub ws_con_flicker_ban_reason: IpBanReason,
+        //pub ws_req_block_threshold: F,  <F: Fn (&ClientMsg) -> Threshold>
+        //pub ws_req_block_threshold: Box<dyn Fn (&ClientMsg) -> Threshold + Send + 'static>,
+        // pub ws_req_block_threshold: fn (&ClientMsg) -> Threshold,
+        pub ws_req_block_threshold: ThresholdMapType,
+        pub ws_req_block_threshold_fallback: Threshold,
         pub ws_req_ban_threshold: Threshold,
         pub ws_req_ban_duration: TimeDelta,
+        pub ws_req_ban_reason: IpBanReason,
+        pub ws_http_block_threshold: Threshold,
+        pub ws_http_ban_threshold: Threshold,
+        pub ws_http_ban_duration: TimeDelta,
+        pub ws_http_ban_reason: IpBanReason,
     }
 
     #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -602,13 +629,13 @@ pub mod global {
     //     pub throttle: ThrottleDoubleLayer,
     // }
 
-    impl ClientThresholdMiddleware for ProdThreshold {
-        fn get_threshold(&self, msg: &ClientMsg) -> Threshold {
-            match msg {
-                _ => Threshold::new_const(5, TimeDelta::try_seconds(10)),
-            }
-        }
-    }
+    // impl ClientThresholdMiddleware for ProdThreshold {
+    //     fn get_threshold(&self, msg: &ClientMsg) -> Threshold {
+    //         match msg {
+    //             _ => Threshold::new_const(5, TimeDelta::try_seconds(10)),
+    //         }
+    //     }
+    // }
 
     impl TimeMiddleware for Clock {
         async fn get_time(&self) -> DateTime<Utc> {
@@ -690,6 +717,74 @@ pub mod global {
                 has_low: false,
                 modified_at: Utc::now().timestamp_millis(),
                 created_at: Utc::now().timestamp_millis(),
+            }
+        }
+    }
+
+    // impl <F: Fn (&ClientMsg) -> Threshold> Default for DefaultThreshold <F> {
+        
+    // }
+
+    impl Default for DefaultThreshold {
+        fn default() -> DefaultThreshold {
+            let f = |n: &'static str| -> usize {
+                <ClientMsg as strum::VariantNames>::VARIANTS.iter().position(|a| *a == n).unwrap()
+            };
+            cfg_if::cfg_if! {
+                if #[cfg(feature = "development")] {
+                    DefaultThreshold {
+                        ws_max_con_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
+                        ws_max_con_ban_duration: delta_minutes(1),
+                        ws_max_con_threshold_range: 5,
+                        ws_max_con_ban_reason: IpBanReason::WsTooManyReconnections,
+                        ws_con_flicker_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
+                        ws_con_flicker_ban_duration: delta_minutes(1),
+                        ws_con_flicker_ban_reason: IpBanReason::WsConFlickerDetected,
+                        ws_http_block_threshold: Threshold::new_const(10000, TimeDelta::try_minutes(1)),
+                        ws_http_ban_threshold: Threshold::new_const(10000, TimeDelta::try_minutes(1)),
+                        ws_http_ban_duration: delta_minutes(1),
+                        ws_http_ban_reason: IpBanReason::HttpTooManyRequests,
+                        // ws_req_block_threshold: move |msg: &ClientMsg| -> Threshold {
+                        //     match msg {
+                        //         _ => Threshold::new_const(5, TimeDelta::try_seconds(10))
+                        //     }
+                        // } ,
+                        ws_req_block_threshold: HashMap::from([
+                            (f("login"), Threshold::new_const(10, TimeDelta::try_minutes(1)))
+                        ]),
+                        ws_req_block_threshold_fallback: Threshold::new_const(10000, TimeDelta::try_minutes(1)),
+                        ws_req_ban_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
+                        ws_req_ban_duration: delta_minutes(1),
+                        ws_req_ban_reason: IpBanReason::WsRouteBruteForceDetected,
+                    }
+                } else {
+                    DefaultThreshold {
+                        ws_max_con_threshold: Threshold::new_const(10000, TimeDelta::try_minutes(1)),
+                        ws_max_con_ban_duration: delta_days(1),
+                        ws_max_con_threshold_range: 100,
+                        ws_max_con_ban_reason: IpBanReason::WsTooManyReconnections,
+                        ws_con_flicker_threshold: Threshold::new_const(10000, TimeDelta::try_minutes(1)),
+                        ws_con_flicker_ban_duration: delta_days(1),
+                        ws_con_flicker_ban_reason: IpBanReason::WsConFlickerDetected,
+                      
+                        ws_http_block_threshold: Threshold::new_const(10000, TimeDelta::try_minutes(1)),
+                        ws_http_ban_threshold: Threshold::new_const(10000, TimeDelta::try_minutes(1)),
+                        ws_http_ban_duration: delta_days(1),
+                        ws_http_ban_reason: IpBanReason::HttpTooManyRequests,
+                        // ws_req_block_threshold: move |msg: &ClientMsg| -> Threshold {
+                        //     match msg {
+                        //         _ => Threshold::new_const(10000, TimeDelta::try_minutes(1))
+                        //     }
+                        // } ,
+                        ws_req_block_threshold: HashMap::from([
+                            (f("login"), Threshold::new_const(10, TimeDelta::try_minutes(1)))
+                        ]),
+                        ws_req_block_threshold_fallback: Threshold::new_const(10000, TimeDelta::try_minutes(1)),
+                        ws_req_ban_threshold: Threshold::new_const(10000, TimeDelta::try_minutes(1)),
+                        ws_req_ban_duration: delta_days(1),
+                        ws_req_ban_reason: IpBanReason::WsRouteBruteForceDetected,
+                    }
+                }
             }
         }
     }
@@ -926,7 +1021,6 @@ pub mod global {
         }
     }
 
-
     impl DebugServerMsg {
         pub fn from_bytes(bytes: &[u8]) -> Result<WsPackage<Self>, bincode::Error> {
             let result = bincode::deserialize::<WsPackage<Self>>(bytes);
@@ -1062,21 +1156,19 @@ pub mod global {
             banned_until: BanType,
             time: DateTime<Utc>,
         ) -> Result<Self, WsIpToDbErr> {
-            Ok(
-                Self {
-                    id: uuid::Uuid::new_v4().to_string(),
-                    ip: ip.to_string(),
-                    total_allow_amount: total_allow_amount as i64,
-                    total_block_amount: total_block_amount as i64,
-                    total_banned_amount: total_banned_amount as i64,
-                    total_already_banned_amount: total_already_banned_amount as i64,
-                    con_count_tracker: con_count_tracker.try_into()?,
-                    con_flicker_tracker: con_flicker_tracker.try_into()?,
-                    banned_until: ban_to_db(banned_until),
-                    modified_at: time.timestamp_millis(),
-                    created_at: time.timestamp_millis()
-                }
-            )
+            Ok(Self {
+                id: uuid::Uuid::new_v4().to_string(),
+                ip: ip.to_string(),
+                total_allow_amount: total_allow_amount as i64,
+                total_block_amount: total_block_amount as i64,
+                total_banned_amount: total_banned_amount as i64,
+                total_already_banned_amount: total_already_banned_amount as i64,
+                con_count_tracker: con_count_tracker.try_into()?,
+                con_flicker_tracker: con_flicker_tracker.try_into()?,
+                banned_until: ban_to_db(banned_until),
+                modified_at: time.timestamp_millis(),
+                created_at: time.timestamp_millis(),
+            })
         }
     }
 
@@ -1097,7 +1189,6 @@ pub mod global {
             })
         }
     }
-
 
     impl DbWsCon {
         pub fn try_new(
@@ -1217,7 +1308,8 @@ pub mod global {
         match banned_until {
             Some((date, reason)) => {
                 let date = date_from_db(date)?;
-                let reason = IpBanReason::from_str(&reason).map_err(|err| BanFromDbErr::InvalidReason { reason, err })?;
+                let reason = IpBanReason::from_str(&reason)
+                    .map_err(|err| BanFromDbErr::InvalidReason { reason, err })?;
                 Ok(Some((date, reason)))
             }
             None => Ok(None),
@@ -1225,7 +1317,7 @@ pub mod global {
     }
 
     pub fn ban_to_db(banned_until: BanType) -> Option<(i64, String)> {
-        banned_until.map(|(date, reason)| (date.timestamp_millis(), reason.to_string() ))
+        banned_until.map(|(date, reason)| (date.timestamp_millis(), reason.to_string()))
     }
 
     pub fn req_stats_to_db(
@@ -1256,19 +1348,36 @@ pub mod global {
     }
 
     pub fn date_from_db(date: i64) -> Result<DateTime<Utc>, InvalidDateErr> {
-        Ok(
-            DateTime::<Utc>::from_timestamp_millis(date)
-                .ok_or(InvalidDateErr { date })?
-        )
+        Ok(DateTime::<Utc>::from_timestamp_millis(date).ok_or(InvalidDateErr { date })?)
+    }
+
+    pub const fn delta_seconds(time: i64) -> TimeDelta {
+        match TimeDelta::try_seconds(time) {
+            Some(delta) => delta,
+            None => panic!("invalid delta"),
+        }
+    }
+
+    pub const fn delta_minutes(time: i64) -> TimeDelta {
+        match TimeDelta::try_minutes(time) {
+            Some(delta) => delta,
+            None => panic!("invalid delta"),
+        }
+    }
+
+    pub const fn delta_days(time: i64) -> TimeDelta {
+        match TimeDelta::try_days(time) {
+            Some(delta) => delta,
+            None => panic!("invalid delta"),
+        }
     }
 
     #[derive(Error, Debug)]
     pub enum BanFromDbErr {
-        
         #[error("invalid ban reason: {reason:?}, err: {err:?}")]
         InvalidReason {
             reason: String,
-            err: strum::ParseError
+            err: strum::ParseError,
         },
 
         #[error("invalid ban date: {0}")]
@@ -1291,17 +1400,13 @@ pub mod global {
 
         #[error("invalid ban date: {0}")]
         InvalidDate(#[from] InvalidDateErr),
-        
     }
-
-   
 
     #[derive(Error, Debug)]
     pub enum WsIpToDbErr {
         #[error("tracker error: {0}")]
         TrackerError(#[from] ThresholdTrackerToDbErr),
     }
-
 
     #[derive(Error, Debug)]
     pub enum WsIpManagerFromDb {
@@ -1419,7 +1524,7 @@ pub mod global {
 
     #[derive(Error, Debug)]
     pub struct InvalidDateErr {
-        date: i64
+        date: i64,
     }
 
     impl Display for InvalidDateErr {

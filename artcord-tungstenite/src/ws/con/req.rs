@@ -29,7 +29,7 @@ pub async fn req_task(
     connection_key: global::TempConIdType,
     addr: SocketAddr,
     ip: IpAddr,
-    get_threshold: impl global::ClientThresholdMiddleware,
+    //get_threshold: impl global::ClientThresholdMiddleware,
 ) {
     trace!("started");
     let user_task_result = async {
@@ -44,7 +44,7 @@ pub async fn req_task(
         let res_key: WsRouteKey = client_msg.0;
         let data: global::ClientMsg = client_msg.1;
         let path_index = data.enum_index();
-        let path_throttle = get_threshold.get_threshold(&data);
+        //let path_throttle = get_threshold.get_threshold(&data);
 
         trace!("recv: {:#?}", data);
 
@@ -52,7 +52,7 @@ pub async fn req_task(
         con_tx
             .send(ConMsg::CheckThrottle {
                 path: path_index,
-                block_threshold: path_throttle,
+                //block_threshold: path_throttle,
                 allow_tx,
             })
             .await?;
