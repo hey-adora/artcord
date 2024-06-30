@@ -490,6 +490,7 @@ dependencies = [
  "strum",
  "thiserror",
  "tokio",
+ "tokio-tungstenite",
  "tracing",
  "tracing-subscriber",
  "uuid",

@@ -9,7 +9,7 @@ edition = "2021"
 futures = "0.3.30"
 tokio = { version = "1.37.0", features = ["full"] }
 tokio-tungstenite = "0.21.0"
-artcord-state = { path = "../artcord-state" }
+artcord-state = { path = "../artcord-state", features = ["backend"] }
 artcord-leptos-web-sockets = { path = "../artcord-leptos-web-sockets" }
 tracing = { version = "0.1.40" }
 artcord-mongodb = { path = "../artcord-mongodb" }

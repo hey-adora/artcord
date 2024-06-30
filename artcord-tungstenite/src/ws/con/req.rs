@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use artcord_leptos_web_sockets::{WsPackage, WsRouteKey};
 use artcord_mongodb::database::DB;
-use artcord_state::global;
+use artcord_state::{global, backend};
 use enum_index::EnumIndex;
 use tokio::sync::{mpsc, oneshot};
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
@@ -13,9 +13,6 @@ use tokio_tungstenite::tungstenite::Message;
 use tracing::{debug, error, trace};
 
 use crate::ws::con::req::res::ResErr;
-use crate::ws::con::ConMsg;
-use crate::ws::WsAppMsg;
-
 
 
 pub mod res;
@@ -24,8 +21,8 @@ pub mod stats;
 pub async fn req_task(
     client_msg: Message,
     db: Arc<DB>,
-    con_tx: mpsc::Sender<ConMsg>,
-    ws_tx: mpsc::Sender<WsAppMsg>,
+    con_tx: mpsc::Sender<backend::ConMsg>,
+    ws_tx: mpsc::Sender<backend::WsMsg>,
     connection_key: global::TempConIdType,
     addr: SocketAddr,
     ip: IpAddr,
@@ -50,7 +47,7 @@ pub async fn req_task(
 
         let (allow_tx, allow_rx) = oneshot::channel();
         con_tx
-            .send(ConMsg::CheckThrottle {
+            .send(backend::ConMsg::CheckThrottle {
                 path: path_index,
                 //block_threshold: path_throttle,
                 allow_tx,
@@ -67,7 +64,9 @@ pub async fn req_task(
 
             let response_data: Result<Option<global::ServerMsg>, ResErr> = match data {
                 global::ClientMsg::BanIp { ip, date, reason } => {
-                    ws_tx.send(WsAppMsg::Ban { ip, date, reason }).await?;
+                    //let (done_tx, done_rx) = oneshot::channel::<()>();
+                    ws_tx.send(backend::WsMsg::Ban { ip, date, reason }).await?;
+                    //done_rx.await?;
                     Ok(None)
                 }
                 global::ClientMsg::WsStatsTotalCount { from } => res::ws_stats::total_count(db, from).await,
@@ -132,7 +131,7 @@ pub async fn req_task(
         }
         let response = global::ServerMsg::as_bytes(response)?;
         let response = Message::Binary(response);
-        con_tx.send(ConMsg::Send(response)).await?;
+        con_tx.send(backend::ConMsg::Send(response)).await?;
 
         Ok::<(), ResErr>(())
     }
@@ -141,7 +140,7 @@ pub async fn req_task(
     if let Err(err) = user_task_result {
         debug!("res error: {}", &err);
         let send_result = con_tx
-            .send(ConMsg::Send(Message::Close(Some(CloseFrame {
+            .send(backend::ConMsg::Send(Message::Close(Some(CloseFrame {
                 code: CloseCode::Error,
                 reason: Cow::from("corrupted"),
             }))))

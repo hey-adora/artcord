@@ -1,9 +1,9 @@
 use artcord_mongodb::database::DBError;
 use thiserror::Error;
 use tokio_tungstenite::tungstenite::Message;
-use artcord_state::global;
+use artcord_state::{global, backend};
 
-use crate::ws::{con::ConMsg, WsAppMsg};
+
 
 pub mod ws_stats;
 pub mod ws_throttle;
@@ -30,10 +30,10 @@ pub enum ResErr {
     Send(#[from] tokio::sync::mpsc::error::SendError<tokio_tungstenite::tungstenite::Message>),
 
     #[error("Send error: {0}")]
-    WsAppSend(#[from] tokio::sync::mpsc::error::SendError<WsAppMsg>),
+    WsAppSend(#[from] tokio::sync::mpsc::error::SendError<backend::WsMsg>),
 
     #[error("Send error: {0}")]
-    ConnectionSend(#[from] tokio::sync::mpsc::error::SendError<ConMsg>),
+    ConnectionSend(#[from] tokio::sync::mpsc::error::SendError<backend::ConMsg>),
 
     // #[error("Send error: {0}")]
     // ThrottleSend(#[from] tokio::sync::mpsc::error::SendError<WsStatsMsg>),

@@ -22,6 +22,7 @@ const COLLECTION_USER_NAME: &str = "user";
 const COLLECTION_WS_STATISTIC_NAME: &str = "ws_statistic";
 const COLLECTION_WS_IP_MANAGER_NAME: &str = "ws_ip_manager";
 const COLLECTION_WS_IP_NAME: &str = "ws_ip";
+const COLLECTION_HTTP_IP_NAME: &str = "http_ip";
 
 #[derive(Clone, Debug)]
 pub struct DB {
@@ -39,6 +40,7 @@ pub struct DB {
     collection_ws_statistic: mongodb::Collection<global::DbWsCon>,
     collection_ws_ip_manager: mongodb::Collection<global::DbWsIpManager>,
     collection_ws_ip: mongodb::Collection<global::DbWsIp>,
+    collection_http_ip: mongodb::Collection<global::DbHttpIp>,
 }
 
 // const DATABASE_NAME: &'static str = "artcord";
@@ -74,6 +76,7 @@ impl DB {
         let collection_ws_statistic = DB::init_ws_statistic(&database).await;
         let collection_ws_ip_manager = DB::init_ws_ip_manager(&database).await;
         let collection_ws_ip = DB::init_ws_ip(&database).await;
+        let collection_http_ip = DB::init_http_ip(&database).await;
 
         Self {
             database,
@@ -90,6 +93,7 @@ impl DB {
             collection_ws_statistic,
             collection_ws_ip_manager,
             collection_ws_ip,
+            collection_http_ip,
         }
     }
 }
@@ -112,7 +116,12 @@ pub enum DBError {
     #[error("Chrono parse: {0}.")]
     Chrono(#[from] chrono::ParseError),
 
-    //global::WsIpToDbErr
+    #[error("http_ip_to_db conversion err: {0}.")]
+    HttpIpToDbErr(#[from] global::HttpIpToDbErr),
+
+    #[error("http_ip_from_db conversion err: {0}.")]
+    HttpIpFromDbErr(#[from] global::HttpIpFromDbErr),
+    
     #[error("ws_ip_from_db conversion err: {0}.")]
     WsIpFromDbErr(#[from] global::WsIpFromDbErr),
 

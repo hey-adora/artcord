@@ -1,18 +1,17 @@
 use std::collections::HashMap;
 
 use artcord_leptos_web_sockets::{WsPackage, WsRouteKey};
-use artcord_state::global;
+use artcord_state::{global, backend};
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message;
 use tracing::debug;
 use tracing::{error, trace};
 
-use super::ConMsg;
 
 #[derive(Debug, Clone)]
 pub struct ThrottleStatsListenerTracker {
-    pub cons: HashMap<global::TempConIdType, (WsRouteKey, mpsc::Sender<ConMsg>)>,
+    pub cons: HashMap<global::TempConIdType, (WsRouteKey, mpsc::Sender<backend::ConMsg>)>,
 }
 
 // #[derive(Debug, Clone)]
@@ -43,7 +42,7 @@ impl ThrottleStatsListenerTracker {
             let msg = global::ServerMsg::as_bytes(msg)?;
             let msg = Message::binary(msg);
             trace!("sending {:#?} to listener: {}", &msg_org, &con_key);
-            let send_result = tx.send(ConMsg::Send(msg)).await;
+            let send_result = tx.send(backend::ConMsg::Send(msg)).await;
             trace!("finished sending to listener");
             if let Err(err) = send_result {
                 debug!(

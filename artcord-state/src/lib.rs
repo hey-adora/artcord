@@ -6,6 +6,155 @@
 // mod util;
 // mod ws;
 
+#[cfg(feature = "backend")]
+pub mod backend {
+    use std::{collections::HashMap, net::IpAddr};
+    use chrono::DateTime;
+    use crate::global;
+    use chrono::Utc;
+    use tokio::sync::{oneshot, mpsc};
+    use artcord_leptos_web_sockets::{WsPackage, WsRouteKey};
+    use tokio_tungstenite::tungstenite::Message;
+    use tracing::{trace, debug};
+    use thiserror::Error;
+
+    pub type ListenerTrackerType = HashMap<global::TempConIdType, (WsRouteKey, mpsc::Sender<ConMsg>)>;
+
+    // pub enum WsExternalMsg {
+    //     Ban {
+    //         ip: IpAddr,
+    //         date: DateTime<Utc>,
+    //         reason: global::IpBanReason,
+    //         done_tx: oneshot::Sender<()>,
+    //     }
+    // }
+
+    pub enum HttpMsg {
+        Ban {
+            ip: IpAddr,
+            date: DateTime<Utc>,
+            reason: global::IpBanReason,
+           done_tx: oneshot::Sender<()>,
+        },
+        AddListener {
+            con_id: global::TempConIdType,
+            con_tx: mpsc::Sender<ConMsg>,
+            ws_key: WsRouteKey,
+            done_tx: oneshot::Sender<()>,
+        },
+        RemoveListener {
+            con_id: global::TempConIdType,
+        },
+    }
+
+    #[derive(Debug)]
+    pub enum WsMsg {
+        Close,
+        Ban {
+            ip: IpAddr,
+            date: DateTime<Utc>,
+            reason: global::IpBanReason,
+     //       done_tx: Option<oneshot::Sender<()>>,
+        },
+        // UnBan {
+        //     ip: IpAddr,
+        // },
+        Disconnected {
+            //  connection_key: TempConIdType,
+            ip: IpAddr,
+        },
+        AddListener {
+            con_id: global::TempConIdType,
+            con_tx: mpsc::Sender<ConMsg>,
+            ws_key: WsRouteKey,
+            done_tx: oneshot::Sender<Vec<global::ConnectedWsIp>>,
+        },
+        RemoveListener {
+            con_id: global::TempConIdType,
+            // tx: mpsc::Sender<ConMsg>,
+            // ws_key: WsRouteKey,
+        },
+        // Inc {
+        //     ip: IpAddr,
+        //     path: ClientPathType,
+        // },
+    }
+
+    #[derive(Debug)]
+    pub enum ConMsg {
+        Send(Message),
+        Stop,
+        CheckThrottle {
+            path: usize,
+            //block_threshold: global::Threshold,
+            allow_tx: oneshot::Sender<bool>,
+        },
+        AddWsThrottleListener {
+            //msg_author: TempConIdType,
+            //con_id: TempConIdType,
+            //con_tx: mpsc::Sender<ConMsg>,
+            res_key: WsRouteKey,
+            //current_state_tx: oneshot::Sender<Vec<WsStat>>,
+        },
+        RemoveWsThrottleListener,
+        // AddWsThrottleListener {
+        //     msg_author: TempConIdType,
+        //     con_id: TempConIdType,
+        //     con_tx: mpsc::Sender<ConMsg>,
+        //     current_state_tx: mpsc::Sender<HashMap<ClientPathType, WsReqStat>>,
+        // },
+        // RemoveWsThrottleListener {
+        //     msg_author: TempConIdType,
+        // },
+        // AddReqThrottleListener {
+        //     msg_author: TempConIdType,
+        //     con_tx: mpsc::Sender<ConMsg>,
+        //     current_state_tx: mpsc::Sender<HashMap<ClientPathType, WsReqStat>>,
+        // },
+    }
+
+    pub async fn listener_tracker_send(
+        cons: &mut ListenerTrackerType,
+        msg_org: global::ServerMsg,
+    ) -> Result<(), ListenerTrackerErr> {
+        // if self.cons.is_empty() {
+        //     return Ok(());
+        // }
+
+        let mut to_remove: Vec<global::TempConIdType> = Vec::new();
+        trace!("sending {:#?} to listeners: {:#?}", &msg_org, &cons);
+        for (con_key, (ws_key, tx)) in cons.iter() {
+            let msg: WsPackage<global::ServerMsg> = (ws_key.clone(), msg_org.clone());
+            let msg = global::ServerMsg::as_bytes(msg)?;
+            let msg = Message::binary(msg);
+            trace!("sending {:#?} to listener: {}", &msg_org, &con_key);
+            let send_result = tx.send(ConMsg::Send(msg)).await;
+            trace!("finished sending to listener");
+            if let Err(err) = send_result {
+                debug!(
+                    "ws throttle: failed to send on_con update to {} {}",
+                    con_key, err
+                );
+                to_remove.push(*con_key);
+            }
+        }
+        for con_key in to_remove {
+            trace!("removing listener: {}", &con_key);
+            cons.remove(&con_key);
+        }
+        trace!("sending msg to listeners finished");
+        Ok(())
+    }
+
+    
+    #[derive(Error, Debug)]
+    pub enum ListenerTrackerErr {
+        #[error("MainGallery error: {0}")]
+        Serialization(#[from] bincode::Error),
+    }
+
+}
+
 pub mod global {
     use artcord_leptos_web_sockets::WsPackage;
     use chrono::{DateTime, TimeDelta, Utc};
@@ -72,12 +221,32 @@ pub mod global {
         fn get_time(&self) -> impl std::future::Future<Output = DateTime<Utc>> + Send;
     }
 
+    pub trait GetUserAddrMiddleware {
+        fn get_addr(&self, addr: SocketAddr) -> impl std::future::Future<Output = SocketAddr> + Send;
+    }
+
     // pub trait ClientThresholdMiddleware {
     //     fn get_threshold(&self, msg: &ClientMsg) -> Threshold;
     // }
 
     #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
     pub enum ServerMsg {
+        HttpLiveStatsConAllowed {
+            ip: IpAddr,
+        //    path: String,
+            total_amount: u64,
+        },
+        HttpLiveStatsConBlocked {
+            ip: IpAddr,
+        //    path: String,
+            total_amount: u64,
+        },
+        HttpLiveStatsConBanned {
+            ip: IpAddr,
+         //   path: String,
+            total_amount: u64,
+        },
+
         WsLiveStatsIpCons(Vec<ConnectedWsIp>),
 
         WsLiveStatsConnected {
@@ -217,6 +386,8 @@ pub mod global {
         LiveWsThrottleCache(bool),
     }
 
+  
+
     #[derive(Deserialize, Serialize, Debug, PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Hash)]
     pub enum DebugServerMsg {
         Restart,
@@ -227,6 +398,8 @@ pub mod global {
         BrowserReady,
         RuntimeReady,
     }
+
+    
 
     #[derive(
         Deserialize,
@@ -447,6 +620,17 @@ pub mod global {
     }
 
     #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, FieldName)]
+    pub struct DbHttpIp {
+        pub id: String,
+        pub ip: String,
+        pub block_tracker: DbThresholdTracker,
+        pub ban_tracker: DbThresholdTracker,
+        pub banned_until: DbBanType,
+        pub modified_at: i64,
+        pub created_at: i64,
+    }
+
+    #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, FieldName)]
     pub struct DbWsIp {
         pub id: String,
         pub ip: String,
@@ -517,6 +701,17 @@ pub mod global {
     //     pub banned_until: Option<(DateTime<Utc>, IpBanReason)>,
     //     //pub cons_brodcast: broadcast::Sender<ConMsg>
     // }
+
+    #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, FieldName)]
+    pub struct SavedHttpIp {
+        pub id: uuid::Uuid,
+        pub ip: IpAddr,
+        pub block_tracker: ThresholdTracker,
+        pub ban_tracker: ThresholdTracker,
+        pub banned_until: BanType,
+        pub modified_at: DateTime<Utc>,
+        pub created_at: DateTime<Utc>,
+    }
 
     #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, FieldName)]
     pub struct SavedWsIp {
@@ -737,18 +932,15 @@ pub mod global {
                         ws_max_con_ban_duration: delta_minutes(1),
                         ws_max_con_threshold_range: 5,
                         ws_max_con_ban_reason: IpBanReason::WsTooManyReconnections,
+                        
                         ws_con_flicker_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
                         ws_con_flicker_ban_duration: delta_minutes(1),
                         ws_con_flicker_ban_reason: IpBanReason::WsConFlickerDetected,
-                        ws_http_block_threshold: Threshold::new_const(10000, TimeDelta::try_minutes(1)),
-                        ws_http_ban_threshold: Threshold::new_const(10000, TimeDelta::try_minutes(1)),
+                        ws_http_block_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
+                        ws_http_ban_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
                         ws_http_ban_duration: delta_minutes(1),
                         ws_http_ban_reason: IpBanReason::HttpTooManyRequests,
-                        // ws_req_block_threshold: move |msg: &ClientMsg| -> Threshold {
-                        //     match msg {
-                        //         _ => Threshold::new_const(5, TimeDelta::try_seconds(10))
-                        //     }
-                        // } ,
+
                         ws_req_block_threshold: HashMap::from([
                             (f("login"), Threshold::new_const(10, TimeDelta::try_minutes(1)))
                         ]),
@@ -771,15 +963,11 @@ pub mod global {
                         ws_http_ban_threshold: Threshold::new_const(10000, TimeDelta::try_minutes(1)),
                         ws_http_ban_duration: delta_days(1),
                         ws_http_ban_reason: IpBanReason::HttpTooManyRequests,
-                        // ws_req_block_threshold: move |msg: &ClientMsg| -> Threshold {
-                        //     match msg {
-                        //         _ => Threshold::new_const(10000, TimeDelta::try_minutes(1))
-                        //     }
-                        // } ,
                         ws_req_block_threshold: HashMap::from([
                             (f("login"), Threshold::new_const(10, TimeDelta::try_minutes(1)))
                         ]),
                         ws_req_block_threshold_fallback: Threshold::new_const(10000, TimeDelta::try_minutes(1)),
+
                         ws_req_ban_threshold: Threshold::new_const(10000, TimeDelta::try_minutes(1)),
                         ws_req_ban_duration: delta_days(1),
                         ws_req_ban_reason: IpBanReason::WsRouteBruteForceDetected,
@@ -842,6 +1030,23 @@ pub mod global {
     //         })
     //     }
     // }
+
+
+    impl TryFrom<DbHttpIp> for SavedHttpIp {
+        type Error = HttpIpFromDbErr;
+
+        fn try_from(value: DbHttpIp) -> Result<SavedHttpIp, Self::Error> {
+            Ok(Self {
+                id: uuid::Uuid::from_str(&value.id)?,
+                ip: IpAddr::from_str(&value.ip)?,
+                block_tracker: value.block_tracker.try_into()?,
+                ban_tracker: value.ban_tracker.try_into()?,
+                banned_until: ban_from_db(value.banned_until)?,
+                modified_at: date_from_db(value.modified_at)?,
+                created_at: date_from_db(value.created_at)?,
+            })
+        }
+    }
 
     impl TryFrom<DbWsIp> for SavedWsIp {
         type Error = WsIpFromDbErr;
@@ -1144,6 +1349,28 @@ pub mod global {
         }
     }
 
+    impl DbHttpIp {
+        pub fn try_new(
+            ip: IpAddr,
+            block_tracker: ThresholdTracker,
+            ban_tracker: ThresholdTracker,
+            banned_until: BanType,
+            time: DateTime<Utc>,
+        ) -> Result<Self, HttpIpToDbErr> {
+            Ok(
+                Self {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    ip: ip.to_string(),
+                    block_tracker: block_tracker.try_into()?,
+                    ban_tracker: ban_tracker.try_into()?,
+                    banned_until: ban_to_db(banned_until),
+                    modified_at: time.timestamp_millis(),
+                    created_at: time.timestamp_millis(),
+                }
+            )
+        }
+    }
+
     impl DbWsIp {
         pub fn try_new(
             ip: IpAddr,
@@ -1382,6 +1609,30 @@ pub mod global {
 
         #[error("invalid ban date: {0}")]
         InvalidDate(#[from] InvalidDateErr),
+    }
+
+    #[derive(Error, Debug)]
+    pub enum HttpIpFromDbErr {
+        #[error("banned_until conversion error: {0}")]
+        BanError(#[from] BanFromDbErr),
+
+        #[error("tracker error: {0}")]
+        TrackerError(#[from] ThresholdTrackerFromDbErr),
+
+        #[error("failed to parse string to socket_addr: {0}")]
+        InvalidSocketAddr(#[from] std::net::AddrParseError),
+
+        #[error("Invalid uuid: {0}")]
+        InvalidUuid(#[from] uuid::Error),
+
+        #[error("invalid ban date: {0}")]
+        InvalidDate(#[from] InvalidDateErr),
+    }
+
+    #[derive(Error, Debug)]
+    pub enum HttpIpToDbErr {
+        #[error("tracker error: {0}")]
+        TrackerError(#[from] ThresholdTrackerToDbErr),
     }
 
     #[derive(Error, Debug)]

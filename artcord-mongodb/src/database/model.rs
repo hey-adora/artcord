@@ -19,6 +19,7 @@ pub mod user;
 pub mod ws_ip;
 pub mod ws_con;
 pub mod ws_ip_manager;
+pub mod http;
 
 
 

@@ -1,8 +1,9 @@
 use crate::ws::con::req::res::ResErr;
-use crate::ws::{GlobalConChannel, WsAppMsg};
+use crate::ws::{GlobalConChannel};
 use artcord_leptos_web_sockets::{WsPackage, WsRouteKey};
 use artcord_mongodb::database::DB;
-use artcord_state::global;
+use artcord_state::backend::listener_tracker_send;
+use artcord_state::{global, backend};
 use chrono::{DateTime, TimeDelta, Utc};
 use enum_index::EnumIndex;
 use futures::stream::{SplitSink, SplitStream};
@@ -23,12 +24,12 @@ use tokio_util::task::TaskTracker;
 use tracing::{debug, error, trace, Instrument};
 
 use self::req::req_task;
-use self::throttle_stats_listener_tracker::{ConTrackerErr, ThrottleStatsListenerTracker};
+// use self::throttle_stats_listener_tracker::{ConTrackerErr, ThrottleStatsListenerTracker};
 
 use super::IpManagerMsg;
 
 pub mod req;
-pub mod throttle_stats_listener_tracker;
+// pub mod throttle_stats_listener_tracker;
 
 
 
@@ -53,7 +54,7 @@ pub enum IpConMsg {
 pub enum GlobalConMsg {
     AddIpStatListener {
         con_id: global::TempConIdType,
-        con_tx: mpsc::Sender<ConMsg>,
+        con_tx: mpsc::Sender<backend::ConMsg>,
         ws_key: WsRouteKey,
     },
     RemoveIpStatListener {
@@ -61,38 +62,7 @@ pub enum GlobalConMsg {
     },
 }
 
-#[derive(Debug)]
-pub enum ConMsg {
-    Send(Message),
-    Stop,
-    CheckThrottle {
-        path: usize,
-        //block_threshold: global::Threshold,
-        allow_tx: oneshot::Sender<bool>,
-    },
-    AddWsThrottleListener {
-        //msg_author: TempConIdType,
-        //con_id: TempConIdType,
-        //con_tx: mpsc::Sender<ConMsg>,
-        res_key: WsRouteKey,
-        //current_state_tx: oneshot::Sender<Vec<WsStat>>,
-    },
-    RemoveWsThrottleListener,
-    // AddWsThrottleListener {
-    //     msg_author: TempConIdType,
-    //     con_id: TempConIdType,
-    //     con_tx: mpsc::Sender<ConMsg>,
-    //     current_state_tx: mpsc::Sender<HashMap<ClientPathType, WsReqStat>>,
-    // },
-    // RemoveWsThrottleListener {
-    //     msg_author: TempConIdType,
-    // },
-    // AddReqThrottleListener {
-    //     msg_author: TempConIdType,
-    //     con_tx: mpsc::Sender<ConMsg>,
-    //     current_state_tx: mpsc::Sender<HashMap<ClientPathType, WsReqStat>>,
-    // },
-}
+
 
 #[derive(Debug)]
 pub struct Con<
@@ -107,17 +77,17 @@ pub struct Con<
     ip_con_rx: broadcast::Receiver<IpConMsg>,
     global_con_tx: broadcast::Sender<GlobalConMsg>,
     global_con_rx: broadcast::Receiver<GlobalConMsg>,
-    con_tx: mpsc::Sender<ConMsg>,
-    con_rx: mpsc::Receiver<ConMsg>,
+    con_tx: mpsc::Sender<backend::ConMsg>,
+    con_rx: mpsc::Receiver<backend::ConMsg>,
     ip_manager_tx: mpsc::Sender<IpManagerMsg>,
-    ws_app_tx: mpsc::Sender<WsAppMsg>,
+    ws_app_tx: mpsc::Sender<backend::WsMsg>,
     cancellation_token: CancellationToken,
     db: Arc<DB>,
     ip: IpAddr,
     addr: SocketAddr,
     //ip_req_stats: ReqStat,
     req_stats: HashMap<global::ClientPathType, global::WsConReqStat>,
-    listener_tracker: ThrottleStatsListenerTracker,
+    listener_tracker: backend::ListenerTrackerType,
     is_listening: bool,
     ip_threshold_map: global::ThresholdMapType,
     ip_threshold_fallback: global::Threshold,
@@ -138,7 +108,7 @@ impl<
         stream: TcpStream,
         cancellation_token: CancellationToken,
         db: Arc<DB>,
-        ws_app_tx: mpsc::Sender<WsAppMsg>,
+        ws_app_tx: mpsc::Sender<backend::WsMsg>,
         ip: IpAddr,
         addr: SocketAddr,
         //admin_ws_stats_tx: mpsc::Sender<WsStatsMsg>,
@@ -152,7 +122,7 @@ impl<
         ban_duration: TimeDelta,
         time_middleware: TimeMiddlewareType,
         //threshold_middleware: ThresholdMiddlewareType,
-        listener_tracker: ThrottleStatsListenerTracker,
+        listener_tracker: backend::ListenerTrackerType,
     ) {
         trace!("task spawned!");
 
@@ -167,7 +137,7 @@ impl<
         trace!("con accepted");
         let time = time_middleware.get_time().await;
         let (ws_stream_write, ws_stream_read) = ws_stream.split();
-        let (con_tx, mut con_rx) = mpsc::channel::<ConMsg>(1);
+        let (con_tx, mut con_rx) = mpsc::channel::<backend::ConMsg>(1);
         let con_id: global::TempConIdType = uuid::Uuid::new_v4().as_u128();
 
         let mut con = Self {
@@ -319,11 +289,11 @@ impl<
         self.on_disconnect().await;
     }
 
-    pub async fn on_msg(&mut self, msg: ConMsg) -> Result<bool, ConErr> {
+    pub async fn on_msg(&mut self, msg: backend::ConMsg) -> Result<bool, ConErr> {
         match msg {
-            ConMsg::RemoveWsThrottleListener => {
+            backend::ConMsg::RemoveWsThrottleListener => {
                 self.ws_app_tx
-                    .send(WsAppMsg::RemoveListener {
+                    .send(backend::WsMsg::RemoveListener {
                         con_id: self.con_id,
                     })
                     .await?;
@@ -332,10 +302,10 @@ impl<
                         con_id: self.con_id,
                     })?;
             }
-            ConMsg::AddWsThrottleListener { res_key: ws_key } => {
+            backend::ConMsg::AddWsThrottleListener { res_key: ws_key } => {
                 let (done_tx, done_rx) = oneshot::channel();
                 self.ws_app_tx
-                    .send(WsAppMsg::AddListener {
+                    .send(backend::WsMsg::AddListener {
                         con_id: self.con_id,
                         con_tx: self.con_tx.clone(),
                         ws_key,
@@ -365,17 +335,17 @@ impl<
 
                 //current_state_tx.send(vec![self.stats.clone()]).map_err(|_| ReqOnMsgErr::LiveStatsSend)?;
             }
-            ConMsg::Send(msg) => {
+            backend::ConMsg::Send(msg) => {
                 let send_result = self.ws_stream_tx.send(msg).await;
                 if let Err(err) = send_result {
                     debug!("failed to send msg: {}", err);
                     return Ok(true);
                 }
             }
-            ConMsg::Stop => {
+            backend::ConMsg::Stop => {
                 return Ok(true);
             }
-            ConMsg::CheckThrottle {
+            backend::ConMsg::CheckThrottle {
                 path,
                 //block_threshold,
                 allow_tx,
@@ -429,9 +399,9 @@ impl<
 
                 let result = match result {
                     global::AllowCon::Allow => {
-                        if !self.listener_tracker.cons.is_empty() {
-                            self.listener_tracker
-                                .send(global::ServerMsg::WsLiveStatsReqAllowed {
+                        if !self.listener_tracker.is_empty() {
+                            
+                                backend::listener_tracker_send(&mut self.listener_tracker, global::ServerMsg::WsLiveStatsReqAllowed {
                                     con_id: self.con_id,
                                     path,
                                     total_amount: req_stat.total_allowed_count,
@@ -443,9 +413,8 @@ impl<
                     }
                     global::AllowCon::AlreadyBanned => false,
                     global::AllowCon::Banned((date, reason)) => {
-                        if !self.listener_tracker.cons.is_empty() {
-                            self.listener_tracker
-                                .send(global::ServerMsg::WsLiveStatsReqBanned {
+                        if !self.listener_tracker.is_empty() {
+                            backend::listener_tracker_send(&mut self.listener_tracker, global::ServerMsg::WsLiveStatsReqBanned {
                                     con_id: self.con_id,
                                     path,
                                     total_amount: req_stat.total_banned_count,
@@ -460,21 +429,23 @@ impl<
                             //     })
                             //     .await?;
                         }
-
+                        //let (done_tx, done_rx) = oneshot::channel::<()>();
                         self.ws_app_tx
-                            .send(WsAppMsg::Ban {
+                            .send(backend::WsMsg::Ban {
                                 ip: self.ip,
                                 date,
                                 reason,
+                          //      done_tx: None,
                             })
                             .await?;
+
+                        //done_rx.await?;
 
                         false
                     }
                     global::AllowCon::Blocked => {
-                        if !self.listener_tracker.cons.is_empty() {
-                            self.listener_tracker
-                                .send(global::ServerMsg::WsLiveStatsReqBlocked {
+                        if !self.listener_tracker.is_empty() {
+                            backend::listener_tracker_send(&mut self.listener_tracker, global::ServerMsg::WsLiveStatsReqBlocked {
                                     con_id: self.con_id,
                                     path,
                                     total_amount: req_stat.total_blocked_count,
@@ -484,32 +455,28 @@ impl<
                         false
                     }
                     global::AllowCon::UnbannedAndBlocked => {
-                        if !self.listener_tracker.cons.is_empty() {
-                            self.listener_tracker
-                                .send(global::ServerMsg::WsLiveStatsReqBlocked {
+                        if !self.listener_tracker.is_empty() {
+                            backend::listener_tracker_send(&mut self.listener_tracker, global::ServerMsg::WsLiveStatsReqBlocked {
                                     con_id: self.con_id,
                                     path,
                                     total_amount: req_stat.total_blocked_count,
                                 })
                                 .await?;
-                            self.listener_tracker
-                                .send(global::ServerMsg::WsLiveStatsIpUnbanned { ip: self.ip })
+                            backend::listener_tracker_send(&mut self.listener_tracker, global::ServerMsg::WsLiveStatsIpUnbanned { ip: self.ip })
                                 .await?;
                         }
                         false
                     }
                     global::AllowCon::UnbannedAndAllow => {
-                        if !self.listener_tracker.cons.is_empty() {
-                            self.listener_tracker
-                                .send(global::ServerMsg::WsLiveStatsReqAllowed {
+                        if !self.listener_tracker.is_empty() {
+                            backend::listener_tracker_send(&mut self.listener_tracker, global::ServerMsg::WsLiveStatsReqAllowed {
                                     con_id: self.con_id,
                                     path,
                                     total_amount: req_stat.total_allowed_count,
                                 })
                                 .await?;
 
-                            self.listener_tracker
-                                .send(global::ServerMsg::WsLiveStatsIpUnbanned { ip: self.ip })
+                                backend::listener_tracker_send(&mut self.listener_tracker, global::ServerMsg::WsLiveStatsIpUnbanned { ip: self.ip })
                                 .await?;
                         }
 
@@ -549,7 +516,7 @@ impl<
                 // }
                 self.is_listening = true;
                 self.listener_tracker
-                    .cons
+                    
                     .insert(con_id, (ws_key, con_tx.clone()));
 
                 let msg = global::ServerMsg::WsLiveStatsConnected {
@@ -563,12 +530,12 @@ impl<
                 let msg = global::ServerMsg::as_bytes(msg)?;
                 let msg = Message::Binary(msg);
 
-                con_tx.send(ConMsg::Send(msg)).await?;
+                con_tx.send(backend::ConMsg::Send(msg)).await?;
                 // current_global_state_tx.
             }
             GlobalConMsg::RemoveIpStatListener { con_id } => {
                 self.is_listening = false;
-                self.listener_tracker.cons.remove(&con_id);
+                self.listener_tracker.remove(&con_id);
             }
         }
         Ok(false)
@@ -636,7 +603,7 @@ impl<
     }
 
     pub async fn prepare(&mut self) -> Result<(), ConErr> {
-        if !self.listener_tracker.cons.is_empty() {
+        if !self.listener_tracker.is_empty() {
             let msg = global::ServerMsg::WsLiveStatsConnected {
                 ip: self.ip,
                 socket_addr: self.addr,
@@ -644,7 +611,7 @@ impl<
                 banned_until: self.banned_until.clone(),
                 req_stats: self.req_stats.clone(),
             };
-            self.listener_tracker.send(msg).await?;
+            backend::listener_tracker_send(&mut self.listener_tracker, msg).await?;
         }
         Ok(())
     }
@@ -680,7 +647,7 @@ impl<
                 //debug!("3");
                 let send_result = self
                     .ws_app_tx
-                    .send(WsAppMsg::RemoveListener {
+                    .send(backend::WsMsg::RemoveListener {
                         con_id: self.con_id,
                     })
                     .await;
@@ -697,16 +664,14 @@ impl<
                 }
             }
             //debug!("7");
-            if !self.listener_tracker.cons.is_empty() {
+            if !self.listener_tracker.is_empty() {
                 //debug!("8");
                 if self.is_listening {
                     //debug!("9");
-                    self.listener_tracker.cons.remove(&self.con_id);
+                    self.listener_tracker.remove(&self.con_id);
                 }
                 //debug!("10");
-                let send_result = self
-                    .listener_tracker
-                    .send(global::ServerMsg::WsLiveStatsDisconnected {
+                let send_result = backend::listener_tracker_send(&mut self.listener_tracker,global::ServerMsg::WsLiveStatsDisconnected {
                         con_id: self.con_id,
                     })
                     .await;
@@ -724,7 +689,7 @@ impl<
         //trace!("disconnected");
         let send_result = self
             .ws_app_tx
-            .send(WsAppMsg::Disconnected { ip: self.ip })
+            .send(backend::WsMsg::Disconnected { ip: self.ip })
             .await;
 
         if let Err(err) = send_result {
@@ -741,7 +706,7 @@ pub enum ConErr {
     Serialization(#[from] bincode::Error),
 
     #[error("error from con tracker: {0}")]
-    ConTrackerErr(#[from] ConTrackerErr),
+    ConTrackerErr(#[from] backend::ListenerTrackerErr),
 
     #[error("failed to send throttle check result.")]
     ThrottleCheckSend,
@@ -753,13 +718,13 @@ pub enum ConErr {
     SendIpDataSyncErr(#[from] mpsc::error::SendError<IpManagerMsg>),
 
     #[error("failed to send con msg: {0}")]
-    SendConMsgErr(#[from] mpsc::error::SendError<ConMsg>),
+    SendConMsgErr(#[from] mpsc::error::SendError<backend::ConMsg>),
 
     #[error("failed to send stats: {0}")]
     SendStatsErr(#[from] mpsc::error::SendError<global::WsConReqStat>),
 
     #[error("failed to send ws_msg: {0}")]
-    SendWsMsgErr(#[from] mpsc::error::SendError<WsAppMsg>),
+    SendWsMsgErr(#[from] mpsc::error::SendError<backend::WsMsg>),
 
     #[error("failed to send global con msg: {0}")]
     SendGlobalConErr(#[from] broadcast::error::SendError<GlobalConMsg>),

@@ -1,8 +1,8 @@
 use artcord_http::server::create_server;
 use artcord_mongodb::database::DB;
 use artcord_serenity::create_bot::create_bot;
-use artcord_state::global;
 use artcord_state::global::TimeMiddleware;
+use artcord_state::{backend, global};
 use artcord_tungstenite::ws::ProdUserAddrMiddleware;
 use artcord_tungstenite::ws::Ws;
 use cfg_if::cfg_if;
@@ -12,6 +12,7 @@ use futures::try_join;
 use std::{env, sync::Arc};
 use tokio::select;
 use tokio::signal;
+use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use tracing::error;
@@ -58,7 +59,6 @@ async fn main() {
 
     let time = time_machine.get_time().await;
 
- 
     // cfg_if! {
     //     if #[cfg(feature = "development")] {
 
@@ -68,16 +68,24 @@ async fn main() {
     // }
 
     let threshold = global::DefaultThreshold::default();
-   
 
+    let (ws_tx, ws_rx) = mpsc::channel::<backend::WsMsg>(1);
+    let (http_tx, http_rx) = mpsc::channel::<backend::HttpMsg>(1);
+
+    let http_ip = "0.0.0.0:3420".to_string();
     let web_server = create_server(
-        cancelation_token.clone(),
-        &gallery_root_dir,
-        &assets_root_dir,
+        http_ip,
+        db.clone(),
         threshold.clone(),
-        time,
+        cancelation_token.clone(),
+        gallery_root_dir.clone(),
+        assets_root_dir,
+        "./artcord-http/index.html".to_string(),
+        ws_tx.clone(),
+        http_rx,
+        time_machine.clone(),
+        ProdUserAddrMiddleware.clone(),
     );
-
 
     let ws_ip = "0.0.0.0:3420".to_string();
     let web_sockets_handle = task_tracker.spawn(
@@ -86,6 +94,9 @@ async fn main() {
             cancelation_token.clone(),
             ws_ip.clone(),
             threshold,
+            ws_tx,
+            ws_rx,
+            http_tx,
             db.clone(),
             time_machine,
             //global::ProdThreshold,
@@ -138,11 +149,12 @@ mod artcord_tests {
 
     use crate::create_server;
     use artcord_mongodb::database::DB;
-    use artcord_state::global;
-    use artcord_tungstenite::ws::{GetUserAddrMiddleware, Ws};
+    use artcord_state::{backend, global};
+    use artcord_tungstenite::ws::Ws;
     use chrono::{DateTime, TimeDelta, Utc};
-    use futures::{stream::SplitSink, SinkExt, StreamExt};
+    use futures::{join, stream::SplitSink, SinkExt, StreamExt};
     use mongodb::{bson::doc, options::ClientOptions};
+    use reqwest::StatusCode;
     use std::net::SocketAddr;
     use thiserror::Error;
     use tokio::sync::mpsc;
@@ -180,6 +192,12 @@ mod artcord_tests {
     const CLIENT_CONNECTED_SUCCESS: Result<ConnectionMsg, ClientErr> = Ok(ConnectionMsg::Connected);
     const CLIENT_CONNECTED_ERR: Result<ConnectionMsg, ClientErr> = Err(ClientErr::FailedToConnect);
 
+    const HTTP_MAX_ALLOW: u64 = 5;
+    const HTTP_MAX_BLOCK: u64 = 5;
+    const HTTP_ALLOW_DURATION: TimeDelta = global::delta_seconds(10);
+    const HTTP_BLOCK_DURATION: TimeDelta = global::delta_seconds(10);
+    const HTTP_BAN_DURATION: TimeDelta = global::delta_minutes(1);
+
     // const DEFAULT_THRESHOLD: global::DefaultThreshold= global::DefaultThreshold {
     //     ws_max_con_threshold: global::Threshold::new_const(10, TimeDelta::try_minutes(1)),
     //     ws_max_con_ban_duration: global::delta_minutes(1),
@@ -197,10 +215,6 @@ mod artcord_tests {
     //     ws_http_ban_duration: global::delta_minutes(1),
     //     ws_http_ban_reason: global::IpBanReason::HttpTooManyRequests,
     // };
-
-
-
-
 
     #[derive(Debug, PartialEq, Clone, Copy)]
     pub struct DebugThreshold;
@@ -237,10 +251,7 @@ mod artcord_tests {
 
     pub fn create_default_thresholds() -> global::DefaultThreshold {
         global::DefaultThreshold {
-            ws_max_con_threshold: global::Threshold::new(
-                CON_MAX_BLOCK_AMOUNT,
-                CON_BLOCK_DURATION,
-            ),
+            ws_max_con_threshold: global::Threshold::new(CON_MAX_BLOCK_AMOUNT, CON_BLOCK_DURATION),
             ws_max_con_ban_duration: CON_BAN_DURATION,
             ws_max_con_threshold_range: CON_MAX_AMOUNT,
             ws_max_con_ban_reason: global::IpBanReason::WsTooManyReconnections,
@@ -253,19 +264,22 @@ mod artcord_tests {
             ws_con_flicker_ban_reason: global::IpBanReason::WsConFlickerDetected,
 
             ws_req_block_threshold: HashMap::new(),
-            ws_req_block_threshold_fallback: global::Threshold::new(REQ_MAX_ALLOW, REQ_ALLOW_DURATION),
+            ws_req_block_threshold_fallback: global::Threshold::new(
+                REQ_MAX_ALLOW,
+                REQ_ALLOW_DURATION,
+            ),
             ws_req_ban_threshold: global::Threshold::new(REQ_MAX_BLOCK, REQ_BLOCK_DURATION),
             ws_req_ban_duration: REQ_BAN_DURATION,
             ws_req_ban_reason: global::IpBanReason::WsRouteBruteForceDetected,
 
-            ws_http_block_threshold: global::Threshold::new_const(10, TimeDelta::try_minutes(1)),
-            ws_http_ban_threshold: global::Threshold::new_const(10, TimeDelta::try_minutes(1)),
-            ws_http_ban_duration: global::delta_minutes(1),
+            ws_http_block_threshold: global::Threshold::new(HTTP_MAX_ALLOW, HTTP_ALLOW_DURATION),
+            ws_http_ban_threshold: global::Threshold::new(HTTP_MAX_BLOCK, HTTP_BLOCK_DURATION),
+            ws_http_ban_duration: HTTP_BAN_DURATION,
             ws_http_ban_reason: global::IpBanReason::HttpTooManyRequests,
         }
     }
 
-    impl GetUserAddrMiddleware for TestUserAddrMiddleware {
+    impl global::GetUserAddrMiddleware for TestUserAddrMiddleware {
         async fn get_addr(&self, addr: SocketAddr) -> SocketAddr {
             let (addr_tx, addr_rx) = oneshot::channel();
             self.tx.send((addr, addr_tx)).await.unwrap();
@@ -307,17 +321,18 @@ mod artcord_tests {
     //     }
     // }
 
-    struct WsTestApp {
+    struct TestApp {
         //ips: HashMap<usize, IpAddr>,
         connections: HashMap<usize, Connection>,
         tracker: TaskTracker,
         time: Arc<Mutex<DateTime<Utc>>>,
         cancelation_token: CancellationToken,
         addr_middleware_rx: mpsc::Receiver<(SocketAddr, oneshot::Sender<SocketAddr>)>,
-        server_port: usize,
+        ws_port: usize,
+        http_port: usize,
     }
 
-    impl WsTestApp {
+    impl TestApp {
         pub async fn new(ws_id: usize, time: DateTime<Utc>) -> Self {
             let mongo_name = format!("artcord_test_{}", ws_id);
             drop_db(mongo_name.clone(), MONGO_URL).await;
@@ -327,7 +342,6 @@ mod artcord_tests {
             let time_mutex: Arc<Mutex<DateTime<Utc>>> = Arc::new(Mutex::new(time));
             let tracker = TaskTracker::new();
             let cancelation_token = CancellationToken::new();
-            
 
             let (addr_middleware_rx, addr_middleware) = TestUserAddrMiddleware::new();
 
@@ -342,23 +356,58 @@ mod artcord_tests {
                 }
             });
 
-            let port = 3420 + ws_id;
-            let ws_addr = format!("0.0.0.0:{}", port);
+            let ws_port = 3420 + ws_id;
+            let ws_addr = format!("0.0.0.0:{}", ws_port);
             let default_threshold = create_default_thresholds();
+
+            let (ws_tx, ws_rx) = mpsc::channel::<backend::WsMsg>(1);
+            let (http_tx, http_rx) = mpsc::channel::<backend::HttpMsg>(1);
 
             tracker.spawn(
                 Ws::create(
                     tracker.clone(),
                     cancelation_token.clone(),
                     ws_addr.clone(),
-                    default_threshold,
+                    default_threshold.clone(),
+                    ws_tx.clone(),
+                    ws_rx,
+                    http_tx,
                     db.clone(),
-                    time_machine,
-                  //  DebugThreshold,
-                    addr_middleware,
+                    time_machine.clone(),
+                    //  DebugThreshold,
+                    addr_middleware.clone(),
                 )
                 .instrument(tracing::trace_span!("ws", "{}", ws_addr)),
             );
+
+            // let server = create_server(
+            //     CancellationToken::new(),
+            //     "./artcord-actix/gallery/",
+            //     "./artcord-actix/assets",
+            //     default_threshold,
+            //     time,
+            // );
+
+            let manifest_dir = env!("CARGO_MANIFEST_DIR");
+            let index_path = format!("{}/{}", manifest_dir, "../artcord-http/index.html");
+            let gallery_path = format!("{}/{}", manifest_dir, "../gallery");
+            let assets_path = format!("{}/{}", manifest_dir, "../assets");
+            let http_port = 2420 + ws_id;
+            let ws_addr = format!("0.0.0.0:{}", http_port);
+
+            tracker.spawn(create_server(
+                ws_addr,
+                db.clone(),
+                default_threshold,
+                cancelation_token.clone(),
+                gallery_path,
+                assets_path,
+                index_path,
+                ws_tx,
+                http_rx,
+                time_machine,
+                addr_middleware,
+            ));
 
             Self {
                 //ips: HashMap::new(),
@@ -367,7 +416,8 @@ mod artcord_tests {
                 tracker,
                 time: time_mutex,
                 addr_middleware_rx,
-                server_port: port,
+                ws_port,
+                http_port,
             }
         }
 
@@ -382,7 +432,7 @@ mod artcord_tests {
                 self.tracker.clone(),
                 self.cancelation_token.clone(),
                 IpAddr::V4(ip),
-                self.server_port,
+                self.ws_port,
             );
 
             let ((mut addr, return_tx)) = self.addr_middleware_rx.recv().await.unwrap();
@@ -408,6 +458,47 @@ mod artcord_tests {
         async fn set_time(&self, callback: impl Fn(&mut DateTime<Utc>)) {
             let time = &mut *self.time.lock().await;
             callback(time);
+        }
+
+        async fn req(
+            &mut self,
+            link: &str,
+            ip: Ipv4Addr,
+        ) -> Result<reqwest::Response, reqwest::Error> {
+            let (done_tx, done_rx) =
+                oneshot::channel::<Result<reqwest::Response, reqwest::Error>>();
+            let link = format!("http://localhost:{}{}", self.http_port, link);
+            join!(
+                async {
+                    let res: Result<reqwest::Response, reqwest::Error> = reqwest::get(link).await;
+                    done_tx.send(res).unwrap();
+                },
+                async {
+                    let ((mut addr, return_tx)) = self.addr_middleware_rx.recv().await.unwrap();
+                    let client_2_ip = IpAddr::V4(ip);
+                    addr.set_ip(client_2_ip);
+                    return_tx.send(addr).unwrap();
+                }
+            );
+
+            done_rx.await.unwrap()
+        }
+
+        async fn req_ok(&mut self, link: &str, ip: Ipv4Addr) {
+            let res = self.req(link, ip).await.unwrap();
+
+            assert_eq!(res.status(), StatusCode::OK);
+        }
+
+        async fn req_forbidden(&mut self, link: &str, ip: Ipv4Addr) {
+            let res = self.req(link, ip).await.unwrap();
+
+            assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        }
+
+        async fn req_err(&mut self, link: &str, ip: Ipv4Addr) {
+            let is_err = self.req(link, ip).await.is_err();
+            assert!(is_err);
         }
 
         async fn send(
@@ -590,6 +681,36 @@ mod artcord_tests {
             })
         }
 
+        async fn recv_http_allow(&mut self, client_id: usize, ip: Ipv4Addr) {
+            let target_ip = IpAddr::V4(ip);
+            //let c_ip = self.connections.get(&target).map(|con| con.ip).unwrap();
+            let msg = self.recv(client_id).await;
+            assert!(match msg {
+                global::ServerMsg::HttpLiveStatsConAllowed { ip, total_amount } => ip == target_ip,
+                _ => false,
+            })
+        }
+
+        async fn recv_http_block(&mut self, client_id: usize, ip: Ipv4Addr) {
+            let target_ip = IpAddr::V4(ip);
+            //let c_ip = self.connections.get(&target).map(|con| con.ip).unwrap();
+            let msg = self.recv(client_id).await;
+            assert!(match msg {
+                global::ServerMsg::HttpLiveStatsConBlocked { ip, total_amount } => ip == target_ip,
+                _ => false,
+            })
+        }
+
+        async fn recv_http_ban(&mut self, client_id: usize, ip: Ipv4Addr) {
+            let target_ip = IpAddr::V4(ip);
+            //let c_ip = self.connections.get(&target).map(|con| con.ip).unwrap();
+            let msg = self.recv(client_id).await;
+            assert!(match msg {
+                global::ServerMsg::HttpLiveStatsConBanned { ip, total_amount } => ip == target_ip,
+                _ => false,
+            })
+        }
+
         async fn recv_con_allow(&mut self, client_id: usize, target: usize) {
             let c_ip = self.connections.get(&target).map(|con| con.ip).unwrap();
             let msg = self.recv(client_id).await;
@@ -741,7 +862,7 @@ mod artcord_tests {
         init_tracer();
 
         let time = Utc::now();
-        let mut ws_test_app = WsTestApp::new(1, time).await;
+        let mut ws_test_app = TestApp::new(1, time).await;
 
         let client1 = ws_test_app
             .create_client(1, Ipv4Addr::new(0, 0, 0, 1), CLIENT_CONNECTED_SUCCESS)
@@ -771,7 +892,7 @@ mod artcord_tests {
         init_tracer();
 
         let time = Utc::now();
-        let mut ws_test_app = WsTestApp::new(2, time).await;
+        let mut ws_test_app = TestApp::new(2, time).await;
 
         let client1 = ws_test_app
             .create_client(1, Ipv4Addr::new(0, 0, 0, 1), CLIENT_CONNECTED_SUCCESS)
@@ -923,7 +1044,7 @@ mod artcord_tests {
         init_tracer();
 
         let time = Utc::now();
-        let mut ws_test_app = WsTestApp::new(3, time).await;
+        let mut ws_test_app = TestApp::new(3, time).await;
 
         let client2 = ws_test_app
             .create_client(200, Ipv4Addr::new(0, 0, 0, 2), CLIENT_CONNECTED_SUCCESS)
@@ -1019,7 +1140,7 @@ mod artcord_tests {
         init_tracer();
 
         let time = Utc::now();
-        let mut ws_test_app = WsTestApp::new(4, time).await;
+        let mut ws_test_app = TestApp::new(4, time).await;
 
         let client2 = ws_test_app
             .create_client(200, Ipv4Addr::new(0, 0, 0, 2), CLIENT_CONNECTED_SUCCESS)
@@ -1057,7 +1178,7 @@ mod artcord_tests {
         init_tracer();
 
         let time = Utc::now();
-        let mut ws_test_app = WsTestApp::new(5, time).await;
+        let mut ws_test_app = TestApp::new(5, time).await;
 
         let client1_ip = Ipv4Addr::new(0, 0, 0, 1);
         let ban_duration = TimeDelta::try_seconds(10).unwrap();
@@ -1121,25 +1242,71 @@ mod artcord_tests {
         init_tracer();
 
         let time = Utc::now();
-        let default_threshold = create_default_thresholds();
+        let mut ws_test_app = TestApp::new(6, time).await;
 
-        let server = create_server(
-            CancellationToken::new(),
-            "./artcord-actix/gallery/",
-            "./artcord-actix/assets",
-            default_threshold,
-            time,
-        );
+        let http_ip = Ipv4Addr::new(0, 0, 0, 1);
+        let http_ip2 = Ipv4Addr::new(0, 0, 0, 2);
+
+        let client2 = ws_test_app
+            .create_client(200, http_ip2, CLIENT_CONNECTED_SUCCESS)
+            .await;
+        ws_test_app.send_live_stats_on(client2).await;
+        ws_test_app.recv_connections(client2).await;
+        ws_test_app.recv_connected(client2).await;
+
+        let client1 = ws_test_app
+            .create_client(1, http_ip, CLIENT_CONNECTED_SUCCESS)
+            .await;
+        ws_test_app.recv_con_allow(client2, client1).await;
+        ws_test_app.recv_connected_one(client2, client1).await;
+
+        // let time = Utc::now();
+        // let default_threshold = create_default_thresholds();
+
+        // let server = create_server(
+        //     CancellationToken::new(),
+        //     "./artcord-actix/gallery/",
+        //     "./artcord-actix/assets",
+        //     default_threshold,
+        //     time,
+        // );
 
         //   / tokio::spawn(server);
 
-        let body = reqwest::get("http://localhost:3000").await.unwrap();
+        for _ in 0..HTTP_MAX_ALLOW {
+            ws_test_app.req_ok("/", http_ip).await;
+            ws_test_app.recv_http_allow(client2, http_ip).await;
+        }
 
-        trace!("{:#?}", body);
+        ws_test_app.req_ok("/", http_ip2).await;
+        ws_test_app.recv_http_allow(client2, http_ip2).await;
 
-        let body = reqwest::get("http://localhost:3000").await.unwrap();
+        for _ in 0..HTTP_MAX_ALLOW {
+            ws_test_app
+                .req_forbidden("/", http_ip)
+                .await;
+            ws_test_app.recv_http_block(client2, http_ip).await;
+        }
 
-        trace!("{:#?}", body);
+        ws_test_app.req_err("/", http_ip).await;
+        ws_test_app.recv_http_ban(client2, http_ip).await;
+        ws_test_app
+            .recv_ip_banned(client2, client1, global::IpBanReason::HttpTooManyRequests)
+            .await;
+
+        ws_test_app.recv_disconnected_one(client2).await;
+        ws_test_app.recv_command_disconnected(client1).await;
+
+        ws_test_app.req_ok("/", http_ip2).await;
+        ws_test_app.recv_http_allow(client2, http_ip2).await;
+
+        //trace!("{:#?}", body);
+
+        // let body = reqwest::get("http://localhost:3000").await.unwrap();
+
+        // trace!("{:#?}", body);
+
+        ws_test_app.close().await;
     }
 
     fn init_tracer() {

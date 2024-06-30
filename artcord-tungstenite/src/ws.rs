@@ -11,7 +11,7 @@ use artcord_leptos_web_sockets::WsRouteKey;
 use artcord_mongodb::database::model::ws_ip_manager;
 use artcord_mongodb::database::DBError;
 use artcord_mongodb::database::DB;
-use artcord_state::global;
+use artcord_state::{global, backend};
 use chrono::DateTime;
 use chrono::Month;
 use chrono::Months;
@@ -60,11 +60,7 @@ use tracing::{error, trace};
 
 use crate::ws::con::GlobalConMsg;
 
-use self::con::throttle_stats_listener_tracker::ConTrackerErr;
-use self::con::throttle_stats_listener_tracker::ThrottleStatsListenerTracker;
 use self::con::Con;
-use self::con::ConMsg;
-
 pub mod con;
 
 pub type GlobalConChannel = (
@@ -72,41 +68,9 @@ pub type GlobalConChannel = (
     broadcast::Receiver<GlobalConMsg>,
 );
 
-pub trait GetUserAddrMiddleware {
-    fn get_addr(&self, addr: SocketAddr) -> impl std::future::Future<Output = SocketAddr> + Send;
-}
 
-#[derive(Debug)]
-pub enum WsAppMsg {
-    Close,
-    Ban {
-        ip: IpAddr,
-        date: DateTime<Utc>,
-        reason: global::IpBanReason,
-    },
-    // UnBan {
-    //     ip: IpAddr,
-    // },
-    Disconnected {
-        //  connection_key: TempConIdType,
-        ip: IpAddr,
-    },
-    AddListener {
-        con_id: global::TempConIdType,
-        con_tx: mpsc::Sender<ConMsg>,
-        ws_key: WsRouteKey,
-        done_tx: oneshot::Sender<Vec<global::ConnectedWsIp>>,
-    },
-    RemoveListener {
-        con_id: global::TempConIdType,
-        // tx: mpsc::Sender<ConMsg>,
-        // ws_key: WsRouteKey,
-    },
-    // Inc {
-    //     ip: IpAddr,
-    //     path: ClientPathType,
-    // },
-}
+
+
 
 #[derive(Debug)]
 pub enum IpManagerMsg {
@@ -136,7 +100,7 @@ pub struct ProdUserAddrMiddleware;
 pub struct Ws<
     TimeMiddlewareType: global::TimeMiddleware + Clone + Sync + Send + 'static,
     //ThresholdMiddlewareType: global::ClientThresholdMiddleware + Send + Clone + Sync + 'static,
-    SocketAddrMiddlewareType: GetUserAddrMiddleware + Send + Sync + Clone + 'static,
+    SocketAddrMiddlewareType: global::GetUserAddrMiddleware + Send + Sync + Clone + 'static,
 > {
     tcp_listener: TcpListener,
     task_tracker_ws_ip_manager: TaskTracker,
@@ -151,9 +115,10 @@ pub struct Ws<
     // ws_rx: mpsc::Receiver<WsAppMsg>,
     global_con_tx: broadcast::Sender<GlobalConMsg>,
     global_con_rx: broadcast::Receiver<GlobalConMsg>,
+    http_tx: mpsc::Sender<backend::HttpMsg>,
     db: Arc<DB>,
     ips: HashMap<IpAddr, WsIp>,
-    listener_tracker: ThrottleStatsListenerTracker,
+    listener_tracker: backend::ListenerTrackerType,
     time_middleware: TimeMiddlewareType,
     //threshold_middleware: ThresholdMiddlewareType,
     socket_middleware: SocketAddrMiddlewareType,
@@ -199,7 +164,7 @@ pub struct WsIp {
 impl<
         TimeMiddlewareType: global::TimeMiddleware + Clone + Sync + Send + 'static,
         //ThresholdMiddlewareType: global::ClientThresholdMiddleware + Send + Clone + Sync + 'static, , ThresholdMiddlewareType
-        SocketAddrMiddlewareType: GetUserAddrMiddleware + Send + Sync + Clone + 'static,
+        SocketAddrMiddlewareType: global::GetUserAddrMiddleware + Send + Sync + Clone + 'static,
     > Ws<TimeMiddlewareType, SocketAddrMiddlewareType>
 {
     pub async fn create(
@@ -207,6 +172,9 @@ impl<
         root_cancellation_token: CancellationToken,
         ws_addr: String,
         ws_threshold: global::DefaultThreshold,
+        ws_tx: mpsc::Sender<backend::WsMsg>,
+        ws_rx: mpsc::Receiver<backend::WsMsg>,
+        http_tx: mpsc::Sender<backend::HttpMsg>,
         db: Arc<DB>,
         time_middleware: TimeMiddlewareType,
         //threshold_middleware: ThresholdMiddlewareType,
@@ -215,7 +183,7 @@ impl<
         let try_socket = TcpListener::bind(ws_addr.clone()).await;
         let tcp_listener = try_socket.expect("Failed to bind");
 
-        let (global_con_tx, global_con_rx) = broadcast::channel::<GlobalConMsg>(1000);
+        let (global_con_tx, global_con_rx) = broadcast::channel::<GlobalConMsg>(1);
 
         let mut ws = Self {
             tcp_listener,
@@ -231,20 +199,24 @@ impl<
             // ws_rx,
             global_con_tx,
             global_con_rx,
+            http_tx,
             db,
             ips: HashMap::new(),
-            listener_tracker: ThrottleStatsListenerTracker::new(),
+            listener_tracker: HashMap::new(),
             time_middleware,
             //threshold_middleware,
             socket_middleware,
         };
 
-        ws.run().await;
+        ws.run(ws_tx, ws_rx).await;
     }
 
-    pub async fn run(&mut self) {
+    pub async fn run(&mut self,
+        ws_tx: mpsc::Sender<backend::WsMsg>,
+        mut ws_rx: mpsc::Receiver<backend::WsMsg>,
+    ) {
         info!("ws started");
-        let (ws_tx, mut ws_rx) = mpsc::channel::<WsAppMsg>(1);
+        //let (ws_tx, mut ws_rx) = mpsc::channel::<backend::WsMsg>(1);
 
         //self.root_cancellation_token.is_cancelled()
         loop {
@@ -319,7 +291,7 @@ impl<
 
     pub async fn on_con(
         &mut self,
-        ws_tx: &mpsc::Sender<WsAppMsg>,
+        ws_tx: &mpsc::Sender<backend::WsMsg>,
         con: Result<(TcpStream, SocketAddr), io::Error>,
     ) -> Result<(), WsOnConErr> {
         let (stream, user_addr) = match con {
@@ -394,12 +366,12 @@ impl<
         ) {
             global::AllowCon::Allow => {
                 ws_ip.total_allow_amount += 1;
-                if !self.listener_tracker.cons.is_empty() {
+                if !self.listener_tracker.is_empty() {
                     let msg = global::ServerMsg::WsLiveStatsConAllowed {
                         ip,
                         total_amount: ws_ip.total_allow_amount,
                     };
-                    self.listener_tracker.send(msg).await?
+                    backend::listener_tracker_send(&mut self.listener_tracker,msg).await?
                 }
                 true
             }
@@ -409,56 +381,56 @@ impl<
             }
             global::AllowCon::Blocked => {
                 ws_ip.total_block_amount += 1;
-                if !self.listener_tracker.cons.is_empty() {
+                if !self.listener_tracker.is_empty() {
                     let msg = global::ServerMsg::WsLiveStatsConBlocked {
                         ip,
                         total_amount: ws_ip.total_block_amount,
                     };
-                    self.listener_tracker.send(msg).await?;
+                    backend::listener_tracker_send(&mut self.listener_tracker, msg).await?;
                 }
                 false
             }
             global::AllowCon::UnbannedAndBlocked => {
                 ws_ip.total_allow_amount += 1;
-                if !self.listener_tracker.cons.is_empty() {
+                if !self.listener_tracker.is_empty() {
                     let msg = global::ServerMsg::WsLiveStatsConBlocked {
                         ip,
                         total_amount: ws_ip.total_block_amount,
                     };
-                    self.listener_tracker.send(msg).await?;
+                    backend::listener_tracker_send(&mut self.listener_tracker,msg).await?;
 
                     let msg = global::ServerMsg::WsLiveStatsIpUnbanned { ip };
-                    self.listener_tracker.send(msg).await?;
+                    backend::listener_tracker_send(&mut self.listener_tracker,msg).await?;
                 }
                 ws_ip.ip_manager_tx.send(IpManagerMsg::Unban).await?;
 
                 false
             }
             global::AllowCon::UnbannedAndAllow => {
-                if !self.listener_tracker.cons.is_empty() {
+                if !self.listener_tracker.is_empty() {
                     let msg = global::ServerMsg::WsLiveStatsConAllowed {
                         ip,
                         total_amount: ws_ip.total_allow_amount,
                     };
-                    self.listener_tracker.send(msg).await?;
+                    backend::listener_tracker_send(&mut self.listener_tracker,msg).await?;
 
                     let msg = global::ServerMsg::WsLiveStatsIpUnbanned { ip };
-                    self.listener_tracker.send(msg).await?;
+                    backend::listener_tracker_send(&mut self.listener_tracker,msg).await?;
                 }
                 ws_ip.ip_manager_tx.send(IpManagerMsg::Unban).await?;
                 true
             }
             global::AllowCon::Banned((date, reason)) => {
                 ws_ip.total_banned_amount += 1;
-                if !self.listener_tracker.cons.is_empty() {
+                if !self.listener_tracker.is_empty() {
                     let msg = global::ServerMsg::WsLiveStatsConBanned {
                         ip,
                         total_amount: ws_ip.total_banned_amount,
                     };
-                    self.listener_tracker.send(msg).await?;
+                    backend::listener_tracker_send(&mut self.listener_tracker,msg).await?;
 
                     let msg = global::ServerMsg::WsLiveStatsIpBanned { ip, date, reason };
-                    self.listener_tracker.send(msg).await?;
+                    backend::listener_tracker_send(&mut self.listener_tracker,msg).await?;
                 }
                 ws_ip.ip_con_tx.send(IpConMsg::Disconnect)?;
                 debug!("ip {} is banned: {:#?}", ip, &ws_ip);
@@ -499,7 +471,7 @@ impl<
         Ok(())
     }
 
-    pub async fn on_msg(&mut self, msg: Option<WsAppMsg>) -> Result<bool, WsMsgErr> {
+    pub async fn on_msg(&mut self, msg: Option<backend::WsMsg>) -> Result<bool, WsMsgErr> {
         let time = self.time_middleware.get_time().await;
 
         let Some(msg) = msg else {
@@ -507,7 +479,7 @@ impl<
         };
 
         match msg {
-            WsAppMsg::Disconnected { ip } => {
+            backend::WsMsg::Disconnected { ip } => {
                 if let Some(ws_ip) = self.ips.get_mut(&ip) {
                     let new_con_count = ws_ip.current_con_count.checked_sub(1);
                     if let Some(new_con_count) = new_con_count {
@@ -554,18 +526,18 @@ impl<
                     error!("cant disconnect ip that doesnt exist: {}", ip);
                 }
             }
-            WsAppMsg::Close => {
+            backend::WsMsg::Close => {
                 return Ok(true);
             }
-            WsAppMsg::AddListener {
-                con_id: connection_key,
-                con_tx: tx,
+            backend::WsMsg::AddListener {
+                con_id,
+                con_tx,
                 ws_key,
                 done_tx,
             } => {
                 self.listener_tracker
-                    .cons
-                    .insert(connection_key, (ws_key, tx));
+                    
+                    .insert(con_id, (ws_key, con_tx.clone()));
                 let mut cons: Vec<global::ConnectedWsIp> = Vec::new();
                 for (ip, ws_ip) in self.ips.iter() {
                     cons.push(global::ConnectedWsIp {
@@ -577,34 +549,44 @@ impl<
                         total_already_banned_amount: ws_ip.total_already_banned_amount,
                     });
                 }
+                let (http_done_tx, http_done_rx) = oneshot::channel::<()>();
+                self.http_tx.send(backend::HttpMsg::AddListener { con_id, con_tx, ws_key, done_tx: http_done_tx }).await?;
+                http_done_rx.await?;
                 let send_result = done_tx.send(cons).map_err(|_| WsMsgErr::ListenerDoneTx);
                 if let Err(err) = send_result {
                     debug!("ws add listener err: {}", err);
                 }
             }
-            WsAppMsg::RemoveListener {
-                con_id: connection_key,
+            backend::WsMsg::RemoveListener {
+                con_id,
                 // tx,
                 // ws_key,
             } => {
-                self.listener_tracker.cons.remove(&connection_key);
+                self.listener_tracker.remove(&con_id);
+                self.http_tx.send(backend::HttpMsg::RemoveListener { con_id }).await?;
             }
-            WsAppMsg::Ban {
+            backend::WsMsg::Ban {
                 ip,
                 date,
                 reason,
+              //  done_tx
             } => {
                 if let Some(ws_ip) = self.ips.get_mut(&ip) {
 
-                    let msg = global::ServerMsg::WsLiveStatsIpBanned { ip, date, reason: reason.clone() };
-                    self.listener_tracker.send(msg).await?;
+                    
 
-                    ws_ip.banned_until = Some((date, reason));
+                    ws_ip.banned_until = Some((date, reason.clone()));
                     ws_ip.ip_con_tx.send(IpConMsg::Disconnect)?;
                     debug!("ip {} is banned: {:#?}", ip, &self.ips);
+
+                    let msg = global::ServerMsg::WsLiveStatsIpBanned { ip, date, reason };
+                    backend::listener_tracker_send(&mut self.listener_tracker,msg).await?;
+
                 } else {
                     error!("cant ban ip that doesnt exist: {}", ip);
                 }
+
+              //  done_tx.send(())?;
             } // WsAppMsg::UnBan { ip } => {
               //     self.throttle.unban(&ip);
               // }
@@ -814,7 +796,7 @@ impl WsIp {
     }
 }
 
-impl GetUserAddrMiddleware for ProdUserAddrMiddleware {
+impl global::GetUserAddrMiddleware for ProdUserAddrMiddleware {
     async fn get_addr(&self, addr: SocketAddr) -> SocketAddr {
         addr
     }
@@ -823,7 +805,7 @@ impl GetUserAddrMiddleware for ProdUserAddrMiddleware {
 #[derive(Error, Debug)]
 pub enum WsOnConErr {
     #[error("Con tracker err: {0}")]
-    ConTracker(#[from] ConTrackerErr),
+    ConTracker(#[from] backend::ListenerTrackerErr),
 
     #[error("Send error: {0}")]
     IpMangerSend(#[from] tokio::sync::mpsc::error::SendError<IpManagerMsg>),
@@ -844,10 +826,13 @@ pub enum WsIpManagerErr {
 #[derive(Error, Debug)]
 pub enum WsMsgErr {
     #[error("Con tracker err: {0}")]
-    ConTracker(#[from] ConTrackerErr),
+    ConTracker(#[from] backend::ListenerTrackerErr),
 
     #[error("failed to send done_tx msg back")]
     ListenerDoneTx,
+    
+    #[error("failed to receive from oneshot channel")]
+    OneShotRxErr(#[from] tokio::sync::oneshot::error::RecvError),
 
     #[error("MainGallery error: {0}")]
     Serialization(#[from] bincode::Error),
@@ -865,7 +850,10 @@ pub enum WsMsgErr {
     IpManagerSend(#[from] tokio::sync::mpsc::error::SendError<IpManagerMsg>),
 
     #[error("Send error: {0}")]
-    ConnectionSend(#[from] tokio::sync::mpsc::error::SendError<ConMsg>),
+    HttpSend(#[from] tokio::sync::mpsc::error::SendError<backend::HttpMsg>),
+
+    #[error("Send error: {0}")]
+    ConnectionSend(#[from] tokio::sync::mpsc::error::SendError<backend::ConMsg>),
 
     #[error("db error: {0}")]
     DBError(#[from] DBError),
