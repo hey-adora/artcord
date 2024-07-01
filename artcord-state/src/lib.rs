@@ -953,7 +953,7 @@ pub mod global {
                         ws_con_flicker_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
                         ws_con_flicker_ban_duration: delta_minutes(1),
                         ws_con_flicker_ban_reason: IpBanReason::WsConFlickerDetected,
-                        ws_http_block_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
+                        ws_http_block_threshold: Threshold::new_const(100, TimeDelta::try_minutes(1)),
                         ws_http_ban_threshold: Threshold::new_const(10, TimeDelta::try_minutes(1)),
                         ws_http_ban_duration: delta_minutes(1),
                         ws_http_ban_reason: IpBanReason::HttpTooManyRequests,

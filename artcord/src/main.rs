@@ -109,7 +109,7 @@ async fn main() {
     let (ws_tx, ws_rx) = mpsc::channel::<backend::WsMsg>(1);
     let (http_tx, http_rx) = mpsc::channel::<backend::HttpMsg>(1);
 
-    let http_ip = "0.0.0.0:3420".to_string();
+    let http_ip = "0.0.0.0:3000".to_string();
     let web_server = create_server(
         http_ip,
         db.clone(),
