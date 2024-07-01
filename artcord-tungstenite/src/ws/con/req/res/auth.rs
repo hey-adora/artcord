@@ -14,7 +14,7 @@ pub async fn login(
     email: &str,
     password: &str,
     pepper: &str,
-    jwt_secret: &Vec<u8>,
+    jwt_secret: &[u8],
     time: &DateTime<Utc>,
 ) -> Result<global::ServerMsg, ResErr> {
     println!("LOGIN '{}' '{}'", email, password);
@@ -34,11 +34,20 @@ pub async fn login(
         ));
     }
 
-    let token: String = (0..69)
-        .map(|_| char::from(rand::thread_rng().gen_range(32..127)))
-        .collect();
-    // let header = Header::new(Algorithm::HS512);
-    // let token = encode(&header, &token, &EncodingKey::from_secret(&jwt_secret))?;
+    // let token: String = (0..69)
+    //     .map(|_| char::from(rand::thread_rng().gen_range(32..127)))
+    //     .collect();
+
+    let mut token = [0u8; 512];
+    rand::thread_rng().fill(&mut token);
+    let token = base64::Engine::encode(&base64::prelude::BASE64_STANDARD, &token);
+
+    let header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS512);
+    let token = jsonwebtoken::encode(
+        &header,
+        &token,
+        &jsonwebtoken::EncodingKey::from_secret(&jwt_secret),
+    )?;
 
     let acc_session = global::DbAccSession::new(
         acc.id.clone(),
@@ -61,7 +70,7 @@ pub async fn register(
     email: &str,
     password: &str,
     time: &DateTime<Utc>,
-) -> Result<global::ServerMsg, ResErr> {
+) -> Result<Option<global::ServerMsg>, ResErr> {
     let email_code: String = (0..25)
         .map(|_| char::from(rand::thread_rng().gen_range(32..127)))
         .collect();
@@ -69,22 +78,21 @@ pub async fn register(
     let (invalid, email_error, password_error) =
         global::RegistrationInvalidMsg::validate_registration(&email, &password);
 
-    if invalid == true {
-        return Ok(global::ServerMsg::RegistrationErr(
+    if invalid {
+        return Ok(Some(global::ServerMsg::RegistrationErr(
             global::RegistrationInvalidMsg {
                 general_error: None,
                 password_error,
                 email_error,
             },
-        ));
+        )));
     }
 
-    let acc = db.acc_find_one(&email).await?;
-    if let Some(acc) = acc {
-        return Ok(global::ServerMsg::RegistrationErr(
+    if db.acc_find_one(&email).await?.is_some() {
+        return Ok(Some(global::ServerMsg::RegistrationErr(
             global::RegistrationInvalidMsg::new()
                 .general(format!("Account with email '{}' already exists.", &email)),
-        ));
+        )));
     };
 
     let password = format!("{}{}", &password, &pepper);
@@ -95,13 +103,10 @@ pub async fn register(
 
     let acc = global::DbAcc::new(&email, &password_hash, &email_code, time);
 
-    let result = db
-        .acc_insert_one(acc)
+    db.acc_insert_one(acc)
         .await
-        .and_then(|e| Ok(global::ServerMsg::RegistrationSuccess))?;
-    // .or_else(|e| Err(ServerMsgCreationError::from(e)))?;
-
-    Ok(result)
+        .map(|_| Some(global::ServerMsg::RegistrationSuccess))
+        .map_err(|err| ResErr::from(err))
 }
 
 // pub async fn logout(acc: Arc<RwLock<Option<global::DbAcc>>>) -> Result<global::ServerMsg, ResErr> {

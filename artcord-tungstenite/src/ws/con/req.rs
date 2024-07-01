@@ -5,6 +5,7 @@ use std::sync::Arc;
 use artcord_leptos_web_sockets::{WsPackage, WsRouteKey};
 use artcord_mongodb::database::DB;
 use artcord_state::{global, backend};
+use chrono::{DateTime, Utc};
 use enum_index::EnumIndex;
 use tokio::sync::{mpsc, oneshot};
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
@@ -21,11 +22,14 @@ pub mod stats;
 pub async fn req_task(
     client_msg: Message,
     db: Arc<DB>,
+    pepper: Arc<String>,
+    jwt_secret: Arc<String>,
     con_tx: mpsc::Sender<backend::ConMsg>,
     ws_tx: mpsc::Sender<backend::WsMsg>,
     connection_key: global::TempConIdType,
     addr: SocketAddr,
     ip: IpAddr,
+    time: DateTime<Utc>,
     //get_threshold: impl global::ClientThresholdMiddleware,
 ) {
     trace!("started");
@@ -63,6 +67,14 @@ pub async fn req_task(
             }
 
             let response_data: Result<Option<global::ServerMsg>, ResErr> = match data {
+                global::ClientMsg::Login { email, password } => {
+                    res::auth::login(&db, &email, &password, &pepper, jwt_secret.as_bytes(), &time);
+
+                    Ok(None)
+                }
+                global::ClientMsg::Register { email, password } => {
+                    res::auth::register(&db, &pepper, &email, &password, &time).await
+                }
                 global::ClientMsg::BanIp { ip, date, reason } => {
                     //let (done_tx, done_rx) = oneshot::channel::<()>();
                     ws_tx.send(backend::WsMsg::Ban { ip, date, reason }).await?;

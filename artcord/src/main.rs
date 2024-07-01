@@ -9,6 +9,7 @@ use cfg_if::cfg_if;
 use chrono::TimeDelta;
 use dotenv::dotenv;
 use futures::try_join;
+use tokio::io::AsyncWriteExt;
 use std::{env, sync::Arc};
 use tokio::select;
 use tokio::signal;
@@ -36,17 +37,53 @@ async fn main() {
     trace!("started!");
 
     let path = env::current_dir().unwrap();
+    let env_path = path.join(".env");
 
-    let assets_root_dir = env::var("ASSETS_ROOT_DIR").unwrap_or("./target/site".to_string());
-    let gallery_root_dir = env::var("GALLERY_ROOT_DIR").unwrap_or("./gallery/".to_string());
+
+    let mut missing = String::new();
+
+
+
+    // if env_path.exists() {
+    //     // let mut file = tokio::fs::OpenOptions::new().write(true).append(true).open(env_path);
+        
+
+        
+
+
+    // } else {
+        
+    // }
+
+    // let mut check_env = |env_name: &'static str, default: &'static str| -> String {
+    //     let Ok(env) = env::var(env_name) else {
+    //         missing.push_str(default);
+    //         missing.push('\n');
+    //         return default.to_string();
+    //     };
+    //     env
+    // };
+
+   // let pepper = Arc::new( check_env("PEPPER", "123") );
+    let pepper = Arc::new( env::var("PEPPER").unwrap_or("123".to_string()) );
+    let jwt_secret = Arc::new(env::var("JWT_SECRET").unwrap_or("123".to_string()));
+    let root_dir = env::var("ROOT_DIR").unwrap_or("./target/site".to_string());
+    let gallery_dir = env::var("GALLERY_DIR").unwrap_or("./gallery/".to_string());
     let mongodb_url =
         env::var("MONGO_URL").unwrap_or("mongodb://root:U2L63zXot4n5@localhost:27017".to_string());
     let discord_bot_token = env::var("DISCORD_BOT_TOKEN").ok();
     let discord_bot_default_guild = env::var("DISCORD_DEFAULT_GUILD").ok();
 
+    // if missing.is_empty() {
+    //     let mut file = tokio::fs::OpenOptions::new().append(true).open(env_path).await.unwrap();
+    //     fo
+    //     file.write_all(src)
+    // }
+    
+
     trace!("current working directory is {}", path.display());
-    trace!("current assets directory is {}", assets_root_dir);
-    trace!("current gallery directory is {}", gallery_root_dir);
+    trace!("current root directory is {}", root_dir);
+    trace!("current gallery directory is {}", gallery_dir);
 
     //let assets_root_dir = Arc::new(assets_root_dir);
     //let gallery_root_dir = Arc::new(gallery_root_dir);
@@ -78,8 +115,8 @@ async fn main() {
         db.clone(),
         threshold.clone(),
         cancelation_token.clone(),
-        gallery_root_dir.clone(),
-        assets_root_dir,
+        gallery_dir.clone(),
+        root_dir,
         "./artcord-http/index.html".to_string(),
         ws_tx.clone(),
         http_rx,
@@ -92,6 +129,8 @@ async fn main() {
         Ws::create(
             task_tracker.clone(),
             cancelation_token.clone(),
+            pepper.clone(),
+            jwt_secret.clone(),
             ws_ip.clone(),
             threshold,
             ws_tx,
@@ -110,7 +149,7 @@ async fn main() {
         let mut discord_bot = create_bot(
             db.clone(),
             &discord_bot_token,
-            &gallery_root_dir,
+            &gallery_dir,
             discord_bot_default_guild,
         )
         .await;
@@ -359,6 +398,8 @@ mod artcord_tests {
             let ws_port = 3420 + ws_id;
             let ws_addr = format!("0.0.0.0:{}", ws_port);
             let default_threshold = create_default_thresholds();
+            let pepper = Arc::new(String::from("123"));
+            let jwt_secret = Arc::new(String::from("123"));
 
             let (ws_tx, ws_rx) = mpsc::channel::<backend::WsMsg>(1);
             let (http_tx, http_rx) = mpsc::channel::<backend::HttpMsg>(1);
@@ -367,6 +408,8 @@ mod artcord_tests {
                 Ws::create(
                     tracker.clone(),
                     cancelation_token.clone(),
+                    pepper.clone(),
+                    jwt_secret.clone(),
                     ws_addr.clone(),
                     default_threshold.clone(),
                     ws_tx.clone(),
@@ -577,20 +620,36 @@ mod artcord_tests {
             msg
         }
 
+        async fn send_auth_login(&self, client_id: usize, email: String, password: String) {
+            self.send(client_id, global::ClientMsg::Register { email, password })
+                .await.unwrap();
+        } 
+
+        async fn send_auth_reg(&self, client_id: usize, email: String, password: String) {
+            self.send(client_id, global::ClientMsg::Register { email, password })
+                .await;
+        } 
+
         async fn send_live_stats_on(&self, client_id: usize) {
             self.send(client_id, global::ClientMsg::LiveWsStats(true))
-                .await;
+                .await.unwrap();
         }
 
         async fn send_live_stats_off(&self, client_id: usize) {
             self.send(client_id, global::ClientMsg::LiveWsStats(false))
-                .await;
+                .await.unwrap();
+        }
+
+        async fn recv_auth_reg_success(&mut self, client_id: usize) {
+            let msg = self.recv(client_id).await;
+            assert!(matches!(msg, global::ServerMsg::RegistrationSuccess));
         }
 
         async fn recv_connections(&mut self, client_id: usize) {
             let msg = self.recv(client_id).await;
             assert!(matches!(msg, global::ServerMsg::WsLiveStatsIpCons(_)));
         }
+        
 
         async fn recv_connected(&mut self, client_id: usize) {
             //let mut received: Vec<IpAddr> = Vec::new();
@@ -1305,6 +1364,38 @@ mod artcord_tests {
         // let body = reqwest::get("http://localhost:3000").await.unwrap();
 
         // trace!("{:#?}", body);
+
+        ws_test_app.close().await;
+    }
+
+    #[tokio::test]
+    async fn auth() {
+        init_tracer();
+
+        let time = Utc::now();
+        let mut ws_test_app = TestApp::new(7, time).await;
+
+        let http_ip = Ipv4Addr::new(0, 0, 0, 1);
+        let http_ip2 = Ipv4Addr::new(0, 0, 0, 2);
+
+        let client2 = ws_test_app
+            .create_client(200, http_ip2, CLIENT_CONNECTED_SUCCESS)
+            .await;
+        ws_test_app.send_live_stats_on(client2).await;
+        ws_test_app.recv_connections(client2).await;
+        ws_test_app.recv_connected(client2).await;
+
+        let client1 = ws_test_app
+            .create_client(1, http_ip, CLIENT_CONNECTED_SUCCESS)
+            .await;
+        ws_test_app.recv_con_allow(client2, client1).await;
+        ws_test_app.recv_connected_one(client2, client1).await;
+
+        let email = "test@test.com";
+        let pss = "testTestTestTest123";
+
+        ws_test_app.send_auth_reg(client1, email.to_string(), pss.to_string()).await;
+        ws_test_app.recv_auth_reg_success(client1).await;
 
         ws_test_app.close().await;
     }

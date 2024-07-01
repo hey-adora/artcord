@@ -11,7 +11,7 @@ use artcord_leptos_web_sockets::WsRouteKey;
 use artcord_mongodb::database::model::ws_ip_manager;
 use artcord_mongodb::database::DBError;
 use artcord_mongodb::database::DB;
-use artcord_state::{global, backend};
+use artcord_state::{backend, global};
 use chrono::DateTime;
 use chrono::Month;
 use chrono::Months;
@@ -68,10 +68,6 @@ pub type GlobalConChannel = (
     broadcast::Receiver<GlobalConMsg>,
 );
 
-
-
-
-
 #[derive(Debug)]
 pub enum IpManagerMsg {
     CheckThrottle {
@@ -110,6 +106,8 @@ pub struct Ws<
     cancellation_token_ip_manager: CancellationToken,
     cancellation_token_user_con: CancellationToken,
     ws_addr: String,
+    pepper: Arc<String>,
+    jwt_secret: Arc<String>,
     ws_threshold: global::DefaultThreshold,
     // ws_tx: mpsc::Sender<WsAppMsg>,
     // ws_rx: mpsc::Receiver<WsAppMsg>,
@@ -134,7 +132,7 @@ pub struct WsIpManagerTask<
     ip_req_stat: HashMap<global::ClientPathType, global::WsConReqStat>,
     ip_threshold_map: global::ThresholdMapType,
     ip_threshold_fallback: global::Threshold,
-    ip_ban_reason: global::IpBanReason, 
+    ip_ban_reason: global::IpBanReason,
     banned_until: Option<(DateTime<Utc>, global::IpBanReason)>,
     cancelation_token: CancellationToken,
     time_middleware: TimeMiddlewareType,
@@ -170,6 +168,8 @@ impl<
     pub async fn create(
         root_task_tracker: TaskTracker,
         root_cancellation_token: CancellationToken,
+        pepper: Arc<String>,
+        jwt_secret: Arc<String>,
         ws_addr: String,
         ws_threshold: global::DefaultThreshold,
         ws_tx: mpsc::Sender<backend::WsMsg>,
@@ -194,6 +194,8 @@ impl<
             cancellation_token_ip_manager: CancellationToken::new(),
             cancellation_token_user_con: CancellationToken::new(),
             ws_addr,
+            pepper,
+            jwt_secret,
             ws_threshold,
             // ws_tx,
             // ws_rx,
@@ -211,7 +213,8 @@ impl<
         ws.run(ws_tx, ws_rx).await;
     }
 
-    pub async fn run(&mut self,
+    pub async fn run(
+        &mut self,
         ws_tx: mpsc::Sender<backend::WsMsg>,
         mut ws_rx: mpsc::Receiver<backend::WsMsg>,
     ) {
@@ -312,26 +315,30 @@ impl<
             None => {
                 let ws_ip = match self.db.ws_ip_find_one_by_ip(ip).await? {
                     Some(saved_ws_ip) => {
-                        debug!("loaded from db ws_ip with flicker at: {}", saved_ws_ip.con_flicker_tracker.amount);
+                        debug!(
+                            "loaded from db ws_ip with flicker at: {}",
+                            saved_ws_ip.con_flicker_tracker.amount
+                        );
                         WsIp::new(
-                        self.db.clone(),
-                        ip,
-                        saved_ws_ip.total_allow_amount,
-                        saved_ws_ip.total_block_amount,
-                        saved_ws_ip.total_banned_amount,
-                        saved_ws_ip.total_already_banned_amount,
-                        self.ws_threshold.ws_req_block_threshold.clone(),
-                        self.ws_threshold.ws_req_block_threshold_fallback.clone(),
-                        self.ws_threshold.ws_req_ban_reason.clone(),
-                        self.ws_threshold.ws_req_ban_threshold.clone(),
-                        self.ws_threshold.ws_req_ban_duration.clone(),
-                        saved_ws_ip.con_count_tracker,
-                        saved_ws_ip.con_flicker_tracker,
-                        &self.task_tracker_ws_ip_manager,
-                        self.cancellation_token_ip_manager.clone(),
-                        self.time_middleware.clone(),
-                        time,
-                    )},
+                            self.db.clone(),
+                            ip,
+                            saved_ws_ip.total_allow_amount,
+                            saved_ws_ip.total_block_amount,
+                            saved_ws_ip.total_banned_amount,
+                            saved_ws_ip.total_already_banned_amount,
+                            self.ws_threshold.ws_req_block_threshold.clone(),
+                            self.ws_threshold.ws_req_block_threshold_fallback.clone(),
+                            self.ws_threshold.ws_req_ban_reason.clone(),
+                            self.ws_threshold.ws_req_ban_threshold.clone(),
+                            self.ws_threshold.ws_req_ban_duration.clone(),
+                            saved_ws_ip.con_count_tracker,
+                            saved_ws_ip.con_flicker_tracker,
+                            &self.task_tracker_ws_ip_manager,
+                            self.cancellation_token_ip_manager.clone(),
+                            self.time_middleware.clone(),
+                            time,
+                        )
+                    }
                     None => WsIp::new(
                         self.db.clone(),
                         ip,
@@ -371,7 +378,7 @@ impl<
                         ip,
                         total_amount: ws_ip.total_allow_amount,
                     };
-                    backend::listener_tracker_send(&mut self.listener_tracker,msg).await?
+                    backend::listener_tracker_send(&mut self.listener_tracker, msg).await?
                 }
                 true
             }
@@ -397,10 +404,10 @@ impl<
                         ip,
                         total_amount: ws_ip.total_block_amount,
                     };
-                    backend::listener_tracker_send(&mut self.listener_tracker,msg).await?;
+                    backend::listener_tracker_send(&mut self.listener_tracker, msg).await?;
 
                     let msg = global::ServerMsg::WsLiveStatsIpUnbanned { ip };
-                    backend::listener_tracker_send(&mut self.listener_tracker,msg).await?;
+                    backend::listener_tracker_send(&mut self.listener_tracker, msg).await?;
                 }
                 ws_ip.ip_manager_tx.send(IpManagerMsg::Unban).await?;
 
@@ -412,10 +419,10 @@ impl<
                         ip,
                         total_amount: ws_ip.total_allow_amount,
                     };
-                    backend::listener_tracker_send(&mut self.listener_tracker,msg).await?;
+                    backend::listener_tracker_send(&mut self.listener_tracker, msg).await?;
 
                     let msg = global::ServerMsg::WsLiveStatsIpUnbanned { ip };
-                    backend::listener_tracker_send(&mut self.listener_tracker,msg).await?;
+                    backend::listener_tracker_send(&mut self.listener_tracker, msg).await?;
                 }
                 ws_ip.ip_manager_tx.send(IpManagerMsg::Unban).await?;
                 true
@@ -427,10 +434,10 @@ impl<
                         ip,
                         total_amount: ws_ip.total_banned_amount,
                     };
-                    backend::listener_tracker_send(&mut self.listener_tracker,msg).await?;
+                    backend::listener_tracker_send(&mut self.listener_tracker, msg).await?;
 
                     let msg = global::ServerMsg::WsLiveStatsIpBanned { ip, date, reason };
-                    backend::listener_tracker_send(&mut self.listener_tracker,msg).await?;
+                    backend::listener_tracker_send(&mut self.listener_tracker, msg).await?;
                 }
                 ws_ip.ip_con_tx.send(IpConMsg::Disconnect)?;
                 debug!("ip {} is banned: {:#?}", ip, &ws_ip);
@@ -453,6 +460,8 @@ impl<
                 ws_tx.clone(),
                 ip,
                 user_addr,
+                self.pepper.clone(),
+                self.jwt_secret.clone(),
                 (self.global_con_tx.clone(), self.global_con_tx.subscribe()),
                 ws_ip.ip_con_tx.clone(),
                 ws_ip.ip_con_rx.resubscribe(),
@@ -462,7 +471,7 @@ impl<
                 self.ws_threshold.ws_req_ban_threshold.clone(),
                 self.ws_threshold.ws_req_ban_duration.clone(),
                 self.time_middleware.clone(),
-              //  self.threshold_middleware.clone(),
+                //  self.threshold_middleware.clone(),
                 self.listener_tracker.clone(),
             )
             .instrument(tracing::trace_span!("con", "{}", user_addr.to_string())),
@@ -489,7 +498,8 @@ impl<
                         ws_ip.current_con_count = 0;
                     }
                     if ws_ip.current_con_count == 0
-                        && global::is_banned(&mut ws_ip.banned_until, &time) != global::IsBanned::Banned
+                        && global::is_banned(&mut ws_ip.banned_until, &time)
+                            != global::IsBanned::Banned
                     {
                         let send_result = ws_ip.ip_manager_tx.send(IpManagerMsg::Close).await;
                         if let Err(err) = send_result {
@@ -504,20 +514,24 @@ impl<
                             }
                         }
 
-                        
-                        self.db.ws_ip_upsert(
-                            &ip,
-                            ws_ip.total_allow_amount,
-                            ws_ip.total_block_amount,
-                            ws_ip.total_banned_amount,
-                            ws_ip.total_already_banned_amount,
-                            ws_ip.con_count_tracker.clone(),
-                            ws_ip.con_flicker_tracker.clone(),
-                            ws_ip.banned_until.clone(),
-                            &time,
-                        ).await?;
+                        self.db
+                            .ws_ip_upsert(
+                                &ip,
+                                ws_ip.total_allow_amount,
+                                ws_ip.total_block_amount,
+                                ws_ip.total_banned_amount,
+                                ws_ip.total_already_banned_amount,
+                                ws_ip.con_count_tracker.clone(),
+                                ws_ip.con_flicker_tracker.clone(),
+                                ws_ip.banned_until.clone(),
+                                &time,
+                            )
+                            .await?;
 
-                        debug!("saved ws_ip with flicker at: {}", ws_ip.con_flicker_tracker.amount);
+                        debug!(
+                            "saved ws_ip with flicker at: {}",
+                            ws_ip.con_flicker_tracker.amount
+                        );
 
                         self.ips.remove(&ip);
                         trace!("disconnected ip {}", &ip);
@@ -536,7 +550,6 @@ impl<
                 done_tx,
             } => {
                 self.listener_tracker
-                    
                     .insert(con_id, (ws_key, con_tx.clone()));
                 let mut cons: Vec<global::ConnectedWsIp> = Vec::new();
                 for (ip, ws_ip) in self.ips.iter() {
@@ -550,7 +563,14 @@ impl<
                     });
                 }
                 let (http_done_tx, http_done_rx) = oneshot::channel::<()>();
-                self.http_tx.send(backend::HttpMsg::AddListener { con_id, con_tx, ws_key, done_tx: http_done_tx }).await?;
+                self.http_tx
+                    .send(backend::HttpMsg::AddListener {
+                        con_id,
+                        con_tx,
+                        ws_key,
+                        done_tx: http_done_tx,
+                    })
+                    .await?;
                 http_done_rx.await?;
                 let send_result = done_tx.send(cons).map_err(|_| WsMsgErr::ListenerDoneTx);
                 if let Err(err) = send_result {
@@ -563,30 +583,28 @@ impl<
                 // ws_key,
             } => {
                 self.listener_tracker.remove(&con_id);
-                self.http_tx.send(backend::HttpMsg::RemoveListener { con_id }).await?;
+                self.http_tx
+                    .send(backend::HttpMsg::RemoveListener { con_id })
+                    .await?;
             }
             backend::WsMsg::Ban {
                 ip,
                 date,
                 reason,
-              //  done_tx
+                //  done_tx
             } => {
                 if let Some(ws_ip) = self.ips.get_mut(&ip) {
-
-                    
-
                     ws_ip.banned_until = Some((date, reason.clone()));
                     ws_ip.ip_con_tx.send(IpConMsg::Disconnect)?;
                     debug!("ip {} is banned: {:#?}", ip, &self.ips);
 
                     let msg = global::ServerMsg::WsLiveStatsIpBanned { ip, date, reason };
-                    backend::listener_tracker_send(&mut self.listener_tracker,msg).await?;
-
+                    backend::listener_tracker_send(&mut self.listener_tracker, msg).await?;
                 } else {
                     error!("cant ban ip that doesnt exist: {}", ip);
                 }
 
-              //  done_tx.send(())?;
+                //  done_tx.send(())?;
             } // WsAppMsg::UnBan { ip } => {
               //     self.throttle.unban(&ip);
               // }
@@ -607,8 +625,8 @@ impl<TimeMiddlewareType: global::TimeMiddleware + Clone + Sync + Send + 'static>
         ban_threshold: global::Threshold,
         ban_duration: TimeDelta,
         ip_threshold_map: global::ThresholdMapType,
-        ip_threshold_fallback: global::Threshold, 
-        ip_ban_reason: global::IpBanReason, 
+        ip_threshold_fallback: global::Threshold,
+        ip_ban_reason: global::IpBanReason,
     ) {
         let mut task = Self {
             //id: None,
@@ -682,7 +700,10 @@ impl<TimeMiddlewareType: global::TimeMiddleware + Clone + Sync + Send + 'static>
                 allow_tx,
             } => {
                 let time = self.time_middleware.get_time().await;
-                let block_threshold = self.ip_threshold_map.get(&path).unwrap_or(&self.ip_threshold_fallback);
+                let block_threshold = self
+                    .ip_threshold_map
+                    .get(&path)
+                    .unwrap_or(&self.ip_threshold_fallback);
 
                 let ip_req_stat = self
                     .ip_req_stat
@@ -774,7 +795,6 @@ impl WsIp {
                 ip_threshold_map,
                 ip_threshold_fallback,
                 ip_ban_reason,
-
             )
             .instrument(tracing::trace_span!("ip_sync", "{}", ip)),
         );
@@ -830,7 +850,7 @@ pub enum WsMsgErr {
 
     #[error("failed to send done_tx msg back")]
     ListenerDoneTx,
-    
+
     #[error("failed to receive from oneshot channel")]
     OneShotRxErr(#[from] tokio::sync::oneshot::error::RecvError),
 
@@ -857,4 +877,77 @@ pub enum WsMsgErr {
 
     #[error("db error: {0}")]
     DBError(#[from] DBError),
+}
+
+#[cfg(test)]
+mod tests {
+    use artcord_state::backend;
+    use ed25519_dalek::Signature;
+    use ed25519_dalek::Signer;
+    use ed25519_dalek::SigningKey;
+    use ed25519_dalek::{Verifier, VerifyingKey};
+    use rand::rngs::OsRng;
+
+    use base64::prelude::*;
+    use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+    use rand::Rng;
+    use serde::{Deserialize, Serialize};
+    use tracing::trace;
+
+    #[derive(Debug, Serialize, Deserialize)]
+    struct Acc {
+        name: String,
+        exp: u64,
+    }
+
+    #[test]
+    fn keys() {
+        backend::init_tracer();
+
+        let key = b"secret";
+        let acc = Acc {
+            name: "wowza".to_string(),
+            exp: 0,
+        };
+        let header = Header::new(Algorithm::HS512);
+        let token =
+            encode(&header, &acc, &EncodingKey::from_secret(key)).expect("Failed to create token");
+        trace!("token: {}", token);
+
+        let mut validation = Validation::new(Algorithm::HS512);
+        validation.validate_exp = false;
+        let dec = decode::<Acc>(&token, &DecodingKey::from_secret(key), &validation)
+            .expect("Invalid key");
+        trace!("dec: {:#?}", dec);
+        // let mut csprng = OsRng;
+        // let signing_key: SigningKey = SigningKey::generate(&mut csprng);
+        // // let bytes = signing_key.as_bytes();
+        // // let signing_key_str = BASE64_STANDARD.encode(bytes);
+        // let verifying_key: VerifyingKey = signing_key.verifying_key();
+        // // let bytes = verifying_key.as_bytes();
+        // // let verify_key_str = BASE64_STANDARD.encode(bytes);
+
+        // // let verifying_key: VerifyingKey = signing_key.verifying_key();
+        // // let bytes = verifying_key.as_bytes();
+        // // let verify_key_str2 = BASE64_STANDARD.encode(bytes);
+
+        // //let mut input = [0i8; 512];
+        // let mut token = [0u8; 512];
+        // rand::thread_rng().fill(&mut token);
+        // let signature: Signature = signing_key.sign(&token);
+
+        // let token_str = BASE64_STANDARD.encode(token);
+        // // if token == input {
+
+        // // }
+
+        // trace!("generated key: {:?}", token);
+        // trace!("generated key str: {}", token_str);
+        // trace!("signature: {:?}", signature);
+
+        // trace!("generated key str: {}", signing_key_str);
+        // trace!("verifying key: {:#?}", verifying_key);
+        // trace!("verifying key str: {}", verify_key_str);
+        // trace!("verifying key str2: {}", verify_key_str2);
+    }
 }

@@ -49,4 +49,7 @@ pub enum ResErr {
 
     #[error("RwLock error: {0}")]
     RwLock(String),
+
+    #[error("Jwt error: {0}")]
+    JwtErr(#[from] jsonwebtoken::errors::Error),
 }

@@ -24,6 +24,10 @@ rand = "0.8.5"
 bcrypt = "0.15.1"
 enum_index = "0.2.0"
 enum_index_derive = "0.2.0"
+ed25519-dalek = { version = "2.1.1", features = ["rand_core"]}
+base64 = "0.22.1"
+jsonwebtoken = "9.3.0"
+serde = { version = "1.0.197" }
 
 [dev-dependencies]
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }

@@ -85,6 +85,8 @@ pub struct Con<
     db: Arc<DB>,
     ip: IpAddr,
     addr: SocketAddr,
+    pepper: Arc<String>,
+    jwt_secret: Arc<String>,
     //ip_req_stats: ReqStat,
     req_stats: HashMap<global::ClientPathType, global::WsConReqStat>,
     listener_tracker: backend::ListenerTrackerType,
@@ -111,6 +113,8 @@ impl<
         ws_app_tx: mpsc::Sender<backend::WsMsg>,
         ip: IpAddr,
         addr: SocketAddr,
+        pepper: Arc<String>,
+        jwt_secret: Arc<String>,
         //admin_ws_stats_tx: mpsc::Sender<WsStatsMsg>,
         (global_con_tx, mut global_con_rx): GlobalConChannel,
         ip_con_tx: broadcast::Sender<IpConMsg>,
@@ -159,6 +163,8 @@ impl<
             db,
             ip,
             addr,
+            pepper,
+            jwt_secret,
             listener_tracker,
             is_listening: false,
             ban_threshold,
@@ -574,6 +580,8 @@ impl<
 
     pub async fn on_req(&mut self, msg: Message) -> bool {
         //debug!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        let time = self.time_middleware.get_time().await;
+
         let msg_name = match &msg {
             Message::Binary(_) => "binary",
             Message::Close(_) => {
@@ -589,11 +597,14 @@ impl<
             req_task(
                 msg,
                 self.db.clone(),
+                self.pepper.clone(),
+                self.jwt_secret.clone(),
                 self.con_tx.clone(),
                 self.ws_app_tx.clone(),
                 self.con_id,
                 self.addr,
                 self.ip,
+                time,
              //   self.threshold_middleware.clone(),
             )
             .instrument(tracing::trace_span!("req", "{}", msg_name,)),

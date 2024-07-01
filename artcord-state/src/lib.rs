@@ -146,6 +146,23 @@ pub mod backend {
         Ok(())
     }
 
+    pub fn init_tracer() {
+        use std::str::FromStr;
+
+        let _ = tracing_subscriber::fmt()
+            .event_format(
+                tracing_subscriber::fmt::format()
+                    .with_file(true)
+                    .with_line_number(true),
+            )
+            .with_env_filter(
+                std::env::var("RUST_LOG")
+                    .map(|data| tracing_subscriber::EnvFilter::from_str(&data).unwrap())
+                    .unwrap_or(tracing_subscriber::EnvFilter::from_str("artcord=trace").unwrap()),
+            )
+            .try_init();
+    }
+
     
     #[derive(Error, Debug)]
     pub enum ListenerTrackerErr {
