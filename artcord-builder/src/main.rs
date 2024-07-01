@@ -111,7 +111,7 @@ async fn main() {
 
     let paths_backend = [
         "artcord",
-        "artcord-actix",
+        "artcord-http",
         "artcord-mongodb",
         "artcord-serenity",
         "artcord-state",
