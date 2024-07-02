@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 
-cargo build --package=artcord --no-default-features --features=ssr,development
-cargo build --package=artcord-leptos --target=wasm32-unknown-unknown --no-default-features --features=hydrate,development
+cargo build --package=artcord --no-default-features --features=ssr
+cargo build --package=artcord-leptos --target=wasm32-unknown-unknown --no-default-features --features=hydrate
 rm -rf ./target/site &&
 mkdir ./target/site &&
 mkdir ./target/site/pkg &&
