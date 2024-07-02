@@ -522,7 +522,7 @@ async fn get_assets_res(
     //let assets_dir = assets_dir.to_string();
     let mut responses: HashMap<String, Vec<u8>> = HashMap::new();
     // debug!("reading {}", assets_dir);
-    // let mut dir = tokio::fs::read_dir(&assets_dir).await.unwrap();
+    // let mut dir = tokio::fs::read_dir(&assets_dir).await.unwrap(); 
     // let mut last: Option<std::fs::DirEntry> = None;
 
     let mut queue = std::collections::VecDeque::from([String::new()]);
@@ -553,8 +553,8 @@ async fn get_assets_res(
     
                 match get_asset(asset_path.to_str().unwrap(), extension).await {
                     Ok(asset) => {
-                        let route = format!("{}/{}", path, name);
-                        responses.insert(route, asset);
+                        let route = std::path::Path::new("/").join(&path).join(name);
+                        responses.insert(route.to_str().unwrap().to_string(), asset);
                     }
                     Err(err) => {
                         debug!("getting asset err: {}", err);
