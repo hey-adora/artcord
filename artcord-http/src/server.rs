@@ -49,6 +49,8 @@ pub struct ResData<T: AsRef<str> + std::marker::Send + std::marker::Sync + 'stat
     pub forbidden_res: Vec<u8>,
     pub index_res: Vec<u8>,
     pub schemas: Vec<T>,
+    pub asset_dir: std::path::PathBuf,
+    pub csr_index: String,
 }
 
 pub struct HttpIp {
@@ -66,7 +68,7 @@ pub async fn create_server<
     default_threshold: global::DefaultThreshold,
     cancelation_token: CancellationToken,
     galley_root_dir: String,
-    assets_root_dir: String,
+    assets_dir: String,
     csr_index: String,
     ws_tx: mpsc::Sender<backend::WsMsg>,
     mut http_rx: mpsc::Receiver<backend::HttpMsg>,
@@ -114,23 +116,16 @@ pub async fn create_server<
     let forbidden_res = "HTTP/1.1 403 forbidden\r\n\r\n";
     let forbidden_res = forbidden_res.as_bytes();
 
-    trace!("reading: {csr_index}");
-    let index_bytes = tokio::fs::read(csr_index).await.unwrap();
-    let index_content_length = index_bytes.len();
-    let index_header = format!(
-        "HTTP/1.1 200 OK\r\ncontent-type: text/html;charset=UTF-8\r\ncontent-length: {index_content_length}\r\n\r\n"
-    );
-    let index_header = index_header.as_bytes();
-    let index_res: Vec<u8> = [index_header, &index_bytes].concat();
+    
+    let index_res: Vec<u8> = get_asset(&csr_index, "html").await.unwrap();
 
-    let assets_res = get_assets_res(&assets_root_dir).await;
+    let assets_res = get_assets_res(&assets_dir).await;
     let k = assets_res
         .iter()
         .map(|(k, _)| k.clone())
         .collect::<Vec<String>>();
     debug!("AAAAAAAA: {:#?}", k);
 
-    
 
     let res_data = ResData {
         leptos_options: leptos_options,
@@ -139,6 +134,8 @@ pub async fn create_server<
         not_found_res: not_found_res.to_vec(),
         forbidden_res: forbidden_res.to_vec(),
         schemas: schemas,
+        asset_dir: std::path::PathBuf::from(assets_dir),
+        csr_index,
         //ips: HashMap::new(),
     };
     let res_data = Arc::new(res_data);
@@ -166,57 +163,6 @@ pub async fn create_server<
         tacker: TaskTracker::new(),
         db: db.clone(),
     };
-    
-    
-    loop {
-        select! {
-            result = listener.accept() => {
-                let (stream, addr) = match result {
-                    Ok(v) => v,
-                    Err(err) => {
-                        debug!("tcp accept err: {err}");
-                        continue;
-                    }
-                };
-                let addr = socket_middleware.get_addr(addr).await;
-                let time = time_middleware.get_time().await;
-
-                let result = on_con(&http, &ws_tx, &mut http_ips, &mut listener_tracker, stream, addr, time).await;
-                if let Err(err) = result {
-                    debug!("on_con: {}", err);
-                }
-                // let allow = match allow {
-                //     Ok(allow) => allow,
-                //     Err(err) => {
-                //         debug!("firewall err: {}", err);
-                //         false
-                //     },
-                // };
-
-                // if allow {
-                //     tacker.spawn();
-                // }
-                // let res_data = res_data.clone();
-                // tacker.spawn(async move {
-                //     stream;
-                //     res_data;
-                // });
-            }
-            msg = http_rx.recv() => {
-                let Some(msg) = msg else {
-                    error!("http_tx closed");
-                    break;
-                };
-                let result = on_msg(msg,  &mut http_ips, &mut listener_tracker).await;
-                if let Err(err) = result {
-                    error!("on_msg: {err}");
-                }
-            }
-            _ = cancelation_token.cancelled() => {
-                break;
-            }
-        }
-    }
 
     #[cfg(feature = "development")]
     {
@@ -291,6 +237,58 @@ pub async fn create_server<
             future::select(read, write).await;
         });
     }
+    
+    loop {
+        select! {
+            result = listener.accept() => {
+                let (stream, addr) = match result {
+                    Ok(v) => v,
+                    Err(err) => {
+                        debug!("tcp accept err: {err}");
+                        continue;
+                    }
+                };
+                let addr = socket_middleware.get_addr(addr).await;
+                let time = time_middleware.get_time().await;
+
+                let result = on_con(&http, &ws_tx, &mut http_ips, &mut listener_tracker, stream, addr, time).await;
+                if let Err(err) = result {
+                    debug!("on_con: {}", err);
+                }
+                // let allow = match allow {
+                //     Ok(allow) => allow,
+                //     Err(err) => {
+                //         debug!("firewall err: {}", err);
+                //         false
+                //     },
+                // };
+
+                // if allow {
+                //     tacker.spawn(); 
+                // }
+                // let res_data = res_data.clone();
+                // tacker.spawn(async move {
+                //     stream;
+                //     res_data;
+                // });
+            }
+            msg = http_rx.recv() => {
+                let Some(msg) = msg else {
+                    error!("http_tx closed");
+                    break;
+                };
+                let result = on_msg(msg,  &mut http_ips, &mut listener_tracker).await;
+                if let Err(err) = result {
+                    error!("on_msg: {err}");
+                }
+            }
+            _ = cancelation_token.cancelled() => {
+                break;
+            }
+        }
+    }
+
+  
 
     http.tacker.close();
     http.tacker.wait().await;
@@ -446,37 +444,80 @@ async fn handle_res_ok<T: AsRef<str> + std::marker::Send + std::marker::Sync + '
     trace!("connected: {} ", path);
     let full_path = ["http://leptos.dev", path].concat();
 
-    //let app_fn = (*res_data.app_fn)();
-    let result = if let Some(res) = res_data.assets_res.get(path) {
-        stream.write_all(res).await
-    } else {
-        let found = compare_path(path, &res_data.schemas);
-        if found {
-            cfg_if! {
-                if #[cfg(feature = "serve_csr")] {
-                    trace!("sending csr app....");
-                    stream.write_all(index_res).await
-                } else {
-                    trace!("rendering app....");
+    //let app_fn = (*res_data.app_fn)();e  
+    
+   
+    
+    
 
-                    let app = render_my_app(&res_data.leptos_options, &full_path).await;
-                    stream.write_all(app.as_bytes()).await
-
-                    // stream.write_all(&res_data.not_found_res).await
+    cfg_if! {
+        if #[cfg(feature = "development")] {
+            let new_path = res_data.asset_dir.join(if path.len() > 1 && path.starts_with('/') { &path[1..] } else { path });
+            trace!("ASSET DIR: {:?} + {:?} = {:?}", res_data.asset_dir, path, new_path);
+            
+            let extension = match new_path.extension().map(|ex| ex.to_str().unwrap()   ) {
+                Some(ex) => {
+                    Some(get_asset(new_path.to_str().unwrap(), ex).await)
                 }
+                None => None
+            };
+           
+            let result = if let Some(Ok(res)) = extension {
+                stream.write_all(&res).await
+            } else {
+                let found = compare_path(path, &res_data.schemas);
+                if found {
+                    cfg_if! {
+                        if #[cfg(feature = "serve_csr")] {
+                            trace!("sending csr app....");
+                            let index_res: Vec<u8> = get_asset(&res_data.csr_index, "html").await.unwrap();
+                            stream.write_all(&index_res).await
+                        } else {
+                            trace!("rendering app....");
+                            let app = render_my_app(&res_data.leptos_options, &full_path).await;
+                            stream.write_all(app.as_bytes()).await
+                        }
+                    }
+                } else {
+                    stream.write_all(&res_data.not_found_res).await
+                }
+            };
+        
+            if let Err(err) = result {
+                debug!("writing to stream err: {}", err);
             }
+           
         } else {
-            stream.write_all(&res_data.not_found_res).await
+            let result = if let Some(res) = res_data.assets_res.get(path) {
+                stream.write_all(res).await
+            } else {
+                let found = compare_path(path, &res_data.schemas);
+                if found {
+                    cfg_if! {
+                        if #[cfg(feature = "serve_csr")] {
+                            trace!("sending csr app....");
+                            stream.write_all(&res_data.index_res).await
+                        } else {
+                            trace!("rendering app....");
+                            let app = render_my_app(&res_data.leptos_options, &full_path).await;
+                            stream.write_all(app.as_bytes()).await
+                        }
+                    }
+                } else {
+                    stream.write_all(&res_data.not_found_res).await
+                }
+            };
+            if let Err(err) = result {
+                debug!("writing to stream err: {}", err);
+            }
         }
-    };
-
-    if let Err(err) = result {
-        debug!("writing to stream err: {}", err);
     }
+
+    
 }
 
 async fn get_assets_res(
-    assets_dir: &str,
+    root_dir: &str,
 ) -> HashMap<String, Vec<u8>> {
     //let assets_dir = assets_dir.to_string();
     let mut responses: HashMap<String, Vec<u8>> = HashMap::new();
@@ -487,21 +528,16 @@ async fn get_assets_res(
     let mut queue = std::collections::VecDeque::from([String::new()]);
 
     while let Some(path) = queue.pop_front() {
-        let new_path = format!("{}/{}", assets_dir, path);
-        let mut dir = tokio::fs::read_dir(&new_path).await.unwrap();
+        let dir_path =std::path::Path::new(&root_dir).join(&path);
+        let mut dir = tokio::fs::read_dir(&dir_path).await.unwrap();
         while let Some(entry) = dir.next_entry().await.unwrap() {
 
             let kind = entry.file_type().await.unwrap();
             if kind.is_dir() {
-                let name = entry.file_name();
-                let name = name.to_str().unwrap();
-                let sub_assets_dir = format!("{}/{}", path, name);
+                let sub_assets_dir = std::path::Path::new(&path).join(entry.file_name());
+                let sub_assets_dir = sub_assets_dir.to_str().unwrap();
                 trace!("reading: {sub_assets_dir}");
-                queue.push_back(sub_assets_dir);
-                // let sub_responses = get_assets_res(&sub_assets_dir).await;
-                // for (sub_key, sub_data) in sub_responses {
-                //     responses.insert(format!("/{}{}", name, sub_key), sub_data);
-                // }
+                queue.push_back(sub_assets_dir.to_string());
             } else if kind.is_file() {
                 let name = entry.file_name();
                 let name = name.to_str().unwrap();
@@ -512,79 +548,19 @@ async fn get_assets_res(
                 else {
                     continue;
                 };
-                //let new_path = std::path::Path::new(&path).join(name);
-                //let new_path = new_path.to_str().unwrap();
-                let new_path = format!("{}/{}", new_path, name);
+                
+                let asset_path = dir_path.join(name);
     
-                match extension {
-                    "ico" => {
-                        let bytes = tokio::fs::read(new_path).await.unwrap();
-                        let bytes_content_length = bytes.len();
-                        let header = format!(
-                            "HTTP/1.1 200 OK\r\ncontent-type: x-icon\r\ncontent-length: {bytes_content_length}\r\n\r\n"
-                        );
-                        let header = header.as_bytes();
-                        let res: Vec<u8> = [header, &bytes].concat();
+                match get_asset(asset_path.to_str().unwrap(), extension).await {
+                    Ok(asset) => {
                         let route = format!("{}/{}", path, name);
-                        responses.insert(route, res);
+                        responses.insert(route, asset);
                     }
-                    "webp" => {
-                        let bytes = tokio::fs::read(new_path).await.unwrap();
-                        let bytes_content_length = bytes.len();
-                        let header = format!(
-                            "HTTP/1.1 200 OK\r\ncontent-type: image/webp\r\ncontent-length: {bytes_content_length}\r\n\r\n"
-                        );
-                        let header = header.as_bytes();
-                        let res: Vec<u8> = [header, &bytes].concat();
-                        let route = format!("{}/{}", path, name);
-                        responses.insert(route, res);
+                    Err(err) => {
+                        debug!("getting asset err: {}", err);
                     }
-                    "svg" => {
-                        let bytes = tokio::fs::read(new_path).await.unwrap();
-                        let bytes_content_length = bytes.len();
-                        let header = format!(
-                            "HTTP/1.1 200 OK\r\ncontent-type: image/svg+xml\r\ncontent-length: {bytes_content_length}\r\n\r\n"
-                        );
-                        let header = header.as_bytes();
-                        let res: Vec<u8> = [header, &bytes].concat();
-                        let route = format!("{}/{}", path, name);
-                        responses.insert(route, res);
-                    }
-                    "css" => {
-                        let css = tokio::fs::read(new_path).await.unwrap();
-                        let css_content_length = css.len();
-                        let css_header = format!(
-                            "HTTP/1.1 200 OK\r\ncontent-type: text/css\r\ncontent-length: {css_content_length}\r\n\r\n"
-                        );
-                        let css_header = css_header.as_bytes();
-                        let css_res: Vec<u8> = [css_header, &css].concat();
-                        let route = format!("{}/{}", path, name);
-                        responses.insert(route, css_res);
-                    }
-                    "js" => {
-                        let js: Vec<u8> = tokio::fs::read(new_path).await.unwrap();
-                        let js_content_length = js.len();
-                        let js_header = format!("HTTP/1.1 200 OK\r\ncontent-type: text/javascript\r\ncontent-length: {js_content_length}\r\n\r\n");
-                        let js_header = js_header.as_bytes();
-                        let js_res: Vec<u8> = [js_header, &js].concat();
-                        let route = format!("{}/{}", path, name);
-                        responses.insert(route, js_res);
-                    }
-                    "wasm" => {
-                        let wasm = tokio::fs::read(new_path).await.unwrap();
-                        let wasm_content_length = wasm.len();
-                        let wasm_header = format!("HTTP/1.1 200 OK\r\ncontent-type: application/wasm\r\ncontent-length: {wasm_content_length}\r\n\r\n");
-                        let wasm_header = wasm_header.as_bytes();
-                        let wasm_res = [wasm_header, &wasm].concat();
-    
-                        // let not_found_res = "HTTP/1.1 404 Not Found\r\n\r\n";
-                        // let not_found_res = not_found_res.as_bytes().to_vec();
-    
-                        let route = format!("{}/{}", path, name);
-                        responses.insert(route, wasm_res);
-                    }
-                    _ => {}
                 }
+                
             }
 
         }
@@ -596,6 +572,38 @@ async fn get_assets_res(
 
     responses
 }
+
+async fn get_asset<'a>(path: &str, extension: &'a str) -> Result<Vec<u8>, GetAssetErr<'a>> {
+    trace!("reading: {path}");
+
+    let file: Vec<u8> = tokio::fs::read(path).await.map_err(|err| GetAssetErr::IO(path.to_string(), err))?;
+    let file_length = file.len();
+    let content_type = get_content_type(extension).ok_or_else(|| GetAssetErr::UnSupportedFileType(extension))?;
+    let header = format!("HTTP/1.1 200 OK\r\ncontent-type: {content_type}\r\ncontent-length: {file_length}\r\n\r\n");
+    let header = header.as_bytes();
+    let res: Vec<u8> = [header, &file].concat();
+    Ok(res)
+}
+
+fn get_content_type(extension: &str) -> Option<&'static str> {
+    Some(
+        match extension {
+            "ico" => "x-icon",
+            "webp" => "image/webp",
+            "svg" => "image/svg+xml",
+            "css" => "text/css",
+            "js" => "text/javascript",
+            "wasm" => "application/wasm",
+            "html" => "text/html;charset=UTF-8",
+            _ => {
+                return None;
+            }
+        }
+    )
+}
+
+
+
 
 // fn get_assets_res(
 //     assets_dir: &str,
@@ -999,6 +1007,16 @@ fn compare_path<T: AsRef<str>>(path: &str, path_schemas: &[T]) -> bool {
         return true;
     }
     false
+}
+
+
+#[derive(thiserror::Error, Debug)]
+pub enum GetAssetErr<'a> {
+    #[error("error reading {0} : {1}")]
+    IO(String, std::io::Error),
+
+    #[error("failed to get content_type for extension {0}, reason: unsupported")]
+    UnSupportedFileType(&'a str),
 }
 
 #[derive(thiserror::Error, Debug)]

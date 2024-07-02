@@ -34,15 +34,15 @@ pub fn App() -> impl IntoView {
      provide_meta_context();
      provide_context(GlobalState::new());
 
-    // #[cfg(feature = "development")]
-    // {
-    //     let debug_ws = WsRuntime::<global::DebugServerMsg, global::DebugClientMsg>::new();
-    //     debug_ws.connect(3001).unwrap();
-    //     let debug_ch = debug_ws.channel().key(0).start();
-    //     debug_ch.recv().start(|msg, _| {
-    //         window().location().reload().unwrap();
-    //     });
-    // }
+    #[cfg(feature = "development")]
+    {
+        let debug_ws = WsRuntime::<global::DebugServerMsg, global::DebugClientMsg>::new();
+        debug_ws.connect(3001).unwrap();
+        let debug_ch = debug_ws.channel().key(0).start();
+        debug_ch.recv().start(|msg, _| {
+            window().location().reload().unwrap();
+        });
+    }
 
     let global_state = use_context::<GlobalState>().expect("Failed to provide global state");
     global_state.ws.connect(3420).unwrap();
