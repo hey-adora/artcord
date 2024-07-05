@@ -42,6 +42,8 @@ pub async fn login(
     rand::thread_rng().fill(&mut token);
     let token = base64::Engine::encode(&base64::prelude::BASE64_STANDARD, &token);
 
+    "owo".chars().into_iter().for_each(|c| println!("{c}"));
+
     let header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS512);
     let token = jsonwebtoken::encode(
         &header,

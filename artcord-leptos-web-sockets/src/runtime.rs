@@ -52,7 +52,6 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
 {
     fn default() -> Self {
         Self {
-            // global_msgs_callbacks_multi: StoredValue::new(HashMap::new()),
             channels: StoredValue::new(HashMap::new()),
             global_on_open_callbacks: StoredValue::new(HashMap::new()),
             global_on_close_callbacks: StoredValue::new(HashMap::new()),
@@ -96,6 +95,8 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
     pub fn connect_to(&self, url: &str) {
         let connect = || {
             let url = String::from(url);
+            let span_data = format!("ws({})", url);
+            let _span = tracing::span!(tracing::Level::TRACE, "", "{}", span_data).entered();
 
             let ws_on_msg = self.ws_on_msg;
             let ws_on_err = self.ws_on_err;
@@ -110,39 +111,54 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
             let ws = self.ws;
 
             ws_on_msg.set_value({
-                let url = url.clone();
+                let span_data = span_data.clone();
                 Some(Rc::new(Closure::<dyn FnMut(_)>::new(
-                    move |e: MessageEvent| Self::ws_on_msg(&url, channels, e),
+                    move |e: MessageEvent| {
+                        let _span =
+                            tracing::span!(tracing::Level::TRACE, "", "{}", span_data).entered();
+                        tracing::trace_span!("RUNTIME-RECV");
+                        Self::ws_on_msg(channels, e);
+                    },
                 )))
             });
 
             ws_on_err.set_value({
-                let url = url.clone();
+                let span_data = span_data.clone();
                 Some(Rc::new(Closure::<dyn FnMut(_)>::new(
-                    move |e: ErrorEvent| Self::ws_on_err(&url, e),
+                    move |e: ErrorEvent| {
+                        let _span =
+                            tracing::span!(tracing::Level::TRACE, "", "{}", span_data).entered();
+                        tracing::trace_span!("RUNTIME-ERR");
+                        Self::ws_on_err(e);
+                    },
                 )))
             });
 
             ws_on_open.set_value({
-                let url = url.clone();
+                let span_data = span_data.clone();
                 let ws_connected = ws_connected.clone();
                 Some(Rc::new(Closure::<dyn FnMut()>::new(move || {
-                    Self::ws_on_open(ws, &url, ws_connected, ws_pending, ws_on_ws_state_closures)
+                    let _span =
+                        tracing::span!(tracing::Level::TRACE, "", "{}", span_data).entered();
+                    tracing::trace_span!("RUNTIME-OPEN");
+                    Self::ws_on_open(ws, ws_connected, ws_pending, ws_on_ws_state_closures);
                 })))
             });
 
             ws_on_close.set_value({
-                let url = url.clone();
+                let span_data = span_data.clone();
                 let ws_connected = ws_connected.clone();
                 Some(Rc::new(Closure::<dyn FnMut()>::new(move || {
-                    Self::ws_on_close(ws, &url, ws_connected, ws_on_ws_state_closures)
+                    let _span =
+                        tracing::span!(tracing::Level::TRACE, "", "{}", span_data).entered();
+                    tracing::trace_span!("RUNTIME-CLOSE");
+                    Self::ws_on_close(ws, ws_connected, ws_on_ws_state_closures);
                 })))
             });
 
             let create_ws = {
-                let url = url.clone();
                 move || -> WebSocket {
-                    info!("ws({})_global: connecting", &url);
+                    trace!("connecting...");
                     let ws = WebSocket::new(&url).unwrap();
 
                     ws.set_binary_type(web_sys::BinaryType::Arraybuffer);
@@ -178,15 +194,18 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
             ws.set_value(Some(create_ws()));
             let _reconnect_interval = leptos_use::use_interval_fn(
                 {
-                    let url = url.clone();
+                    let span_data = span_data.clone();
                     move || {
+                        let _span =
+                            tracing::span!(tracing::Level::TRACE, "", "{}", span_data).entered();
+
                         let is_closed = ws.with_value(move |ws| {
                             ws.as_ref()
                                 .and_then(|ws| Some(ws.ready_state() == WebSocket::CLOSED))
                                 .unwrap_or(false)
                         });
                         if is_closed {
-                            info!("ws({}): reconnecting...", url);
+                            trace!("reconnecting...");
                             ws.set_value(Some(create_ws()));
                         }
                     }
@@ -196,92 +215,104 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
 
             let _timeout_interval = leptos_use::use_interval_fn(
                 {
-                    let url = url.clone();
+                    let span_data = span_data.clone();
                     move || {
+                        let _span =
+                            tracing::span!(tracing::Level::TRACE, "", "{}", span_data).entered();
+
+                        tracing::trace_span!("TIMEOUT");
+
                         let is_closed = ws.with_value(move |ws| {
                             ws.as_ref()
                                 .and_then(|ws| Some(ws.ready_state() != WebSocket::OPEN))
                                 .unwrap_or(false)
                         });
                         if is_closed {
-                            trace!("ws({}): timedout: skipped, ws closed.", url,);
+                            trace!("skipped, ws closed.",);
                             return;
                         }
 
                         let callbacks: Vec<(WsRouteKey, WsChannelCallbacksType<ServerMsg>)> =
-                            channels.try_update_value(|channels| {
+                            channels
+                                .try_update_value(|channels| {
+                                    let mut output: Vec<(
+                                        WsRouteKey,
+                                        WsChannelCallbacksType<ServerMsg>,
+                                    )> = Vec::new();
 
-                                let mut output: Vec<(
-                                    WsRouteKey,
-                                    WsChannelCallbacksType<ServerMsg>,
-                                )> = Vec::new();
+                                    for (i, (channel_key, channel)) in
+                                        channels.iter_mut().enumerate()
+                                    {
+                                        let Some(delta) = channel.timeout_duratoin else {
+                                            continue;
+                                        };
 
-                                for (i, (channel_key, channel)) in channels.iter_mut().enumerate() {
-                                    let Some(delta) = channel.timeout_duratoin else {
-                                        continue;
-                                    };
+                                        if channel.waiting_for_response == 0 {
+                                            continue;
+                                        }
 
-                                    if channel.waiting_for_response == 0 {
-                                        continue;
-                                    }
+                                        let Some(since) = channel.timeout_since else {
+                                            channel.timeout_since = Some(Utc::now());
+                                            trace!(
+                                                "since date set: {:?} : {} : {:?} : {:?}",
+                                                channel_key,
+                                                channel.waiting_for_response,
+                                                channel.timeout_since,
+                                                channel.timeout_duratoin,
+                                            );
 
-                                    let Some(since) = channel.timeout_since else {
-                                        channel.timeout_since = Some(Utc::now());
+                                            continue;
+                                        };
+
                                         trace!(
-                                            "ws({}): timedout: since date set: {:?} : {} : {:?} : {:?}",
-                                            url, channel_key,
-                                            channel.waiting_for_response,
-                                            channel.timeout_since,
-                                            channel.timeout_duratoin,
-
+                                            "comparing time: {:?} > {:?} & {}",
+                                            Utc::now() - since,
+                                            delta,
+                                            channel.waiting_for_response
                                         );
 
-                                        continue;
-                                    };
-
-                                    trace!(
-                                        "ws({}): timedout: comparing time: {:?} > {:?} & {}",
-                                        url,
-                                        Utc::now() - since,
-                                        delta,
-                                        channel.waiting_for_response
-                                    );
-
-                                    if Utc::now() - since > delta {
-                                        trace!(
-                                            "ws({}): timedout: found callback: {:?}",
-                                            url,
-                                            channel_key
-                                        );
-                                        output
-                                            .push((channel_key.clone(), channel.callbacks.clone()));
+                                        if Utc::now() - since > delta {
+                                            trace!("found callback: {:?}", channel_key);
+                                            output.push((
+                                                channel_key.clone(),
+                                                channel.callbacks.clone(),
+                                            ));
+                                        }
                                     }
-                                    // else {
-                                    //     trace!("ws({}): timeout: finished looking for callbacks at: {}", url, i);
-                                    //     break;
-                                    // }
-                                }
 
-                                output
-                            }).unwrap_or_default();
+                                    output
+                                })
+                                .unwrap_or_default();
 
                         for (channel_key, callbacks) in callbacks {
-                            trace!("ws({}): timeout: running callback: {:?}", url, &channel_key);
+                            let _span = tracing::span!(
+                                tracing::Level::TRACE,
+                                "",
+                                "{}",
+                                format!("CHANNEL({:#01x})", channel_key)
+                            )
+                            .entered();
+
                             for (callback_key, callback) in callbacks {
-                                // trace!("1111111111wtf, run run run!");
+                                let _span = tracing::span!(
+                                    tracing::Level::TRACE,
+                                    "",
+                                    "{}",
+                                    format!("CALLBACK({})", callback_key)
+                                )
+                                .entered();
+
                                 let mut keep_open = true;
                                 callback(&WsRecvResult::TimeOut, &mut keep_open);
-
-                                // trace!("wtf, run run run!");
-                                Self::update_callback_after_recv(
+                                Self::remove_callback(
                                     channels,
-                                    &url,
                                     channel_key,
                                     callback_key,
                                     keep_open,
                                 );
                             }
-                            Self::update_channel_after_recv(channels, &url, channel_key);
+
+                            Self::update_channel_after_recv(channels, channel_key);
                         }
                     }
                 },
@@ -294,93 +325,60 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
         }
     }
 
-    pub fn on_open(&self, callback: impl Fn() + 'static) {
-        let temp_key = u128::generate_key();
-
-        self.global_on_open_callbacks.update_value({
-            let temp_key = temp_key.clone();
-            move |callbacks| {
-                trace!(
-                    "ws({})_global: adding on_open callback: {:#?}",
-                    self.ws_url.get_value().unwrap_or("error".to_string()),
-                    temp_key
-                );
-                callbacks.insert(temp_key, Rc::new(callback));
-            }
-        });
-
-        on_cleanup({
-            let callbacks = self.global_on_open_callbacks;
-            let ws_url = self.ws_url;
-            move || {
-                callbacks.update_value({
-                    move |callbacks| {
-                        trace!(
-                            "ws({})_global: cleanup: removing on_open callback: {:#?}",
-                            ws_url.get_value().unwrap_or("error".to_string()),
-                            temp_key
-                        );
-                        callbacks.remove(&temp_key);
-                    }
-                });
-            }
-        });
+    fn ws_on_open(
+        ws: StoredValue<Option<WebSocket>>,
+        connected: RwSignal<bool>,
+        socket_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
+        global_on_ws_state_callbacks: StoredValue<HashMap<WsRouteKey, Rc<dyn Fn(bool)>>>,
+    ) {
+        trace!(
+            "connected, ws_on_closeclosures left {}",
+            global_on_ws_state_callbacks.with_value(|c| c.len())
+        );
+        connected.set(true);
+        Self::run_on_ws_state_callbacks(ws, global_on_ws_state_callbacks);
+        Self::flush_pending_client_msgs(ws, socket_pending_client_msgs);
     }
 
-    fn update_callback_after_recv(
+    fn remove_callback(
         channels: WsChannelsType<ServerMsg>,
-        url: &str,
         channel_key: WsRouteKey,
         callback_key: WsRouteKey,
         keep_open: bool,
     ) {
-        trace!(
-            "ws({}): updating callbacks after recv...: {:?}",
-            url,
-            &channel_key
-        );
         channels.update_value(|channels| {
             let Some(channel) = channels.get_mut(&channel_key) else {
-                warn!(
-                    "ws({}): channel after recv not found: {:?}",
-                    url, &channel_key
-                );
+                error!("channel not found",);
                 return;
             };
 
             if !keep_open {
                 let result = channel.callbacks.remove(&callback_key);
-                if let Some(result) = result {
-                    trace!("ws({}): removed callback: {:?}", url, &callback_key);
+                if let Some(_) = result {
+                    trace!("removed callback");
                 } else {
-                    warn!("ws({}): callback not found: {:?}", url, &callback_key);
+                    error!("callback not found");
                 }
             }
         });
     }
 
-    fn update_channel_after_recv(
-        channels: WsChannelsType<ServerMsg>,
-        url: &str,
-        channel_key: WsRouteKey,
-    ) {
-        trace!("ws({}): updating channel after recv...{}", url, channel_key);
+    fn update_channel_after_recv(channels: WsChannelsType<ServerMsg>, channel_key: WsRouteKey) {
         channels.update_value(|channels| {
             let Some(mut channel) = channels.get_mut(&channel_key) else {
-                warn!(
-                    "ws({}): channel after recv not found: {:?}",
-                    url, &channel_key
-                );
+                error!("channel not found");
                 return;
             };
 
-            Self::update_timout(url, channel);
+            Self::update_timout(channel);
         });
     }
 
-    pub fn update_timout(url: &str, channel: &mut WsChannelType<ServerMsg>) {
+    pub fn update_timout(channel: &mut WsChannelType<ServerMsg>) {
+        tracing::trace_span!("TIMEOUT");
+
         let Some(value) = channel.waiting_for_response.checked_sub(1) else {
-            trace!("ws({}): received while not waiting", url);
+            warn!("received while not waiting");
             return;
         };
         channel.waiting_for_response = value;
@@ -391,8 +389,7 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
             channel.timeout_since = None;
         }
         trace!(
-            "ws({}): state after updating channel: {} {:?}",
-            url,
+            "channel timeout state: {} {:?}",
             channel.waiting_for_response,
             channel.timeout_since
         );
@@ -408,99 +405,72 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
         )
     }
 
-    fn ws_on_open(
-        ws: StoredValue<Option<WebSocket>>,
-        url: &str,
-        connected: RwSignal<bool>,
-        socket_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
-        global_on_ws_state_callbacks: StoredValue<HashMap<WsRouteKey, Rc<dyn Fn(bool)>>>,
-    ) {
-        info!(
-            "ws({})_global: connected, ws_on_closeclosures left {}",
-            url,
-            global_on_ws_state_callbacks.with_value(|c| c.len())
-        );
-        connected.set(true);
-        Self::run_on_ws_state_callbacks(ws, url, global_on_ws_state_callbacks);
-        //Self::run_on_open_callbacks(url, global_on_open_callbacks);
-        Self::flush_pending_client_msgs(ws, url, socket_pending_client_msgs);
-    }
-
     fn ws_on_close(
         ws: StoredValue<Option<WebSocket>>,
-        url: &str,
         connected: RwSignal<bool>,
         global_on_ws_closure_callbacks: StoredValue<HashMap<WsRouteKey, Rc<dyn Fn(bool)>>>,
     ) {
-        info!("ws({})_global: disconnected", url);
+        info!("disconnected");
         connected.set(false);
-        Self::run_on_ws_state_callbacks(ws, url, global_on_ws_closure_callbacks);
+        Self::run_on_ws_state_callbacks(ws, global_on_ws_closure_callbacks);
 
         trace!(
-            "ws({})_global: disconnect: ws_on_closeclosures left: {}",
-            url,
+            "callbacks left: {}",
             global_on_ws_closure_callbacks.with_value(|c| c.len())
         );
     }
 
-    fn ws_on_err(url: &str, e: ErrorEvent) {
-        error!("WS({})_global: error: {:?}", url, e);
+    fn ws_on_err(e: ErrorEvent) {
+        error!("{:?}", e);
     }
 
-    fn ws_on_msg(url: &str, channels: WsChannelsType<ServerMsg>, e: MessageEvent) {
+    fn ws_on_msg(channels: WsChannelsType<ServerMsg>, e: MessageEvent) {
         let data = e.data().dyn_into::<js_sys::ArrayBuffer>();
         let Ok(data) = data else {
+            error!("failed to cast data");
             return;
         };
         let array = js_sys::Uint8Array::new(&data);
         let bytes: Vec<u8> = array.to_vec();
 
         if bytes.is_empty() {
-            trace!("ws({})_global: recv empty msg.", url);
+            error!("is empty data");
             return;
         };
 
         let server_msg = ServerMsg::recv_from_vec(&bytes);
         let Ok(server_msg) = server_msg else {
-            error!(
-                "ws({})_global: error decoding msg: {}",
-                url,
-                server_msg.err().unwrap()
-            );
+            error!("data decoding: {}", server_msg.err().unwrap());
             return;
         };
 
-        //debug!("ONE ONE ONE ");
-        trace!("ws({})_global: recved msg: {:#?}", url, &server_msg);
+        let _span = tracing::span!(
+            tracing::Level::TRACE,
+            "",
+            "{}",
+            format!("CHANNEL({:#01x})", server_msg.0)
+        )
+        .entered();
 
-        Self::execute(url, channels, server_msg);
-        //debug!("TWO TWO TWO ");
+        trace!("data: \n{:#?}", &server_msg.1);
+
+        Self::execute(channels, server_msg);
     }
 
     fn flush_pending_client_msgs(
         ws: StoredValue<Option<WebSocket>>,
-        url: &str,
         socket_pending_client_msgs: StoredValue<Vec<Vec<u8>>>,
     ) {
         ws.with_value(|ws| {
             if let Some(ws) = ws {
                 socket_pending_client_msgs.update_value(|msgs| {
-                    trace!(
-                        "ws({})_global: sending msgs from queue, left: {}",
-                        url,
-                        msgs.len()
-                    );
+                    trace!("sending from queue amount: {}", msgs.len());
                     let mut index: usize = 0;
                     for msg in msgs.iter() {
-                        trace!(
-                            "ws({})_global: sending from msg {} from queue: {:?}",
-                            url,
-                            index,
-                            msg
-                        );
+                        trace!("sending from queue {}: {:?}", index, msg);
                         let result = ws.send_with_u8_array(msg);
                         if result.is_err() {
-                            warn!("ws({})_global: failed to send msg {}:{:?}", url, index, msg);
+                            warn!("failed to send {}: {:?}", index, msg);
                             break;
                         }
 
@@ -508,25 +478,20 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
                     }
                     if index < msgs.len() && index > 0 {
                         *msgs = msgs[index..].to_vec();
-                        warn!("ws({})_global: msg left in queue: {}", url, msgs.len());
+                        warn!("msg left in queue: {}", msgs.len());
                     } else if index == msgs.len() {
                         *msgs = vec![];
-                        trace!(
-                            "ws({})_global: msg left in queue is none: {}",
-                            url,
-                            msgs.len()
-                        );
+                        trace!("msg left in queue is none: {}", msgs.len());
                     }
                 });
             } else {
-                warn!("ws({})_global: not initialized.", url);
+                warn!("not initialized.");
             }
         });
     }
 
     fn run_on_ws_state_callbacks(
         ws: StoredValue<Option<WebSocket>>,
-        url: &str,
         global_on_ws_state_callbacks: StoredValue<HashMap<WsRouteKey, Rc<dyn Fn(bool)>>>,
     ) {
         let is_connected = ws.with_value(|ws| {
@@ -536,23 +501,27 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
         });
 
         let callbacks = global_on_ws_state_callbacks.get_value();
+
         for (key, callback) in callbacks {
-            trace!(
-                "ws({})_global: running on_ws_state callback: {:#?}",
-                url,
-                key
+            let _span = tracing::span!(
+                tracing::Level::TRACE,
+                "",
+                "{}",
+                format!("STATE_CALLBACK({})", key)
             );
+
+            trace!("running state callback");
             callback(is_connected);
         }
     }
 
-    fn execute(url: &str, channels: WsChannelsType<ServerMsg>, package: WsPackage<ServerMsg>) {
+    fn execute(channels: WsChannelsType<ServerMsg>, package: WsPackage<ServerMsg>) {
         let channel_key: WsRouteKey = package.0;
         let server_msg = WsRecvResult::Ok(package.1);
 
         let channel: Option<WsChannelType<ServerMsg>> = channels.with_value(move |channels| {
             let Some(f) = channels.get(&channel_key) else {
-                warn!("ws({})_global: channel not found {:?}", url, &channel_key);
+                error!("channel not found {:?}", &channel_key);
                 return None;
             };
 
@@ -563,30 +532,43 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
             return;
         };
 
-        //debug!("THREE THREE");
-
         for (callback_key, callback) in channel.callbacks {
-            trace!(
-                "ws({})_global: running(execute_single) callback: {:#?}",
-                url,
-                channel_key
-            );
+            let _span = tracing::span!(
+                tracing::Level::TRACE,
+                "",
+                "{}",
+                format!("CALLBACK({})", callback_key)
+            )
+            .entered();
+            trace!("running callback");
 
-            //debug!("FOUR FOUR");
             let mut keep_open = true;
             callback(&server_msg, &mut keep_open);
-            //debug!("FIVE FIVE");
-            Self::update_callback_after_recv(channels, &url, channel_key, callback_key, keep_open);
-            //debug!("SIX SIX");
+            Self::remove_callback(channels, channel_key, callback_key, keep_open);
         }
-        Self::update_channel_after_recv(channels, &url, channel_key);
+        Self::update_channel_after_recv(channels, channel_key);
     }
 
     #[track_caller]
     pub fn on_ws_state(&self, callback: impl Fn(bool) + 'static) {
-        //console_log!("3420 count this");
-        let temp_key = crate::location_hash();
-        // let temp_key: WsRouteKey = u128::generate_key();
+        let state_callback_key = crate::location_hash();
+
+        let _span = tracing::span!(
+            tracing::Level::TRACE,
+            "",
+            "{}",
+            format!(
+                "ws({})",
+                self.ws_url.get_value().unwrap_or("error".to_string())
+            )
+        );
+
+        let _span = tracing::span!(
+            tracing::Level::TRACE,
+            "",
+            "{}",
+            format!("STATE_CALLBACK({})", state_callback_key)
+        );
 
         let is_connected = self.ws.with_value(|ws| {
             ws.as_ref()
@@ -597,14 +579,9 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
         callback(is_connected);
 
         self.global_on_ws_state_change_callbacks.update_value({
-            let temp_key = temp_key.clone();
             move |callbacks| {
-                trace!(
-                    "ws({})_global: adding on_ws_state callback: {:#?}",
-                    self.ws_url.get_value().unwrap_or("error".to_string()),
-                    temp_key
-                );
-                callbacks.insert(temp_key, Rc::new(callback));
+                trace!("added state callback");
+                callbacks.insert(state_callback_key, Rc::new(callback));
             }
         });
 
@@ -612,14 +589,26 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
             let callbacks = self.global_on_ws_state_change_callbacks;
             let ws_url = self.ws_url;
             move || {
+                let _span = tracing::span!(
+                    tracing::Level::TRACE,
+                    "",
+                    "{}",
+                    format!("ws({})", ws_url.get_value().unwrap_or("error".to_string()))
+                );
+
+                let _span = tracing::span!(
+                    tracing::Level::TRACE,
+                    "",
+                    "{}",
+                    format!("STATE_CALLBACK({})", state_callback_key)
+                );
+
+                tracing::trace_span!("CLEANUP");
+
                 callbacks.update_value({
                     move |callbacks| {
-                        trace!(
-                            "ws({})_global: cleanup: removing on_ws_state callback: {:#?}",
-                            ws_url.get_value().unwrap_or("error".to_string()),
-                            temp_key
-                        );
-                        callbacks.remove(&temp_key);
+                        trace!("removed state callback");
+                        callbacks.remove(&state_callback_key);
                     }
                 });
             }

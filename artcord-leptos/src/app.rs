@@ -48,7 +48,6 @@ pub fn App() -> impl IntoView {
     global_state.ws.connect(3420).unwrap();
 
     view! {
-        <h1>"wowowowowwowowwowo"</h1>
         <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
         <meta name="description" content="Art Community!"/>
         <meta name="keywords" content="artcord,art,gallery,server,discord,community"/>
@@ -84,6 +83,5 @@ pub fn App() -> impl IntoView {
                     <ProtectedRoute condition=move || !global_state.auth_is_logged_out() redirect_path="/"  path="/register" view=Register/>
                 </Routes>
         </Router>
-        <h1>"wowowowowwowowwowo"</h1>
     }
 }

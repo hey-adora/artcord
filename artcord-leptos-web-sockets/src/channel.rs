@@ -9,7 +9,30 @@ use tracing::{error, trace, warn};
 use wasm_bindgen::closure::Closure;
 use web_sys::WebSocket;
 
-// pub mod channel_with_timeout;
+pub type WsChannelCallbacksType<ServerMsgType: Clone + 'static> =
+    HashMap<u128, Rc<dyn Fn(&WsRecvResult<ServerMsgType>, &mut bool)>>;
+pub type WsCallbackType<T> = StoredValue<Option<Rc<Closure<T>>>>;
+pub type WsChannelsType<ServerMsg> = StoredValue<HashMap<u128, WsChannelType<ServerMsg>>>;
+
+#[derive(Debug, Clone)]
+pub enum WsResourcSendResult {
+    Sent,
+    Skipped,
+    Queued,
+    EventAdded,
+}
+
+#[derive(Debug, Clone)]
+pub enum SendResult {
+    Sent,
+    Queued,
+}
+
+#[derive(Debug, Clone)]
+pub enum WsRecvResult<T: Debug + Clone> {
+    Ok(T),
+    TimeOut,
+}
 
 #[derive(Clone)]
 pub struct WsChannelType<ServerMsg: Clone + Receive + Debug + 'static> {
@@ -18,26 +41,6 @@ pub struct WsChannelType<ServerMsg: Clone + Receive + Debug + 'static> {
     pub timeout_since: Option<(DateTime<chrono::Utc>)>,
     pub callbacks: WsChannelCallbacksType<ServerMsg>,
 }
-
-impl<ServerMsg: Clone + Receive + Debug + 'static> WsChannelType<ServerMsg> {
-    pub fn new(
-        timeout_duratoin: Option<TimeDelta>,
-        callbacks: WsChannelCallbacksType<ServerMsg>,
-    ) -> Self {
-        Self {
-            timeout_since: None,
-            callbacks,
-            waiting_for_response: 0,
-            timeout_duratoin,
-        }
-    }
-}
-
-pub type WsChannelCallbacksType<ServerMsgType: Clone + 'static> =
-    HashMap<u128, Rc<dyn Fn(&WsRecvResult<ServerMsgType>, &mut bool)>>;
-
-pub type WsCallbackType<T> = StoredValue<Option<Rc<Closure<T>>>>;
-pub type WsChannelsType<ServerMsg> = StoredValue<HashMap<u128, WsChannelType<ServerMsg>>>;
 
 #[derive(Clone, Debug)]
 pub struct WsChannel<
@@ -53,6 +56,20 @@ pub struct WsChannel<
     single_fire: bool,
     timeout: Option<TimeDelta>,
     is_connected: RwSignal<bool>,
+}
+
+impl<ServerMsg: Clone + Receive + Debug + 'static> WsChannelType<ServerMsg> {
+    pub fn new(
+        timeout_duratoin: Option<TimeDelta>,
+        callbacks: WsChannelCallbacksType<ServerMsg>,
+    ) -> Self {
+        Self {
+            timeout_since: None,
+            callbacks,
+            waiting_for_response: 0,
+            timeout_duratoin,
+        }
+    }
 }
 
 impl<
@@ -79,6 +96,15 @@ impl<
         is_connected: RwSignal<bool>,
         key: Option<WsRouteKey>,
     ) -> Self {
+        let _span = tracing::span!(
+            tracing::Level::TRACE,
+            "",
+            "{}",
+            format!("ws({})", ws_url.get_value().unwrap_or("error".to_string()))
+        );
+
+        tracing::trace_span!("HANDLE");
+
         let channel_key = if let Some(key) = key {
             key
         } else if persistant {
@@ -87,32 +113,27 @@ impl<
             u128::generate_key()
         };
 
+        let _span = tracing::span!(
+            tracing::Level::TRACE,
+            "",
+            "{}",
+            format!("CHANNEL({:#01x})", channel_key)
+        );
+
         let create_channel = || {
             channels.update_value({
                 move |channels| {
                     let Some(channel) = channels.get_mut(&channel_key) else {
                         channels.insert(channel_key, WsChannelType::new(timeout, HashMap::new()));
-                        trace!(
-                            "ws({}): channel inserted: {}",
-                            ws_url.get_value().unwrap_or("error".to_string()),
-                            channel_key
-                        );
+                        trace!("channel inserted");
                         return;
                     };
 
                     if !persistant {
                         *channel = WsChannelType::new(timeout, HashMap::new());
-                        trace!(
-                            "ws({}): channel replaced: {}",
-                            ws_url.get_value().unwrap_or("error".to_string()),
-                            channel_key
-                        );
+                        trace!("channel replaced");
                     } else {
-                        trace!(
-                            "ws({}): channel already exists: {}",
-                            ws_url.get_value().unwrap_or("error".to_string()),
-                            channel_key
-                        );
+                        trace!("channel already exists");
                     }
                 }
             })
@@ -127,13 +148,28 @@ impl<
             on_cleanup({
                 move || {
                     channels.update_value({
-                        move |socket_closures| {
-                            trace!(
-                                "ws({})_global: channel removed: {:?}",
-                                ws_url.get_value().unwrap_or("error".to_string()),
-                                &channel_key
+                        move |channels| {
+                            let _span = tracing::span!(
+                                tracing::Level::TRACE,
+                                "",
+                                "{}",
+                                format!(
+                                    "ws({})",
+                                    ws_url.get_value().unwrap_or("error".to_string())
+                                )
                             );
-                            socket_closures.remove(&channel_key);
+
+                            tracing::trace_span!("HANDLE");
+
+                            let _span = tracing::span!(
+                                tracing::Level::TRACE,
+                                "",
+                                "{}",
+                                format!("CHANNEL({:#01x})", channel_key)
+                            );
+
+                            trace!("channel removed",);
+                            channels.remove(&channel_key);
                         }
                     });
                 }
@@ -160,45 +196,58 @@ impl<
         persistant: bool,
         // key: Option<u128>,
     ) {
+        let _span = tracing::span!(
+            tracing::Level::TRACE,
+            "",
+            "{}",
+            format!(
+                "ws({})",
+                self.ws_url.get_value().unwrap_or("error".to_string())
+            )
+        );
+
+        tracing::trace_span!("HANDLE");
+
         let channel_key = self.key;
         let callback_key = if persistant {
             crate::location_hash()
         } else {
             u128::generate_key()
         };
+
+        let _span = tracing::span!(
+            tracing::Level::TRACE,
+            "",
+            "{}",
+            format!("CHANNEL({:#01x})", channel_key)
+        );
+
+        let _span = tracing::span!(
+            tracing::Level::TRACE,
+            "",
+            "{}",
+            format!("CALLBACK({})", callback_key)
+        );
+
         self.ws.with_value(|ws| {
             self.channels.update_value({
                 move |channels| {
+                    tracing::trace_span!("CREATION");
+
                     let Some(channel) = channels.get_mut(&channel_key) else {
-                        trace!(
-                            "ws({}): channel was not created: {}",
-                            self.ws_url.get_value().unwrap_or("error".to_string()),
-                            &callback_key
-                        );
+                        error!("channel not found");
                         return;
                     };
 
                     let contains = channel.callbacks.contains_key(&callback_key);
                     if !contains {
-                        trace!(
-                            "ws({})_global: adding global_msgs_closures callback: {:#?}",
-                            self.ws_url.get_value().unwrap_or("error".to_string()),
-                            &callback_key
-                        );
+                        trace!("callback inserted");
                         channel.callbacks.insert(channel_key, Rc::new(on_receive));
                     } else if !persistant {
-                        trace!(
-                            "ws({})_global: replacing global_msgs_closures callback: {:#?}",
-                            self.ws_url.get_value().unwrap_or("error".to_string()),
-                            &callback_key
-                        );
+                        trace!("callback replaced");
                         channel.callbacks.insert(channel_key, Rc::new(on_receive));
                     } else {
-                        trace!(
-                            "ws({})_global: persistant global_msgs_closures callback: {:#?}",
-                            self.ws_url.get_value().unwrap_or("error".to_string()),
-                            &callback_key
-                        );
+                        trace!("callback already exists");
                     }
                 }
             });
@@ -209,19 +258,32 @@ impl<
             let ws_url = self.ws_url;
             on_cleanup({
                 move || {
+                    let _span = tracing::span!(
+                        tracing::Level::TRACE,
+                        "",
+                        "{}",
+                        format!("ws({})", ws_url.get_value().unwrap_or("error".to_string()))
+                    );
+
+                    tracing::trace_span!("HANDLE");
+
+                    let _span = tracing::span!(
+                        tracing::Level::TRACE,
+                        "",
+                        "{}",
+                        format!("STATE_CALLBACK({})", channel_key)
+                    );
+
+                    tracing::trace_span!("CLEANUP");
+
                     channels.update_value({
                         move |socket_closures| {
-                            trace!(
-                                "ws({})_global: channel '{}' callback removed: {}",
-                                ws_url.get_value().unwrap_or("error".to_string()),
-                                &channel_key,
-                                &callback_key,
-                            );
-
                             let channel = socket_closures.get_mut(&channel_key);
                             let Some(channel) = channel else {
+                                error!("channel not found");
                                 return;
                             };
+                            trace!("removed callback");
                             channel.callbacks.remove(&callback_key);
                         }
                     });
@@ -238,6 +300,25 @@ impl<
         resend_on_reconnect: bool,
         // last_msg: bool
     ) -> Result<WsResourcSendResult, WsError> {
+        let _span = tracing::span!(
+            tracing::Level::TRACE,
+            "",
+            "{}",
+            format!(
+                "ws({})",
+                self.ws_url.get_value().unwrap_or("error".to_string())
+            )
+        );
+
+        tracing::trace_span!("HANDLE");
+
+        let _span = tracing::span!(
+            tracing::Level::TRACE,
+            "",
+            "{}",
+            format!("CHANNEL({:#01x})", self.key)
+        );
+
         let owner = Owner::current();
         if owner.is_none() {
             let mut errors: Option<String> = None;
@@ -260,35 +341,44 @@ impl<
 
             if let Some(errors) = errors {
                 let location = std::panic::Location::caller().to_string();
-                warn!("ws send error at {}\n{}", location, errors);
+                error!("ws send error at {}\n{}", location, errors);
             }
         }
 
         let channel_key = self.key;
+
         if let Some(client_msg) = on_cleanup_msg {
             let channel = self.clone();
-            // let send = self.send;
+            let ws_url = self.ws_url;
+
             on_cleanup(move || {
                 let result = channel.send(client_msg, None, false);
                 if let Err(err) = result {
-                    warn!(
-                        "ws({})_send: error on cleanup '{}' : {}",
-                        channel.ws_url.get_value().unwrap_or("error".to_string()),
-                        &channel_key,
-                        err
+                    let _span = tracing::span!(
+                        tracing::Level::TRACE,
+                        "",
+                        "{}",
+                        format!("ws({})", ws_url.get_value().unwrap_or("error".to_string()))
                     );
+
+                    tracing::trace_span!("HANDLE");
+
+                    let _span = tracing::span!(
+                        tracing::Level::TRACE,
+                        "",
+                        "{}",
+                        format!("CHANNEL({:#01x})", channel_key)
+                    );
+
+                    error!("send on cleanup: {}", err);
                 }
             });
         }
 
         if resend_on_reconnect {
             let channel = self.clone();
-            // let client_msg = client_msg.clone();
-            // self.ws.with_value(|ws| {
-            //     if let Some(ws) = ws {
-            //         ws.stat
-            //     }
-            // });
+            let ws_url = self.ws_url;
+
             create_effect(move |_| {
                 let is_connected = channel.is_connected.get();
                 if !is_connected {
@@ -296,12 +386,23 @@ impl<
                 }
                 let result = channel.send(client_msg.clone(), None, false);
                 if let Err(err) = result {
-                    warn!(
-                        "ws({})_send: error on connect '{}' : {}",
-                        channel.ws_url.get_value().unwrap_or("error".to_string()),
-                        &channel_key,
-                        err
+                    let _span = tracing::span!(
+                        tracing::Level::TRACE,
+                        "",
+                        "{}",
+                        format!("ws({})", ws_url.get_value().unwrap_or("error".to_string()))
                     );
+
+                    tracing::trace_span!("HANDLE");
+
+                    let _span = tracing::span!(
+                        tracing::Level::TRACE,
+                        "",
+                        "{}",
+                        format!("CHANNEL({:#01x})", channel_key)
+                    );
+
+                    error!("send on reconnect: {}", err);
                 }
             });
             return Ok(WsResourcSendResult::EventAdded);
@@ -317,11 +418,7 @@ impl<
                             .unwrap_or(0)
                     });
                     if waiting_for_response > 0 {
-                        trace!(
-                            "ws({})_send: skipped '{}'",
-                            self.ws_url.get_value().unwrap_or("error".to_string()),
-                            &channel_key,
-                        );
+                        trace!("skipped");
                         return Ok(WsResourcSendResult::Skipped);
                     }
                 }
@@ -337,11 +434,7 @@ impl<
                     });
 
                     if is_open {
-                        trace!(
-                            "ws({}): sending msg: {:?}",
-                            self.ws_url.get_value().unwrap_or("error".to_string()),
-                            &package
-                        );
+                        trace!("sending data: \n{:#?}", &package);
                         return ws
                             .send_with_u8_array(&bytes)
                             .map(|_| {
@@ -358,11 +451,7 @@ impl<
                     }
                 }
 
-                trace!(
-                    "ws({}): msg \"{:?}\" pushed to queue",
-                    self.ws_url.get_value().unwrap_or("error".to_string()),
-                    &package
-                );
+                trace!("data pushed to queue \n\"{:#?}\"", &package);
 
                 self.global_pending_client_msgs
                     .update_value(|pending| pending.push(bytes));
@@ -373,23 +462,16 @@ impl<
     }
 
     fn update_timeout(&self) {
+        tracing::trace_span!("TIMEOUT");
         self.channels.update_value(|channels| {
             let Some(channel) = channels.get_mut(&self.key) else {
-                trace!(
-                    "ws({}): cant set waiting for response, channel not found: {}",
-                    self.ws_url.get_value().unwrap_or("error".to_string()),
-                    &self.key
-                );
+                error!("channel not found: {}", &self.key);
                 return;
             };
             channel.waiting_for_response += 1;
-            // if channel.timeout_since.is_none() {
-            //     channel.timeout_since = Some(Utc::now());
-            // }
+
             trace!(
-                "ws({}): waiting for response enabled for: {} : {} : {:?} : {:?}",
-                self.ws_url.get_value().unwrap_or("error".to_string()),
-                &self.key,
+                "channel timeout state: {} : {:?} : {:?}",
                 channel.waiting_for_response,
                 channel.timeout_since,
                 channel.timeout_duratoin,
@@ -397,58 +479,36 @@ impl<
         });
     }
 
-    fn remove_callback(&self, callback_key: u128) -> bool {
-        let channel_key = self.key;
-        let mut output = false;
+    // fn remove_callback(&self, callback_key: u128) -> bool {
+    //     let channel_key = self.key;
+    //     let mut output = false;
 
-        self.channels.update_value({
-            |socket_closures| {
-                let channel = socket_closures.get_mut(&channel_key);
-                let Some(channel) = channel else {
-                    error!(
-                        "ws({}): error: cant find channel with key: {:?}",
-                        self.ws_url.get_value().unwrap_or("error".to_string()),
-                        &channel_key
-                    );
-                    return;
-                };
+    //     self.channels.update_value({
+    //         |socket_closures| {
+    //             let channel = socket_closures.get_mut(&channel_key);
+    //             let Some(channel) = channel else {
+    //                 error!(
+    //                     "cant find channel",
+    //                 );
+    //                 return;
+    //             };
 
-                output = channel.callbacks.remove(&callback_key).is_some();
-                if output {
-                    trace!(
-                        "ws({}): channel callback removed {:?}",
-                        self.ws_url.get_value().unwrap_or("error".to_string()),
-                        &callback_key
-                    );
-                } else {
-                    error!(
-                        "ws({}): error: cant find callback with key: {:?}",
-                        self.ws_url.get_value().unwrap_or("error".to_string()),
-                        &callback_key
-                    );
-                }
-            }
-        });
-        output
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum WsResourcSendResult {
-    Sent,
-    Skipped,
-    Queued,
-    EventAdded,
-}
-
-#[derive(Debug, Clone)]
-pub enum SendResult {
-    Sent,
-    Queued,
-}
-
-#[derive(Debug, Clone)]
-pub enum WsRecvResult<T: Debug + Clone> {
-    Ok(T),
-    TimeOut,
+    //             output = channel.callbacks.remove(&callback_key).is_some();
+    //             if output {
+    //                 trace!(
+    //                     "ws({}): channel callback removed {:?}",
+    //                     self.ws_url.get_value().unwrap_or("error".to_string()),
+    //                     &callback_key
+    //                 );
+    //             } else {
+    //                 error!(
+    //                     "ws({}): error: cant find callback with key: {:?}",
+    //                     self.ws_url.get_value().unwrap_or("error".to_string()),
+    //                     &callback_key
+    //                 );
+    //             }
+    //         }
+    //     });
+    //     output
+    // }
 }
