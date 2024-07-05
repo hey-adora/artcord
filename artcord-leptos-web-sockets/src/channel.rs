@@ -103,7 +103,7 @@ impl<
             format!("ws({})", ws_url.get_value().unwrap_or("error".to_string()))
         );
 
-        tracing::trace_span!("HANDLE");
+        let _span = tracing::span!(tracing::Level::TRACE, "HANDLE",);
 
         let channel_key = if let Some(key) = key {
             key
@@ -159,7 +159,7 @@ impl<
                                 )
                             );
 
-                            tracing::trace_span!("HANDLE");
+                            let _span = tracing::span!(tracing::Level::TRACE, "HANDLE",);
 
                             let _span = tracing::span!(
                                 tracing::Level::TRACE,
@@ -206,7 +206,9 @@ impl<
             )
         );
 
-        tracing::trace_span!("HANDLE");
+        //tracing::trace_span!("HANDLE");
+
+        let _span = tracing::span!(tracing::Level::TRACE, "HANDLE",);
 
         let channel_key = self.key;
         let callback_key = if persistant {
@@ -265,8 +267,8 @@ impl<
                         format!("ws({})", ws_url.get_value().unwrap_or("error".to_string()))
                     );
 
-                    tracing::trace_span!("HANDLE");
-
+                    let _span = tracing::span!(tracing::Level::TRACE, "HANDLE",);
+                    
                     let _span = tracing::span!(
                         tracing::Level::TRACE,
                         "",
@@ -310,7 +312,7 @@ impl<
             )
         );
 
-        tracing::trace_span!("HANDLE");
+        let _span = tracing::span!(tracing::Level::TRACE, "HANDLE",);
 
         let _span = tracing::span!(
             tracing::Level::TRACE,
@@ -361,7 +363,7 @@ impl<
                         format!("ws({})", ws_url.get_value().unwrap_or("error".to_string()))
                     );
 
-                    tracing::trace_span!("HANDLE");
+                    let _span = tracing::span!(tracing::Level::TRACE, "HANDLE",);
 
                     let _span = tracing::span!(
                         tracing::Level::TRACE,
@@ -393,7 +395,7 @@ impl<
                         format!("ws({})", ws_url.get_value().unwrap_or("error".to_string()))
                     );
 
-                    tracing::trace_span!("HANDLE");
+                    let _span = tracing::span!(tracing::Level::TRACE, "HANDLE",);
 
                     let _span = tracing::span!(
                         tracing::Level::TRACE,

@@ -97,6 +97,7 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
             let url = String::from(url);
             let span_data = format!("ws({})", url);
             let _span = tracing::span!(tracing::Level::TRACE, "", "{}", span_data).entered();
+            let _span = tracing::span!(tracing::Level::TRACE, "RUNTIME");
 
             let ws_on_msg = self.ws_on_msg;
             let ws_on_err = self.ws_on_err;
@@ -116,7 +117,7 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
                     move |e: MessageEvent| {
                         let _span =
                             tracing::span!(tracing::Level::TRACE, "", "{}", span_data).entered();
-                        tracing::trace_span!("RUNTIME-RECV");
+                        let _span = tracing::span!(tracing::Level::TRACE, "RUNTIME-RECV");
                         Self::ws_on_msg(channels, e);
                     },
                 )))
@@ -128,7 +129,7 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
                     move |e: ErrorEvent| {
                         let _span =
                             tracing::span!(tracing::Level::TRACE, "", "{}", span_data).entered();
-                        tracing::trace_span!("RUNTIME-ERR");
+                        let _span = tracing::span!(tracing::Level::TRACE, "RUNTIME-ERR");
                         Self::ws_on_err(e);
                     },
                 )))
@@ -140,7 +141,7 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
                 Some(Rc::new(Closure::<dyn FnMut()>::new(move || {
                     let _span =
                         tracing::span!(tracing::Level::TRACE, "", "{}", span_data).entered();
-                    tracing::trace_span!("RUNTIME-OPEN");
+                    let _span = tracing::span!(tracing::Level::TRACE, "RUNTIME-OPEN");
                     Self::ws_on_open(ws, ws_connected, ws_pending, ws_on_ws_state_closures);
                 })))
             });
@@ -151,7 +152,7 @@ impl<ServerMsg: Clone + Receive + Debug + 'static, ClientMsg: Clone + Send + Deb
                 Some(Rc::new(Closure::<dyn FnMut()>::new(move || {
                     let _span =
                         tracing::span!(tracing::Level::TRACE, "", "{}", span_data).entered();
-                    tracing::trace_span!("RUNTIME-CLOSE");
+                    let _span = tracing::span!(tracing::Level::TRACE, "RUNTIME-CLOSE");
                     Self::ws_on_close(ws, ws_connected, ws_on_ws_state_closures);
                 })))
             });
