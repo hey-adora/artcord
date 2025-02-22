@@ -1,0 +1,19 @@
+@import "tailwindcss" source(none);
+
+@source "../src/**/*.rs";
+/* @import "tailwindcss"; */
+
+@theme {
+    --color-low-purple: #ffffff;
+    --color-half-purple: #67398B;
+    --color-mid-purple: #925CB3;
+    --color-dark-purple: #250157;
+    --color-dark2-purple: #642B87;
+    --color-dark-night: #1A2625;
+    --color-dark-night2: #1A2621;
+    --color-light-flower: #E6C5E8;
+    --color-second-one: #823679;
+    --color-first-one: #41355E;
+
+    --bg-sword-lady: url("/asset/sword_lady.webp");
+}

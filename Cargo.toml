@@ -1,17 +1,25 @@
-[workspace]
-resolver = "2"
-members = [
-  "artcord",
-  "artcord-http",
-  "artcord-builder",
-  "artcord-leptos",
-  "artcord-leptos-web-sockets",
-  "artcord-mongodb",
-  "artcord-serenity",
-  "artcord-state",
-  "artcord-tungstenite",
-  "artcord-benchmark",
-]
+# [workspace]
+# resolver = "2"
+# members = [
+#   "artcord",
+#   "artcord-http",
+#   "artcord-builder",
+#   "artcord-leptos",
+#   "artcord-leptos-web-sockets",
+#   "artcord-mongodb",
+#   "artcord-serenity",
+#   "artcord-state",
+#   "artcord-tungstenite",
+#   "artcord-benchmark",
+# ]
+
+[package]
+name = "heyadora_art"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
 
 [profile.dev]
 opt-level = 0
@@ -19,8 +27,7 @@ incremental = true
 codegen-units = 256
 
 [profile.dev.package."*"]
-opt-level = 3
-
+opt-level = 0
 
 [profile.wasm-release]
 inherits = "release"
@@ -29,15 +36,39 @@ lto = true
 codegen-units = 1
 panic = "abort"
 
+[dependencies]
+axum = { version = "0.7.9", optional = true }
+console_error_panic_hook = "0.1.7"
+gloo = "0.11.0"
+indexmap = "2.7.1"
+leptos = "0.7.7"
+leptos_axum = {version = "0.7.7", optional = true}
+rkyv = "0.8.10"
+server_fn = "0.7.7"
+tokio = { version = "1.43.0", features = ["full"], optional = true}
+tower = {version = "0.5.2", optional = true }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+wasm-bindgen = "0.2.100"
 
-[[workspace.metadata.leptos]]
-name = "artcord"
-bin-package = "artcord"
-lib-package = "artcord-leptos"
-output-name = "leptos_start5"
+[features]
+hydrate = ["leptos/hydrate"]
+ssr = [
+    "leptos/ssr",
+    "dep:axum",
+    "dep:leptos_axum",
+    "dep:tower",
+    "dep:tokio",
+]
+
+
+
+[package.metadata.leptos]
+name = "heyadora_art"
+output-name = "heyadora_art"
 site-root = "target/site"
 site-pkg-dir = "pkg"
-style-file = "style/output.css"
+tailwind-input-file = "style/tailwind.css"
 assets-dir = "assets"
 site-addr = "0.0.0.0:3000"
 reload-port = 3001
@@ -47,7 +78,7 @@ browserquery = "defaults"
 watch = true
 env = "DEV"
 lib-profile-release = "wasm-release"
-bin-features = []
+bin-features = ["ssr"]
 lib-features = ["hydrate"]
 bin-default-features = false
 lib-default-features = false
