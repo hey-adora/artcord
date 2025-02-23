@@ -1,7 +1,6 @@
 use std::{rc::Rc, sync::Arc};
 
 use leptos_toolbox::{use_event_listener, use_event_listener_dragover};
-use leptos_use::{use_drop_zone_with_options, UseDropZoneOptions, UseDropZoneReturn};
 // pub mod app;
 // pub mod error_template;
 // pub mod errors;
@@ -43,11 +42,16 @@ pub mod leptos_toolbox {
         any::Any,
         cell::{LazyCell, RefCell, UnsafeCell},
         collections::HashMap,
+        mem,
         rc::Rc,
         sync::{Arc, LazyLock},
     };
 
-    use leptos::{ev::{self, EventDescriptor}, html::ElementType, prelude::*};
+    use leptos::{
+        ev::{self, EventDescriptor},
+        html::ElementType,
+        prelude::*,
+    };
     use reactive_stores::Store;
     use tracing::{trace, trace_span};
     use uuid::Uuid;
@@ -57,75 +61,98 @@ pub mod leptos_toolbox {
         AddEventListenerOptions, HtmlElement,
     };
 
-    thread_local! {
-        static WEB_SYS_STORE: RefCell<HashMap<uuid::Uuid, Rc<Box<dyn Any>>>> = RefCell::new(HashMap::default());
-    }
+    // thread_local! {
+    //     static WEB_SYS_STORE: RefCell<HashMap<uuid::Uuid, Rc<Box<dyn Any>>>> = RefCell::new(HashMap::default());
+    // }
 
-    fn store_fn_set<T, F>(id: Uuid, f: F) where 
-        T: FromWasmAbi + 'static,
-        F: FnMut(T) + 'static,
-     {
-        let span_leptos_toolbox = trace_span!("LeptosToolbox", "{}", id).entered();
-        trace!("inserting");
-        let closure = Rc::new(Box::new(Closure::<dyn FnMut(_)>::new(f)) as Box<dyn Any>);
-        WEB_SYS_STORE.with(|v| v.borrow_mut().insert(id, closure));
-        span_leptos_toolbox.exit();
-    }
+    // fn store_fn_set<T, F>(id: Uuid, f: F) where
+    //     T: FromWasmAbi + 'static,
+    //     F: FnMut(T) + 'static,
+    //  {
+    //     let span_leptos_toolbox = trace_span!("LeptosToolbox", "{}", id).entered();
+    //     trace!("inserting");
+    //     let closure = Rc::new(Box::new(Closure::<dyn FnMut(_)>::new(f)) as Box<dyn Any>);
+    //     WEB_SYS_STORE.with(|v| v.borrow_mut().insert(id, closure));
+    //     span_leptos_toolbox.exit();
+    // }
 
-    fn store_fn_with<T: FromWasmAbi + 'static, F: FnMut(&Function)>(id: &Uuid, mut f: F) {
-        let span_leptos_toolbox = trace_span!("LeptosToolbox", "{}", id).entered();
-        trace!("reading");
-        WEB_SYS_STORE.with(|v| {
-            let store = v.borrow();
-            let rc = store.get(&id).unwrap();
-            let closure = rc.downcast_ref::<Closure<dyn FnMut(T)>>().unwrap();
-            let closure = closure.as_ref().as_ref().unchecked_ref::<Function>();
-            f(closure);
-        });
-        span_leptos_toolbox.exit();
-    }
+    // fn store_fn_with<T: FromWasmAbi + 'static, F: FnMut(&Function)>(id: &Uuid, mut f: F) {
+    //     let span_leptos_toolbox = trace_span!("LeptosToolbox", "{}", id).entered();
+    //     trace!("reading");
+    //     WEB_SYS_STORE.with(|v| {
+    //         let store = v.borrow();
+    //         let rc = store.get(&id).unwrap();
+    //         let closure = rc.downcast_ref::<Closure<dyn FnMut(T)>>().unwrap();
+    //         let closure = closure.as_ref().as_ref().unchecked_ref::<Function>();
+    //         f(closure);
+    //     });
+    //     span_leptos_toolbox.exit();
+    // }
 
-    fn store_rm(id: &Uuid) {
-        let span_leptos_toolbox = trace_span!("LeptosToolbox", "{}", id).entered();
-        trace!("removing");
-        WEB_SYS_STORE.with(|v| {
-            let mut store = v.borrow_mut();
-            let rc = store.remove(id).unwrap();
-            let weak_count = Rc::weak_count(&rc);
-            let strong_count = Rc::strong_count(&rc);
-            assert!(weak_count == 0 && strong_count == 1);
-        });
+    // fn store_rm(id: &Uuid) {
+    //     let span_leptos_toolbox = trace_span!("LeptosToolbox", "{}", id).entered();
+    //     trace!("removing");
+    //     WEB_SYS_STORE.with(|v| {
+    //         let mut store = v.borrow_mut();
+    //         let rc = store.remove(id).unwrap();
+    //         let weak_count = Rc::weak_count(&rc);
+    //         let strong_count = Rc::strong_count(&rc);
+    //         assert!(weak_count == 0 && strong_count == 1);
+    //     });
 
-        span_leptos_toolbox.exit();
-    }
+    //     span_leptos_toolbox.exit();
+    // }
+
+    // pub fn use_event_listener<E, T, F>(event: T, f: F) -> NodeRef<E>
+    // where
+    //     E: ElementType,
+    //     E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
+    //     T: EventDescriptor + 'static,
+    //     F: FnMut(<T as EventDescriptor>::EventType) + 'static,
+    // {
+    //     let node = NodeRef::<E>::new();
+    //     let id: Uuid = Uuid::new_v4();
+    //     let mut f = Some(f);
+
+    //     Effect::new(move || {
+    //         let Some(node) = node.get() else {
+    //             return;
+    //         };
+    //         let f = mem::take(&mut f).unwrap();
+    //         let node: HtmlElement = node.into();
+    //         store_fn_set(id, f);
+    //         store_fn_with::<<T as EventDescriptor>::EventType, _>(&id, |closure| {
+    //             node.add_event_listener_with_callback(&event.name(), closure)
+    //                 .unwrap();
+    //         });
+    //     });
+
+    //     Owner::on_cleanup(move || {
+    //         store_rm(&id);
+    //     });
+
+    //     node
+    // }
 
     pub fn use_event_listener<E, T, F>(event: T, f: F) -> NodeRef<E>
     where
         E: ElementType,
         E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
         T: EventDescriptor + 'static,
-        F: FnMut(<T as EventDescriptor>::EventType),
+        F: FnMut(<T as EventDescriptor>::EventType) + 'static,
     {
         let node = NodeRef::<E>::new();
-        let id: Uuid = Uuid::new_v4();
-
-        Effect::new(move || {
+        let mut f = Some(f);
+        let a = move || {
             let Some(node) = node.get() else {
                 return;
             };
             let node: HtmlElement = node.into();
-            store_fn_set(id, |event: <T as EventDescriptor>::EventType| {
-                trace!("nova");
-            });
-            store_fn_with::<<T as EventDescriptor>::EventType, _>(&id, |closure| {
-                node.add_event_listener_with_callback(&event.name(), closure)
-                    .unwrap();
-            });
-        });
-
-        Owner::on_cleanup(move || {
-            store_rm(&id);
-        });
+            let closure = Closure::<dyn FnMut(_)>::new(mem::take(&mut f).unwrap()).into_js_value();
+            node.add_event_listener_with_callback(&event.name(), closure.as_ref().unchecked_ref())
+                .unwrap();
+        };
+        Effect::new(a);
 
         node
     }
@@ -134,7 +161,7 @@ pub mod leptos_toolbox {
     where
         E: ElementType,
         E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
-        F: FnMut(web_sys::DragEvent),
+        F: FnMut(web_sys::DragEvent) + 'static,
     {
         use_event_listener(ev::dragover, f)
     }
