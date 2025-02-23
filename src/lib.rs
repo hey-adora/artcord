@@ -1,3 +1,7 @@
+use std::{rc::Rc, sync::Arc};
+
+use leptos_toolbox::use_event_listener;
+use leptos_use::{use_drop_zone_with_options, UseDropZoneOptions, UseDropZoneReturn};
 // pub mod app;
 // pub mod error_template;
 // pub mod errors;
@@ -5,7 +9,14 @@
 // pub mod middleware;
 use tracing::{error, trace};
 
-use leptos::{prelude::*, task::spawn_local};
+use leptos::{
+    ev::{self, DragEvent},
+    html::{Div, HtmlElement, Main},
+    prelude::*,
+    task::spawn_local,
+};
+use wasm_bindgen::{prelude::Closure, JsCast};
+use web_sys::{js_sys::Function, HtmlDivElement};
 
 pub fn shell(options: LeptosOptions) -> impl IntoView {
     view! {
@@ -20,11 +31,121 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
                 <link rel="shortcut icon" type="image/ico" href="/favicon.ico"/>
                 <link rel="stylesheet" id="leptos" href="/pkg/heyadora_art.css"/>
             </head>
-            <body>
+            <body class="bg-gray-950 py-1 px-1">
                 <App/>
             </body>
         </html>
     }
+}
+
+pub mod leptos_toolbox {
+    use std::{
+        any::Any,
+        cell::{LazyCell, RefCell, UnsafeCell},
+        collections::HashMap,
+        rc::Rc,
+        sync::{Arc, LazyLock},
+    };
+
+    use leptos::{html::ElementType, prelude::*};
+    use reactive_stores::Store;
+    use tracing::trace;
+    use uuid::Uuid;
+    use wasm_bindgen::{convert::FromWasmAbi, prelude::*};
+    use web_sys::{
+        js_sys::{Function, Object},
+        AddEventListenerOptions, HtmlElement,
+    };
+
+    thread_local! {
+        static WEB_SYS_STORE: RefCell<HashMap<uuid::Uuid, Rc<Box<dyn Any>>>> = RefCell::new(HashMap::default());
+    }
+
+    fn store_fn_set<T: FromWasmAbi + 'static, F: FnMut(T) + 'static>(id: Uuid, f: F){
+        // let closure = Rc::new(Closure::<dyn FnMut(_)>::new(
+        //     move |event: web_sys::DragEvent| {
+        //         trace!("nova");
+        //     },
+        // ));
+        
+        let closure = Rc::new(Box::new(Closure::<dyn FnMut(_)>::new(f)) as Box<dyn Any>);
+        WEB_SYS_STORE.with(|v| v.borrow_mut().insert(id, closure));
+    }
+
+    fn store_fn_with<T: FromWasmAbi + 'static, F: FnMut(&Function)>(id: &Uuid, mut f: F) {
+        WEB_SYS_STORE.with(|v| {
+            let store = v.borrow();
+            let rc = store.get(&id).unwrap();
+            let closure = rc.downcast_ref::<Closure<dyn FnMut(T)>>().unwrap();
+            let closure = closure.as_ref().as_ref().unchecked_ref::<Function>();
+            f(closure);
+        });
+    }
+
+    fn store_rm(id: &Uuid) {
+        WEB_SYS_STORE.with(|v| {
+            let store = v.borrow();
+            let rc = store.get(id).unwrap();
+            let count = Rc::weak_count(rc);
+            trace!("COUNT {count}");
+        });
+    }
+
+    pub fn use_event_listener<E, T, F>(event: &'static str, f: F) -> NodeRef<E>
+    where
+        E: ElementType,
+        E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
+        T: FromWasmAbi + 'static,
+        F: FnMut(T),
+    {
+        let node = NodeRef::<E>::new();
+        let id = Uuid::new_v4();
+        
+
+        Effect::new( move || {
+            trace!("EFFECT: {id}");
+            let Some(node) = node.get() else {
+                return;
+            };
+            // let Some(node) = node.get() else {
+            //     return;
+            // };
+            let node: HtmlElement = node.into();
+            store_fn_set(id, |event: T| {
+                trace!("nova");
+            });
+            store_fn_with::<T, _>(&id,  |closure| {
+                node.add_event_listener_with_callback(event, closure).unwrap();
+            });
+
+           
+    
+            
+            //node.into.add("dragover", &closure).unwrap();
+
+            //let a = Rc::new(closure.into_js_value());
+            //let g = closure.as_ref().unchecked_ref::<Function>();
+            //
+            // let c = a.as_ref();
+
+            //closure.forget();
+        });
+
+        on_cleanup(move || {
+            trace!("CLEANUP");
+            //store_rm(&id);
+        });
+        
+
+        node
+    }
+
+    // fn get_context() {
+    //     // let web_sys_store = use_context::<Local<WebSysStore>>().unwrap_or_else(|| {
+    //     //     provide_context(WebSysStore::default());
+    //     //     expect_context::<WebSysStore>()
+    //     // });
+    // }
 }
 
 #[component]
@@ -58,11 +179,73 @@ pub fn App() -> impl IntoView {
     //     }
     // };
 
+    //let drop_zone_el = NodeRef::<Main>::new();
+    let drag_ref = use_event_listener("dragover", |e: web_sys::DragEvent| {
+        trace!("wowza");
+    });
+
+    // let on_drop = |event| {
+    //     // called when files are dropped on zone
+
+    //     trace!("droppp");
+    // };
+
+    let y = |e: DragEvent| {
+        trace!("droppp");
+    };
+
+    let y2 = || {
+        trace!("drop hover over");
+    };
+
+    // let UseDropZoneReturn {
+    //     is_over_drop_zone, ..
+    // } = use_drop_zone_with_options(drop_zone_el, UseDropZoneOptions::default().on_drop(on_drop));
+
+    // /let r = NodeRef::new();
+
+    // Effect::new(move || {
+    //     let Some(node): Option<HtmlDivElement> = r.get() else {
+    //         return;
+    //     };
+
+    //     let closure =Closure::<dyn FnMut(_)>::new(
+    //         move |event: web_sys::DragEvent| {
+    //             trace!("nova");
+    //         },
+    //     );
+    //     //let a = Rc::new(closure.into_js_value());
+    //     let g = closure.as_ref();
+    //     let h= g.unchecked_ref::<Function>();
+    //     //
+    //     // let c = a.as_ref();
+
+    //     node.add_event_listener_with_callback("dragover", &closure)
+    //         .unwrap();
+    //     //closure.forget();
+    // });
+
+    let tab = RwSignal::new(false);
+    let switch_tab = move |e| {
+        tab.update(|v| *v = !*v);
+    };
+
     view! {
-        <main>
-            <nav class="text-gray-">
-                <h3>"hello"</h3>
+        <main   >
+            <nav class="text-gray-200 pb-1">
+                <h3 class="font-black text-xl">"ArtBounty"</h3>
             </nav>
+            <div>
+                <img draggable="true" src="/assets/sword_lady.webp" />
+                <button on:click=switch_tab class="font-black text-xl text-white">"switch tab"</button>
+                <Show 
+                    when = move || { tab.get() }
+                    fallback=|| view!( <div class="p-10 bg-green-600" >"tab1"</div> )
+                >
+
+                    <div node_ref=drag_ref  class="p-10 bg-red-600">"tab2"</div>
+                </Show>
+            </div>
         </main>
         // <div class="bg-green-600">"hello9e0"</div>
         // <div class="bg-dark-night">"hello9e0"</div>
@@ -92,115 +275,139 @@ pub async fn get_server_data() -> Result<String, ServerFnError> {
 #[cfg(feature = "hydrate")]
 #[wasm_bindgen::prelude::wasm_bindgen]
 pub fn hydrate() {
-    use tracing::{span, trace_span};
-
     console_error_panic_hook::set_once();
     wasmlog::simple_logger_init();
-    trace!("one");
-
-    {
-        trace_span!("huh");
-        trace!("zero");
-    }
-    let span1 = tracing::span!(tracing::Level::TRACE, "HANDLE-RECV",).entered();
-
-    trace!("two");
-    {
-        let span2 = tracing::span!(tracing::Level::TRACE, "WOWZA",).entered();
-
-        trace!("three");
-
-        span2.exit();
-    }
-    span1.exit();
     leptos::mount::hydrate_body(App);
 }
 
-pub mod wasmlog {
-    // use std::io;
-    // use std::io::Write;
+pub mod hook {
+    use std::fmt::Debug;
 
-    use wasm_bindgen::prelude::*;
+    use tracing::debug;
 
-    #[derive(Debug, Clone)]
-    struct Spanner(u32);
+    pub const NEW_IMG_HEIGHT: u32 = 250;
 
-    impl Default for Spanner {
-        fn default() -> Self {
-            Self(0)
-        }
+    pub trait GalleryImg {
+        fn get_size(&self) -> (u32, u32);
+        fn get_pos(&self) -> (f32, f32);
+        fn set_pos(&mut self, left: f32, top: f32, new_width: f32, new_height: f32);
     }
 
-    // pub struct MakeConsoleWriter;
+    pub fn resize_img<T: GalleryImg + Debug>(
+        top: &mut f32,
+        max_width: u32,
+        new_row_start: usize,
+        new_row_end: usize,
+        imgs: &mut [T],
+    ) {
+        let mut total_ratio: f32 = 0f32;
 
-    // impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for MakeConsoleWriter {
-    //     type Writer = ConsoleWriter;
+        for i in new_row_start..(new_row_end + 1) {
+            let (width, height) = imgs[i].get_size();
+            total_ratio += width as f32 / height as f32;
+        }
+        let optimal_height: f32 = max_width as f32 / total_ratio;
+        let mut left: f32 = 0.0;
 
-    //     fn make_writer(&'a self) -> Self::Writer {
-    //         ConsoleWriter::default()
-    //     }
+        for i in new_row_start..(new_row_end + 1) {
+            let (width, height) = imgs[i].get_size();
+            let new_width = optimal_height * (width as f32 / height as f32);
+            let new_height = optimal_height;
+            imgs[i].set_pos(left, *top, new_width, new_height);
+            left += new_width;
+        }
+        *top += optimal_height;
+    }
 
-    //     fn make_writer_for(&'a self, meta: &tracing::Metadata<'_>) -> Self::Writer {
-    //         ConsoleWriter::default()
-    //     }
-    //   }
+    pub fn resize_img2<T: GalleryImg + Debug>(
+        top: &mut f32,
+        max_width: u32,
+        new_row_start: usize,
+        new_row_end: usize,
+        imgs: &mut [T],
+    ) {
+        let mut optimal_count =
+            (max_width as i32 / NEW_IMG_HEIGHT as i32) - (new_row_end - new_row_start) as i32;
+        if optimal_count < 0 {
+            optimal_count = 0;
+        }
+        let mut total_ratio: f32 = optimal_count as f32;
+        if max_width < NEW_IMG_HEIGHT * 3 {
+            total_ratio = 0.0;
+        }
 
-    // pub struct ConsoleWriter(tracing::Level, Vec<u8>);
+        for i in new_row_start..(new_row_end + 1) {
+            let (width, height) = imgs[i].get_size();
+            total_ratio += width as f32 / height as f32;
+        }
+        let optimal_height: f32 = max_width as f32 / total_ratio;
+        let mut left: f32 = 0.0;
 
-    // impl Default for ConsoleWriter {
-    //     fn default() -> Self {
-    //         Self(tracing::Level::TRACE, Vec::new())
-    //     }
-    // }
+        for i in new_row_start..(new_row_end + 1) {
+            let (width, height) = imgs[i].get_size();
+            let new_width = optimal_height * (width as f32 / height as f32);
+            let new_height = optimal_height;
+            imgs[i].set_pos(left, *top, new_width, new_height);
+            left += new_width;
+        }
 
-    // impl io::Write for ConsoleWriter {
-    //     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-    //         self.1.write(buf)
-    //     }
+        *top += optimal_height;
+    }
 
-    //     fn flush(&mut self) -> io::Result<()> {
-    //         use tracing::Level;
+    pub fn resize_imgs<T: GalleryImg + Debug>(
+        new_height: u32,
+        max_width: u32,
+        imgs: &mut [T],
+    ) -> () {
+        debug!("utils: resizing started: count: {}", imgs.len());
+        let loop_start = 0;
+        let loop_end = imgs.len();
+        let mut new_row_start: usize = 0;
+        let mut new_row_end: usize = if loop_end > 0 { loop_end - 1 } else { 0 };
+        let mut current_row_filled_width: u32 = 0;
+        let mut top: f32 = 0.0;
 
-    //         let data = std::str::from_utf8(&self.1)
-    //             .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "data not UTF-8"))?;
+        for index in loop_start..loop_end {
+            let org_img = &mut imgs[index];
+            let (width, height) = org_img.get_size();
+            let ratio: f32 = width as f32 / height as f32;
+            let height_diff: u32 = if height < new_height {
+                0
+            } else {
+                height - new_height
+            };
+            let new_width: u32 = width - (height_diff as f32 * ratio) as u32;
+            if (current_row_filled_width + new_width) <= max_width {
+                current_row_filled_width += new_width;
+                new_row_end = index;
+                if index == loop_end - 1 {
+                    resize_img2(&mut top, max_width, new_row_start, new_row_end, imgs);
+                }
+            } else {
+                if index != 0 {
+                    resize_img(&mut top, max_width, new_row_start, new_row_end, imgs);
+                }
+                new_row_start = index;
+                new_row_end = index;
+                current_row_filled_width = new_width;
+                if index == loop_end - 1 {
+                    resize_img2(&mut top, max_width, new_row_start, new_row_end, imgs);
+                }
+            }
+        }
 
-    //         // log1("wtf 1".to_string());
-    //         // log1(data.to_string());
-    //         // leptos::logging::
-    //         // log5(
-    //         //     format!("%c{level}%c{spans_combined}%c{target}{origin}%c: {value}"),
-    //         //     match *level {
-    //         //         tracing::Level::TRACE => "color: dodgerblue; background: #444",
-    //         //         tracing::Level::DEBUG => "color: lawngreen; background: #444",
-    //         //         tracing::Level::INFO => "color: whitesmoke; background: #444",
-    //         //         tracing::Level::WARN => "color: orange; background: #444",
-    //         //         tracing::Level::ERROR => "color: red; background: #444",
-    //         //     },
-    //         //     "color: inherit; font-weight: bold",
-    //         //     "color: gray; font-style: italic",
-    //         //     "color: inherit",
-    //         // );
+        debug!("utils: resizing ended: count: {}", imgs.len());
+    }
 
-    //         match self.0 {
-    //             Level::TRACE => gloo::console::trace!(data),
-    //             Level::DEBUG => gloo::console::debug!(data),
-    //             Level::INFO => gloo::console::log!(data),
-    //             Level::WARN => gloo::console::warn!(data),
-    //             Level::ERROR => gloo::console::error!(data),
-    //         }
+    pub fn calc_fit_count(width: u32, height: u32) -> u32 {
+        (width * height) / (NEW_IMG_HEIGHT * NEW_IMG_HEIGHT)
+    }
+}
 
-    //         Ok(())
-    //     }
-    // }
-
-    // impl Drop for ConsoleWriter {
-    //     fn drop(&mut self) {
-    //         let _ = self.flush();
-    //     }
-    // }
+pub mod wasmlog {
+    use wasm_bindgen::prelude::*;
 
     struct WASMTracingLayer {
-        pub spans: std::sync::Arc<std::sync::Mutex<indexmap::IndexMap<tracing::span::Id, String>>>,
         pub config: WASMTracingConfig,
     }
 
@@ -208,31 +415,6 @@ pub mod wasmlog {
         pub target: bool,
         pub line: bool,
     }
-
-    // pub fn original_log_init() {
-    //     tracing_subscriber::fmt()
-    //         .with_writer(
-    //             // To avoide trace events in the browser from showing their
-    //             // JS backtrace, which is very annoying, in my opinion
-    //             MakeConsoleWriter, //.map_trace_level_to(tracing::Level::TRACE),
-    //         )
-    //         .with_ansi(false)
-    //         .with_max_level(tracing::Level::TRACE)
-    //         .with_env_filter(
-    //             <tracing_subscriber::EnvFilter as std::str::FromStr>::from_str(
-    //                 "heyadora_art=trace,artcord_leptos_web_sockets=trace",
-    //             )
-    //             .unwrap(),
-    //         )
-    //         .with_file(true)
-    //         .with_line_number(true)
-    //         .without_time()
-    //         .with_thread_ids(true)
-    //         .with_thread_names(true)
-    //         // For some reason, if we don't do this in the browser, we get
-    //         // a runtime error.
-    //         .init();
-    // }
 
     pub fn simple_logger_init() {
         tracing::subscriber::set_global_default(
@@ -249,10 +431,7 @@ pub mod wasmlog {
 
     impl WASMTracingLayer {
         pub fn new(config: WASMTracingConfig) -> Self {
-            Self {
-                spans: std::sync::Arc::new(std::sync::Mutex::new(indexmap::IndexMap::new())),
-                config,
-            }
+            Self { config }
         }
     }
 
@@ -264,61 +443,29 @@ pub mod wasmlog {
             event: &tracing::Event<'_>,
             ctx: tracing_subscriber::layer::Context<'_, S>,
         ) {
-            let s = ctx.current_span();
-            if let Some(metadata) = s.metadata() {
-                let a = metadata.name();
-                log1(format!("im in event with span: {}", a));
-            } else {
-                log1(format!("im in event"));
-            }
-
             let mut spans_combined = String::new();
             {
+                let mut span_names: Vec<&str> = Vec::new();
                 let mut current_span = ctx.current_span().id().and_then(|id| ctx.span(id));
 
                 while let Some(span) = current_span {
                     let name = span.metadata().name();
-                    spans_combined.push_str(name);
-                    spans_combined.push_str(", ");
+                    span_names.push(&name);
                     current_span = span.parent();
                 }
-                // loop {
-                //     let Some(pan_id) = current_span else {
-                //         break;
-                //     };
-                //     let Some(span) = ctx.span(pan_id) else {
-                //         break;
-                //     };
-                //     let Some(parent_id) = span.parent() else {
-                //         break;
-                //     };
 
-                //     current_span = 
-                // }
+                if !span_names.is_empty() {
+                    spans_combined.push_str(" ");
+                    spans_combined += &span_names.join(" ");
+                }
             }
 
-            // let a = ctx.current_span().id().unwrap();
-            // let b = ctx.span(a).unwrap().metadata();
-
-            // let mut spans_combined = String::new();
-            // {
-            //     let spans = &mut *self.spans.lock().unwrap();
-            //     let len = spans.len();
-            //     if len > 0 {
-            //         spans_combined.push_str(" ");
-            //     }
-            //     for (i, span) in spans.values().enumerate() {
-            //         spans_combined.push_str(span);
-            //         if i + 1 != len {
-            //             spans_combined.push_str(", ")
-            //         }
-            //     }
-            //     //output.push_str(": ");
-            // }
             let mut value = String::new();
-            let writer = tracing_subscriber::fmt::format::Writer::new(&mut value);
-            let mut visitor = tracing_subscriber::fmt::format::PrettyVisitor::new(writer, true);
-            event.record(&mut visitor);
+            {
+                let writer = tracing_subscriber::fmt::format::Writer::new(&mut value);
+                let mut visitor = tracing_subscriber::fmt::format::PrettyVisitor::new(writer, true);
+                event.record(&mut visitor);
+            }
 
             let meta = event.metadata();
             let level = meta.level();
@@ -334,7 +481,6 @@ pub mod wasmlog {
             } else {
                 String::new()
             };
-            //let thread_suffix = thread_display_suffix();
 
             log5(
                 format!("%c{level}%c{spans_combined}%c{target}{origin}%c: {value}"),
@@ -350,81 +496,10 @@ pub mod wasmlog {
                 "color: inherit",
             );
         }
-
-        fn on_new_span(
-            &self,
-            attrs: &tracing::span::Attributes<'_>,
-            id: &tracing::span::Id,
-            ctx: tracing_subscriber::layer::Context<'_, S>,
-        ) {
-         
-            // if let Some(span) = ctx.span(id) {
-            //     let data = span.metadata();
-            //     let name = data.name();
-            //     log1(format!("new ctx get span: {}", name));
-            // }
-            // attrs.
-            let meta = attrs.metadata();
-            let name = meta.name();
-            log1(format!("new span?: {}", name));
-            let target = meta.target();
-            // if !target.contains("artcord") {
-            //     return;
-            // }
-
-            let mut body = String::new();
-            let writer = tracing_subscriber::fmt::format::Writer::new(&mut body);
-            let mut visitor = tracing_subscriber::fmt::format::PrettyVisitor::new(writer, true);
-            attrs.record(&mut visitor);
-
-            let has_name = !name.is_empty() && name != "{}";
-            let has_body = !body.is_empty() && body != "{}";
-
-            let output = match (has_name, has_body) {
-                (true, false) => name.to_string(),
-                (true, true) => {
-                    format!("{} = {}", name, body)
-                }
-                (false, false) => String::from("{}"),
-                (false, true) => body.to_string(),
-            };
-
-            let spans = &mut *self.spans.lock().unwrap();
-            spans.insert(id.clone(), output);
-        }
-
-        fn on_exit(&self, id: &tracing::span::Id, ctx: tracing_subscriber::layer::Context<'_, S>) {
-            // let a = _ctx.span(id).unwrap().extensions_mut();
-            // a.insert(val);
-            let a = ctx.metadata(id).unwrap().name();
-            log1(format!("exit span?: {}", a));
-            let spans = &mut *self.spans.lock().unwrap();
-            spans.swap_remove(id);
-        }
-
-        fn on_close(&self, id: tracing::span::Id, ctx: tracing_subscriber::layer::Context<'_, S>) {
-            let a = ctx.metadata(&id).unwrap().name();
-            log1(format!("close span?: {}", a));
-
-            let spans = &mut *self.spans.lock().unwrap();
-            spans.swap_remove(&id);
-        }
     }
 
     #[wasm_bindgen]
     extern "C" {
-        #[wasm_bindgen(js_namespace = performance)]
-        pub fn mark(a: &str);
-        #[wasm_bindgen(catch, js_namespace = performance)]
-        pub fn measure(name: String, startMark: String) -> Result<(), wasm_bindgen::JsValue>;
-        #[wasm_bindgen(js_namespace = console, js_name = log)]
-        pub fn log1(message: String);
-        #[wasm_bindgen(js_namespace = console, js_name = log)]
-        pub fn log2(message1: &str, message2: &str);
-        #[wasm_bindgen(js_namespace = console, js_name = log)]
-        pub fn log3(message1: &str, message2: &str, message3: &str);
-        #[wasm_bindgen(js_namespace = console, js_name = log)]
-        pub fn log4(message1: String, message2: &str, message3: &str, message4: &str);
         #[wasm_bindgen(js_namespace = console, js_name = log)]
         pub fn log5(
             message1: String,
