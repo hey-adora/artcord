@@ -1,6 +1,6 @@
 use std::{rc::Rc, sync::Arc};
 
-use leptos_toolbox::{use_event_listener, use_event_listener_dragover};
+use leptos_toolbox::use_event_listener;
 // pub mod app;
 // pub mod error_template;
 // pub mod errors;
@@ -14,8 +14,11 @@ use leptos::{
     prelude::*,
     task::spawn_local,
 };
-use wasm_bindgen::{prelude::Closure, JsCast};
-use web_sys::{js_sys::Function, HtmlDivElement};
+use wasm_bindgen::{prelude::Closure, JsCast, UnwrapThrowExt};
+use web_sys::{
+    js_sys::{self, Function},
+    Blob, HtmlDivElement,
+};
 
 pub fn shell(options: LeptosOptions) -> impl IntoView {
     view! {
@@ -61,90 +64,16 @@ pub mod leptos_toolbox {
         AddEventListenerOptions, HtmlElement,
     };
 
-    // thread_local! {
-    //     static WEB_SYS_STORE: RefCell<HashMap<uuid::Uuid, Rc<Box<dyn Any>>>> = RefCell::new(HashMap::default());
-    // }
-
-    // fn store_fn_set<T, F>(id: Uuid, f: F) where
-    //     T: FromWasmAbi + 'static,
-    //     F: FnMut(T) + 'static,
-    //  {
-    //     let span_leptos_toolbox = trace_span!("LeptosToolbox", "{}", id).entered();
-    //     trace!("inserting");
-    //     let closure = Rc::new(Box::new(Closure::<dyn FnMut(_)>::new(f)) as Box<dyn Any>);
-    //     WEB_SYS_STORE.with(|v| v.borrow_mut().insert(id, closure));
-    //     span_leptos_toolbox.exit();
-    // }
-
-    // fn store_fn_with<T: FromWasmAbi + 'static, F: FnMut(&Function)>(id: &Uuid, mut f: F) {
-    //     let span_leptos_toolbox = trace_span!("LeptosToolbox", "{}", id).entered();
-    //     trace!("reading");
-    //     WEB_SYS_STORE.with(|v| {
-    //         let store = v.borrow();
-    //         let rc = store.get(&id).unwrap();
-    //         let closure = rc.downcast_ref::<Closure<dyn FnMut(T)>>().unwrap();
-    //         let closure = closure.as_ref().as_ref().unchecked_ref::<Function>();
-    //         f(closure);
-    //     });
-    //     span_leptos_toolbox.exit();
-    // }
-
-    // fn store_rm(id: &Uuid) {
-    //     let span_leptos_toolbox = trace_span!("LeptosToolbox", "{}", id).entered();
-    //     trace!("removing");
-    //     WEB_SYS_STORE.with(|v| {
-    //         let mut store = v.borrow_mut();
-    //         let rc = store.remove(id).unwrap();
-    //         let weak_count = Rc::weak_count(&rc);
-    //         let strong_count = Rc::strong_count(&rc);
-    //         assert!(weak_count == 0 && strong_count == 1);
-    //     });
-
-    //     span_leptos_toolbox.exit();
-    // }
-
-    // pub fn use_event_listener<E, T, F>(event: T, f: F) -> NodeRef<E>
-    // where
-    //     E: ElementType,
-    //     E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
-    //     T: EventDescriptor + 'static,
-    //     F: FnMut(<T as EventDescriptor>::EventType) + 'static,
-    // {
-    //     let node = NodeRef::<E>::new();
-    //     let id: Uuid = Uuid::new_v4();
-    //     let mut f = Some(f);
-
-    //     Effect::new(move || {
-    //         let Some(node) = node.get() else {
-    //             return;
-    //         };
-    //         let f = mem::take(&mut f).unwrap();
-    //         let node: HtmlElement = node.into();
-    //         store_fn_set(id, f);
-    //         store_fn_with::<<T as EventDescriptor>::EventType, _>(&id, |closure| {
-    //             node.add_event_listener_with_callback(&event.name(), closure)
-    //                 .unwrap();
-    //         });
-    //     });
-
-    //     Owner::on_cleanup(move || {
-    //         store_rm(&id);
-    //     });
-
-    //     node
-    // }
-
-    pub fn use_event_listener<E, T, F>(event: T, f: F) -> NodeRef<E>
+    pub fn use_event_listener<E, T, F>(target: NodeRef<E>, event: T, f: F)
     where
         E: ElementType,
         E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
         T: EventDescriptor + 'static,
         F: FnMut(<T as EventDescriptor>::EventType) + 'static,
     {
-        let node = NodeRef::<E>::new();
         let mut f = Some(f);
         let a = move || {
-            let Some(node) = node.get() else {
+            let Some(node) = target.get() else {
                 return;
             };
             let node: HtmlElement = node.into();
@@ -153,52 +82,108 @@ pub mod leptos_toolbox {
                 .unwrap();
         };
         Effect::new(a);
-
-        node
     }
 
-    pub fn use_event_listener_dragover<E, F>(f: F) -> NodeRef<E>
-    where
-        E: ElementType,
-        E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
-        F: FnMut(web_sys::DragEvent) + 'static,
-    {
-        use_event_listener(ev::dragover, f)
-    }
+    // pub fn use_event_listener_dragover<E, F>(target: NodeRef<E>, f: F) -> NodeRef<E>
+    // where
+    //     E: ElementType,
+    //     E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
+    //     F: FnMut(web_sys::DragEvent) + 'static,
+    // {
+    //     use_event_listener(target, ev::dragover, f)
+    // }
+
+    // pub fn use_event_listener_dragdrop<E, F>(target: NodeRef<E>, f: F) -> NodeRef<E>
+    // where
+    //     E: ElementType,
+    //     E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
+    //     F: FnMut(web_sys::DragEvent) + 'static,
+    // {
+    //     use_event_listener(target, ev::drop, f)
+    // }
 }
 
 #[component]
 pub fn DragTest() -> impl IntoView {
-    let drag_ref = use_event_listener_dragover(|e| {
-        trace!("wowza");
-    });
+    // let drag_ref = use_event_listener_dragover(|e| {
+    //     trace!("wowza");
+    // });
 
     view! {
-        <div node_ref=drag_ref  class="p-10 bg-red-600">"tab2"</div>
+        <div  class="p-10 bg-red-600">"tab2"</div>
     }
 }
 
-// #[component]
-// pub fn DragTest2() -> impl IntoView {
-//     let target = NodeRef::new();
-//     leptos_use::use_event_listener(target, ev::dragover, |e| {
-//         trace!("hello");
-//     });
-
-//     view! {
-//         <div node_ref=target  class="p-10 bg-red-600">"tab2"</div>
-//     }
-// }
-
 #[component]
 pub fn App() -> impl IntoView {
+    let main_ref = NodeRef::new();
+
+    use_event_listener(main_ref, ev::dragstart, move |e| {
+        //e.prevent_default();
+        trace!("dragstart");
+    });
+
+    use_event_listener(main_ref, ev::dragleave, move |e| {
+        //e.prevent_default();
+        trace!("dragleave");
+    });
+
+    use_event_listener(main_ref, ev::dragenter, move |e| {
+        //e.prevent_default();
+        trace!("dragenter");
+    });
+
+    use_event_listener(main_ref, ev::dragover, move |e| {
+        e.prevent_default();
+        trace!("dragover");
+    });
+
+    use_event_listener(main_ref, ev::drop, move |e| {
+        e.prevent_default();
+        e.stop_propagation();
+
+        let Some(files) = e.data_transfer().and_then(|v| v.files()) else {
+            return;
+        };
+
+        spawn_local(async move {
+            let files = gloo::file::FileList::from(files);
+            for file in files.iter() {
+                trace!("File: {}", file.name());
+                let data = gloo::file::futures::read_as_bytes(file)
+                    .await
+                    .expect("read file");
+                trace!("Got data: {}", String::from_utf8_lossy(&data));
+                upload_file(data).await;
+            }
+        });
+        // let files: Vec<web_sys::File> = data_transfer
+        //             .files()
+        //             .map(|f| js_sys::Array::from(&f).to_vec())
+        //             .unwrap_or_default()
+        //             .into_iter()
+        //             .map(web_sys::File::from)
+        //             //.map(SendWrapper::new)
+        //             .collect();
+        // for file in files {
+        //     let name = file.name();
+        //     let a: Blob = file.into();
+        //     a.da
+        //     // spawn_local(async move {
+        //     //     let h = a.values();
+        //     // });
+        //     trace!("{}", name);
+        // }
+        //files.first().unwrap().name()
+    });
+
     let tab = RwSignal::new(false);
     let switch_tab = move |e| {
         tab.update(|v| *v = !*v);
     };
 
     view! {
-        <main   >
+        <main node_ref=main_ref >
             <nav class="text-gray-200 pb-1">
                 <h3 class="font-black text-xl">"ArtBounty"</h3>
             </nav>
@@ -207,8 +192,9 @@ pub fn App() -> impl IntoView {
                 <button on:click=switch_tab class="font-black text-xl text-white">"switch tab"</button>
                 <Show
                     when = move || { tab.get() }
-                    fallback=|| view!( <div class="p-10 bg-green-600" >"tab1"</div> )
+                    fallback=|| view!( <div id="tab1" class="p-10 bg-green-600" >"tab1"</div> )
                 >
+
                     <DragTest />
                     // <DragTest2 />
                 </Show>
@@ -218,7 +204,16 @@ pub fn App() -> impl IntoView {
     }
 }
 
-#[server(endpoint = "/wtf")]
+#[server()]
+pub async fn upload_file(file: Vec<u8>) -> Result<(), ServerFnError> {
+    let text = String::from_utf8_lossy(&file);
+    println!("file uploaded: {}", text);
+    Ok(())
+    //Ok(std::fs::read_to_string("/home/hey/github/artcord/Dockerfile").unwrap())
+}
+
+
+#[server()]
 pub async fn get_server_data() -> Result<String, ServerFnError> {
     Ok(std::fs::read_to_string("/home/hey/github/artcord/Dockerfile").unwrap())
 }
