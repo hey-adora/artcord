@@ -42,7 +42,6 @@ console_error_panic_hook = "0.1.7"
 gloo = "0.11.0"
 indexmap = "2.7.1"
 leptos = "0.7.7"
-leptos-use = "0.15.6"
 leptos_axum = {version = "0.7.7", optional = true}
 reactive_stores = "0.1.7"
 rkyv = "0.8.10"

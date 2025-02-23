@@ -1,6 +1,6 @@
 use std::{rc::Rc, sync::Arc};
 
-use leptos_toolbox::use_event_listener;
+use leptos_toolbox::{use_event_listener, use_event_listener_dragover};
 use leptos_use::{use_drop_zone_with_options, UseDropZoneOptions, UseDropZoneReturn};
 // pub mod app;
 // pub mod error_template;
@@ -47,9 +47,9 @@ pub mod leptos_toolbox {
         sync::{Arc, LazyLock},
     };
 
-    use leptos::{html::ElementType, prelude::*};
+    use leptos::{ev::{self, EventDescriptor}, html::ElementType, prelude::*};
     use reactive_stores::Store;
-    use tracing::trace;
+    use tracing::{trace, trace_span};
     use uuid::Uuid;
     use wasm_bindgen::{convert::FromWasmAbi, prelude::*};
     use web_sys::{
@@ -61,18 +61,20 @@ pub mod leptos_toolbox {
         static WEB_SYS_STORE: RefCell<HashMap<uuid::Uuid, Rc<Box<dyn Any>>>> = RefCell::new(HashMap::default());
     }
 
-    fn store_fn_set<T: FromWasmAbi + 'static, F: FnMut(T) + 'static>(id: Uuid, f: F){
-        // let closure = Rc::new(Closure::<dyn FnMut(_)>::new(
-        //     move |event: web_sys::DragEvent| {
-        //         trace!("nova");
-        //     },
-        // ));
-        
+    fn store_fn_set<T, F>(id: Uuid, f: F) where 
+        T: FromWasmAbi + 'static,
+        F: FnMut(T) + 'static,
+     {
+        let span_leptos_toolbox = trace_span!("LeptosToolbox", "{}", id).entered();
+        trace!("inserting");
         let closure = Rc::new(Box::new(Closure::<dyn FnMut(_)>::new(f)) as Box<dyn Any>);
         WEB_SYS_STORE.with(|v| v.borrow_mut().insert(id, closure));
+        span_leptos_toolbox.exit();
     }
 
     fn store_fn_with<T: FromWasmAbi + 'static, F: FnMut(&Function)>(id: &Uuid, mut f: F) {
+        let span_leptos_toolbox = trace_span!("LeptosToolbox", "{}", id).entered();
+        trace!("reading");
         WEB_SYS_STORE.with(|v| {
             let store = v.borrow();
             let rc = store.get(&id).unwrap();
@@ -80,151 +82,89 @@ pub mod leptos_toolbox {
             let closure = closure.as_ref().as_ref().unchecked_ref::<Function>();
             f(closure);
         });
+        span_leptos_toolbox.exit();
     }
 
     fn store_rm(id: &Uuid) {
+        let span_leptos_toolbox = trace_span!("LeptosToolbox", "{}", id).entered();
+        trace!("removing");
         WEB_SYS_STORE.with(|v| {
-            let store = v.borrow();
-            let rc = store.get(id).unwrap();
-            let count = Rc::weak_count(rc);
-            trace!("COUNT {count}");
+            let mut store = v.borrow_mut();
+            let rc = store.remove(id).unwrap();
+            let weak_count = Rc::weak_count(&rc);
+            let strong_count = Rc::strong_count(&rc);
+            assert!(weak_count == 0 && strong_count == 1);
         });
+
+        span_leptos_toolbox.exit();
     }
 
-    pub fn use_event_listener<E, T, F>(event: &'static str, f: F) -> NodeRef<E>
+    pub fn use_event_listener<E, T, F>(event: T, f: F) -> NodeRef<E>
     where
         E: ElementType,
         E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
-        T: FromWasmAbi + 'static,
-        F: FnMut(T),
+        T: EventDescriptor + 'static,
+        F: FnMut(<T as EventDescriptor>::EventType),
     {
         let node = NodeRef::<E>::new();
-        let id = Uuid::new_v4();
-        
+        let id: Uuid = Uuid::new_v4();
 
-        Effect::new( move || {
-            trace!("EFFECT: {id}");
+        Effect::new(move || {
             let Some(node) = node.get() else {
                 return;
             };
-            // let Some(node) = node.get() else {
-            //     return;
-            // };
             let node: HtmlElement = node.into();
-            store_fn_set(id, |event: T| {
+            store_fn_set(id, |event: <T as EventDescriptor>::EventType| {
                 trace!("nova");
             });
-            store_fn_with::<T, _>(&id,  |closure| {
-                node.add_event_listener_with_callback(event, closure).unwrap();
+            store_fn_with::<<T as EventDescriptor>::EventType, _>(&id, |closure| {
+                node.add_event_listener_with_callback(&event.name(), closure)
+                    .unwrap();
             });
-
-           
-    
-            
-            //node.into.add("dragover", &closure).unwrap();
-
-            //let a = Rc::new(closure.into_js_value());
-            //let g = closure.as_ref().unchecked_ref::<Function>();
-            //
-            // let c = a.as_ref();
-
-            //closure.forget();
         });
 
-        on_cleanup(move || {
-            trace!("CLEANUP");
-            //store_rm(&id);
+        Owner::on_cleanup(move || {
+            store_rm(&id);
         });
-        
 
         node
     }
 
-    // fn get_context() {
-    //     // let web_sys_store = use_context::<Local<WebSysStore>>().unwrap_or_else(|| {
-    //     //     provide_context(WebSysStore::default());
-    //     //     expect_context::<WebSysStore>()
-    //     // });
-    // }
+    pub fn use_event_listener_dragover<E, F>(f: F) -> NodeRef<E>
+    where
+        E: ElementType,
+        E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
+        F: FnMut(web_sys::DragEvent),
+    {
+        use_event_listener(ev::dragover, f)
+    }
 }
 
 #[component]
-pub fn App() -> impl IntoView {
-    //let local_resource = LocalResource::new(move || get_server_data());
-
-    let data_resource = OnceResource::new(get_server_data());
-    let data_resource2 = Resource::new(|| (), |_| get_server_data());
-    let data_resource3 = Resource::new(|| (), |_| async move { () });
-
-    let (get_data, set_data) = signal::<String>(String::from("loading..."));
-    Effect::new(move || {
-        spawn_local(async move {
-            let data = get_server_data().await.unwrap_or("err".to_string());
-            set_data.set(data);
-            error!("hello");
-            trace!("wtf");
-        });
-    });
-    // let get_data = move || {
-    //     match data_resource.get() {
-    //         Some(data) => {
-    //             match data.as_deref() {
-    //                 Ok(data) => {
-    //                     data.to_string()
-    //                 }
-    //                 Err(err) => String::from("server error")
-    //             }
-    //         }
-    //         None => String::from("loading...")
-    //     }
-    // };
-
-    //let drop_zone_el = NodeRef::<Main>::new();
-    let drag_ref = use_event_listener("dragover", |e: web_sys::DragEvent| {
+pub fn DragTest() -> impl IntoView {
+    let drag_ref = use_event_listener_dragover(|e| {
         trace!("wowza");
     });
 
-    // let on_drop = |event| {
-    //     // called when files are dropped on zone
+    view! {
+        <div node_ref=drag_ref  class="p-10 bg-red-600">"tab2"</div>
+    }
+}
 
-    //     trace!("droppp");
-    // };
+// #[component]
+// pub fn DragTest2() -> impl IntoView {
+//     let target = NodeRef::new();
+//     leptos_use::use_event_listener(target, ev::dragover, |e| {
+//         trace!("hello");
+//     });
 
-    let y = |e: DragEvent| {
-        trace!("droppp");
-    };
+//     view! {
+//         <div node_ref=target  class="p-10 bg-red-600">"tab2"</div>
+//     }
+// }
 
-    let y2 = || {
-        trace!("drop hover over");
-    };
-
-    // let UseDropZoneReturn {
-    //     is_over_drop_zone, ..
-    // } = use_drop_zone_with_options(drop_zone_el, UseDropZoneOptions::default().on_drop(on_drop));
-
-    // /let r = NodeRef::new();
-
-    // Effect::new(move || {
-    //     let Some(node): Option<HtmlDivElement> = r.get() else {
-    //         return;
-    //     };
-
-    //     let closure =Closure::<dyn FnMut(_)>::new(
-    //         move |event: web_sys::DragEvent| {
-    //             trace!("nova");
-    //         },
-    //     );
-    //     //let a = Rc::new(closure.into_js_value());
-    //     let g = closure.as_ref();
-    //     let h= g.unchecked_ref::<Function>();
-    //     //
-    //     // let c = a.as_ref();
-
-    //     node.add_event_listener_with_callback("dragover", &closure)
-    //         .unwrap();
-    //     //closure.forget();
-    // });
-
+#[component]
+pub fn App() -> impl IntoView {
     let tab = RwSignal::new(false);
     let switch_tab = move |e| {
         tab.update(|v| *v = !*v);
@@ -238,32 +178,16 @@ pub fn App() -> impl IntoView {
             <div>
                 <img draggable="true" src="/assets/sword_lady.webp" />
                 <button on:click=switch_tab class="font-black text-xl text-white">"switch tab"</button>
-                <Show 
+                <Show
                     when = move || { tab.get() }
                     fallback=|| view!( <div class="p-10 bg-green-600" >"tab1"</div> )
                 >
-
-                    <div node_ref=drag_ref  class="p-10 bg-red-600">"tab2"</div>
+                    <DragTest />
+                    // <DragTest2 />
                 </Show>
+
             </div>
         </main>
-        // <div class="bg-green-600">"hello9e0"</div>
-        // <div class="bg-dark-night">"hello9e0"</div>
-        // // <div class="bg-red-600">{ get_data }</div>
-        // <Suspense
-        //     fallback=move || view! {"hello"}
-        // >
-        //     <div class="bg-blue-600">{ move || data_resource.get() }</div>
-        // </Suspense>
-
-        // <Await
-        //     future=get_server_data()
-        //     let:data
-        //     >
-        //     { data.clone().unwrap_or(String::from("loading")) }
-        // </Await>
-
-       // <div class="bg-green-600">{ move || local_resource.get().as_deref().map(|v| v.clone()).unwrap_or(Ok("loading".to_string())) }</div>
     }
 }
 
@@ -405,7 +329,20 @@ pub mod hook {
 }
 
 pub mod wasmlog {
+    use std::ops::Deref;
+
+    use leptos::logging::log;
+    use tracing::{
+        field::Visit,
+        span::{self, Record},
+    };
+    use tracing_subscriber::field::RecordFields;
+    use tracing_subscriber::fmt::format::PrettyVisitor;
+    use tracing_subscriber::fmt::format::Writer;
     use wasm_bindgen::prelude::*;
+
+    #[derive(Debug, Clone)]
+    struct SpanBody(pub String);
 
     struct WASMTracingLayer {
         pub config: WASMTracingConfig,
@@ -421,13 +358,21 @@ pub mod wasmlog {
             tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt::with(
                 tracing_subscriber::Registry::default(),
                 WASMTracingLayer::new(WASMTracingConfig {
-                    line: true,
-                    target: true,
+                    line: false,
+                    target: false,
                 }),
             ),
         )
         .unwrap();
     }
+
+    // impl Deref for SpanBody {
+    //     type Target = String;
+
+    //     fn deref(&self) -> &Self::Target {
+    //         &self.0
+    //     }
+    // }
 
     impl WASMTracingLayer {
         pub fn new(config: WASMTracingConfig) -> Self {
@@ -443,27 +388,70 @@ pub mod wasmlog {
             event: &tracing::Event<'_>,
             ctx: tracing_subscriber::layer::Context<'_, S>,
         ) {
+            // let spans_combined = ctx
+            //     .current_span()
+            //     .id()
+            //     .and_then(|id| ctx.span(id))
+            //     .and_then(|span| span.extensions().get::<SpanBody>().cloned())
+            //     .map(|data| data.0)
+            //     .unwrap_or_default();
+
             let mut spans_combined = String::new();
             {
-                let mut span_names: Vec<&str> = Vec::new();
+                let mut span_text: Vec<String> = Vec::new();
                 let mut current_span = ctx.current_span().id().and_then(|id| ctx.span(id));
 
                 while let Some(span) = current_span {
                     let name = span.metadata().name();
-                    span_names.push(&name);
+                    let extensions = span.extensions();
+                    let span_body = extensions.get::<SpanBody>();
+
+                    if let Some(span_body) = span_body {
+                        span_text.push(format!("{}({})", &name, span_body.0));
+                    } else {
+                        span_text.push(name.to_string());
+                    }
+
                     current_span = span.parent();
                 }
 
-                if !span_names.is_empty() {
-                    spans_combined.push_str(" ");
-                    spans_combined += &span_names.join(" ");
+                if !span_text.is_empty() {
+                    spans_combined = span_text.iter().rev().fold(String::from(" "), |mut a, b| {
+                        a += b;
+                        a += " ";
+                        a
+                    });
                 }
             }
 
+            // let spans_combined = ctx
+            //     .current_span()
+            //     .id()
+            //     .and_then(|id| ctx.span(id))
+            //     .map(|span| {
+            //         span.scope().fold(String::from(" "), |mut a, b| {
+            //             let name = span.metadata().name();
+            //             let extensions = span.extensions();
+            //             let span_body = extensions.get::<SpanBody>();
+
+            //             if let Some(span_body) = span_body {
+            //                 a.push_str(&name);
+            //                 a.push_str("(");
+            //                 a.push_str(&span_body);
+            //                 a.push_str(")");
+            //             } else {
+            //                 a.push_str(&name);
+            //             }
+
+            //             a
+            //         })
+            //     })
+            //     .unwrap_or_default();
+
             let mut value = String::new();
             {
-                let writer = tracing_subscriber::fmt::format::Writer::new(&mut value);
-                let mut visitor = tracing_subscriber::fmt::format::PrettyVisitor::new(writer, true);
+                let writer = Writer::new(&mut value);
+                let mut visitor = PrettyVisitor::new(writer, true);
                 event.record(&mut visitor);
             }
 
@@ -495,6 +483,24 @@ pub mod wasmlog {
                 "color: gray; font-style: italic",
                 "color: inherit",
             );
+        }
+
+        fn on_new_span(
+            &self,
+            attrs: &span::Attributes<'_>,
+            id: &span::Id,
+            ctx: tracing_subscriber::layer::Context<'_, S>,
+        ) {
+            let mut span_body = String::new();
+            let writer = Writer::new(&mut span_body);
+            let mut visitor = PrettyVisitor::new(writer, true);
+            attrs.record(&mut visitor);
+            if !span_body.is_empty() {
+                ctx.span(id)
+                    .unwrap()
+                    .extensions_mut()
+                    .insert(SpanBody(span_body));
+            }
         }
     }
 
