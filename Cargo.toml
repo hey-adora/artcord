@@ -41,18 +41,20 @@ axum = { version = "0.7.9", optional = true }
 console_error_panic_hook = "0.1.7"
 gloo = { version = "0.11.0", features = ["file", "futures"]}
 indexmap = "2.7.1"
-leptos = "0.7.7"
+leptos = {version = "0.7.7", features = ["rkyv"]}
 leptos_axum = {version = "0.7.7", optional = true}
 reactive_stores = "0.1.7"
 rkyv = "0.8.10"
-server_fn = "0.7.7"
+server_fn = {version = "0.7.7", features = ["rkyv"]}
+surrealdb = { version = "2.2.1", features = ["kv-surrealkv", "kv-mem"], optional = true}
 tokio = { version = "1.43.0", features = ["full"], optional = true}
 tower = {version = "0.5.2", optional = true }
+tower-http = { version = "0.6.2", features = ["compression-full"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 uuid = { version = "1.14.0", features = ["v4", "js"] }
 wasm-bindgen = "0.2.100"
-web-sys = { version = "0.3.77", features = ["HtmlDivElement", "EventTarget", "DataTransfer", "DragEvent", "Blob", "ReadableStream"] }
+web-sys = { version = "0.3.77", features = ["HtmlDivElement", "EventTarget", "DataTransfer", "DragEvent", "Blob", "ReadableStream", "ResizeObserver", "ResizeObserverEntry", "Element", ] }
 
 [features]
 hydrate = ["leptos/hydrate"]
@@ -62,6 +64,7 @@ ssr = [
     "dep:leptos_axum",
     "dep:tower",
     "dep:tokio",
+    "dep:surrealdb",
 ]
 
 
