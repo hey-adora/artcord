@@ -42,7 +42,7 @@ pub mod leptos_toolbox {
         pub use super::dropzone::{self, AddDropZone, GetFileData, GetFiles};
         pub use super::event_listener;
         pub use super::global;
-        pub use super::observer;
+        pub use super::resize_observer;
     }
 
     pub mod global {
@@ -62,110 +62,63 @@ pub mod leptos_toolbox {
         use uuid::Uuid;
         use wasm_bindgen::prelude::Closure;
         use wasm_bindgen::JsCast;
-        use web_sys::{js_sys::Array, ResizeObserver};
+        use web_sys::{js_sys::Array, Element, HtmlElement, ResizeObserver, ResizeObserverEntry};
 
         pub struct AppState {
-            pub resize_observer: ResizeObserver,
-            pub resize_observer_closure: Closure<dyn FnMut(Array, ResizeObserver)>,
-            pub resize_observer_clients: HashMap<Uuid, Box<dyn Fn()>>,
+            pub resize_observer: Pin<Box<ResizeObserver>>,
+            pub resize_observer_closure: Pin<Box<Closure<dyn FnMut(Array, ResizeObserver)>>>,
+            pub resize_observer_clients: HashMap<Uuid, (HtmlElement, Box<dyn FnMut()>)>,
+            pub event_listener_closures: HashMap<Uuid, Box<dyn Any>>,
         }
 
         thread_local! {
-            // pub static STORE: RefCell<HashMap<uuid::Uuid, Box<dyn Any>>> = RefCell::new(HashMap::default());
             pub static STORE: RefCell<Option<AppState>> = RefCell::new(None);
         }
-
-        // pub struct AutoDowncastRef<T: Any + 'static> {
-        //     data: Rc<Box<dyn Any>>,
-        //     phantom: PhantomData<T>,
-        // }
-
-        // impl Deref for AutoDowncastRef<>
-        // impl Default for AppState {
-        //     fn default() -> Self {
-        //         Self {
-        //             resize_observer
-        //         }
-        //     }
-        // }
 
         pub fn init_toolbox() {
             Effect::new(move || {
                 let f = |entries: Array, observer: ResizeObserver| {
-                    trace!("i think its working?");
+                    let targets: Vec<Element> = entries
+                        .to_vec()
+                        .into_iter()
+                        .map(|v| v.unchecked_into::<ResizeObserverEntry>().target())
+                        .collect();
+
                     STORE.with(|v| {
                         let mut v = v.borrow_mut();
                         let v = v.as_mut().unwrap();
                         let clients = &mut v.resize_observer_clients;
-                        for client in clients.values_mut() {
-                            client();
+                        for target_elm in targets {
+                            for (client_elm, closure) in clients.values_mut() {
+                                let client_elm: Element = client_elm.clone().into();
+                                if target_elm == client_elm {
+                                    closure();
+                                    break;
+                                }
+                            }
                         }
                     });
                 };
                 let resize_observer_closure = Closure::<dyn FnMut(Array, ResizeObserver)>::new(f);
                 let resize_observer =
                     ResizeObserver::new(resize_observer_closure.as_ref().unchecked_ref()).unwrap();
-                // let resize_observer = Box::pin(resize_observer);
-                // let m = &mut *p.as_mut();
+
                 let app_state = AppState {
-                    resize_observer,
-                    resize_observer_closure,
+                    resize_observer: Box::pin(resize_observer),
+                    resize_observer_closure: Box::pin(resize_observer_closure),
                     resize_observer_clients: HashMap::new(),
+                    event_listener_closures: HashMap::new(),
                 };
                 STORE.set(Some(app_state));
-                // let mut v = Vec::new();
-                // v.push(p);
-                // let k = v[0];
-                // STORE.m(f)
-
-                // let a = &mut *STORE_CLOSURE_ID;
-                // store_set(STORE_CLOSURE_ID, value);
             });
         }
 
         pub fn store_id() -> Uuid {
             Uuid::new_v4()
         }
-
-        // pub fn store_set<T: Any + 'static>(id: Uuid, value: T) {
-        //     let closure = Box::new(value) as Box<dyn Any>;
-        //     STORE.with(|v| v.borrow_mut().insert(id, closure));
-        // }
-
-        // pub fn store_with<T: Any + 'static, R>(id: &Uuid, mut f: impl FnMut(Option<&T>) -> R) -> R {
-        //     STORE.with(|v| {
-        //         let store = v.borrow();
-        //         let Some(rc) = store.get(&id) else {
-        //             return f(None);
-        //         };
-        //         let value = rc.downcast_ref::<T>().unwrap();
-        //         f(Some(value))
-        //         // Some(store)
-        //     })
-        // }
-
-        // // pub fn store_get(id: &Uuid) -> Ref<'_, HashMap<Uuid, Box<dyn Any>>> {
-        // //     STORE.with(|v| v.borrow())
-        // // }
-
-        // pub fn store_rm(id: &Uuid) {
-        //     let span = trace_span!("store_rm", "{}", format!("{}", id)).entered();
-        //     STORE.with(|v| {
-        //         let mut store = v.borrow_mut();
-        //         let r = store.remove(id);
-        //         if r.is_some() {
-        //             trace!("item removed");
-        //         } else {
-        //             trace!("item not found");
-        //         }
-        //     });
-        //     span.exit();
-        // }
     }
 
-    pub mod observer {
-        use std::mem;
-
+    pub mod resize_observer {
         use leptos::{ev::EventDescriptor, html::ElementType, prelude::*};
         use tracing::{trace, trace_span};
         use wasm_bindgen::prelude::*;
@@ -180,144 +133,133 @@ pub mod leptos_toolbox {
         where
             E: ElementType,
             E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
-            F: FnMut(Array, ResizeObserver) + Clone + 'static,
+            F: FnMut() + Clone + 'static,
         {
             let store_id = global::store_id();
-            // let rw_resize_observer = RwSignal::new(None::<ResizeObserver>);
-            // let mut f = Some(f);
-            // let f = std::sync::Arc::new(f);
-            // let b = mem::take(&mut f);
-            // let c = b.unwrap().clone();
+
             Effect::new(move || {
-                let span = trace_span!("resize observer creation").entered();
+                let span = trace_span!("resize_observer", "{}", format!("{store_id}")).entered();
 
                 let Some(node) = target.get() else {
                     trace!("target not found");
                     return;
                 };
-
+                if STORE.with(|v| {
+                    v.borrow()
+                        .as_ref()
+                        .unwrap()
+                        .resize_observer_clients
+                        .contains_key(&store_id)
+                }) {
+                    trace!("updating");
+                } else {
+                    trace!("creating");
+                }
                 STORE.with_borrow_mut(|v| {
                     let v = v.as_mut().unwrap();
                     let node: HtmlElement = node.into();
                     v.resize_observer.observe(&node);
-                    v.resize_observer_clients.insert(
-                        store_id,
-                        Box::new(|| {
-                            trace!("wtf1");
-                        }),
-                    );
+                    v.resize_observer_clients
+                        .insert(store_id, (node, Box::new(f.clone())));
                 });
-                // trace!("getting target");
-                // let Some(node) = target.get() else {
-                //     trace!("target not found");
-                //     return;
-                // };
-                // // trace!("target found");
-                // let node: HtmlElement = node.into();
-
-                // // let seg = global::store_with(id, f)
-                // // let Some(item) = global::store_get(id) else {
-                // //     return;
-                // // };
-                // // let item = item.downcast();
-
-                // trace!("creating closure");
-                // let closure =
-                //     Closure::<dyn FnMut(Array, ResizeObserver)>::new(f.clone()).into_js_value();
-
-                // // let closure =
-                // //     Closure::<dyn FnMut(Array, ResizeObserver)>::new(mem::take(&mut f).unwrap())
-                // //         .into_js_value();
-
-                // trace!("creating observer");
-                // let resize_observer =
-                //     ResizeObserver::new(closure.as_ref().unchecked_ref()).unwrap();
-
-                // resize_observer.disconnect();
-
-                // trace!("event added");
-                // resize_observer.observe(&node);
-                // // rw_resize_observer.set(Some(ResizeObserverEntry));
-                // // global::store_set::<ResizeObserver>(store_id, resize_observer);
-                // trace!("stored in global store");
                 span.exit();
-                // node.add_event_listener_with_callback(
-                //     &event.name(),
-                //     closure.as_ref().unchecked_ref(),
-                // )
-                // .unwrap();
             });
+
             on_cleanup(move || {
-                let span = trace_span!("resize observer cleanup").entered();
+                let span = trace_span!("resize_observer", "{}", format!("{store_id}")).entered();
                 let Some(node) = target.get() else {
                     trace!("target not found");
                     return;
                 };
                 STORE.with_borrow_mut(|v| {
-                    let v = v.as_mut().unwrap();
+                    let Some(v) = v.as_mut() else {
+                        trace!("app state is not set for cleanup");
+                        return;
+                    };
+                    trace!("removing");
                     let node: HtmlElement = node.into();
                     v.resize_observer.unobserve(&node);
                     v.resize_observer_clients.remove(&store_id);
-                    trace!("removed");
                 });
                 span.exit();
             });
-            // on_cleanup(move || {
-            //     let span = trace_span!("resize observer").entered();
-            //     trace!("running cleanup");
-            //     // let a = rw_resize_observer.read().un;
-            //     //let store = global::store_get::<ResizeObserver>(&store_id);
-            //     trace!("getting observer");
-            //     let Some(v) = v else {
-            //         trace!("observer not found");
-            //         return;
-            //     };
-            //     trace!("getting target");
-            //     let Some(node) = target.get_untracked() else {
-            //         trace!("target not found");
-            //         return;
-            //     };
-            //     let node: HtmlElement = node.into();
-            //     trace!("unobserving");
-            //     v.unobserve(&node);
-            //     global::store_rm(&store_id);
-            //     span.exit();
-            //     // rw_resize_observer.with(|resize_observer| {
-            //     //     resize_observer.unobserve(target);
-            //     // });
-            // });
         }
     }
 
     pub mod event_listener {
-        use std::mem;
+        use std::{
+            any::Any,
+            fmt::{Debug, Display},
+            pin::Pin,
+        };
 
         use leptos::{ev::EventDescriptor, html::ElementType, prelude::*};
+        use tracing::{trace, trace_span};
         use wasm_bindgen::prelude::*;
-        use web_sys::HtmlElement;
+        use web_sys::{js_sys::Function, HtmlElement};
+
+        use super::global::{store_id, STORE};
 
         pub fn new<E, T, F>(target: NodeRef<E>, event: T, f: F)
         where
             E: ElementType,
             E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
-            T: EventDescriptor + 'static,
-            F: FnMut(<T as EventDescriptor>::EventType) + 'static,
+            T: EventDescriptor + Debug + 'static,
+            F: FnMut(<T as EventDescriptor>::EventType) + Clone + 'static,
         {
-            let mut f = Some(f);
-            let a = move || {
+            let store_id = store_id();
+
+            Effect::new(move || {
+                let span = trace_span!("event_listener", "{}", format!("{store_id}")).entered();
                 let Some(node) = target.get() else {
+                    trace!("target not found");
                     return;
                 };
+                if STORE.with(|v| {
+                    v.borrow()
+                        .as_ref()
+                        .unwrap()
+                        .event_listener_closures
+                        .contains_key(&store_id)
+                }) {
+                    trace!("updating {:?}", event);
+                } else {
+                    trace!("creating {:?}", event);
+                }
                 let node: HtmlElement = node.into();
-                let closure =
-                    Closure::<dyn FnMut(_)>::new(mem::take(&mut f).unwrap()).into_js_value();
-                node.add_event_listener_with_callback(
-                    &event.name(),
-                    closure.as_ref().unchecked_ref(),
-                )
-                .unwrap();
-            };
-            Effect::new(a);
+
+                // trace!("creating closure");
+                let mut closure: Pin<Box<Closure<dyn FnMut(<T as EventDescriptor>::EventType)>>> =
+                    Box::pin(Closure::<dyn FnMut(_)>::new(f.clone()));
+
+                let closure_mut = &mut *closure;
+                let function_ref = closure_mut.as_ref().unchecked_ref::<Function>();
+
+                // trace!("adding event");
+                node.add_event_listener_with_callback(&event.name(), function_ref)
+                    .unwrap();
+
+                STORE.with_borrow_mut(|v| {
+                    let v = v.as_mut().expect("store state should be set");
+                    let v = &mut v.event_listener_closures;
+                    v.insert(store_id, Box::new(closure) as Box<dyn Any>)
+                });
+                span.exit();
+            });
+
+            on_cleanup(move || {
+                let span = trace_span!("event_listener", "{}", format!("{store_id}")).entered();
+                STORE.with_borrow_mut(|v| {
+                    let Some(v) = v.as_mut() else {
+                        trace!("app state is not set for cleanup");
+                        return;
+                    };
+                    trace!("removing");
+                    let v = &mut v.event_listener_closures;
+                    v.remove(&store_id);
+                });
+                span.exit();
+            });
         }
     }
 
@@ -526,6 +468,7 @@ pub fn App() -> impl IntoView {
 
     let main_ref = NodeRef::new();
     let tab_2_ref = NodeRef::new();
+    let tab_3_ref = NodeRef::new();
 
     main_ref.add_dropzone(async move |e, d| {
         //trace!("{}", e);
@@ -536,8 +479,12 @@ pub fn App() -> impl IntoView {
         }
     });
 
-    observer::new(tab_2_ref, move |a, b| {
-        trace!("oh wtf");
+    resize_observer::new(tab_2_ref, move || {
+        trace!("oh wtf from tab 2");
+    });
+
+    resize_observer::new(tab_3_ref, move || {
+        trace!("oh wtf from tab 3");
     });
 
     let tab = RwSignal::new(false);
@@ -556,6 +503,7 @@ pub fn App() -> impl IntoView {
                 <h3 class="font-black text-xl">"ArtBounty"</h3>
             </nav>
             <div>
+                <div node_ref=tab_3_ref id="tab3" class="p-10 bg-purple-600" >"tab3"</div>
                 // <img draggable="true" src="/assets/sword_lady.webp" />
                 <button on:click=switch_tab class="font-black text-xl text-white">"switch tab"</button>
                 <Show
@@ -563,7 +511,9 @@ pub fn App() -> impl IntoView {
                     fallback=|| view!( <div id="tab1" class="p-10 bg-green-600" >"tab1"</div> )
                 >
                     {
-                        view!{ <div node_ref=tab_2_ref id="tab1" class="p-10 bg-red-600" >"tab2"</div> }
+                        view!{
+                            <div node_ref=tab_2_ref id="tab2" class="p-10 bg-red-600" >"tab2"</div>
+                        }
                     }
                     // <DragTest />
                     // <DragTest2 />
