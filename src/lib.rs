@@ -1,6 +1,8 @@
 use std::{rc::Rc, sync::Arc};
 
+use hook::{resize_imgs, GalleryImg};
 use leptos_toolbox::{global::init_toolbox, prelude::*};
+use ordered_float::OrderedFloat;
 use server_fn::codec::Rkyv;
 // pub mod app;
 // pub mod error_template;
@@ -40,9 +42,9 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
 pub mod leptos_toolbox {
     pub mod prelude {
         pub use super::dropzone::{self, AddDropZone, GetFileData, GetFiles};
-        pub use super::event_listener;
-        pub use super::global;
-        pub use super::resize_observer;
+        pub use super::event_listener::{self, AddEventListener};
+        pub use super::resize_observer::{self, AddResizeObserver};
+        // pub use super::global;
     }
 
     pub mod global {
@@ -60,14 +62,18 @@ pub mod leptos_toolbox {
         use leptos::prelude::Effect;
         use tracing::{trace, trace_span};
         use uuid::Uuid;
-        use wasm_bindgen::prelude::Closure;
+        use wasm_bindgen::{convert::ReturnWasmAbi, prelude::Closure};
         use wasm_bindgen::JsCast;
-        use web_sys::{js_sys::Array, Element, HtmlElement, ResizeObserver, ResizeObserverEntry};
+        use web_sys::{
+            js_sys::Array, Element, HtmlElement, ResizeObserver, ResizeObserverEntry,
+            ResizeObserverSize,
+        };
 
         pub struct AppState {
             pub resize_observer: Pin<Box<ResizeObserver>>,
             pub resize_observer_closure: Pin<Box<Closure<dyn FnMut(Array, ResizeObserver)>>>,
-            pub resize_observer_clients: HashMap<Uuid, (HtmlElement, Box<dyn FnMut()>)>,
+            pub resize_observer_clients:
+                HashMap<Uuid, (HtmlElement, Box<dyn FnMut(ResizeObserverEntry)>)>,
             pub event_listener_closures: HashMap<Uuid, Box<dyn Any>>,
         }
 
@@ -78,21 +84,35 @@ pub mod leptos_toolbox {
         pub fn init_toolbox() {
             Effect::new(move || {
                 let f = |entries: Array, observer: ResizeObserver| {
-                    let targets: Vec<Element> = entries
+                    let entries: Vec<ResizeObserverEntry> = entries
                         .to_vec()
                         .into_iter()
-                        .map(|v| v.unchecked_into::<ResizeObserverEntry>().target())
+                        .map(|v| v.unchecked_into::<ResizeObserverEntry>())
                         .collect();
 
                     STORE.with(|v| {
                         let mut v = v.borrow_mut();
                         let v = v.as_mut().unwrap();
                         let clients = &mut v.resize_observer_clients;
-                        for target_elm in targets {
+                        for entry in entries {
+                            let target_elm = entry.target();
                             for (client_elm, closure) in clients.values_mut() {
                                 let client_elm: Element = client_elm.clone().into();
+                                let id = client_elm.clone().to_locale_string();
+
                                 if target_elm == client_elm {
-                                    closure();
+                                    trace!("abi id: {:?}", id);
+                                    // let rect = entry.content_rect();
+                                    // rect.w
+                                    // let size: Vec<ResizeObserverSize> = entry
+                                    //     .content_box_size()
+                                    //     .to_vec()
+                                    //     .into_iter()
+                                    //     .map(|v| v.unchecked_into::<ResizeObserverSize>())
+                                    //     .collect();
+                                    // size[0].
+
+                                    closure(entry);
                                     break;
                                 }
                             }
@@ -124,16 +144,38 @@ pub mod leptos_toolbox {
         use wasm_bindgen::prelude::*;
         use web_sys::{
             js_sys::{self, Array},
-            HtmlElement, ResizeObserver,
+            HtmlElement, ResizeObserver, ResizeObserverEntry,
         };
 
         use super::global::{self, STORE};
+
+        pub trait AddResizeObserver {
+            type Elm;
+
+            fn add_resize_observer<F>(&self, callback: F)
+            where
+                F: FnMut(ResizeObserverEntry, Self::Elm) + Clone + 'static;
+        }
+
+        impl<E> AddResizeObserver for NodeRef<E>
+        where
+            E: ElementType,
+            E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
+        {
+            type Elm = E::Output;
+            fn add_resize_observer<F>(&self, callback: F)
+            where
+                F: FnMut(ResizeObserverEntry, Self::Elm) + Clone + 'static,
+            {
+                new(self.clone(), callback);
+            }
+        }
 
         pub fn new<E, F>(target: NodeRef<E>, f: F)
         where
             E: ElementType,
             E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
-            F: FnMut() + Clone + 'static,
+            F: FnMut(ResizeObserverEntry, E::Output) + Clone + 'static,
         {
             let store_id = global::store_id();
 
@@ -157,10 +199,21 @@ pub mod leptos_toolbox {
                 }
                 STORE.with_borrow_mut(|v| {
                     let v = v.as_mut().unwrap();
-                    let node: HtmlElement = node.into();
-                    v.resize_observer.observe(&node);
-                    v.resize_observer_clients
-                        .insert(store_id, (node, Box::new(f.clone())));
+                    let html_node: HtmlElement = node.clone().into();
+                    html_node.set_attribute("leptos_toolbox_id", &store_id.to_string()).unwrap();
+                    v.resize_observer.observe(&html_node);
+                    v.resize_observer_clients.insert(
+                        store_id,
+                        (
+                            html_node,
+                            Box::new({
+                                let mut f = f.clone();
+                                move |entry| {
+                                    f(entry, node.clone());
+                                }
+                            }),
+                        ),
+                    );
                 });
                 span.exit();
             });
@@ -199,6 +252,27 @@ pub mod leptos_toolbox {
         use web_sys::{js_sys::Function, HtmlElement};
 
         use super::global::{store_id, STORE};
+
+        pub trait AddEventListener {
+            fn add_event_listener<T, F>(&self, event: T, callback: F)
+            where
+                T: EventDescriptor + Debug + 'static,
+                F: FnMut(<T as EventDescriptor>::EventType) + Clone + 'static;
+        }
+
+        impl<E> AddEventListener for NodeRef<E>
+        where
+            E: ElementType,
+            E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
+        {
+            fn add_event_listener<T, F>(&self, event: T, callback: F)
+            where
+                T: EventDescriptor + Debug + 'static,
+                F: FnMut(<T as EventDescriptor>::EventType) + Clone + 'static,
+            {
+                new(self.clone(), event, callback);
+            }
+        }
 
         pub fn new<E, T, F>(target: NodeRef<E>, event: T, f: F)
         where
@@ -433,8 +507,25 @@ pub fn DragTest() -> impl IntoView {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Img {
     pub id: u64,
-    pub width: u64,
-    pub height: u64,
+    pub width: u32,
+    pub height: u32,
+    pub view_width: RwSignal<f32>,
+    pub view_height: RwSignal<f32>,
+    pub view_pos_x: RwSignal<f32>,
+    pub view_pos_y: RwSignal<f32>,
+}
+
+impl GalleryImg for Img {
+    fn get_size(&self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+
+    fn set_pos(&mut self, left: f32, top: f32, new_width: f32, new_height: f32) {
+        self.view_width.set(new_width);
+        self.view_height.set(new_height);
+        self.view_pos_x.set(left);
+        self.view_pos_y.set(top);
+    }
 }
 
 impl Img {
@@ -443,14 +534,22 @@ impl Img {
         // let id = ;
         // trace!("id: {}", id);
         let id = random().to_bits();
-        let width = random().to_bits() % 1000;
-        let height = random().to_bits() % 1000;
+        let width = (random().to_bits() % 1000) as u32;
+        let height = (random().to_bits() % 1000) as u32;
         // let mut rng = rand::rng();
         // let id = rng.random::<u64>();
         // let width = rng.random_range(1_u64..1000);
         // let height = rng.random_range(1_u64..1000);
 
-        Self { id, width, height }
+        Self {
+            id,
+            width,
+            height,
+            view_width: RwSignal::new(0.0),
+            view_height: RwSignal::new(0.0),
+            view_pos_x: RwSignal::new(0.0),
+            view_pos_y: RwSignal::new(0.0),
+        }
     }
 
     pub fn rand_vec(n: usize) -> Vec<Self> {
@@ -462,13 +561,27 @@ impl Img {
     }
 }
 
+// struct X<T>;
+// // struct B<T>;
+
+// impl<A, B> From<X<A>> for X<B>
+// where
+//     B: From<A>,
+// {
+//     fn from(value: X<A>) -> Self {
+//         X
+//     }
+// }
+
 #[component]
 pub fn App() -> impl IntoView {
     init_toolbox();
 
     let main_ref = NodeRef::new();
-    let tab_2_ref = NodeRef::new();
-    let tab_3_ref = NodeRef::new();
+    let gallery_ref = NodeRef::new();
+    let imgs = RwSignal::<Vec<Img>>::new(Vec::new());
+    // let tab_2_ref = NodeRef::new();
+    // let tab_3_ref = NodeRef::new();
 
     main_ref.add_dropzone(async move |e, d| {
         //trace!("{}", e);
@@ -479,23 +592,43 @@ pub fn App() -> impl IntoView {
         }
     });
 
-    resize_observer::new(tab_2_ref, move || {
-        trace!("oh wtf from tab 2");
-    });
+    gallery_ref.add_resize_observer(move |e, t| {
+        let rect = e.content_rect();
+        let w = rect.width() as u32;
+        // trace!("w: {}", w);
+        imgs.update_untracked(move |imgs| {
+            resize_imgs(200, w, imgs);
+            // for img in imgs.iter_mut() {
+            //     let id = random().to_bits();
+            //     img.id = id;
+            // }
+        }); 
 
-    resize_observer::new(tab_3_ref, move || {
-        trace!("oh wtf from tab 3");
     });
+    // let a ;
+
+    // tab_2_ref.add_resize_observer(move |e, t| {
+    //     trace!("oh wtf from tab 2");
+    // });
+
+    // tab_3_ref.add_resize_observer(move |e, t| {
+    //     trace!("oh wtf from tab 3");
+    // });
 
     let tab = RwSignal::new(false);
     let switch_tab = move |e| {
         tab.update(|v| *v = !*v);
     };
 
-    let imgs = RwSignal::new(Vec::new());
     Effect::new(move || {
-        imgs.set(Img::rand_vec(200));
+        imgs.set(Img::rand_vec(10));
     });
+
+    let get_imgs = move || {
+        let mut imgs = imgs.get();
+        // resize_imgs(200, 1500, &mut imgs);
+        imgs
+    };
 
     view! {
         <main node_ref=main_ref >
@@ -503,39 +636,51 @@ pub fn App() -> impl IntoView {
                 <h3 class="font-black text-xl">"ArtBounty"</h3>
             </nav>
             <div>
-                <div node_ref=tab_3_ref id="tab3" class="p-10 bg-purple-600" >"tab3"</div>
+                // <div node_ref=tab_3_ref id="tab3" class="p-10 bg-purple-600" >"tab3"</div>
                 // <img draggable="true" src="/assets/sword_lady.webp" />
                 <button on:click=switch_tab class="font-black text-xl text-white">"switch tab"</button>
-                <Show
-                    when = move || { tab.get() }
-                    fallback=|| view!( <div id="tab1" class="p-10 bg-green-600" >"tab1"</div> )
-                >
-                    {
-                        view!{
-                            <div node_ref=tab_2_ref id="tab2" class="p-10 bg-red-600" >"tab2"</div>
-                        }
-                    }
-                    // <DragTest />
-                    // <DragTest2 />
-                </Show>
-                <For
-                    each=move|| imgs.get()
-                    key=|img| img.id
-                    children=move |img: Img| {
-                        let width = img.width;
-                        let height = img.height;
+                // <Show
+                //     when = move || { tab.get() }
+                //     fallback=|| view!( <div id="tab1" class="p-10 bg-green-600" >"tab1"</div> )
+                // >
+                //     {
+                //         view!{
+                //             <div node_ref=tab_2_ref id="tab2" class="p-10 bg-red-600" >"tab2"</div>
+                //         }
+                //     }
+                //     // <DragTest />
+                //     // <DragTest2 />
+                // </Show>
+                <div node_ref=gallery_ref class="relative">
+                    <For
+                        each=get_imgs
+                        key=|img| img.id
+                        children=move |img: Img| {
+                            let width = img.width;
+                            let height = img.height;
+                            let view_width = img.view_width;
+                            let view_height = img.view_height;
+                            let left = img.view_pos_x;
+                            let top = img.view_pos_y;
+                            let r = (random().to_bits() % 255) as u8;
+                            let g = (random().to_bits() % 255) as u8;
+                            let b = (random().to_bits() % 255) as u8;
 
-                        view! {
-                            <div
-                                class="text-white grid place-items-center bg-blue-950"
-                                style:width=move || format!("{}px", width)
-                                style:height=move || format!("{}px", height)>{
-                                    format!("{}x{}", img.width, img.height)
-                                }</div>
+                            view! {
+                                <div
+                                    class="text-white grid place-items-center bg-blue-950 absolute border border-red-600"
+                                    style:background-color=move || format!("rgb({}, {}, {})", r, g, b)
+                                    style:left=move || format!("{}px", left.get())
+                                    style:top=move || format!("{}px", top.get())
+                                    style:width=move || format!("{}px", view_width.get())
+                                    style:height=move || format!("{}px", view_height.get())>{
+                                        // format!("x:{}y:{}\n{}x{}", left, top, width, height)
+                                        format!("{}x{}", width, height)
+                                    }</div>
+                            }
                         }
-                    }
-                />
-
+                    />
+                </div>
             </div>
         </main>
     }
@@ -575,7 +720,7 @@ pub mod hook {
 
     pub trait GalleryImg {
         fn get_size(&self) -> (u32, u32);
-        fn get_pos(&self) -> (f32, f32);
+        // fn get_pos(&self) -> (f32, f32);
         fn set_pos(&mut self, left: f32, top: f32, new_width: f32, new_height: f32);
     }
 
@@ -645,7 +790,7 @@ pub mod hook {
         max_width: u32,
         imgs: &mut [T],
     ) -> () {
-        debug!("utils: resizing started: count: {}", imgs.len());
+        // debug!("utils: resizing started: count: {}", imgs.len());
         let loop_start = 0;
         let loop_end = imgs.len();
         let mut new_row_start: usize = 0;
@@ -682,7 +827,7 @@ pub mod hook {
             }
         }
 
-        debug!("utils: resizing ended: count: {}", imgs.len());
+        // debug!("utils: resizing ended: count: {}", imgs.len());
     }
 
     pub fn calc_fit_count(width: u32, height: u32) -> u32 {

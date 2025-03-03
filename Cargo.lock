@@ -1863,6 +1863,7 @@ dependencies = [
  "indexmap 2.7.1",
  "leptos",
  "leptos_axum",
+ "ordered-float",
  "reactive_stores",
  "rkyv 0.8.10",
  "server_fn",
@@ -3073,6 +3074,16 @@ name = "or_poisoned"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c04f5d74368e4d0dfe06c45c8627c81bd7c317d52762d118fb9b3076f6420fd"
+
+[[package]]
+name = "ordered-float"
+version = "5.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2c1f9f56e534ac6a9b8a4600bdf0f530fb393b5f393e7b4d03489c3cf0c3f01"
+dependencies = [
+ "num-traits",
+ "rkyv 0.7.45",
+]
 
 [[package]]
 name = "overload"
