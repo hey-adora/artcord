@@ -1,7 +1,7 @@
 use std::{rc::Rc, sync::Arc};
 
 use hook::{resize_imgs, GalleryImg};
-use leptos_toolbox::{global::init_toolbox, prelude::*};
+use leptos_toolbox::prelude::*;
 use ordered_float::OrderedFloat;
 use server_fn::codec::Rkyv;
 // pub mod app;
@@ -9,6 +9,14 @@ use server_fn::codec::Rkyv;
 // pub mod errors;
 // #[cfg(feature = "ssr")]
 // pub mod middleware;
+use leptos::{
+    html::{button, div, Div},
+    prelude::*,
+    tachys::html::node_ref::node_ref,
+};
+use leptos_router::components::*;
+use leptos_router::hooks::use_params_map;
+use leptos_router::path;
 use tracing::{error, trace};
 
 use leptos::prelude::*;
@@ -32,7 +40,7 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
                 <link rel="shortcut icon" type="image/ico" href="/favicon.ico"/>
                 <link rel="stylesheet" id="leptos" href="/pkg/heyadora_art.css"/>
             </head>
-            <body class="bg-gray-950 py-1 px-1">
+            <body class="bg-gray-950">
                 <App/>
             </body>
         </html>
@@ -43,215 +51,279 @@ pub mod leptos_toolbox {
     pub mod prelude {
         pub use super::dropzone::{self, AddDropZone, GetFileData, GetFiles};
         pub use super::event_listener::{self, AddEventListener};
-        pub use super::resize_observer::{self, AddResizeObserver};
+        pub use super::resize_observer::{self};
         // pub use super::global;
     }
 
-    pub mod global {
-        use std::{
-            any::Any,
-            cell::{Ref, RefCell},
-            collections::HashMap,
-            marker::PhantomData,
-            ops::Deref,
-            pin::Pin,
-            rc::Rc,
-            sync::LazyLock,
-        };
+    // pub mod global {
+    //     use std::{
+    //         any::Any,
+    //         cell::{Ref, RefCell},
+    //         collections::HashMap,
+    //         marker::PhantomData,
+    //         ops::Deref,
+    //         pin::Pin,
+    //         rc::Rc,
+    //         sync::LazyLock,
+    //     };
 
-        use leptos::prelude::Effect;
-        use tracing::{trace, trace_span};
-        use uuid::Uuid;
-        use wasm_bindgen::{convert::ReturnWasmAbi, prelude::Closure};
-        use wasm_bindgen::JsCast;
-        use web_sys::{
-            js_sys::Array, Element, HtmlElement, ResizeObserver, ResizeObserverEntry,
-            ResizeObserverSize,
-        };
+    //     use leptos::prelude::Effect;
+    //     use tracing::{trace, trace_span};
+    //     use uuid::Uuid;
+    //     use wasm_bindgen::JsCast;
+    //     use wasm_bindgen::{convert::ReturnWasmAbi, prelude::Closure};
+    //     use web_sys::{
+    //         js_sys::Array, Element, HtmlElement, MutationObserver, ResizeObserver,
+    //         ResizeObserverEntry, ResizeObserverSize,
+    //     };
 
-        pub struct AppState {
-            pub resize_observer: Pin<Box<ResizeObserver>>,
-            pub resize_observer_closure: Pin<Box<Closure<dyn FnMut(Array, ResizeObserver)>>>,
-            pub resize_observer_clients:
-                HashMap<Uuid, (HtmlElement, Box<dyn FnMut(ResizeObserverEntry)>)>,
-            pub event_listener_closures: HashMap<Uuid, Box<dyn Any>>,
-        }
+    //     pub struct AppState {
+    //         pub resize_observer: Pin<Box<ResizeObserver>>,
+    //         pub mutation_observer: Pin<Box<MutationObserver>>,
+    //         // pub resize_observer_closure: Pin<Box<Closure<dyn FnMut(Array, ResizeObserver)>>>,
+    //         pub resize_observer_clients:
+    //             HashMap<Uuid, (HtmlElement, Box<dyn FnMut(ResizeObserverEntry)>)>,
+    //         pub mutation_observer_clients: HashMap<Uuid, (HtmlElement, Box<dyn FnMut()>)>,
+    //         // pub event_listener_closures: HashMap<Uuid, Box<dyn Any>>,
+    //     }
 
-        thread_local! {
-            pub static STORE: RefCell<Option<AppState>> = RefCell::new(None);
-        }
+    //     thread_local! {
+    //         pub static STORE: RefCell<Option<AppState>> = RefCell::new(None);
+    //     }
 
-        pub fn init_toolbox() {
-            Effect::new(move || {
-                let f = |entries: Array, observer: ResizeObserver| {
+    //     pub fn init_toolbox() {
+    //         Effect::new(move || {
+    //             let resize_callback = |entries: Array, observer: ResizeObserver| {
+    //                 let entries: Vec<ResizeObserverEntry> = entries
+    //                     .to_vec()
+    //                     .into_iter()
+    //                     .map(|v| v.unchecked_into::<ResizeObserverEntry>())
+    //                     .collect();
+
+    //                 STORE.with(|v| {
+    //                     let mut v = v.borrow_mut();
+    //                     let v = v.as_mut().unwrap();
+    //                     let clients = &mut v.resize_observer_clients;
+    //                     for entry in entries {
+    //                         let target_elm = entry.target();
+    //                         for (client_elm, closure) in clients.values_mut() {
+    //                             let client_elm: Element = client_elm.clone().into();
+    //                             let id = client_elm.clone().to_locale_string();
+
+    //                             if target_elm == client_elm {
+    //                                 trace!("abi id: {:?}", id);
+    //                                 // let rect = entry.content_rect();
+    //                                 // rect.w
+    //                                 // let size: Vec<ResizeObserverSize> = entry
+    //                                 //     .content_box_size()
+    //                                 //     .to_vec()
+    //                                 //     .into_iter()
+    //                                 //     .map(|v| v.unchecked_into::<ResizeObserverSize>())
+    //                                 //     .collect();
+    //                                 // size[0].
+
+    //                                 closure(entry);
+    //                                 break;
+    //                             }
+    //                         }
+    //                     }
+    //                 });
+    //             };
+    //             let mutation_callback = |entries: Array, observer: MutationObserver| {
+    //                 trace!("wow wtf");
+    //             };
+    //             let mutation_observer_closure =
+    //                 Closure::<dyn FnMut(Array, MutationObserver)>::new(mutation_callback)
+    //                     .into_js_value();
+    //             let resize_observer_closure =
+    //                 Closure::<dyn FnMut(Array, ResizeObserver)>::new(resize_callback)
+    //                     .into_js_value();
+    //             let resize_observer =
+    //                 ResizeObserver::new(resize_observer_closure.as_ref().unchecked_ref()).unwrap();
+
+    //             let mutation_observer =
+    //                 MutationObserver::new(mutation_observer_closure.as_ref().unchecked_ref())
+    //                     .unwrap();
+
+    //             let app_state = AppState {
+    //                 resize_observer: Box::pin(resize_observer),
+    //                 mutation_observer: Box::pin(mutation_observer),
+    //                 // resize_observer_closure: Box::pin(resize_observer_closure),
+    //                 resize_observer_clients: HashMap::new(),
+    //                 mutation_observer_clients: HashMap::new(),
+    //                 // event_listener_closures: HashMap::new(),
+    //             };
+    //             STORE.set(Some(app_state));
+    //         });
+    //     }
+
+    //     pub fn store_id() -> Uuid {
+    //         Uuid::new_v4()
+    //     }
+    // }
+
+    // pub mod mutation_observer {
+    //     pub struct MutationObserver {}
+    // }
+
+    pub mod resize_observer {
+        use wasm_bindgen::prelude::*;
+        use web_sys::{self, js_sys::Array, ResizeObserver, ResizeObserverEntry};
+
+        pub fn new<F>(mut callback: F) -> ResizeObserver
+        where
+            F: FnMut(Vec<web_sys::ResizeObserverEntry>, web_sys::ResizeObserver) + Clone + 'static,
+        {
+            let resize_observer_closure = Closure::<dyn FnMut(Array, ResizeObserver)>::new(
+                move |entries: Array, observer: ResizeObserver| {
                     let entries: Vec<ResizeObserverEntry> = entries
                         .to_vec()
                         .into_iter()
                         .map(|v| v.unchecked_into::<ResizeObserverEntry>())
                         .collect();
-
-                    STORE.with(|v| {
-                        let mut v = v.borrow_mut();
-                        let v = v.as_mut().unwrap();
-                        let clients = &mut v.resize_observer_clients;
-                        for entry in entries {
-                            let target_elm = entry.target();
-                            for (client_elm, closure) in clients.values_mut() {
-                                let client_elm: Element = client_elm.clone().into();
-                                let id = client_elm.clone().to_locale_string();
-
-                                if target_elm == client_elm {
-                                    trace!("abi id: {:?}", id);
-                                    // let rect = entry.content_rect();
-                                    // rect.w
-                                    // let size: Vec<ResizeObserverSize> = entry
-                                    //     .content_box_size()
-                                    //     .to_vec()
-                                    //     .into_iter()
-                                    //     .map(|v| v.unchecked_into::<ResizeObserverSize>())
-                                    //     .collect();
-                                    // size[0].
-
-                                    closure(entry);
-                                    break;
-                                }
-                            }
-                        }
-                    });
-                };
-                let resize_observer_closure = Closure::<dyn FnMut(Array, ResizeObserver)>::new(f);
-                let resize_observer =
-                    ResizeObserver::new(resize_observer_closure.as_ref().unchecked_ref()).unwrap();
-
-                let app_state = AppState {
-                    resize_observer: Box::pin(resize_observer),
-                    resize_observer_closure: Box::pin(resize_observer_closure),
-                    resize_observer_clients: HashMap::new(),
-                    event_listener_closures: HashMap::new(),
-                };
-                STORE.set(Some(app_state));
-            });
+                    callback(entries, observer);
+                },
+            )
+            .into_js_value();
+            ResizeObserver::new(resize_observer_closure.as_ref().unchecked_ref()).unwrap()
         }
+        //                 let entries: Vec<ResizeObserverEntry> = entries
+        //                     .to_vec()
+        //                     .into_iter()
+        //                     .map(|v| v.unchecked_into::<ResizeObserverEntry>())
+        //                     .collect();
 
-        pub fn store_id() -> Uuid {
-            Uuid::new_v4()
-        }
-    }
+        // let mutation_observer_closure =
+        //     Closure::<dyn FnMut(Array, MutationObserver)>::new(mutation_callback)
+        //         .into_js_value();
+        // pub struct ResizeObserver<F>
+        // where
+        //     F: FnMut(Vec<web_sys::ResizeObserverEntry>, web_sys::ResizeObserver) + Clone + 'static,
+        // {
+        //     pub callback: F,
+        // }
 
-    pub mod resize_observer {
-        use leptos::{ev::EventDescriptor, html::ElementType, prelude::*};
-        use tracing::{trace, trace_span};
-        use wasm_bindgen::prelude::*;
-        use web_sys::{
-            js_sys::{self, Array},
-            HtmlElement, ResizeObserver, ResizeObserverEntry,
-        };
+        // impl<F> ResizeObserver<F> where
+        //     F: FnMut(Vec<web_sys::ResizeObserverEntry>, web_sys::ResizeObserver) + Clone + 'static
+        // {
+        //     pub fn
+        // }
 
-        use super::global::{self, STORE};
+        // use leptos::{ev::EventDescriptor, html::ElementType, prelude::*};
+        // use tracing::{trace, trace_span};
+        // use wasm_bindgen::prelude::*;
+        // use web_sys::{
+        //     js_sys::{self, Array},
+        //     HtmlElement, MutationObserverInit, ResizeObserver, ResizeObserverEntry,
+        // };
 
-        pub trait AddResizeObserver {
-            type Elm;
+        // use super::global::{self, STORE};
 
-            fn add_resize_observer<F>(&self, callback: F)
-            where
-                F: FnMut(ResizeObserverEntry, Self::Elm) + Clone + 'static;
-        }
+        // pub trait AddResizeObserver {
+        //     type Elm;
 
-        impl<E> AddResizeObserver for NodeRef<E>
-        where
-            E: ElementType,
-            E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
-        {
-            type Elm = E::Output;
-            fn add_resize_observer<F>(&self, callback: F)
-            where
-                F: FnMut(ResizeObserverEntry, Self::Elm) + Clone + 'static,
-            {
-                new(self.clone(), callback);
-            }
-        }
+        //     fn add_resize_observer<F>(&self, callback: F)
+        //     where
+        //         F: FnMut(ResizeObserverEntry, Self::Elm) + Clone + 'static;
+        // }
 
-        pub fn new<E, F>(target: NodeRef<E>, f: F)
-        where
-            E: ElementType,
-            E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
-            F: FnMut(ResizeObserverEntry, E::Output) + Clone + 'static,
-        {
-            let store_id = global::store_id();
+        // impl<E> AddResizeObserver for NodeRef<E>
+        // where
+        //     E: ElementType,
+        //     E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
+        // {
+        //     type Elm = E::Output;
+        //     fn add_resize_observer<F>(&self, callback: F)
+        //     where
+        //         F: FnMut(ResizeObserverEntry, Self::Elm) + Clone + 'static,
+        //     {
+        //         new(self.clone(), callback);
+        //     }
+        // }
 
-            Effect::new(move || {
-                let span = trace_span!("resize_observer", "{}", format!("{store_id}")).entered();
+        // pub fn new<E, F>(target: NodeRef<E>, f: F)
+        // where
+        //     E: ElementType,
+        //     E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
+        //     F: FnMut(ResizeObserverEntry, E::Output) + Clone + 'static,
+        // {
+        //     let store_id = global::store_id();
 
-                let Some(node) = target.get() else {
-                    trace!("target not found");
-                    return;
-                };
-                if STORE.with(|v| {
-                    v.borrow()
-                        .as_ref()
-                        .unwrap()
-                        .resize_observer_clients
-                        .contains_key(&store_id)
-                }) {
-                    trace!("updating");
-                } else {
-                    trace!("creating");
-                }
-                STORE.with_borrow_mut(|v| {
-                    let v = v.as_mut().unwrap();
-                    let html_node: HtmlElement = node.clone().into();
-                    html_node.set_attribute("leptos_toolbox_id", &store_id.to_string()).unwrap();
-                    v.resize_observer.observe(&html_node);
-                    v.resize_observer_clients.insert(
-                        store_id,
-                        (
-                            html_node,
-                            Box::new({
-                                let mut f = f.clone();
-                                move |entry| {
-                                    f(entry, node.clone());
-                                }
-                            }),
-                        ),
-                    );
-                });
-                span.exit();
-            });
+        //     Effect::new(move || {
+        //         let span = trace_span!("resize_observer", "{}", format!("{store_id}")).entered();
 
-            on_cleanup(move || {
-                let span = trace_span!("resize_observer", "{}", format!("{store_id}")).entered();
-                let Some(node) = target.get() else {
-                    trace!("target not found");
-                    return;
-                };
-                STORE.with_borrow_mut(|v| {
-                    let Some(v) = v.as_mut() else {
-                        trace!("app state is not set for cleanup");
-                        return;
-                    };
-                    trace!("removing");
-                    let node: HtmlElement = node.into();
-                    v.resize_observer.unobserve(&node);
-                    v.resize_observer_clients.remove(&store_id);
-                });
-                span.exit();
-            });
-        }
+        //         let Some(node) = target.get() else {
+        //             trace!("target not found");
+        //             return;
+        //         };
+        //         if STORE.with(|v| {
+        //             v.borrow()
+        //                 .as_ref()
+        //                 .unwrap()
+        //                 .resize_observer_clients
+        //                 .contains_key(&store_id)
+        //         }) {
+        //             trace!("updating");
+        //         } else {
+        //             trace!("creating");
+        //         }
+        //         STORE.with_borrow_mut(|v| {
+        //             let v = v.as_mut().unwrap();
+        //             let html_node: HtmlElement = node.clone().into();
+        //             html_node
+        //                 .set_attribute("leptos_toolbox_id", &store_id.to_string())
+        //                 .unwrap();
+        //             let options = MutationObserverInit::new();
+        //             options.set_child_list(true);
+        //             options.set_subtree(true);
+        //             v.mutation_observer
+        //                 .observe_with_options(&html_node, &options)
+        //                 .unwrap();
+        //             v.resize_observer.observe(&html_node);
+        //             v.resize_observer_clients.insert(
+        //                 store_id,
+        //                 (
+        //                     html_node,
+        //                     Box::new({
+        //                         let mut f = f.clone();
+        //                         move |entry| {
+        //                             f(entry, node.clone());
+        //                         }
+        //                     }),
+        //                 ),
+        //             );
+        //         });
+        //         span.exit();
+        //     });
+
+        //     on_cleanup(move || {
+        //         let span = trace_span!("resize_observer", "{}", format!("{store_id}")).entered();
+        //         let Some(node) = target.get() else {
+        //             trace!("target not found");
+        //             return;
+        //         };
+        //         STORE.with_borrow_mut(|v| {
+        //             let Some(v) = v.as_mut() else {
+        //                 trace!("app state is not set for cleanup");
+        //                 return;
+        //             };
+        //             trace!("removing");
+        //             let node: HtmlElement = node.into();
+        //             v.resize_observer.unobserve(&node);
+        //             v.resize_observer_clients.remove(&store_id);
+        //         });
+        //         span.exit();
+        //     });
+        // }
     }
 
     pub mod event_listener {
-        use std::{
-            any::Any,
-            fmt::{Debug, Display},
-            pin::Pin,
-        };
+        use std::fmt::Debug;
 
         use leptos::{ev::EventDescriptor, html::ElementType, prelude::*};
         use tracing::{trace, trace_span};
         use wasm_bindgen::prelude::*;
-        use web_sys::{js_sys::Function, HtmlElement};
-
-        use super::global::{store_id, STORE};
+        use web_sys::HtmlElement;
 
         pub trait AddEventListener {
             fn add_event_listener<T, F>(&self, event: T, callback: F)
@@ -281,57 +353,23 @@ pub mod leptos_toolbox {
             T: EventDescriptor + Debug + 'static,
             F: FnMut(<T as EventDescriptor>::EventType) + Clone + 'static,
         {
-            let store_id = store_id();
-
             Effect::new(move || {
-                let span = trace_span!("event_listener", "{}", format!("{store_id}")).entered();
+                let span = trace_span!("event_listener").entered();
                 let Some(node) = target.get() else {
                     trace!("target not found");
                     return;
                 };
-                if STORE.with(|v| {
-                    v.borrow()
-                        .as_ref()
-                        .unwrap()
-                        .event_listener_closures
-                        .contains_key(&store_id)
-                }) {
-                    trace!("updating {:?}", event);
-                } else {
-                    trace!("creating {:?}", event);
-                }
+
                 let node: HtmlElement = node.into();
 
-                // trace!("creating closure");
-                let mut closure: Pin<Box<Closure<dyn FnMut(<T as EventDescriptor>::EventType)>>> =
-                    Box::pin(Closure::<dyn FnMut(_)>::new(f.clone()));
+                let closure = Closure::<dyn FnMut(_)>::new(f.clone()).into_js_value();
 
-                let closure_mut = &mut *closure;
-                let function_ref = closure_mut.as_ref().unchecked_ref::<Function>();
+                node.add_event_listener_with_callback(
+                    &event.name(),
+                    closure.as_ref().unchecked_ref(),
+                )
+                .unwrap();
 
-                // trace!("adding event");
-                node.add_event_listener_with_callback(&event.name(), function_ref)
-                    .unwrap();
-
-                STORE.with_borrow_mut(|v| {
-                    let v = v.as_mut().expect("store state should be set");
-                    let v = &mut v.event_listener_closures;
-                    v.insert(store_id, Box::new(closure) as Box<dyn Any>)
-                });
-                span.exit();
-            });
-
-            on_cleanup(move || {
-                let span = trace_span!("event_listener", "{}", format!("{store_id}")).entered();
-                STORE.with_borrow_mut(|v| {
-                    let Some(v) = v.as_mut() else {
-                        trace!("app state is not set for cleanup");
-                        return;
-                    };
-                    trace!("removing");
-                    let v = &mut v.event_listener_closures;
-                    v.remove(&store_id);
-                });
                 span.exit();
             });
         }
@@ -574,12 +612,84 @@ impl Img {
 // }
 
 #[component]
+pub fn GalleryImg(
+    img: Img,
+    #[prop(optional)] index: usize,
+    #[prop(optional)] node_ref: Option<NodeRef<Div>>,
+) -> impl IntoView {
+    let node_ref2 = NodeRef::<Div>::new();
+
+    node_ref2.on_load(move |e| {
+        trace!("did i load or what? o.O");
+    });
+
+    Effect::new(move || {
+        if index != 0 {
+            return;
+        }
+        trace!("omg, i think im the first one");
+        let Some(node_ref) = node_ref2.get() else {
+            return;
+        };
+        node_ref.scroll_into_view();
+        // if let Some(node_ref) = node_ref {
+
+        //     node_ref.track();
+        //     trace!("tracking!");
+        // }
+    });
+
+    let width = img.width;
+    let height = img.height;
+    let view_width = img.view_width;
+    let view_height = img.view_height;
+    let left = img.view_pos_x;
+    let top = img.view_pos_y;
+    let r = (random().to_bits() % 255) as u8;
+    let g = (random().to_bits() % 255) as u8;
+    let b = (random().to_bits() % 255) as u8;
+
+    let fn_background = move || format!("rgb({}, {}, {})", r, g, b);
+    let fn_left = move || format!("{}px", left.get());
+    let fn_top = move || format!("{}px", top.get() + 100.0);
+    let fn_width = move || format!("{}px", view_width.get());
+    let fn_height = move || format!("{}px", view_height.get());
+
+    view! {
+        <div
+            node_ref=node_ref2
+            // node_ref=first_ref
+            class="text-white grid place-items-center bg-blue-950 absolute border border-red-600 overflow-hidden"
+            style:background-color=fn_background
+            style:left=fn_left
+            style:top=fn_top
+            style:width=fn_width
+            style:height=fn_height>{
+                format!("{}x{}", width, height)
+            }
+        </div>
+    }
+}
+
 pub fn App() -> impl IntoView {
-    init_toolbox();
+    // init_toolbox();
 
     let main_ref = NodeRef::new();
     let gallery_ref = NodeRef::new();
+    let first_ref = NodeRef::<Div>::new();
+    // let first_ref2 = StoredValue::<Option<HtmlDivElement>>::new_local(None);
     let imgs = RwSignal::<Vec<Img>>::new(Vec::new());
+    let gallery_wdith = RwSignal::<f64>::new(0.0);
+
+    // Effect::new(move || {
+    //     let Some(first_elm): Option<HtmlDivElement> = first_ref.get() else {
+    //         trace!("first is not found (effect)");
+    //         return;
+    //     };
+    //     let v = first_elm.text_content().unwrap();
+    //     trace!("first one?: {}", v);
+    //     first_elm.scroll_into_view();
+    // });
     // let tab_2_ref = NodeRef::new();
     // let tab_3_ref = NodeRef::new();
 
@@ -592,19 +702,44 @@ pub fn App() -> impl IntoView {
         }
     });
 
-    gallery_ref.add_resize_observer(move |e, t| {
-        let rect = e.content_rect();
-        let w = rect.width() as u32;
-        // trace!("w: {}", w);
-        imgs.update_untracked(move |imgs| {
-            resize_imgs(200, w, imgs);
-            // for img in imgs.iter_mut() {
-            //     let id = random().to_bits();
-            //     img.id = id;
-            // }
-        }); 
-
+    Effect::new(move || {
+        trace!("logs broke?");
+        let Some(gallery_elm): Option<HtmlDivElement> = gallery_ref.get() else {
+            return;
+        };
+        let observer = resize_observer::new(move |entries, observer| {
+            let Some(gallery_entry) = entries.first() else {
+                return;
+            };
+            let rect = gallery_entry.content_rect();
+            let w = rect.width();
+            gallery_wdith.set(w);
+            imgs.update_untracked(move |imgs| {
+                resize_imgs(200, w as u32, imgs);
+            });
+        });
+        observer.observe(&gallery_elm);
+        // gallery_elm.scroll_to();
     });
+
+    Effect::new(move || {
+        trace!("your code broke");
+        imgs.set(Img::rand_vec(100));
+    });
+
+    // gallery_ref.add_resize_observer(move |e, t| {
+    //     let rect = e.content_rect();
+    //     let w = rect.width() as u32;
+    //     // trace!("w: {}", w);
+    //     imgs.update_untracked(move |imgs| {
+    //         resize_imgs(200, w, imgs);
+    //         // for img in imgs.iter_mut() {
+    //         //     let id = random().to_bits();
+    //         //     img.id = id;
+    //         // }
+    //     });
+    // });
+
     // let a ;
 
     // tab_2_ref.add_resize_observer(move |e, t| {
@@ -617,72 +752,187 @@ pub fn App() -> impl IntoView {
 
     let tab = RwSignal::new(false);
     let switch_tab = move |e| {
-        tab.update(|v| *v = !*v);
+        let Some(gallery_elm): Option<HtmlDivElement> = gallery_ref.get_untracked() else {
+            trace!("refresh target not found");
+            return;
+        };
+        trace!("refreshing...");
+        let width = gallery_elm.client_width() as u32;
+        let new_imgs = Img::rand_vec(100);
+        imgs.set(new_imgs);
+        imgs.update_untracked(move |imgs| {
+            resize_imgs(200, width, imgs);
+        });
+        // tab.update(|v| *v = !*v);
     };
 
-    Effect::new(move || {
-        imgs.set(Img::rand_vec(10));
-    });
+    let scroll_btn = move |e| {
+        // let Some(first_elm): Option<HtmlDivElement> = first_ref.get_untracked() else {
+        //     trace!("first is not found!");
+        //     return;
+        // };
+        // let v = first_elm.text_content().unwrap();
+        // trace!("first one?: {}", v);
+        // first_elm.scroll_into_view();
+    };
 
     let get_imgs = move || {
-        let mut imgs = imgs.get();
+        let mut imgs = imgs
+            .get()
+            .into_iter()
+            .enumerate()
+            .collect::<Vec<(usize, Img)>>();
         // resize_imgs(200, 1500, &mut imgs);
         imgs
     };
 
-    view! {
-        <main node_ref=main_ref >
-            <nav class="text-gray-200 pb-1">
-                <h3 class="font-black text-xl">"ArtBounty"</h3>
-            </nav>
-            <div>
-                // <div node_ref=tab_3_ref id="tab3" class="p-10 bg-purple-600" >"tab3"</div>
-                // <img draggable="true" src="/assets/sword_lady.webp" />
-                <button on:click=switch_tab class="font-black text-xl text-white">"switch tab"</button>
-                // <Show
-                //     when = move || { tab.get() }
-                //     fallback=|| view!( <div id="tab1" class="p-10 bg-green-600" >"tab1"</div> )
-                // >
-                //     {
-                //         view!{
-                //             <div node_ref=tab_2_ref id="tab2" class="p-10 bg-red-600" >"tab2"</div>
-                //         }
-                //     }
-                //     // <DragTest />
-                //     // <DragTest2 />
-                // </Show>
-                <div node_ref=gallery_ref class="relative">
-                    <For
-                        each=get_imgs
-                        key=|img| img.id
-                        children=move |img: Img| {
-                            let width = img.width;
-                            let height = img.height;
-                            let view_width = img.view_width;
-                            let view_height = img.view_height;
-                            let left = img.view_pos_x;
-                            let top = img.view_pos_y;
-                            let r = (random().to_bits() % 255) as u8;
-                            let g = (random().to_bits() % 255) as u8;
-                            let b = (random().to_bits() % 255) as u8;
+    // let k1 = div().node_ref(first_ref);
+    // let k2 = div().add_any_attr(node_ref(first_ref));
 
-                            view! {
-                                <div
-                                    class="text-white grid place-items-center bg-blue-950 absolute border border-red-600"
-                                    style:background-color=move || format!("rgb({}, {}, {})", r, g, b)
-                                    style:left=move || format!("{}px", left.get())
-                                    style:top=move || format!("{}px", top.get())
-                                    style:width=move || format!("{}px", view_width.get())
-                                    style:height=move || format!("{}px", view_height.get())>{
-                                        // format!("x:{}y:{}\n{}x{}", left, top, width, height)
-                                        format!("{}x{}", width, height)
-                                    }</div>
-                            }
-                        }
-                    />
-                </div>
-            </div>
-        </main>
+    // let img_iter = move |(i, img): (usize, Img)| {
+    //     let width = img.width;
+    //     let height = img.height;
+    //     let view_width = img.view_width;
+    //     let view_height = img.view_height;
+    //     let left = img.view_pos_x;
+    //     let top = img.view_pos_y;
+    //     let r = (random().to_bits() % 255) as u8;
+    //     let g = (random().to_bits() % 255) as u8;
+    //     let b = (random().to_bits() % 255) as u8;
+
+    //     let fn_background = move || format!("rgb({}, {}, {})", r, g, b);
+    //     let fn_left = move || format!("{}px", left.get());
+    //     let fn_top = move || format!("{}px", top.get() + 100.0);
+    //     let fn_width = move || format!("{}px", view_width.get());
+    //     let fn_height = move || format!("{}px", view_height.get());
+
+    //     // let v = view! {
+    //     // };
+    //     if i == 0 {
+    //      view! {
+    //         <div
+    //             // node_ref=first_ref
+    //             class="text-white grid place-items-center bg-blue-950 absolute border border-red-600 overflow-hidden"
+    //             style:background-color=fn_background
+    //             style:left=fn_left
+    //             style:top=fn_top
+    //             style:width=fn_width
+    //             style:height=fn_height>{
+    //                 format!("{}x{}", width, height)
+    //             }
+    //         </div>
+    //      }
+    //     } else {
+    //         view! {
+    //             <div
+    //                 class="text-white grid place-items-center bg-blue-950 absolute border border-red-600 overflow-hidden"
+    //                 style:background-color=fn_background
+    //                 style:left=fn_left
+    //                 style:top=fn_top
+    //                 style:width=fn_width
+    //                 style:height=fn_height>{
+    //                     format!("{}x{}", width, height)
+    //                 }
+    //             </div>
+    //         }
+    //     }
+    // if i == 0 {
+    //     view! {
+    //         <>
+    //             <div
+    //                 // node_ref=first_ref
+    //                 class="text-white grid place-items-center bg-blue-950 absolute border border-red-600 overflow-hidden"
+    //                 style:background-color=move || format!("rgb({}, {}, {})", r, g, b)
+    //                 style:left=move || format!("{}px", left.get())
+    //                 style:top=move || format!("{}px", top.get() + 100.0)
+    //                 style:width=move || format!("{}px", view_width.get())
+    //                 style:height=move || format!("{}px", view_height.get())>{
+    //                     // format!("x:{}y:{}\n{}x{}", left, top, width, height)
+    //                     format!("{}x{}", width, height)
+    //                 }</div>
+    //         </>
+    //     }
+    // } else {
+    //     view! {
+    //         <>
+    //             <div
+    //                 class="text-white grid place-items-center bg-blue-950 absolute border border-red-600 overflow-hidden"
+    //                 style:background-color=move || format!("rgb({}, {}, {})", r, g, b)
+    //                 style:left=move || format!("{}px", left.get())
+    //                 style:top=move || format!("{}px", top.get() + 100.0)
+    //                 style:width=move || format!("{}px", view_width.get())
+    //                 style:height=move || format!("{}px", view_height.get())>{
+    //                     // format!("x:{}y:{}\n{}x{}", left, top, width, height)
+    //                     format!("{}x{}", width, height)
+    //                 }</div>
+    //         </>
+    //     }
+    // }
+    // };
+    // }
+
+    view! {
+        <Router>
+            <Routes fallback=|| "not found">
+                <Route path=path!("") view=move || view!{
+                    <main node_ref=main_ref class="grid grid-rows-[auto_auto_auto_1fr] h-screen" >
+                        <nav class="text-gray-200 pb-1">
+                            <a href="/" class="font-black text-xl">"ArtBounty"</a>
+                            <a href="/two" >"two"</a>
+                        </nav>
+                        <button on:click=switch_tab class="font-black text-xl text-white">"refresh"</button>
+                        <button on:click=scroll_btn.clone() class="font-black text-xl text-white">"scroll"</button>
+                        // <div class="h-full">
+                        // <div node_ref=tab_3_ref id="tab3" class="p-10 bg-purple-600" >"tab3"</div>
+                        // <img draggable="true" src="/assets/sword_lady.webp" />
+                        // <Show
+                        //     when = move || { tab.get() }
+                        //     fallback=|| view!( <div id="tab1" class="p-10 bg-green-600" >"tab1"</div> )
+                        // >
+                        //     {
+                        //         view!{
+                        //             <div node_ref=tab_2_ref id="tab2" class="p-10 bg-red-600" >"tab2"</div>
+                        //         }
+                        //     }
+                        //     // <DragTest />
+                        //     // <DragTest2 />
+                        // </Show>
+                        <div id="gallery" node_ref=gallery_ref class="relative overflow-y-scroll overflow-x-hidden">
+                            <div
+                                class="bg-red-600 h-[100px] left-0 top-0 absolute"
+                                style:width=move || format!("{}px", gallery_wdith.get())
+                                // style:width=move || {
+                                //     let Some(gallery_ref) : Option<HtmlDivElement> = gallery_ref.get() else {
+                                //         trace!("zero? why o.O");
+                                //         return String::from("50px");
+                                //     };
+                                //     let width = gallery_ref.client_width();
+                                //     trace!("seting width or something, to: {}", width);
+                                //     format!("{}px", width)
+                                // }
+                                >
+                            </div>
+                            <For
+                                each=get_imgs
+                                key=|img| img.1.id
+                                children=move |(i, img)| {
+                                    view! {
+                                        <GalleryImg index=i img  />
+                                    }
+                                }
+                            />
+                        </div>
+                        // </div>
+                    </main>
+                }/>
+                <Route path=path!("two") view=move || view!{
+                    <nav class="text-gray-200 pb-1">
+                        <a href="/" class="font-black text-xl">"ArtBounty"</a>
+                        <a href="/two" >"two"</a>
+                    </nav>
+                }/>
+            </Routes>
+        </Router>
     }
 }
 

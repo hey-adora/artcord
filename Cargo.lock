@@ -1863,6 +1863,7 @@ dependencies = [
  "indexmap 2.7.1",
  "leptos",
  "leptos_axum",
+ "leptos_router",
  "ordered-float",
  "reactive_stores",
  "rkyv 0.8.10",
