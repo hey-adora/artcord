@@ -1,0 +1,24 @@
+[package]
+name = "artbounty-web-backend"
+version = "0.1.0"
+edition = "2024"
+
+[profile.dev]
+opt-level = 0
+incremental = true
+codegen-units = 256
+
+[profile.dev.package."*"]
+opt-level = 0
+
+[dependencies]
+artbounty-web-frontend = { workspace = true, features = ["ssr"] }
+axum = { workspace = true }
+leptos = { workspace = true }
+leptos_axum = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+surrealdb = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

@@ -1,0 +1,41 @@
+[package]
+name = "artbounty-web-frontend"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[profile.dev]
+opt-level = 0
+incremental = true
+codegen-units = 256
+
+[profile.dev.package."*"]
+opt-level = 0
+
+[profile.wasm-release]
+inherits = "release"
+opt-level = 'z'
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[features]
+hydrate = ["leptos/hydrate"]
+ssr = ["leptos/ssr", "leptos_router/ssr"]
+
+[dependencies]
+wasm-bindgen = { workspace = true }
+web-sys = { workspace = true }
+leptos = { workspace = true }
+leptos_router = { workspace = true }
+console_error_panic_hook = { workspace = true }
+gloo = { workspace = true }
+reactive_stores = { workspace = true }
+rkyv = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+indextree = { workspace = true }
+uuid = { workspace = true }
+send_wrapper = { workspace = true }

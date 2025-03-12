@@ -162,7 +162,7 @@ pub fn MainGalleryPage() -> impl IntoView {
 
     create_effect(move |_| {
         let _ = use_event_listener(use_window(), resize, move |_| {
-            imgs.update(|imgs| {
+             imgs.update(|imgs| {
                 let section = gallery_section.get_untracked();
                 if let Some(section) = section {
                     let width = section.client_width() as u32;

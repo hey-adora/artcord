@@ -1,64 +1,30 @@
-# [workspace]
-# resolver = "2"
-# members = [
-#   "artcord",
-#   "artcord-http",
-#   "artcord-builder",
-#   "artcord-leptos",
-#   "artcord-leptos-web-sockets",
-#   "artcord-mongodb",
-#   "artcord-serenity",
-#   "artcord-state",
-#   "artcord-tungstenite",
-#   "artcord-benchmark",
-# ]
+[workspace]
+resolver = "2"
+members = ["artbounty-web-backend", "artbounty-web-frontend"]
 
-[package]
-name = "heyadora_art"
-version = "0.1.0"
-edition = "2021"
-
-[lib]
-crate-type = ["cdylib", "rlib"]
-
-[profile.dev]
-opt-level = 0
-incremental = true
-codegen-units = 256
-
-[profile.dev.package."*"]
-opt-level = 0
-
-[profile.wasm-release]
-inherits = "release"
-opt-level = 'z'
-lto = true
-codegen-units = 1
-panic = "abort"
-
-[dependencies]
-axum = { version = "0.7.9", optional = true }
+[workspace.dependencies]
+artbounty-web-frontend = { path = "artbounty-web-frontend" }
+axum = { version = "0.7.9" }
+leptos_axum = { version = "0.7.7" }
+tokio = { version = "1.43.0", features = ["full"] }
+tower = { version = "0.5.2" }
+tower-http = { version = "0.6.2", features = ["compression-full"] }
+surrealdb = { version = "2.2.1", features = ["kv-surrealkv", "kv-mem"] }
 console_error_panic_hook = "0.1.7"
 gloo = { version = "0.11.0", features = ["file", "futures"] }
 indexmap = "2.7.1"
+indextree = "4.7.3"
 leptos = { version = "0.7.7", features = ["rkyv"] }
-leptos_axum = { version = "0.7.7", optional = true }
 leptos_router = { version = "0.7.7" }
 ordered-float = { version = "5.0.0", features = ["rkyv"] }
 reactive_stores = "0.1.7"
 rkyv = "0.8.10"
 server_fn = { version = "0.7.7", features = ["rkyv"] }
-surrealdb = { version = "2.2.1", features = [
-    "kv-surrealkv",
-    "kv-mem",
-], optional = true }
-tokio = { version = "1.43.0", features = ["full"], optional = true }
-tower = { version = "0.5.2", optional = true }
-tower-http = { version = "0.6.2", features = ["compression-full"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 uuid = { version = "1.14.0", features = ["v4", "js"] }
 wasm-bindgen = "0.2.100"
+send_wrapper = { version = "0.6.0" }
 web-sys = { version = "0.3.77", features = [
     "HtmlDivElement",
     "EventTarget",
@@ -72,26 +38,18 @@ web-sys = { version = "0.3.77", features = [
     "ResizeObserverSize",
     "DomRectReadOnly",
     "MutationObserver",
+    "IntersectionObserver",
     "IntersectionObserverEntry",
     "MutationObserverInit",
     "Node",
 ] }
 
-[features]
-hydrate = ["leptos/hydrate"]
-ssr = [
-    "leptos/ssr",
-    "leptos_router/ssr",
-    "dep:axum",
-    "dep:leptos_axum",
-    "dep:tower",
-    "dep:tokio",
-    "dep:surrealdb",
-]
 
-[package.metadata.leptos]
-name = "heyadora_art"
-output-name = "heyadora_art"
+[[workspace.metadata.leptos]]
+name = "artbounty"
+bin-package = "artbounty-web-backend"
+lib-package = "artbounty-web-frontend"
+output-name = "artbounty_1"
 site-root = "target/site"
 site-pkg-dir = "pkg"
 tailwind-input-file = "style/tailwind.css"
@@ -104,7 +62,7 @@ browserquery = "defaults"
 watch = true
 env = "DEV"
 lib-profile-release = "wasm-release"
-bin-features = ["ssr"]
+bin-features = []
 lib-features = ["hydrate"]
 bin-default-features = false
 lib-default-features = false
