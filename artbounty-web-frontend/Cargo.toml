@@ -40,3 +40,4 @@ indextree = { workspace = true }
 uuid = { workspace = true }
 send_wrapper = { workspace = true }
 ordered-float = { workspace = true }
+sha2 = { workspace = true }

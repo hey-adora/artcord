@@ -110,12 +110,13 @@ pub mod uuid {
 
 pub mod intersection_observer {
     use std::collections::HashMap;
-    use std::hash::Hash;
+    use std::hash::{DefaultHasher, Hash, Hasher};
 
     use leptos::html;
     use leptos::{html::ElementType, prelude::*};
     use ordered_float::OrderedFloat;
     use send_wrapper::SendWrapper;
+    use sha2::Digest;
     use tracing::{error, trace, trace_span};
     use uuid::Uuid;
     use wasm_bindgen::prelude::Closure;
@@ -131,8 +132,10 @@ pub mod intersection_observer {
     const ID_FIELD_ROOT_NAME: &str = "data-leptos_toolbox_intersection_observer_root_id";
 
     pub trait AddIntersectionObserver {
-        fn add_intersection_observer<F>(&self, callback: F)
+        fn add_intersection_observer<R, F>(&self, callback: F, options: Options<R>)
         where
+            R: ElementType,
+            R::Output: JsCast + Clone + 'static + Into<HtmlElement>,
             F: FnMut(IntersectionObserverEntry, IntersectionObserver)
                 + Send
                 + Sync
@@ -145,15 +148,17 @@ pub mod intersection_observer {
         E: ElementType,
         E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
     {
-        fn add_intersection_observer<F>(&self, callback: F)
+        fn add_intersection_observer<R, F>(&self, callback: F, options: Options<R>)
         where
+            R: ElementType,
+            R::Output: JsCast + Clone + 'static + Into<HtmlElement>,
             F: FnMut(IntersectionObserverEntry, IntersectionObserver)
                 + Send
                 + Sync
                 + Clone
                 + 'static,
         {
-            new(self.clone(), callback);
+            new(self.clone(), callback, options);
         }
     }
 
@@ -173,7 +178,25 @@ pub mod intersection_observer {
         >,
     }
 
-    #[derive(Default, Clone)]
+    // #[derive(Default, Clone)]
+    // pub struct Options<E>
+    // where
+    //     E: ElementType,
+    //     E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
+    // {
+    //     root: Option<NodeRef<E>>,
+    //     root_margin: Option<String>,
+    //     threshold: Option<OrderedFloat<f64>>,
+    // }
+
+    // //#[derive(Default, Clone)]
+    // pub struct Options {
+    //     root: Box<dyn Into<HtmlElement>>,
+    //     root_margin: Option<String>,
+    //     threshold: Option<OrderedFloat<f64>>,
+    // }
+
+    #[derive(Clone)]
     pub struct Options<E>
     where
         E: ElementType,
@@ -182,6 +205,20 @@ pub mod intersection_observer {
         root: Option<NodeRef<E>>,
         root_margin: Option<String>,
         threshold: Option<OrderedFloat<f64>>,
+    }
+
+    impl<E> Default for Options<E>
+    where
+        E: ElementType,
+        E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
+    {
+        fn default() -> Self {
+            Self {
+                root: None,
+                root_margin: None,
+                threshold: None,
+            }
+        }
     }
 
     impl<E> Options<E>
@@ -258,15 +295,48 @@ pub mod intersection_observer {
     //     F: FnMut(IntersectionObserverEntry, IntersectionObserver) + Clone + Send + Sync + 'static,
     // {
 
-    pub fn new<E, F>(target: NodeRef<E>, mut callback: F)
+    pub fn new<E, R, F>(target: NodeRef<E>, mut callback: F, options: Options<R>)
     where
         E: ElementType,
         E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
-        // R: ElementType,
-        // R::Output: JsCast + Clone + 'static + Into<HtmlElement>,
+        R: ElementType,
+        R::Output: JsCast + Clone + 'static + Into<HtmlElement>,
         F: FnMut(IntersectionObserverEntry, IntersectionObserver) + Clone + Send + Sync + 'static,
     {
-        let ctx = expect_context::<GlobalState>();
+        let ctx = match use_context::<GlobalState>() {
+            Some(v) => v,
+            None => {
+                provide_context(GlobalState::default());
+                let ctx = expect_context::<GlobalState>();
+
+                Effect::new(move || {
+                    let mut hasher = DefaultHasher::new();
+                    options.hash(&mut hasher);
+                    let hash = hasher.finish();
+                    trace!("hash of options: {}", hash);
+
+                    let observer = new_raw(move |entries, observer| {
+                        ctx.callbacks.update_value(|callbacks| {
+                            for entry in entries {
+                                let target = entry.target();
+                                let Some(id) = get_id(&target, ID_FIELD_NAME) else {
+                                    continue;
+                                };
+
+                                let Some(callback) = callbacks.get_mut(&id) else {
+                                    continue;
+                                };
+                                callback(entry, observer.clone());
+                            }
+                        });
+                    });
+
+                    ctx.observer.set(Some(SendWrapper::new(observer)));
+                });
+
+                ctx
+            }
+        };
         let id = Uuid::new_v4();
 
         Effect::new(move || {

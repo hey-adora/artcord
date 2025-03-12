@@ -231,6 +231,7 @@ dependencies = [
  "reactive_stores",
  "rkyv 0.8.10",
  "send_wrapper",
+ "sha2",
  "tracing",
  "tracing-subscriber",
  "uuid",

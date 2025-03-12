@@ -1,10 +1,12 @@
 pub mod gallery {
     use leptos::{
-        html::{Div, div},
+        html::{self, Div, div},
         prelude::*,
     };
+    use std::default::Default;
     use std::fmt::Debug;
     use tracing::trace;
+    use web_sys::HtmlDivElement;
 
     use crate::toolbox::{prelude::*, random::random_u64};
 
@@ -41,9 +43,12 @@ pub mod gallery {
             });
         });
 
-        top_bar_ref.add_intersection_observer(move |entry, observer| {
-            trace!("wowza, its intersecting");
-        });
+        top_bar_ref.add_intersection_observer(
+            move |entry, observer| {
+                trace!("wowza, its intersecting");
+            },
+            intersection_observer::Options::<Div>::default(),
+        );
 
         let get_imgs = move || {
             let mut imgs = imgs.get();
