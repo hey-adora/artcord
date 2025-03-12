@@ -1,7 +1,7 @@
 pub mod prelude {
     pub use super::dropzone::{self, AddDropZone, GetFileData, GetFiles};
     pub use super::event_listener::{self, AddEventListener};
-    pub use super::intersection_observer::{self};
+    pub use super::intersection_observer::{self, AddIntersectionObserver};
     pub use super::random::{random_u8, random_u32, random_u32_ranged, random_u64};
     pub use super::resize_observer::{self, AddResizeObserver, GetContentBoxSize};
 }
@@ -68,15 +68,294 @@ pub mod random {
     }
 }
 
-pub mod intersection_observer {
-    use wasm_bindgen::JsCast;
-    use wasm_bindgen::prelude::Closure;
-    use web_sys::{IntersectionObserver, IntersectionObserverEntry, js_sys::Array};
+pub mod uuid {
+    use std::str::FromStr;
 
-    pub fn new<F>(mut callback: F) -> IntersectionObserver
+    use tracing::{error, trace, trace_span};
+    use uuid::Uuid;
+    use web_sys::Element;
+
+    pub fn get_id(target: &Element, field_name: &str) -> Option<Uuid> {
+        trace!(
+            "what does the fox say?: {:?}",
+            target.to_string().as_string()
+        );
+        let Some(id) = target.get_attribute(field_name) else {
+            error!(
+                "{} was not set {:?}",
+                field_name,
+                target.to_string().as_string()
+            );
+            return None;
+        };
+        let id = match Uuid::from_str(&id) {
+            Ok(id) => id,
+            Err(err) => {
+                error!(
+                    "{} is invalid {:?}",
+                    field_name,
+                    target.to_string().as_string()
+                );
+                return None;
+            }
+        };
+
+        Some(id)
+    }
+
+    pub fn set_id(target: &Element, field_name: &str, id: Uuid) {
+        target.set_attribute(field_name, &id.to_string()).unwrap();
+    }
+}
+
+pub mod intersection_observer {
+    use std::collections::HashMap;
+    use std::hash::Hash;
+
+    use leptos::html;
+    use leptos::{html::ElementType, prelude::*};
+    use ordered_float::OrderedFloat;
+    use send_wrapper::SendWrapper;
+    use tracing::{error, trace, trace_span};
+    use uuid::Uuid;
+    use wasm_bindgen::prelude::Closure;
+    use wasm_bindgen::{JsCast, JsValue};
+    use web_sys::{
+        Element, HtmlElement, IntersectionObserver, IntersectionObserverEntry,
+        IntersectionObserverInit, js_sys::Array,
+    };
+
+    use super::uuid::{get_id, set_id};
+
+    const ID_FIELD_NAME: &str = "data-leptos_toolbox_intersection_observer_id";
+    const ID_FIELD_ROOT_NAME: &str = "data-leptos_toolbox_intersection_observer_root_id";
+
+    pub trait AddIntersectionObserver {
+        fn add_intersection_observer<F>(&self, callback: F)
+        where
+            F: FnMut(IntersectionObserverEntry, IntersectionObserver)
+                + Send
+                + Sync
+                + Clone
+                + 'static;
+    }
+
+    impl<E> AddIntersectionObserver for NodeRef<E>
+    where
+        E: ElementType,
+        E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
+    {
+        fn add_intersection_observer<F>(&self, callback: F)
+        where
+            F: FnMut(IntersectionObserverEntry, IntersectionObserver)
+                + Send
+                + Sync
+                + Clone
+                + 'static,
+        {
+            new(self.clone(), callback);
+        }
+    }
+
+    #[derive(Default, Clone)]
+    pub struct GlobalState {
+        pub observer: RwSignal<Option<SendWrapper<IntersectionObserver>>>,
+        pub callbacks: StoredValue<
+            HashMap<
+                Uuid,
+                Box<
+                    dyn FnMut(IntersectionObserverEntry, IntersectionObserver)
+                        + Send
+                        + Sync
+                        + 'static,
+                >,
+            >,
+        >,
+    }
+
+    #[derive(Default, Clone)]
+    pub struct Options<E>
+    where
+        E: ElementType,
+        E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
+    {
+        root: Option<NodeRef<E>>,
+        root_margin: Option<String>,
+        threshold: Option<OrderedFloat<f64>>,
+    }
+
+    impl<E> Options<E>
+    where
+        E: ElementType,
+        E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
+    {
+        pub fn set_root(mut self, root: NodeRef<E>) -> Self {
+            self.root = Some(root);
+            self
+        }
+
+        pub fn set_root_margin(mut self, root_margin: String) -> Self {
+            self.root_margin = Some(root_margin);
+            self
+        }
+
+        pub fn set_threshold(mut self, threshold: f64) -> Self {
+            self.threshold = Some(OrderedFloat(threshold));
+            self
+        }
+    }
+
+    impl<E> Hash for Options<E>
+    where
+        E: ElementType,
+        E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
+    {
+        fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+            self.root
+                .as_ref()
+                .and_then(|v| {
+                    let root: HtmlElement = v.get().unwrap().into();
+                    root.get_attribute(ID_FIELD_ROOT_NAME)
+                })
+                .hash(state);
+            self.root_margin.hash(state);
+            self.threshold.hash(state);
+        }
+    }
+
+    pub fn init_global_state() {
+        provide_context(GlobalState::default());
+
+        Effect::new(move || {
+            let ctx = expect_context::<GlobalState>();
+
+            let observer = new_raw(move |entries, observer| {
+                ctx.callbacks.update_value(|callbacks| {
+                    for entry in entries {
+                        let target = entry.target();
+                        let Some(id) = get_id(&target, ID_FIELD_NAME) else {
+                            continue;
+                        };
+
+                        let Some(callback) = callbacks.get_mut(&id) else {
+                            continue;
+                        };
+                        callback(entry, observer.clone());
+                    }
+                });
+            });
+
+            ctx.observer.set(Some(SendWrapper::new(observer)));
+        });
+    }
+
+    // pub fn new<E, R, F>(target: NodeRef<E>, mut callback: F, options: Options<R>)
+    // where
+    //     E: ElementType,
+    //     E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
+    //     R: ElementType,
+    //     R::Output: JsCast + Clone + 'static + Into<HtmlElement>,
+    //     F: FnMut(IntersectionObserverEntry, IntersectionObserver) + Clone + Send + Sync + 'static,
+    // {
+
+    pub fn new<E, F>(target: NodeRef<E>, mut callback: F)
+    where
+        E: ElementType,
+        E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
+        // R: ElementType,
+        // R::Output: JsCast + Clone + 'static + Into<HtmlElement>,
+        F: FnMut(IntersectionObserverEntry, IntersectionObserver) + Clone + Send + Sync + 'static,
+    {
+        let ctx = expect_context::<GlobalState>();
+        let id = Uuid::new_v4();
+
+        Effect::new(move || {
+            let span = trace_span!("intersection observer").entered();
+
+            let (Some(target), Some(observer)) = (target.get(), ctx.observer.get()) else {
+                return;
+            };
+
+            // let root = if let Some(root) = &options.root {
+            //     if let Some(root) = root.get() {
+            //         let root: HtmlElement = root.into();
+            //         Some(root)
+            //     } else {
+            //         return;
+            //     }
+            // } else {
+            //     None
+            // };
+
+            let target: HtmlElement = target.into();
+
+            set_id(&target, ID_FIELD_NAME, id);
+
+            ctx.callbacks.update_value(|v| {
+                v.insert(id, Box::new(callback.clone()));
+                trace!("created {}", &id);
+            });
+
+            observer.observe(&target);
+
+            span.exit();
+        });
+
+        on_cleanup(move || {
+            let span = trace_span!("intersection observer").entered();
+
+            let (Some(target), Some(observer)) =
+                (target.get_untracked(), ctx.observer.get_untracked())
+            else {
+                return;
+            };
+
+            let target: HtmlElement = target.into();
+
+            let Some(id) = get_id(&target, ID_FIELD_NAME) else {
+                return;
+            };
+
+            observer.unobserve(&target);
+
+            ctx.callbacks.update_value(|callbacks| {
+                callbacks.remove(&id);
+                trace!("removed {}", &id);
+            });
+
+            span.exit();
+        });
+    }
+
+    pub fn new_raw<F>(mut callback: F) -> IntersectionObserver
     where
         F: FnMut(Vec<IntersectionObserverEntry>, IntersectionObserver) + Clone + 'static,
     {
+        new_with_options_raw::<F>(callback, None)
+    }
+
+    pub fn new_with_options_raw<F>(
+        mut callback: F,
+        options: Option<&IntersectionObserverInit>,
+    ) -> IntersectionObserver
+    where
+        F: FnMut(Vec<IntersectionObserverEntry>, IntersectionObserver) + Clone + 'static,
+    {
+        // let root: Option<HtmlElement> = options
+        //     .root
+        //     .and_then(|v| v.get())
+        //     .and_then(|v| v.into() as Option<HtmlElement>);
+
+        // let root = if let Some(root) = &options.root {
+        //     if let Some(root) = root.get() {
+        //         Some(root.into() as HtmlElement)
+        //     } else {
+        //         return;
+        //     }
+        // } else {
+        //     None
+        // };
+
         let observer_closure = Closure::<dyn FnMut(Array, IntersectionObserver)>::new(
             move |entries: Array, observer: IntersectionObserver| {
                 let entries: Vec<IntersectionObserverEntry> = entries
@@ -88,7 +367,15 @@ pub mod intersection_observer {
             },
         )
         .into_js_value();
-        IntersectionObserver::new(observer_closure.as_ref().unchecked_ref()).unwrap()
+
+        match options {
+            Some(options) => IntersectionObserver::new_with_options(
+                observer_closure.as_ref().unchecked_ref(),
+                options,
+            )
+            .unwrap(),
+            None => IntersectionObserver::new(observer_closure.as_ref().unchecked_ref()).unwrap(),
+        }
     }
 }
 
@@ -111,7 +398,9 @@ pub mod resize_observer {
         js_sys::Array,
     };
 
-    const ATTRIBUTE_FIELD_NAME: &str = "leptos_toolbox_resize_observer_id";
+    use super::uuid::{get_id, set_id};
+
+    const ID_FIELD_NAME: &str = "data-leptos_toolbox_resize_observer_id";
 
     pub trait AddResizeObserver {
         fn add_resize_observer<F>(&self, callback: F)
@@ -132,13 +421,6 @@ pub mod resize_observer {
                 .collect()
         }
     }
-
-    // let size: Vec<ResizeObserverSize> = entry
-    //     .content_box_size()
-    //     .to_vec()
-    //     .into_iter()
-    //     .map(|v| v.unchecked_into::<ResizeObserverSize>())
-    //     .collect();
 
     impl<E> AddResizeObserver for NodeRef<E>
     where
@@ -174,7 +456,7 @@ pub mod resize_observer {
                 ctx.callbacks.update_value(|callbacks| {
                     for entry in entries {
                         let target = entry.target();
-                        let Some(id) = get_observer_id(&target) else {
+                        let Some(id) = get_id(&target, ID_FIELD_NAME) else {
                             continue;
                         };
 
@@ -188,36 +470,6 @@ pub mod resize_observer {
 
             ctx.observer.set(Some(SendWrapper::new(observer)));
         });
-    }
-
-    fn get_observer_id(target: &Element) -> Option<Uuid> {
-        let Some(id) = target.get_attribute(ATTRIBUTE_FIELD_NAME) else {
-            error!(
-                "{} was not set {:?}",
-                ATTRIBUTE_FIELD_NAME,
-                target.to_string().as_string()
-            );
-            return None;
-        };
-        let id = match Uuid::from_str(&id) {
-            Ok(id) => id,
-            Err(err) => {
-                error!(
-                    "{} is invalid {:?}",
-                    ATTRIBUTE_FIELD_NAME,
-                    target.to_string().as_string()
-                );
-                return None;
-            }
-        };
-
-        Some(id)
-    }
-
-    fn set_observer_id(target: &Element, id: Uuid) {
-        target
-            .set_attribute(ATTRIBUTE_FIELD_NAME, &id.to_string())
-            .unwrap();
     }
 
     pub fn new<E, F>(target: NodeRef<E>, mut callback: F)
@@ -238,7 +490,7 @@ pub mod resize_observer {
 
             let target: HtmlElement = target.into();
 
-            set_observer_id(&target, id);
+            set_id(&target, ID_FIELD_NAME, id);
 
             ctx.callbacks.update_value(|v| {
                 v.insert(id, Box::new(callback.clone()));
@@ -261,7 +513,7 @@ pub mod resize_observer {
 
             let target: HtmlElement = target.into();
 
-            let Some(id) = get_observer_id(&target) else {
+            let Some(id) = get_id(&target, ID_FIELD_NAME) else {
                 return;
             };
 

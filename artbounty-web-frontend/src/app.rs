@@ -8,7 +8,7 @@ use page::home;
 use reactive_stores::Store;
 use tracing::trace;
 
-use crate::toolbox::resize_observer;
+use crate::toolbox::prelude::*;
 
 pub mod components;
 pub mod page;
@@ -34,6 +34,7 @@ pub fn App() -> impl IntoView {
     provide_context(GlobalState::default());
 
     resize_observer::init_global_state();
+    intersection_observer::init_global_state();
 
     // Effect::new(move || {
     //     use indextree::Arena;

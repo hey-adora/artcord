@@ -13,6 +13,7 @@ pub mod gallery {
     #[component]
     pub fn Gallery(imgs: RwSignal<Vec<Img>>) -> impl IntoView {
         let gallery_ref = NodeRef::<Div>::new();
+        let top_bar_ref = NodeRef::<Div>::new();
         //let imggg = RwSignal::<Vec<(usize, Img)>>::new(Vec::new());
 
         // Effect::new(move || {
@@ -40,6 +41,10 @@ pub mod gallery {
             });
         });
 
+        top_bar_ref.add_intersection_observer(move |entry, observer| {
+            trace!("wowza, its intersecting");
+        });
+
         let get_imgs = move || {
             let mut imgs = imgs.get();
             let Some(width) = gallery_ref.get().map(|v| v.client_width() as u32) else {
@@ -59,7 +64,7 @@ pub mod gallery {
                 node_ref=gallery_ref
                 class="relative overflow-y-scroll overflow-x-hidden"
             >
-                <div class="bg-red-600 h-[100px] w-full ">// style:width=move || format!("{}px", gallery_wdith.get())
+                <div node_ref=top_bar_ref class="bg-red-600 h-[100px] w-full ">// style:width=move || format!("{}px", gallery_wdith.get())
                 </div>
                 <For
                     each=get_imgs

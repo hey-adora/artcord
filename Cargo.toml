@@ -39,6 +39,7 @@ web-sys = { version = "0.3.77", features = [
     "DomRectReadOnly",
     "MutationObserver",
     "IntersectionObserver",
+    "IntersectionObserverInit",
     "IntersectionObserverEntry",
     "MutationObserverInit",
     "Node",
