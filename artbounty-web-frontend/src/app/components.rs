@@ -1,6 +1,6 @@
 pub mod gallery {
     use leptos::{
-        html::{self, Div, div},
+        html::{self, Div, Main, div},
         prelude::*,
     };
     use std::default::Default;
@@ -43,11 +43,11 @@ pub mod gallery {
             });
         });
 
-        top_bar_ref.add_intersection_observer(
+        top_bar_ref.observe_intersection_with_options(
             move |entry, observer| {
                 trace!("wowza, its intersecting");
             },
-            intersection_observer::Options::<Div>::default(),
+            intersection_observer::Options::<Div>::default().set_threshold(0.5),
         );
 
         let get_imgs = move || {

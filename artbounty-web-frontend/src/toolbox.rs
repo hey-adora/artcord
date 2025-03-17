@@ -48,6 +48,25 @@ pub mod prelude {
 //     }
 // }
 
+// pub mod closure {
+//     use wasm_bindgen::{JsCast, JsValue, prelude::Closure};
+//     use web_sys::{IntersectionObserver, IntersectionObserverEntry, js_sys::Array};
+
+//     pub fn new() -> JsValue {
+//         Closure::<dyn FnMut(Array, IntersectionObserver)>::new(
+//             move |entries: Array, observer: IntersectionObserver| {
+//                 let entries: Vec<IntersectionObserverEntry> = entries
+//                     .to_vec()
+//                     .into_iter()
+//                     .map(|v| v.unchecked_into::<IntersectionObserverEntry>())
+//                     .collect();
+//                 callback(entries, observer);
+//             },
+//         )
+//         .into_js_value()
+//     }
+// }
+
 pub mod random {
     use web_sys::js_sys::Math::random;
 
@@ -76,10 +95,10 @@ pub mod uuid {
     use web_sys::Element;
 
     pub fn get_id(target: &Element, field_name: &str) -> Option<Uuid> {
-        trace!(
-            "what does the fox say?: {:?}",
-            target.to_string().as_string()
-        );
+        // trace!(
+        //     "what does the fox say?: {:?}",
+        //     target.to_string().as_string()
+        // );
         let Some(id) = target.get_attribute(field_name) else {
             error!(
                 "{} was not set {:?}",
@@ -111,13 +130,14 @@ pub mod uuid {
 pub mod intersection_observer {
     use std::collections::HashMap;
     use std::hash::{DefaultHasher, Hash, Hasher};
+    use std::ops::Deref;
 
     use leptos::html;
     use leptos::{html::ElementType, prelude::*};
     use ordered_float::OrderedFloat;
     use send_wrapper::SendWrapper;
     use sha2::Digest;
-    use tracing::{error, trace, trace_span};
+    use tracing::{error, trace, trace_span, warn};
     use uuid::Uuid;
     use wasm_bindgen::prelude::Closure;
     use wasm_bindgen::{JsCast, JsValue};
@@ -132,7 +152,7 @@ pub mod intersection_observer {
     const ID_FIELD_ROOT_NAME: &str = "data-leptos_toolbox_intersection_observer_root_id";
 
     pub trait AddIntersectionObserver {
-        fn add_intersection_observer<R, F>(&self, callback: F, options: Options<R>)
+        fn observe_intersection_with_options<F, R>(&self, callback: F, options: Options<R>)
         where
             R: ElementType,
             R::Output: JsCast + Clone + 'static + Into<HtmlElement>,
@@ -148,7 +168,7 @@ pub mod intersection_observer {
         E: ElementType,
         E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
     {
-        fn add_intersection_observer<R, F>(&self, callback: F, options: Options<R>)
+        fn observe_intersection_with_options<F, R>(&self, callback: F, options: Options<R>)
         where
             R: ElementType,
             R::Output: JsCast + Clone + 'static + Into<HtmlElement>,
@@ -162,9 +182,22 @@ pub mod intersection_observer {
         }
     }
 
+    // impl<E, F, R> AddIntersectionObserver<F, R> for NodeRef<E>
+    // where
+    //     E: ElementType,
+    //     E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
+    //     R: ElementType,
+    //     R::Output: JsCast + Clone + 'static + Into<HtmlElement>,
+    //     F: FnMut(IntersectionObserverEntry, IntersectionObserver) + Send + Sync + Clone + 'static,
+    // {
+    //     fn add_intersection_observer(&self, callback: F, options: Options<R>) {
+    //         new(self.clone(), callback, options);
+    //     }
+    // }
+
     #[derive(Default, Clone)]
     pub struct GlobalState {
-        pub observer: RwSignal<Option<SendWrapper<IntersectionObserver>>>,
+        pub observer: StoredValue<HashMap<u64, SendWrapper<IntersectionObserver>>>,
         pub callbacks: StoredValue<
             HashMap<
                 Uuid,
@@ -197,7 +230,7 @@ pub mod intersection_observer {
     // }
 
     #[derive(Clone)]
-    pub struct Options<E>
+    pub struct Options<E = leptos::html::Div>
     where
         E: ElementType,
         E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
@@ -242,6 +275,21 @@ pub mod intersection_observer {
         }
     }
 
+    // impl <E> Options<E> where
+    //     E: ElementType,
+    //     E::Output: JsCast + Clone + 'static + Into<HtmlElement>, {
+    //     pub fn into_
+    // }
+
+    // impl <E> Into<IntersectionObserverInit> for Options<E> where  E: ElementType,
+    // E::Output: JsCast + Clone + 'static + Into<HtmlElement> {
+    //     fn into(self) -> IntersectionObserverInit {
+    //         let init = IntersectionObserverInit::new();
+    //         if let Some(root) =
+    //         init
+    //     }
+    // }
+
     impl<E> Hash for Options<E>
     where
         E: ElementType,
@@ -260,31 +308,31 @@ pub mod intersection_observer {
         }
     }
 
-    pub fn init_global_state() {
-        provide_context(GlobalState::default());
+    // pub fn init_global_state() {
+    //     provide_context(GlobalState::default());
 
-        Effect::new(move || {
-            let ctx = expect_context::<GlobalState>();
+    //     Effect::new(move || {
+    //         let ctx = expect_context::<GlobalState>();
 
-            let observer = new_raw(move |entries, observer| {
-                ctx.callbacks.update_value(|callbacks| {
-                    for entry in entries {
-                        let target = entry.target();
-                        let Some(id) = get_id(&target, ID_FIELD_NAME) else {
-                            continue;
-                        };
+    //         let observer = new_raw(move |entries, observer| {
+    //             ctx.callbacks.update_value(|callbacks| {
+    //                 for entry in entries {
+    //                     let target = entry.target();
+    //                     let Some(id) = get_id(&target, ID_FIELD_NAME) else {
+    //                         continue;
+    //                     };
 
-                        let Some(callback) = callbacks.get_mut(&id) else {
-                            continue;
-                        };
-                        callback(entry, observer.clone());
-                    }
-                });
-            });
+    //                     let Some(callback) = callbacks.get_mut(&id) else {
+    //                         continue;
+    //                     };
+    //                     callback(entry, observer.clone());
+    //                 }
+    //             });
+    //         });
 
-            ctx.observer.set(Some(SendWrapper::new(observer)));
-        });
-    }
+    //         ctx.observer.set(Some(SendWrapper::new(observer)));
+    //     });
+    // }
 
     // pub fn new<E, R, F>(target: NodeRef<E>, mut callback: F, options: Options<R>)
     // where
@@ -309,42 +357,201 @@ pub mod intersection_observer {
                 provide_context(GlobalState::default());
                 let ctx = expect_context::<GlobalState>();
 
-                Effect::new(move || {
-                    let mut hasher = DefaultHasher::new();
-                    options.hash(&mut hasher);
-                    let hash = hasher.finish();
-                    trace!("hash of options: {}", hash);
+                // Effect::new(move || {
+                //     let mut hasher = DefaultHasher::new();
+                //     options.hash(&mut hasher);
+                //     let hash = hasher.finish();
+                //     trace!("hash of options: {}", hash);
 
-                    let observer = new_raw(move |entries, observer| {
-                        ctx.callbacks.update_value(|callbacks| {
-                            for entry in entries {
-                                let target = entry.target();
-                                let Some(id) = get_id(&target, ID_FIELD_NAME) else {
-                                    continue;
-                                };
+                //     let root = if let Some(root) = &options.root {
+                //         if let Some(root) = root.get() {
+                //             let root: HtmlElement = root.into();
+                //             Some(root)
+                //         } else {
+                //             return;
+                //         }
+                //     } else {
+                //         None
+                //     };
 
-                                let Some(callback) = callbacks.get_mut(&id) else {
-                                    continue;
-                                };
-                                callback(entry, observer.clone());
-                            }
-                        });
-                    });
+                //     let observer_settings = IntersectionObserverInit::new();
 
-                    ctx.observer.set(Some(SendWrapper::new(observer)));
-                });
+                //     if let Some(root) = root {
+                //         observer_settings.set_root(Some(&root));
+                //     }
+
+                //     if let Some(margin) = &options.root_margin {
+                //         observer_settings.set_root_margin(margin);
+                //     }
+
+                //     if let Some(threshold) = options.threshold {
+                //         observer_settings.set_threshold(&JsValue::from_f64(*threshold));
+                //     }
+
+                //     let observer = new_with_options_raw(
+                //         move |entries, observer| {
+                //             ctx.callbacks.update_value(|callbacks| {
+                //                 for entry in entries {
+                //                     let target = entry.target();
+                //                     let Some(id) = get_id(&target, ID_FIELD_NAME) else {
+                //                         continue;
+                //                     };
+
+                //                     let Some(callback) = callbacks.get_mut(&id) else {
+                //                         continue;
+                //                     };
+                //                     callback(entry, observer.clone());
+                //                 }
+                //             });
+                //         },
+                //         &observer_settings,
+                //     );
+
+                //     ctx.observer.set(Some(SendWrapper::new(observer)));
+                // });
 
                 ctx
             }
         };
         let id = Uuid::new_v4();
+        let options_hash = StoredValue::new(None::<u64>);
 
         Effect::new(move || {
-            let span = trace_span!("intersection observer").entered();
+            let span = trace_span!("intersection observer", "{}", &id).entered();
 
-            let (Some(target), Some(observer)) = (target.get(), ctx.observer.get()) else {
+            let Some(target) = target.get() else {
                 return;
             };
+
+            let root: Option<HtmlElement> = match &options.root {
+                Some(v) => match v.get() {
+                    Some(v) => {
+                        let root: HtmlElement = v.into();
+
+                        Some(root)
+                    }
+                    None => {
+                        trace!("root is not ready");
+                        return;
+                    }
+                },
+                None => None,
+            };
+
+            trace!("root options parsed");
+
+            let mut hasher = DefaultHasher::new();
+            options.hash(&mut hasher);
+            let hash = hasher.finish();
+            options_hash.set_value(Some(hash));
+            trace!("hash of options: {}", hash);
+
+            let target: HtmlElement = target.into();
+
+            set_id(&target, ID_FIELD_NAME, id);
+
+            ctx.callbacks.update_value(|v| {
+                v.insert(id, Box::new(callback.clone()));
+                trace!("created callback");
+            });
+
+            ctx.observer.update_value(|observers| {
+                trace!("getting observer...");
+                match observers.get_mut(&hash) {
+                    Some(observer) => {
+                        observer.observe(&target);
+                        trace!("observer already exists");
+                    }
+                    None => {
+                        trace!("no observer found");
+
+                        let observer_settings = IntersectionObserverInit::new();
+
+                        if let Some(root) = root {
+                            trace!("root option set");
+                            observer_settings.set_root(Some(&root));
+                        }
+
+                        if let Some(margin) = &options.root_margin {
+                            trace!("margin option set");
+                            observer_settings.set_root_margin(margin);
+                        }
+
+                        if let Some(threshold) = options.threshold {
+                            trace!("threshold option set");
+                            observer_settings.set_threshold(&JsValue::from_f64(*threshold));
+                        }
+
+                        trace!("creating raw observer");
+                        let observer = new_with_options_raw(
+                            move |entries, observer| {
+                                ctx.callbacks.update_value(|callbacks| {
+                                    for entry in entries {
+                                        let target = entry.target();
+                                        let Some(id) = get_id(&target, ID_FIELD_NAME) else {
+                                            continue;
+                                        };
+
+                                        let Some(callback) = callbacks.get_mut(&id) else {
+                                            continue;
+                                        };
+                                        callback(entry, observer.clone());
+                                    }
+                                });
+                            },
+                            &observer_settings,
+                        );
+
+                        trace!("inserting raw observer...");
+                        // trace!("getting observer entry");
+                        let observer = observers.entry(hash).or_insert(SendWrapper::new(observer));
+                        observer.observe(&target);
+                        trace!("observer created");
+
+                        // ctx.observer.update_value(|observers| {
+
+                        // });
+                    }
+                };
+            });
+
+            // ctx.observer.update_value(|observers| {
+            //     let observer = observers.entry(id).or_insert_with(|| {
+            //         let observer_settings = IntersectionObserverInit::new();
+
+            //         if let Some(root) = root {
+            //             observer_settings.set_root(Some(&root));
+            //         }
+
+            //         if let Some(margin) = &options.root_margin {
+            //             observer_settings.set_root_margin(margin);
+            //         }
+
+            //         if let Some(threshold) = options.threshold {
+            //             observer_settings.set_threshold(&JsValue::from_f64(*threshold));
+            //         }
+
+            //         let observer = new_with_options_raw(
+            //             move |entries, observer| {
+            //                 ctx.callbacks.update_value(|callbacks| {
+            //                     for entry in entries {
+            //                         let target = entry.target();
+            //                         let Some(id) = get_id(&target, ID_FIELD_NAME) else {
+            //                             continue;
+            //                         };
+
+            //                         let Some(callback) = callbacks.get_mut(&id) else {
+            //                             continue;
+            //                         };
+            //                         callback(entry, observer.clone());
+            //                     }
+            //                 });
+            //             },
+            //             &observer_settings,
+            //         );
+            //         RwSignal::new(None)
+            //     });
+            // });
 
             // let root = if let Some(root) = &options.root {
             //     if let Some(root) = root.get() {
@@ -357,26 +564,34 @@ pub mod intersection_observer {
             //     None
             // };
 
-            let target: HtmlElement = target.into();
-
-            set_id(&target, ID_FIELD_NAME, id);
-
-            ctx.callbacks.update_value(|v| {
-                v.insert(id, Box::new(callback.clone()));
-                trace!("created {}", &id);
-            });
-
-            observer.observe(&target);
+            // observer.observe(&target);
 
             span.exit();
         });
 
         on_cleanup(move || {
             let span = trace_span!("intersection observer").entered();
+            //     let mut hasher = DefaultHasher::new();
+            //     options.hash(&mut hasher);
+            //     let hash = hasher.finish();
+            //     trace!("hash of options: {}", hash);
 
-            let (Some(target), Some(observer)) =
-                (target.get_untracked(), ctx.observer.get_untracked())
-            else {
+            //     let root = if let Some(root) = &options.root {
+            //         if let Some(root) = root.get() {
+            //             let root: HtmlElement = root.into();
+            //             Some(root)
+            //         } else {
+            //             return;
+            //         }
+            //     } else {
+            //         None
+            //     };
+
+            let Some(target) = target.get_untracked() else {
+                return;
+            };
+
+            let Some(options_hash) = options_hash.get_value() else {
                 return;
             };
 
@@ -386,7 +601,15 @@ pub mod intersection_observer {
                 return;
             };
 
-            observer.unobserve(&target);
+            ctx.observer
+                .with_value(|observers| match observers.get(&options_hash) {
+                    Some(observer) => {
+                        observer.unobserve(&target);
+                    }
+                    None => {
+                        warn!("observer not found with hash {} for {}", options_hash, id);
+                    }
+                });
 
             ctx.callbacks.update_value(|callbacks| {
                 callbacks.remove(&id);
@@ -397,36 +620,10 @@ pub mod intersection_observer {
         });
     }
 
-    pub fn new_raw<F>(mut callback: F) -> IntersectionObserver
-    where
-        F: FnMut(Vec<IntersectionObserverEntry>, IntersectionObserver) + Clone + 'static,
-    {
-        new_with_options_raw::<F>(callback, None)
-    }
-
-    pub fn new_with_options_raw<F>(
-        mut callback: F,
-        options: Option<&IntersectionObserverInit>,
-    ) -> IntersectionObserver
-    where
-        F: FnMut(Vec<IntersectionObserverEntry>, IntersectionObserver) + Clone + 'static,
-    {
-        // let root: Option<HtmlElement> = options
-        //     .root
-        //     .and_then(|v| v.get())
-        //     .and_then(|v| v.into() as Option<HtmlElement>);
-
-        // let root = if let Some(root) = &options.root {
-        //     if let Some(root) = root.get() {
-        //         Some(root.into() as HtmlElement)
-        //     } else {
-        //         return;
-        //     }
-        // } else {
-        //     None
-        // };
-
-        let observer_closure = Closure::<dyn FnMut(Array, IntersectionObserver)>::new(
+    pub fn new_closure(
+        mut callback: impl FnMut(Vec<IntersectionObserverEntry>, IntersectionObserver) + 'static,
+    ) -> JsValue {
+        Closure::<dyn FnMut(Array, IntersectionObserver)>::new(
             move |entries: Array, observer: IntersectionObserver| {
                 let entries: Vec<IntersectionObserverEntry> = entries
                     .to_vec()
@@ -436,16 +633,28 @@ pub mod intersection_observer {
                 callback(entries, observer);
             },
         )
-        .into_js_value();
+        .into_js_value()
+    }
 
-        match options {
-            Some(options) => IntersectionObserver::new_with_options(
-                observer_closure.as_ref().unchecked_ref(),
-                options,
-            )
-            .unwrap(),
-            None => IntersectionObserver::new(observer_closure.as_ref().unchecked_ref()).unwrap(),
-        }
+    pub fn new_raw<F>(callback: F) -> IntersectionObserver
+    where
+        F: FnMut(Vec<IntersectionObserverEntry>, IntersectionObserver) + Clone + 'static,
+    {
+        IntersectionObserver::new(new_closure(callback).as_ref().unchecked_ref()).unwrap()
+    }
+
+    pub fn new_with_options_raw<F>(
+        callback: F,
+        options: &IntersectionObserverInit,
+    ) -> IntersectionObserver
+    where
+        F: FnMut(Vec<IntersectionObserverEntry>, IntersectionObserver) + Clone + 'static,
+    {
+        IntersectionObserver::new_with_options(
+            new_closure(callback).as_ref().unchecked_ref(),
+            options,
+        )
+        .unwrap()
     }
 }
 
