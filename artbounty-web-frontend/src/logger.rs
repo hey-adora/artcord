@@ -75,13 +75,16 @@ impl<S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'
         }
 
         let meta = event.metadata();
-        let level = meta.level();
+        let level = *meta.level();
         let target = if self.config.target {
             format!(" {}", meta.target())
         } else {
             "".to_string()
         };
-        let origin = if self.config.line {
+        let origin = if self.config.line
+            || level == tracing::Level::ERROR
+            || level == tracing::Level::WARN
+        {
             meta.file()
                 .and_then(|file| meta.line().map(|ln| format!(" {}:{}", file, ln)))
                 .unwrap_or_default()
@@ -91,7 +94,7 @@ impl<S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'
 
         log5(
             format!("%c{level}%c{spans_combined}%c{target}{origin}%c: {value}"),
-            match *level {
+            match level {
                 tracing::Level::TRACE => "color: dodgerblue; background: #444",
                 tracing::Level::DEBUG => "color: lawngreen; background: #444",
                 tracing::Level::INFO => "color: whitesmoke; background: #444",

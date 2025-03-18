@@ -1,4 +1,5 @@
 pub mod home {
+    use crate::toolbox::prelude::*;
     use leptos::prelude::*;
     use reactive_stores::Store;
     use tracing::trace;
@@ -18,6 +19,25 @@ pub mod home {
         Effect::new(move || {
             let new_imgs = Img::rand_vec(100);
             imgs.set(new_imgs);
+        });
+
+        main_ref.on_file_drop(async |event, data| {
+            for file in data.get_files() {
+                let stream = file.get_file_stream()?;
+                let mut data = Vec::<u8>::new();
+                while let Some(chunk) = stream.get_stream_chunk().await? {
+                    chunk.push_to_vec(&mut data);
+                }
+                let data_str = String::from_utf8_lossy(&data);
+                trace!("file: {}", data_str);
+            }
+
+            Ok(())
+            // for file in data.files().iter() {
+            //     let data = file.data().await;
+            //     let data = data.map(|data| String::from_utf8_lossy(&data).to_string());
+            //     trace!("file! {:?}", data);
+            // }
         });
 
         // let get_imgs = move || {

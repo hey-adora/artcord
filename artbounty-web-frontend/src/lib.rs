@@ -9,6 +9,7 @@ pub mod logger;
 pub mod toolbox;
 
 pub fn shell(options: LeptosOptions) -> impl IntoView {
+
     view! {
         <!DOCTYPE html>
         <html lang="en">

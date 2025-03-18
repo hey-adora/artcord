@@ -47,7 +47,7 @@ pub mod gallery {
             move |entry, observer| {
                 trace!("wowza, its intersecting");
             },
-            intersection_observer::Options::<Div>::default().set_threshold(0.5),
+            intersection_observer::Options::<Div>::default().set_threshold(0.0),
         );
 
         let get_imgs = move || {

@@ -8,6 +8,9 @@ use surrealdb::{engine::remote::ws, Surreal};
 use tower_http::compression::CompressionLayer;
 use tracing::{info, trace, trace_span};
 
+
+
+
 static DB: LazyLock<Surreal<ws::Client>> = LazyLock::new(Surreal::init);
 
 #[allow(clippy::needless_return)]
@@ -23,7 +26,9 @@ async fn main() {
         .try_init()
         .unwrap();
 
-    trace!("started!");
+    trace!("started!")aa;
+
+
 
     let conf = get_configuration(None).unwrap();
     let leptos_options = conf.leptos_options;

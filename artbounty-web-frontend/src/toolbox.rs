@@ -1,6 +1,7 @@
 pub mod prelude {
-    pub use super::dropzone::{self, AddDropZone, GetFileData, GetFiles};
+    pub use super::dropzone::{self, AddDropZone};
     pub use super::event_listener::{self, AddEventListener};
+    pub use super::file::{self, GetFileStream, GetFiles, GetStreamChunk, PushChunkToVec};
     pub use super::intersection_observer::{self, AddIntersectionObserver};
     pub use super::random::{random_u8, random_u32, random_u32_ranged, random_u64};
     pub use super::resize_observer::{self, AddResizeObserver, GetContentBoxSize};
@@ -881,26 +882,177 @@ pub mod event_listener {
     }
 }
 
+pub mod file {
+    use thiserror::Error;
+    use wasm_bindgen::JsCast;
+    use wasm_bindgen_futures::JsFuture;
+    use web_sys::{
+        DragEvent, File, FileList, ReadableStreamDefaultReader,
+        js_sys::{Object, Reflect, Uint8Array},
+    };
+
+    #[derive(Error, Debug)]
+    pub enum ErrorGetFileStream {
+        #[error("failed to cast as \"ReadableStreamDefaultReader\" \"{0}\"")]
+        Cast(String),
+    }
+
+    #[derive(Error, Debug)]
+    pub enum ErrorGetStreamChunk {
+        #[error("failed to get chunk \"{0}\"")]
+        GetChunk(String),
+
+        #[error("failed to cast chunk to object \"{0}\"")]
+        CastToObject(String),
+
+        #[error("failed to cast chunk to Uint8Array \"{0}\"")]
+        CastToArray(String),
+
+        #[error("failed to read 'done' field from chunk object \"{0}\"")]
+        ReadingFieldDone(String),
+
+        #[error("failed to read 'value' field from chunk object \"{0}\"")]
+        ReadingFieldValue(String),
+    }
+
+    pub trait PushChunkToVec {
+        fn push_to_vec(&self, buffer: &mut Vec<u8>);
+    }
+
+    pub trait GetFiles {
+        fn get_files(&self) -> Vec<File>;
+    }
+
+    pub trait GetFileStream {
+        fn get_file_stream(&self) -> Result<ReadableStreamDefaultReader, ErrorGetFileStream>;
+    }
+
+    pub trait GetStreamChunk {
+        async fn get_stream_chunk(&self) -> Result<Option<Uint8Array>, ErrorGetStreamChunk>;
+    }
+
+    impl PushChunkToVec for Uint8Array {
+        fn push_to_vec(&self, buffer: &mut Vec<u8>) {
+            let chunk = self;
+            let data_len = buffer.len();
+            buffer.resize(data_len + chunk.length() as usize, 0);
+            chunk.copy_to(&mut buffer[data_len..]);
+        }
+    }
+
+    impl GetStreamChunk for ReadableStreamDefaultReader {
+        async fn get_stream_chunk(&self) -> Result<Option<Uint8Array>, ErrorGetStreamChunk> {
+            get_stream_chunk(self).await
+        }
+    }
+
+    impl GetFileStream for File {
+        fn get_file_stream(&self) -> Result<ReadableStreamDefaultReader, ErrorGetFileStream> {
+            get_file_stream(self)
+        }
+    }
+
+    impl GetFiles for DragEvent {
+        fn get_files(&self) -> Vec<File> {
+            get_files(self)
+        }
+    }
+
+    pub fn get_files(drag_event: &DragEvent) -> Vec<File> {
+        let Some(files) = drag_event.data_transfer().and_then(|v| v.files()) else {
+            return Vec::new();
+        };
+        let files = (0..files.length())
+            .filter_map(|i| files.get(i))
+            .collect::<Vec<File>>();
+        files
+    }
+
+    pub fn get_file_stream(file: &File) -> Result<ReadableStreamDefaultReader, ErrorGetFileStream> {
+        let stream = file.stream();
+        let reader = stream
+            .get_reader()
+            .dyn_into::<ReadableStreamDefaultReader>()
+            .map_err(|e| {
+                ErrorGetFileStream::Cast(
+                    e.as_string()
+                        .unwrap_or_else(|| String::from("uwknown error")),
+                )
+            })?;
+        Ok(reader)
+    }
+
+    pub async fn get_stream_chunk(
+        reader: &ReadableStreamDefaultReader,
+    ) -> Result<Option<Uint8Array>, ErrorGetStreamChunk> {
+        let promise = reader.read();
+        let chunk = JsFuture::from(promise)
+            .await
+            .map_err(|e| {
+                ErrorGetStreamChunk::GetChunk(
+                    e.as_string()
+                        .unwrap_or_else(|| String::from("uwknown error")),
+                )
+            })?
+            .dyn_into::<Object>()
+            .map_err(|e| {
+                ErrorGetStreamChunk::CastToObject(
+                    e.as_string()
+                        .unwrap_or_else(|| String::from("uwknown error")),
+                )
+            })?;
+        let done = Reflect::get(&chunk, &"done".into()).map_err(|e| {
+            ErrorGetStreamChunk::ReadingFieldDone(
+                e.as_string()
+                    .unwrap_or_else(|| String::from("uwknown error")),
+            )
+        })?;
+        if done.is_truthy() {
+            return Ok(None);
+        }
+        let chunk = Reflect::get(&chunk, &"value".into())
+            .map_err(|e| {
+                ErrorGetStreamChunk::ReadingFieldValue(
+                    e.as_string()
+                        .unwrap_or_else(|| String::from("uwknown error")),
+                )
+            })?
+            .dyn_into::<Uint8Array>()
+            .map_err(|e| {
+                ErrorGetStreamChunk::CastToArray(
+                    e.as_string()
+                        .unwrap_or_else(|| String::from("uwknown error")),
+                )
+            })?;
+
+        Ok(Some(chunk))
+    }
+}
+
 pub mod dropzone {
 
     use std::{
+        cell::RefCell,
         fmt::Display,
         future::Future,
         ops::{Deref, DerefMut},
+        rc::Rc,
         sync::{Arc, Mutex},
         time::SystemTime,
     };
 
-    use gloo::file::{File, FileList, FileReadError};
+    // use gloo::file::{File, FileList, FileReadError};
     use leptos::{ev, html::ElementType, prelude::*, task::spawn_local};
-    use tracing::{trace, trace_span};
+    use tracing::{debug, error, trace, trace_span};
     use wasm_bindgen::prelude::*;
+    use wasm_bindgen_futures::JsFuture;
     use web_sys::{
         DragEvent, HtmlElement, ReadableStreamDefaultReader,
         js_sys::{self, Object, Promise, Reflect, Uint8Array},
     };
 
     use super::event_listener;
+    use super::file::{GetFileStream, GetFiles, GetStreamChunk};
 
     pub enum Event {
         Start,
@@ -922,69 +1074,148 @@ pub mod dropzone {
             write!(f, "{}", name)
         }
     }
+    // #[track_caller]
+    // pub fn ws_loc_key() -> u128 {
+    //     xxhash_rust::xxh3::xxh3_128(std::panic::Location::caller().to_string().as_bytes())
+    // }
 
     pub trait AddDropZone {
-        fn add_dropzone<F, R>(&self, callback: F)
+        fn on_file_drop<F, R>(&self, callback: F)
         where
-            R: Future<Output = ()> + 'static,
+            R: Future<Output = anyhow::Result<()>> + 'static,
             F: FnMut(Event, DragEvent) -> R + 'static;
     }
 
-    pub trait GetFiles {
-        fn files(&self) -> gloo::file::FileList;
-    }
+    // pub trait GetFiles {
+    //     fn files(&self) -> gloo::file::FileList;
+    // }
 
-    pub trait GetFileData {
-        async fn data(&self) -> Result<Vec<u8>, FileReadError>;
-    }
+    // pub trait GetFileData {
+    //     async fn data(&self) -> Result<Vec<u8>, FileReadError>;
+    // }
 
     impl<E> AddDropZone for NodeRef<E>
     where
         E: ElementType,
         E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
     {
-        fn add_dropzone<F, R>(&self, callback: F)
+        #[track_caller]
+        fn on_file_drop<F, R>(&self, callback: F)
         where
-            R: Future<Output = ()> + 'static,
+            R: Future<Output = anyhow::Result<()>> + 'static,
             F: FnMut(Event, DragEvent) -> R + 'static,
         {
             new(self.clone(), callback);
         }
     }
 
-    impl GetFileData for gloo::file::File {
-        async fn data(&self) -> Result<Vec<u8>, FileReadError> {
-            gloo::file::futures::read_as_bytes(self).await
-        }
-    }
+    // impl GetFileData for gloo::file::File {
+    //     async fn data(&self) -> Result<Vec<u8>, FileReadError> {
+    //         // let r = web_sys::FileReader::new().unwrap();
+    //         // r.se
+    //         gloo::file::futures::read_as_bytes(self).await
+    //     }
+    // }
 
-    impl GetFiles for DragEvent {
-        fn files(&self) -> gloo::file::FileList {
-            let Some(files) = self.data_transfer().and_then(|v| v.files()) else {
-                trace!("shouldnt be here");
-                return gloo::file::FileList::from(web_sys::FileList::from(JsValue::null()));
-            };
-            trace!("len: {}", files.length());
-            gloo::file::FileList::from(files)
-        }
-    }
+    // impl GetFiles for DragEvent {
+    //     fn files(&self) -> gloo::file::FileList {
+    //         let Some(files) = self.data_transfer().and_then(|v| v.files()) else {
+    //             trace!("shouldnt be here");
+    //             return gloo::file::FileList::from(web_sys::FileList::from(JsValue::null()));
+    //         };
+    //         {
+    //             let files = files.clone();
+    //             let event = self.clone();
+    //             trace!("spawning...");
+    //             spawn_local(async move {
+    //                 for files in event.get_files() {}
+    //                 // debug!("im in spawn!");
+    //                 // let files = (0..files.length())
+    //                 //     .map(|i| files.get(i))
+    //                 //     .collect::<Vec<Option<web_sys::File>>>();
+    //                 // // let reader = web_sys::FileReader::new().unwrap();
+    //                 // // // reader.result();
 
+    //                 // // let closure = Closure::<dyn FnMut()>::new({
+    //                 // //     let reader = reader.clone();
+    //                 // //     move || {
+    //                 // //         let result = reader.result().unwrap();
+    //                 // //         let result = js_sys::Uint8Array::new(&result).to_vec();
+    //                 // //         let result_str = String::from_utf8_lossy(&result);
+    //                 // //         trace!("ohohohoho: {}", result_str);
+    //                 // //     }
+    //                 // // })
+    //                 // // .into_js_value();
+
+    //                 // // reader.set_onloadend(Some(closure.as_ref().unchecked_ref()));
+
+    //                 // for file in files {
+    //                 //     let file = file.unwrap();
+    //                 //     let stream = file.stream();
+    //                 //     let reader = stream
+    //                 //         .get_reader()
+    //                 //         .dyn_into::<ReadableStreamDefaultReader>()
+    //                 //         .unwrap();
+    //                 //     let mut data = Vec::<u8>::new();
+
+    //                 //     loop {
+    //                 //         let promise = reader.read();
+    //                 //         let chunk = JsFuture::from(promise)
+    //                 //             .await
+    //                 //             .unwrap()
+    //                 //             .dyn_into::<Object>()
+    //                 //             .unwrap();
+    //                 //         let done = js_sys::Reflect::get(&chunk, &"done".into()).unwrap();
+    //                 //         if done.is_truthy() {
+    //                 //             debug!("its done");
+    //                 //             break;
+    //                 //         }
+    //                 //         let chunk = Reflect::get(&chunk, &"value".into())
+    //                 //             .unwrap()
+    //                 //             .dyn_into::<Uint8Array>()
+    //                 //             .unwrap();
+    //                 //         let data_len = data.len();
+    //                 //         debug!("chunk len: {}", chunk.length());
+    //                 //         data.resize(data_len + chunk.length() as usize, 0);
+    //                 //         chunk.copy_to(&mut data[data_len..]);
+    //                 //         // data.resize(data_len + chunk.length() as usize, 255);
+    //                 //         // chunk.copy_to(&mut data);
+    //                 //     }
+    //                 //     let s = String::from_utf8_lossy(&data);
+    //                 //     debug!("full data: {:?}", s);
+    //                 //     // reader.read_as_array_buffer(&file).unwrap();
+    //                 // }
+    //             });
+    //         }
+    //         trace!("len: {}", files.length());
+    //         gloo::file::FileList::from(files)
+    //     }
+    // }
+
+    #[track_caller]
     pub fn new<E, F, R>(target: NodeRef<E>, mut callback: F)
     where
         E: ElementType,
         E::Output: JsCast + Clone + 'static + Into<HtmlElement>,
-        R: Future<Output = ()> + 'static,
+        R: Future<Output = anyhow::Result<()>> + 'static,
         F: FnMut(Event, DragEvent) -> R + 'static,
     {
-        let callback = Arc::new(Mutex::new(callback));
+        let callback_location = *std::panic::Location::caller();
+        let callback = Rc::new(RefCell::new(callback));
 
         event_listener::new(target, ev::dragstart, {
             let callback = callback.clone();
-
             move |e| {
-                let mut callback = callback.lock().unwrap();
-                let fut = callback(Event::Start, e);
+                let callback = callback.clone();
+                let fut = async move {
+                    let mut callback = callback.borrow_mut();
+                    let result = callback(Event::Start, e).await;
 
+                    trace!("tracking 3: {}", std::panic::Location::caller().to_string());
+                    if let Err(err) = result {
+                        error!("dropzone error at: {}: {}", callback_location, err);
+                    }
+                };
                 spawn_local(fut);
             }
         });
@@ -993,8 +1224,14 @@ pub mod dropzone {
             let callback = callback.clone();
 
             move |e| {
-                let mut callback = callback.lock().unwrap();
-                let fut = callback(Event::Leave, e);
+                let callback = callback.clone();
+                let fut = async move {
+                    let mut callback = callback.borrow_mut();
+                    let result = callback(Event::Leave, e).await;
+                    if let Err(err) = result {
+                        error!("dropzone error at: {}: {}", callback_location, err);
+                    }
+                };
                 spawn_local(fut);
             }
         });
@@ -1003,8 +1240,14 @@ pub mod dropzone {
             let callback = callback.clone();
 
             move |e| {
-                let mut callback = callback.lock().unwrap();
-                let fut = callback(Event::Enter, e);
+                let callback = callback.clone();
+                let fut = async move {
+                    let mut callback = callback.borrow_mut();
+                    let result = callback(Event::Enter, e).await;
+                    if let Err(err) = result {
+                        error!("dropzone error at: {}: {}", callback_location, err);
+                    }
+                };
                 spawn_local(fut);
             }
         });
@@ -1015,8 +1258,14 @@ pub mod dropzone {
             move |e| {
                 e.prevent_default();
 
-                let mut callback = callback.lock().unwrap();
-                let fut = callback(Event::Over, e);
+                let callback = callback.clone();
+                let fut = async move {
+                    let mut callback = callback.borrow_mut();
+                    let result = callback(Event::Over, e).await;
+                    if let Err(err) = result {
+                        error!("dropzone error at: {}: {}", callback_location, err);
+                    }
+                };
                 spawn_local(fut);
             }
         });
@@ -1028,8 +1277,14 @@ pub mod dropzone {
                 e.prevent_default();
                 e.stop_propagation();
 
-                let mut callback = callback.lock().unwrap();
-                let fut = callback(Event::Drop, e);
+                let callback = callback.clone();
+                let fut = async move {
+                    let mut callback = callback.borrow_mut();
+                    let result = callback(Event::Drop, e).await;
+                    if let Err(err) = result {
+                        error!("dropzone error at: {}: {}", callback_location, err);
+                    }
+                };
                 spawn_local(fut);
             }
         });

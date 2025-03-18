@@ -27,6 +27,7 @@ ssr = ["leptos/ssr", "leptos_router/ssr"]
 
 [dependencies]
 wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
 web-sys = { workspace = true }
 leptos = { workspace = true }
 leptos_router = { workspace = true }
@@ -41,3 +42,6 @@ uuid = { workspace = true }
 send_wrapper = { workspace = true }
 ordered-float = { workspace = true }
 sha2 = { workspace = true }
+futures = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
